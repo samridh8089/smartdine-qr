@@ -142,13 +142,18 @@ export default function MenuManagementPage() {
       return;
     }
 
-    if (!itemCategoryId) {
+    let catId = itemCategoryId;
+    if (!catId && categories.length > 0) {
+      catId = categories[0].id;
+    }
+
+    if (!catId) {
       setErrorMsg('Please select or create a category first.');
       return;
     }
 
     const payload = {
-      category_id: itemCategoryId,
+      category_id: catId,
       name: itemName,
       description: itemDescription,
       price: parsedPrice,

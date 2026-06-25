@@ -24,6 +24,21 @@ async function waitForButton(page, text) {
   }, { timeout: 10000 }, text);
 }
 
+async function clickButton(page, text) {
+  await waitForButton(page, text);
+  const buttons = await page.$$('button');
+  for (const btn of buttons) {
+    const btnText = await page.evaluate(el => el.textContent, btn);
+    if (btnText.includes(text)) {
+      await page.evaluate((el) => {
+        if (el) el.click();
+      }, btn);
+      return;
+    }
+  }
+  throw new Error(`Button containing "${text}" not found`);
+}
+
 async function runTests() {
   console.log('Starting E2E verification...');
 
@@ -79,6 +94,7 @@ async function runTests() {
     await page.type('input[placeholder="you@example.com"]', testEmail);
     await page.type('input[placeholder="••••••••"]', 'password123');
     await page.type('input[placeholder="The Bistro Cafe"]', testRestaurant);
+    await page.type('input[placeholder="e.g. +91 99999 88888"]', '+91 98765 43210');
     await sleep(1000);
     await page.screenshot({ path: path.join(ARTIFACT_DIR, '02_signup_filled.png') });
     
@@ -98,31 +114,18 @@ async function runTests() {
 
     // Open Category Modal
     console.log('Creating category Tacos...');
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Category'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Category');
     
     await page.waitForSelector('input[placeholder="e.g. Appetizers, Mains, Drinks"]');
     await page.type('input[placeholder="e.g. Appetizers, Mains, Drinks"]', 'Tacos');
     
     // Save Category
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Save Category'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Save Category');
     await sleep(1500);
 
     // Open Menu Item Modal
     console.log('Creating menu item Spicy Beef Taco...');
-    await waitForButton(page, 'Menu Item');
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Menu Item'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Menu Item');
     
     await page.waitForSelector('input[placeholder="e.g. Garlic Bread, Pasta Carbonara"]');
     await page.type('input[placeholder="e.g. Garlic Bread, Pasta Carbonara"]', 'Spicy Beef Taco');
@@ -136,11 +139,7 @@ async function runTests() {
     await page.screenshot({ path: path.join(ARTIFACT_DIR, '04_menu_item_modal.png') });
 
     // Save Menu Item
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Save Menu Item'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Save Menu Item');
     await sleep(1500);
     await page.screenshot({ path: path.join(ARTIFACT_DIR, '04_menu_final.png') });
     console.log('Saved 04_menu_final.png');
@@ -154,11 +153,7 @@ async function runTests() {
 
     // Open Add Table Modal
     console.log('Creating Table 5...');
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Add Table'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Add Table');
     
     await page.waitForSelector('input[placeholder="e.g. Table 1, Outdoor 4, Cabin B"]');
     await page.focus('input[placeholder="e.g. Table 1, Outdoor 4, Cabin B"]');
@@ -168,14 +163,10 @@ async function runTests() {
     await page.keyboard.up('Control');
     await page.keyboard.press('Backspace');
     await page.type('input[placeholder="e.g. Table 1, Outdoor 4, Cabin B"]', 'Table 5');
-
-    // Save Table
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Create Table'));
-      if (btn) btn.click();
-    });
-    await sleep(2500); // wait for QR generation
+    await sleep(500);
+    // Press Enter to submit the table creation form
+    await page.keyboard.press('Enter');
+    await sleep(3500); // wait for QR generation
     await page.screenshot({ path: path.join(ARTIFACT_DIR, '05_tables_final.png') });
     console.log('Saved 05_tables_final.png');
 
@@ -199,20 +190,12 @@ async function runTests() {
 
     // Add item to cart
     console.log('Adding item to cart...');
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Add +'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Add +');
     await sleep(500);
 
     // Open Cart Sheet
     console.log('Opening Cart Sheet...');
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('View Cart'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'View Cart');
     
     // Wait for the modal/sheet to slide in
     await page.waitForSelector('textarea', { timeout: 3000 });
@@ -225,11 +208,7 @@ async function runTests() {
 
     // Place Order
     console.log('Submitting order...');
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Place Order ticket'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Place Order ticket');
     await sleep(3000); // wait for redirect to tracking page
 
     // 6. ORDER TRACKING
@@ -261,11 +240,7 @@ async function runTests() {
     // 10. SUPER ADMIN
     console.log('10. Signing Out and accessing Super Admin...');
     // Log out first
-    await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button'));
-      const btn = buttons.find(b => b.textContent.includes('Sign Out'));
-      if (btn) btn.click();
-    });
+    await clickButton(page, 'Sign Out');
     await sleep(1500);
 
     // Login as Super Admin
@@ -274,7 +249,10 @@ async function runTests() {
     await page.type('input[type="email"]', 'admin@smartdine.com');
     await page.type('input[type="password"]', 'password123');
     await page.click('button[type="submit"]');
-    await sleep(3000);
+    await page.waitForFunction(() => {
+      return document.body.innerText.includes('Global Platform Dashboard');
+    }, { timeout: 15000 }).catch(() => {});
+    await sleep(1000);
     await page.screenshot({ path: path.join(ARTIFACT_DIR, '11_super_admin.png') });
     console.log('Saved 11_super_admin.png');
 

@@ -2,17 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { db, Order, Restaurant } from '@/lib/db';
-import { getActiveUser } from '@/lib/supabase';
+import { db, Order, Restaurant, CustomerRequest } from '@/lib/db';
+import { getActiveUser, supabase } from '@/lib/supabase';
 import { formatPrice, formatDate } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { 
-  ClipboardList, Search, Eye, Printer, Check, X, 
-  Trash2, ShoppingBag, CreditCard, ChevronRight, User, AlertCircle
-} from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle } from 'lucide-react';
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -26,10 +22,12 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  const printAreaRef = useRef<HTMLDivElement>(null);
+  // Tab state: 'orders' or 'requests'
+  const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
+  const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
 
   useEffect(() => {
-    async function loadOrders() {
+    async function loadInitialData() {
       const user = await getActiveUser();
       if (!user || !user.restaurant_id) return;
       const restId = user.restaurant_id;
@@ -40,6 +38,10 @@ export default function OrdersPage() {
       const allOrders = await db.getOrders(restId);
       setOrders(allOrders);
 
+      // Load pending requests
+      const reqs = await db.getCustomerRequests(restId);
+      setCustomerRequests(reqs.filter(r => r.status === 'pending'));
+
       if (orderIdParam) {
         const selected = allOrders.find(o => o.id === orderIdParam);
         if (selected) setSelectedOrder(selected);
@@ -49,14 +51,60 @@ export default function OrdersPage() {
 
       setLoading(false);
     }
-    loadOrders();
+    loadInitialData();
+  }, [orderIdParam]);
 
-    const handleStorage = () => {
-      loadOrders();
+  // Realtime Supabase Subscription for Orders & Customer Requests
+  useEffect(() => {
+    if (!restaurant) return;
+    const restId = restaurant.id;
+
+    const loadRequests = async () => {
+      const reqs = await db.getCustomerRequests(restId);
+      setCustomerRequests(reqs.filter(r => r.status === 'pending'));
     };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, [orderIdParam, selectedOrder]);
+
+    const loadOrders = async () => {
+      const allOrders = await db.getOrders(restId);
+      setOrders(allOrders);
+      if (selectedOrder) {
+        const updated = allOrders.find(o => o.id === selectedOrder.id);
+        if (updated) setSelectedOrder(updated);
+      }
+    };
+
+    const channel = supabase
+      .channel('live_orders_requests')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `restaurant_id=eq.${restId}`
+        },
+        () => {
+          loadOrders();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customer_requests',
+          filter: `restaurant_id=eq.${restId}`
+        },
+        () => {
+          loadRequests();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [restaurant, selectedOrder]);
 
   const handleSelectOrder = (order: Order) => {
     setSelectedOrder(order);
@@ -64,19 +112,28 @@ export default function OrdersPage() {
   };
 
   const updateOrderStatus = async (status: Order['status']) => {
-    if (!selectedOrder) return;
+    if (!selectedOrder || !restaurant) return;
     try {
       const updated = await db.updateOrderStatus(selectedOrder.id, status);
       setSelectedOrder(updated);
       
-      if (restaurant) {
-        const allOrders = await db.getOrders(restaurant.id);
-        setOrders(allOrders);
-      }
-      // Dispatch storage event to alert KDS layout of changes locally
+      const allOrders = await db.getOrders(restaurant.id);
+      setOrders(allOrders);
+      
+      // Dispatch storage event locally
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
       alert(`Failed to update order status: ${err.message}`);
+    }
+  };
+
+  const handleResolveRequest = async (requestId: string) => {
+    try {
+      await db.resolveCustomerRequest(requestId);
+      setCustomerRequests(customerRequests.filter(r => r.id !== requestId));
+      alert('Request marked resolved.');
+    } catch (err: any) {
+      alert(`Failed to resolve request: ${err.message}`);
     }
   };
 
@@ -205,13 +262,13 @@ export default function OrdersPage() {
     }
   };
 
-  if (loading) {
+  if (loading || !restaurant) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-48 bg-slate-200 rounded" />
+        <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded" />
         <div className="grid grid-cols-3 gap-6 h-[80vh]">
-          <div className="bg-slate-200 rounded-xl" />
-          <div className="col-span-2 bg-slate-200 rounded-xl" />
+          <div className="bg-slate-200 dark:bg-slate-800 rounded-xl" />
+          <div className="col-span-2 bg-slate-200 dark:bg-slate-800 rounded-xl" />
         </div>
       </div>
     );
@@ -231,224 +288,300 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-8 flex flex-col h-[calc(100vh-8rem)]">
-      {/* Title Header */}
-      <div className="shrink-0">
-        <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Live Orders & Billing</h2>
-        <p className="text-slate-500 text-sm mt-1">Manage statuses, print bills, and track transaction details.</p>
+      {/* Header section with Tabs */}
+      <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Live Orders & Requests</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Manage statuses, print bills, and resolve customer notifications in real time.</p>
+        </div>
+
+        {/* Tab Selector */}
+        <div className="flex gap-1.5 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 self-start sm:self-auto">
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'orders'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+            }`}
+          >
+            <ClipboardList className="h-3.5 w-3.5" /> Live Orders
+          </button>
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 relative ${
+              activeTab === 'requests'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+            }`}
+          >
+            <Bell className="h-3.5 w-3.5" /> Customer Calls
+            {customerRequests.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 bg-rose-500 text-white font-extrabold text-[9px] rounded-full flex items-center justify-center animate-pulse">
+                {customerRequests.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Main Workspace Layout */}
-      <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
-        
-        {/* Left Side: Order List */}
-        <div className="w-full md:w-5/12 flex flex-col space-y-4 min-h-0 bg-white border border-slate-100 rounded-2xl p-4">
-          {/* Filters Bar */}
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search order ID, table..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-              />
+      {/* Orders Tab View */}
+      {activeTab === 'orders' && (
+        <div className="flex-1 flex flex-col md:flex-row gap-6 min-h-0">
+          {/* Left Side: Order List */}
+          <div className="w-full md:w-5/12 flex flex-col space-y-4 min-h-0 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search order ID, table..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+              >
+                <option value="all">All States</option>
+                <option value="new">New</option>
+                <option value="accepted">Accepted</option>
+                <option value="preparing">Preparing</option>
+                <option value="ready">Ready</option>
+                <option value="served">Served</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none bg-white text-slate-700"
-            >
-              <option value="all">All States</option>
-              <option value="new">New</option>
-              <option value="accepted">Accepted</option>
-              <option value="preparing">Preparing</option>
-              <option value="ready">Ready</option>
-              <option value="served">Served</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 pr-1">
+              {filteredOrders.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-center text-slate-400 text-sm py-12 flex-col gap-2">
+                  <ClipboardList className="h-8 w-8 text-slate-300" />
+                  <span>No orders match this query.</span>
+                </div>
+              ) : (
+                filteredOrders.map((order) => {
+                  const isSelected = selectedOrder?.id === order.id;
+                  return (
+                    <button
+                      key={order.id}
+                      onClick={() => handleSelectOrder(order)}
+                      className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer ${
+                        isSelected 
+                          ? 'bg-slate-900 dark:bg-slate-800 text-white shadow-md' 
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-sm text-slate-950 dark:text-white">#{order.id.slice(-5).toUpperCase()}</span>
+                          {getStatusBadge(order.status)}
+                        </div>
+                        <p className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
+                          {order.table_name || 'N/A'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items
+                        </p>
+                        <p className="text-xs truncate max-w-[200px] text-slate-500 dark:text-slate-400">
+                          {order.items.map(i => i.menu_item_name).join(', ')}
+                        </p>
+                      </div>
+                      <div className="text-right space-y-1">
+                        <p className="font-extrabold text-sm">{formatPrice(order.total, restaurant.settings.currency)}</p>
+                        <p className="text-[10px] text-slate-400">{new Date(order.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          {/* List content */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 pr-1">
-            {filteredOrders.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-center text-slate-400 text-sm py-12 flex-col gap-2">
-                <ClipboardList className="h-8 w-8 text-slate-300" />
-                <span>No orders match this query.</span>
+          {/* Right Side: Order Detail & Billing panel */}
+          <div className="hidden md:flex flex-1 flex-col min-h-0 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden">
+            {selectedOrder ? (
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-slate-955 dark:text-white text-lg">Order #{selectedOrder.id.slice(-5).toUpperCase()}</h3>
+                      {getStatusBadge(selectedOrder.status)}
+                    </div>
+                    <p className="text-xs text-slate-400 font-semibold uppercase">
+                      {selectedOrder.table_name || 'N/A'} • {formatDate(selectedOrder.created_at)}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="gap-1 cursor-pointer" onClick={handlePrintInvoice}>
+                      <Printer className="h-4 w-4" /> Print Bill
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+                    <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedOrder.status === 'new' && (
+                        <Button size="sm" variant="primary" className="cursor-pointer" onClick={() => updateOrderStatus('accepted')}>
+                          Accept Order
+                        </Button>
+                      )}
+                      {(selectedOrder.status === 'accepted' || selectedOrder.status === 'new') && (
+                        <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white cursor-pointer" onClick={() => updateOrderStatus('preparing')}>
+                          Start Preparing
+                        </Button>
+                      )}
+                      {selectedOrder.status === 'preparing' && (
+                        <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" onClick={() => updateOrderStatus('ready')}>
+                          Mark Ready for Pickup
+                        </Button>
+                      )}
+                      {selectedOrder.status === 'ready' && (
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" onClick={() => updateOrderStatus('served')}>
+                          Mark Served
+                        </Button>
+                      )}
+                      {selectedOrder.status === 'served' && (
+                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white cursor-pointer" onClick={() => updateOrderStatus('completed')}>
+                          Complete Order
+                        </Button>
+                      )}
+                      {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
+                        <Button size="sm" variant="danger" className="cursor-pointer" onClick={() => updateOrderStatus('cancelled')}>
+                          Cancel Order
+                        </Button>
+                      )}
+                      {(selectedOrder.status === 'completed' || selectedOrder.status === 'cancelled') && (
+                        <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5 py-1">
+                          <AlertCircle className="h-4 w-4" /> This order has been finalized and cannot be edited.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Ordered Items</h4>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                      {selectedOrder.items.map(item => (
+                        <div key={item.id} className="p-4 flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm">{item.menu_item_name}</p>
+                            <p className="text-xs text-slate-400 font-semibold mt-0.5">{item.quantity}x @ {formatPrice(item.price, restaurant.settings.currency)}</p>
+                            {item.notes && (
+                              <span className="inline-block mt-1 text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-950/20 px-2 py-0.5 rounded border border-rose-100 dark:border-rose-900/30 font-semibold">
+                                Note: {item.notes}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-extrabold text-slate-900 dark:text-white">{formatPrice(item.price * item.quantity, restaurant.settings.currency)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedOrder.special_instructions && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Chef Special Instructions</h4>
+                      <p className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/30 text-amber-800 dark:text-amber-400 text-sm rounded-xl p-4 leading-relaxed font-semibold">
+                        {selectedOrder.special_instructions}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 shrink-0">
+                  <div className="space-y-2.5 max-w-sm ml-auto">
+                    <div className="flex justify-between text-sm text-slate-500 font-semibold">
+                      <span>Subtotal</span>
+                      <span>{formatPrice(selectedOrder.subtotal, restaurant.settings.currency)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-slate-500 font-semibold">
+                      <span>GST ({restaurant.settings.gst_percentage}%)</span>
+                      <span>{formatPrice(selectedOrder.gst, restaurant.settings.currency)}</span>
+                    </div>
+                    {selectedOrder.service_charge > 0 && (
+                      <div className="flex justify-between text-sm text-slate-500 font-semibold">
+                        <span>Service Charge ({restaurant.settings.service_charge_percentage}%)</span>
+                        <span>{formatPrice(selectedOrder.service_charge, restaurant.settings.currency)}</span>
+                      </div>
+                    )}
+                    <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
+                    <div className="flex justify-between text-slate-900 dark:text-white font-black text-lg">
+                      <span>Grand Total</span>
+                      <span>{formatPrice(selectedOrder.total, restaurant.settings.currency)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : (
-              filteredOrders.map((order) => {
-                const isSelected = selectedOrder?.id === order.id;
-                return (
-                  <button
-                    key={order.id}
-                    onClick={() => handleSelectOrder(order)}
-                    className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-3 ${
-                      isSelected 
-                        ? 'bg-slate-900 text-white shadow-md' 
-                        : 'hover:bg-slate-50 text-slate-700 border border-transparent'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-sm">#{order.id.slice(-5).toUpperCase()}</span>
-                        {getStatusBadge(order.status)}
-                      </div>
-                      <p className={`text-[10px] font-semibold uppercase ${isSelected ? 'text-slate-400' : 'text-slate-400'}`}>
-                        {order.table_name || 'N/A'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items
-                      </p>
-                      <p className={`text-xs truncate max-w-[200px] ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                        {order.items.map(i => i.menu_item_name).join(', ')}
-                      </p>
-                    </div>
-                    <div className="text-right space-y-1">
-                      <p className="font-extrabold text-sm">{formatPrice(order.total, restaurant?.settings.currency)}</p>
-                      <p className="text-[10px] text-slate-400">{new Date(order.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
-                  </button>
-                );
-              })
+              <div className="flex-1 flex items-center justify-center text-center p-12 text-slate-400 text-sm">
+                <ShoppingBag className="h-10 w-10 text-slate-300 mb-2" />
+                <span>Select an order from the list to manage and view bill invoices.</span>
+              </div>
             )}
           </div>
         </div>
+      )}
 
-        {/* Right Side: Order Detail & Billing panel */}
-        <div className="hidden md:flex flex-1 flex-col min-h-0 bg-white border border-slate-100 rounded-2xl overflow-hidden">
-          {selectedOrder ? (
-            <div className="flex-1 flex flex-col min-h-0">
-              
-              {/* Detail Header */}
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-slate-950 text-lg">Order #{selectedOrder.id.slice(-5).toUpperCase()}</h3>
-                    {getStatusBadge(selectedOrder.status)}
-                  </div>
-                  <p className="text-xs text-slate-400 font-semibold uppercase">
-                    {selectedOrder.table_name || 'N/A'} • {formatDate(selectedOrder.created_at)}
-                  </p>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="gap-1" onClick={handlePrintInvoice}>
-                    <Printer className="h-4 w-4" /> Print Bill
-                  </Button>
-                </div>
+      {/* Customer Requests Tab View */}
+      {activeTab === 'requests' && (
+        <Card className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800">
+          <div className="flex-1 overflow-y-auto">
+            {customerRequests.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-3">
+                <CheckCircle className="h-10 w-10 text-emerald-500" />
+                <span className="font-semibold text-slate-600 dark:text-slate-400">All customer requests resolved!</span>
+                <span className="text-xs text-slate-400">Notifications from customers at tables will appear here in real time.</span>
               </div>
-
-              {/* Items List & Details */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                
-                {/* Status action bar */}
-                <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 flex flex-col gap-3">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Action to Update Status:</span>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedOrder.status === 'new' && (
-                      <Button size="sm" variant="primary" onClick={() => updateOrderStatus('accepted')}>
-                        Accept Order
-                      </Button>
-                    )}
-                    {(selectedOrder.status === 'accepted' || selectedOrder.status === 'new') && (
-                      <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" onClick={() => updateOrderStatus('preparing')}>
-                        Start Preparing
-                      </Button>
-                    )}
-                    {selectedOrder.status === 'preparing' && (
-                      <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => updateOrderStatus('ready')}>
-                        Mark Ready for Pickup
-                      </Button>
-                    )}
-                    {selectedOrder.status === 'ready' && (
-                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => updateOrderStatus('served')}>
-                        Mark Served
-                      </Button>
-                    )}
-                    {selectedOrder.status === 'served' && (
-                      <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white" onClick={() => updateOrderStatus('completed')}>
-                        Complete Order
-                      </Button>
-                    )}
-                    {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
-                      <Button size="sm" variant="danger" onClick={() => updateOrderStatus('cancelled')}>
-                        Cancel Order
-                      </Button>
-                    )}
-                    {(selectedOrder.status === 'completed' || selectedOrder.status === 'cancelled') && (
-                      <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5 py-1">
-                        <AlertCircle className="h-4 w-4" /> This order has been finalized and cannot be edited.
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Items */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Ordered Items</h4>
-                  <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white">
-                    {selectedOrder.items.map(item => (
-                      <div key={item.id} className="p-4 flex items-center justify-between gap-4">
-                        <div>
-                          <p className="font-semibold text-slate-800 text-sm">{item.menu_item_name}</p>
-                          <p className="text-xs text-slate-400 font-semibold mt-0.5">{item.quantity}x @ {formatPrice(item.price, restaurant?.settings.currency)}</p>
-                          {item.notes && (
-                            <span className="inline-block mt-1 text-[10px] text-rose-500 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 font-semibold">
-                              Note: {item.notes}
-                            </span>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800 text-sm">
+                  <thead className="bg-slate-50 dark:bg-slate-900 font-bold text-slate-400 text-xs uppercase tracking-wider">
+                    <tr>
+                      <th scope="col" className="px-6 py-4 text-left">Dining Location</th>
+                      <th scope="col" className="px-6 py-4 text-left">Call Request Type</th>
+                      <th scope="col" className="px-6 py-4 text-left">Time Received</th>
+                      <th scope="col" className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-300">
+                    {customerRequests.map((req) => (
+                      <tr key={req.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/25 transition-colors">
+                        <td className="px-6 py-4 font-extrabold text-slate-950 dark:text-white">
+                          {req.table_name}
+                        </td>
+                        <td className="px-6 py-4">
+                          {req.type === 'call_waiter' ? (
+                            <Badge variant="purple">🙋 Call Waiter</Badge>
+                          ) : (
+                            <Badge variant="warning">💳 Request Bill</Badge>
                           )}
-                        </div>
-                        <span className="font-extrabold text-slate-900">{formatPrice(item.price * item.quantity, restaurant?.settings.currency)}</span>
-                      </div>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-400">
+                          {new Date(req.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                            onClick={() => handleResolveRequest(req.id)}
+                          >
+                            <Check className="h-3.5 w-3.5 mr-1" /> Mark Resolved
+                          </Button>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-
-                {/* Instructions */}
-                {selectedOrder.special_instructions && (
-                  <div className="space-y-2">
-                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Chef Special Instructions</h4>
-                    <p className="bg-amber-50/50 border border-amber-100 text-amber-800 text-sm rounded-xl p-4 leading-relaxed font-semibold">
-                      {selectedOrder.special_instructions}
-                    </p>
-                  </div>
-                )}
+                  </tbody>
+                </table>
               </div>
-
-              {/* Bill/Invoice Totals Panel */}
-              <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
-                <div className="space-y-2.5 max-w-sm ml-auto">
-                  <div className="flex justify-between text-sm text-slate-500 font-semibold">
-                    <span>Subtotal</span>
-                    <span>{formatPrice(selectedOrder.subtotal, restaurant?.settings.currency)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm text-slate-500 font-semibold">
-                    <span>GST ({restaurant?.settings.gst_percentage}%)</span>
-                    <span>{formatPrice(selectedOrder.gst, restaurant?.settings.currency)}</span>
-                  </div>
-                  {selectedOrder.service_charge > 0 && (
-                    <div className="flex justify-between text-sm text-slate-500 font-semibold">
-                      <span>Service Charge ({restaurant?.settings.service_charge_percentage}%)</span>
-                      <span>{formatPrice(selectedOrder.service_charge, restaurant?.settings.currency)}</span>
-                    </div>
-                  )}
-                  <div className="h-px bg-slate-200 my-1" />
-                  <div className="flex justify-between text-slate-900 font-black text-lg">
-                    <span>Grand Total</span>
-                    <span>{formatPrice(selectedOrder.total, restaurant?.settings.currency)}</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-center p-12 text-slate-400 text-sm">
-              <ShoppingBag className="h-10 w-10 text-slate-300 mb-2" />
-              <span>Select an order from the list to manage and view bill invoices.</span>
-            </div>
-          )}
-        </div>
-
-      </div>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

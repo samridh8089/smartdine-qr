@@ -251,13 +251,21 @@ declare
   new_restaurant_id uuid;
   r_name text;
   r_slug text;
+  r_phone text;
+  r_plan text;
+  r_interval text;
+  r_role text;
 begin
   r_name := new.raw_user_meta_data->>'restaurantName';
   r_slug := new.raw_user_meta_data->>'slug';
+  r_phone := new.raw_user_meta_data->>'phone';
+  r_plan := coalesce(new.raw_user_meta_data->>'subscriptionPlan', 'starter');
+  r_interval := coalesce(new.raw_user_meta_data->>'billingInterval', 'monthly');
+  r_role := coalesce(new.raw_user_meta_data->>'role', 'owner');
 
   if r_name is not null and r_slug is not null then
-    insert into public.restaurants (name, slug)
-    values (r_name, r_slug)
+    insert into public.restaurants (name, slug, phone, subscription_plan, subscription_status, billing_interval)
+    values (r_name, r_slug, r_phone, r_plan, 'trial', r_interval)
     returning id into new_restaurant_id;
   else
     new_restaurant_id := case 
@@ -271,7 +279,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'fullName', ''),
-    coalesce(new.raw_user_meta_data->>'role', 'owner'),
+    r_role,
     new_restaurant_id
   );
   return new;

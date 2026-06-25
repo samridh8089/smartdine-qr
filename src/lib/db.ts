@@ -6,17 +6,21 @@ export interface Restaurant {
   name: string;
   slug: string;
   logo_url?: string;
+  cover_image_url?: string;
   phone: string;
   address: string;
+  gst_number?: string;
   settings: {
     currency: string;
     gst_percentage: number;
     service_charge_percentage: number;
+    theme_color?: string;
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';
   trial_ends_at: string;
   created_at: string;
+  billing_interval: 'monthly' | 'yearly';
 }
 
 export interface Profile {
@@ -24,7 +28,36 @@ export interface Profile {
   restaurant_id: string | null;
   email: string;
   full_name: string;
-  role: 'owner' | 'staff' | 'super_admin';
+  role: 'owner' | 'manager' | 'waiter' | 'kitchen' | 'cashier' | 'super_admin';
+}
+
+export interface PricingPlan {
+  id: 'starter' | 'pro' | 'premium';
+  name: string;
+  price_monthly: number;
+  price_yearly: number;
+  features: string[];
+  created_at?: string;
+}
+
+export interface CustomerRequest {
+  id: string;
+  restaurant_id: string;
+  table_id: string;
+  table_name: string;
+  type: 'call_waiter' | 'request_bill';
+  status: 'pending' | 'completed';
+  created_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  restaurant_id: string;
+  user_id: string | null;
+  user_email: string;
+  action: string;
+  details: string;
+  created_at: string;
 }
 
 export interface Category {
@@ -439,23 +472,82 @@ export const db = {
     return fullOrder;
   },
 
-  // --- Super Admin Control Panel ---
-  async getSuperAdminStats(): Promise<{ totalRestaurants: number; totalRevenue: number; activeSubscriptions: number }> {
+  // --- Super Admin Control Panel & SaaS Stats ---
+  async getSuperAdminStats(): Promise<{
+    totalRestaurants: number;
+    totalRevenue: number; // MRR
+    activeSubscriptions: number; // Active paid
+    mrr: number;
+    arr: number;
+    totalPaidCustomers: number;
+    trialUsers: number;
+    expiredLicenses: number;
+    activeLicenses: number;
+  }> {
     const { data: rests, error: restsErr } = await supabase.from('restaurants').select('*');
     if (restsErr || !rests) throw new Error(restsErr?.message || 'Failed to fetch admin stats');
 
-    const { data: completedOrders, error: ordersErr } = await supabase
-      .from('orders')
-      .select('total')
-      .eq('status', 'completed');
-      
-    const totalRev = (completedOrders || []).reduce((sum, o) => sum + Number(o.total), 0);
-    const activeSubs = rests.filter(r => r.subscription_status === 'active').length;
+    const pricingPlans = await this.getPricingPlans();
+    const planPrices = pricingPlans.reduce((acc, plan) => {
+      acc[plan.id] = { monthly: plan.price_monthly, yearly: plan.price_yearly };
+      return acc;
+    }, {} as Record<string, { monthly: number; yearly: number }>);
+
+    // Fallbacks if pricing plans database is not loaded yet
+    const getPlanPrice = (plan: 'starter' | 'pro' | 'premium', interval: 'monthly' | 'yearly') => {
+      const prices = planPrices[plan] || {
+        starter: { monthly: 299, yearly: 2990 },
+        pro: { monthly: 799, yearly: 7990 },
+        premium: { monthly: 1499, yearly: 14990 }
+      }[plan];
+      return interval === 'yearly' ? prices.yearly : prices.monthly;
+    };
+
+    let mrr = 0;
+    let totalPaidCustomers = 0;
+    let trialUsers = 0;
+    let expiredLicenses = 0;
+    let activeLicenses = 0;
+
+    const now = new Date();
+
+    rests.forEach(r => {
+      const plan = (r.subscription_plan || 'starter') as 'starter' | 'pro' | 'premium';
+      const status = r.subscription_status || 'trial';
+      const interval = (r.billing_interval || 'monthly') as 'monthly' | 'yearly';
+      const trialEnds = new Date(r.trial_ends_at);
+      const isTrialExpired = status === 'trial' && trialEnds < now;
+      const isCancelled = status === 'cancelled' || status === 'past_due';
+
+      if (status === 'active') {
+        totalPaidCustomers += 1;
+        activeLicenses += 1;
+        const price = getPlanPrice(plan, interval);
+        if (interval === 'yearly') {
+          mrr += price / 12;
+        } else {
+          mrr += price;
+        }
+      } else if (status === 'trial' && !isTrialExpired) {
+        trialUsers += 1;
+        activeLicenses += 1;
+      } else if (isTrialExpired || isCancelled) {
+        expiredLicenses += 1;
+      }
+    });
+
+    const arr = mrr * 12;
 
     return {
       totalRestaurants: rests.length,
-      totalRevenue: totalRev,
-      activeSubscriptions: activeSubs
+      totalRevenue: mrr, // Display MRR in the card
+      activeSubscriptions: activeLicenses,
+      mrr: Math.round(mrr),
+      arr: Math.round(arr),
+      totalPaidCustomers,
+      trialUsers,
+      expiredLicenses,
+      activeLicenses
     };
   },
 
@@ -479,5 +571,157 @@ export const db = {
     }
 
     return updated[0] as Restaurant;
+  },
+
+  // --- Pricing Plans CRUD ---
+  async getPricingPlans(): Promise<PricingPlan[]> {
+    const { data, error } = await supabase
+      .from('pricing_plans')
+      .select('*')
+      .order('price_monthly', { ascending: true });
+    if (error || !data || data.length === 0) {
+      return [
+        { id: 'starter', name: 'Starter', price_monthly: 299, price_yearly: 2990, features: ['Up to 5 tables', 'Up to 15 menu items', 'Standard KDS', 'QR Code Generation'] },
+        { id: 'pro', name: 'Pro', price_monthly: 799, price_yearly: 7990, features: ['Up to 20 tables', 'Up to 50 menu items', 'Premium KDS', 'Analytics Dashboard', 'Waiter Panel', 'Real-time Alerts'] },
+        { id: 'premium', name: 'Premium', price_monthly: 1499, price_yearly: 14990, features: ['Unlimited tables', 'Unlimited menu items', 'Priority Support', 'Branding settings', 'Real-time Analytics', 'Waiter & Kitchen Panels'] }
+      ];
+    }
+    return data.map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      price_monthly: Number(d.price_monthly),
+      price_yearly: Number(d.price_yearly),
+      features: Array.isArray(d.features) ? d.features : JSON.parse(d.features || '[]')
+    })) as PricingPlan[];
+  },
+
+  async updatePricingPlan(id: string, data: Partial<PricingPlan>): Promise<PricingPlan> {
+    const { data: updated, error } = await supabase
+      .from('pricing_plans')
+      .update(data)
+      .eq('id', id)
+      .select();
+    if (error || !updated || updated.length === 0) {
+      throw new Error(error?.message || 'Pricing plan not found');
+    }
+    return updated[0] as PricingPlan;
+  },
+
+  // --- Deletion ---
+  async deleteRestaurant(restaurantId: string): Promise<void> {
+    // Delete profiles first
+    await supabase.from('profiles').delete().eq('restaurant_id', restaurantId);
+    // Delete restaurant (which cascades to tables, categories, menu items, orders, order items)
+    const { error } = await supabase.from('restaurants').delete().eq('id', restaurantId);
+    if (error) throw new Error(error.message);
+  },
+
+  // --- Customer Requests (Waiter Portal Calls) ---
+  async getCustomerRequests(restaurantId: string): Promise<CustomerRequest[]> {
+    const { data, error } = await supabase
+      .from('customer_requests')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data as CustomerRequest[];
+  },
+
+  async createCustomerRequest(restaurantId: string, tableId: string, type: 'call_waiter' | 'request_bill'): Promise<CustomerRequest> {
+    const tables = await this.getTables(restaurantId);
+    const table = tables.find(t => t.id === tableId);
+    if (!table) throw new Error('Table not found');
+
+    const { data, error } = await supabase
+      .from('customer_requests')
+      .insert({
+        restaurant_id: restaurantId,
+        table_id: tableId,
+        table_name: table.name,
+        type,
+        status: 'pending'
+      })
+      .select();
+    if (error || !data || data.length === 0) {
+      throw new Error(error?.message || 'Failed to submit call request');
+    }
+    return data[0] as CustomerRequest;
+  },
+
+  async resolveCustomerRequest(requestId: string): Promise<void> {
+    const { error } = await supabase
+      .from('customer_requests')
+      .update({ status: 'completed' })
+      .eq('id', requestId);
+    if (error) throw new Error(error.message);
+  },
+
+  // --- Audit Logging ---
+  async getAuditLogs(restaurantId: string): Promise<AuditLog[]> {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data as AuditLog[];
+  },
+
+  async createAuditLog(restaurantId: string, userId: string | null, email: string, action: string, details: string): Promise<void> {
+    await supabase
+      .from('audit_logs')
+      .insert({
+        restaurant_id: restaurantId,
+        user_id: userId,
+        user_email: email,
+        action,
+        details
+      });
+  },
+
+  // --- Staff Management ---
+  async getStaffProfiles(restaurantId: string): Promise<Profile[]> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .neq('role', 'super_admin');
+    if (error || !data) return [];
+    return data as Profile[];
+  },
+
+  async createStaffProfile(email: string, password: string, fullName: string, role: Profile['role'], restaurantId: string): Promise<Profile> {
+    const { createClient } = await import('@supabase/supabase-js');
+    const tempSupabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
+    
+    // Sign up via the temporary client so it doesn't affect active session
+    const { data, error } = await tempSupabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          fullName,
+          role,
+          restaurant_id: restaurantId
+        }
+      }
+    });
+    
+    if (error) throw new Error(error.message);
+    if (!data.user) throw new Error('Failed to create staff auth user');
+    
+    const { data: profileData, error: profileErr } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+       
+    if (profileErr || !profileData) {
+      throw new Error(profileErr?.message || 'Staff profile sync failed');
+    }
+    return profileData as Profile;
   }
 };
