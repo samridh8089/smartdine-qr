@@ -11,6 +11,83 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat } from 'lucide-react';
 
+// Helper to generate a 2-second WAV file (0.5s A5 880Hz square wave beep followed by 1.5s of silence)
+const createBeepWavDataUri = () => {
+  const sampleRate = 8000;
+  const duration = 2.0;
+  const numSamples = sampleRate * duration;
+  const buffer = new Uint8Array(44 + numSamples);
+  
+  // RIFF header
+  buffer[0] = 0x52; // 'R'
+  buffer[1] = 0x49; // 'I'
+  buffer[2] = 0x46; // 'F'
+  buffer[3] = 0x46; // 'F'
+  
+  const fileSize = 36 + numSamples;
+  buffer[4] = fileSize & 0xff;
+  buffer[5] = (fileSize >> 8) & 0xff;
+  buffer[6] = (fileSize >> 16) & 0xff;
+  buffer[7] = (fileSize >> 24) & 0xff;
+  
+  buffer[8] = 0x57; // 'W'
+  buffer[9] = 0x41; // 'A'
+  buffer[10] = 0x56; // 'V'
+  buffer[11] = 0x45; // 'E'
+  
+  // fmt chunk
+  buffer[12] = 0x66; // 'f'
+  buffer[13] = 0x6d; // 'm'
+  buffer[14] = 0x74; // 't'
+  buffer[15] = 0x20; // ' '
+  
+  buffer[16] = 16; buffer[17] = 0; buffer[18] = 0; buffer[19] = 0;
+  buffer[20] = 1; buffer[21] = 0;
+  buffer[22] = 1; buffer[23] = 0;
+  
+  buffer[24] = sampleRate & 0xff;
+  buffer[25] = (sampleRate >> 8) & 0xff;
+  buffer[26] = (sampleRate >> 16) & 0xff;
+  buffer[27] = (sampleRate >> 24) & 0xff;
+  
+  buffer[28] = sampleRate & 0xff;
+  buffer[29] = (sampleRate >> 8) & 0xff;
+  buffer[30] = (sampleRate >> 16) & 0xff;
+  buffer[31] = (sampleRate >> 24) & 0xff;
+  
+  buffer[32] = 1; buffer[33] = 0;
+  buffer[34] = 8; buffer[35] = 0;
+  
+  // data chunk
+  buffer[36] = 0x64; // 'd'
+  buffer[37] = 0x61; // 'a'
+  buffer[38] = 0x74; // 't'
+  buffer[39] = 0x61; // 'a'
+  
+  buffer[40] = numSamples & 0xff;
+  buffer[41] = (numSamples >> 8) & 0xff;
+  buffer[42] = (numSamples >> 16) & 0xff;
+  buffer[43] = (numSamples >> 24) & 0xff;
+  
+  // Generate square wave for 0.5s, then 1.5s silence
+  const frequency = 880;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    if (t < 0.5) {
+      const sample = Math.sin(2 * Math.PI * frequency * t) >= 0 ? 225 : 30;
+      buffer[44 + i] = sample;
+    } else {
+      buffer[44 + i] = 128;
+    }
+  }
+  
+  let binary = '';
+  for (let i = 0; i < buffer.length; i++) {
+    binary += String.fromCharCode(buffer[i]);
+  }
+  return 'data:audio/wav;base64,' + btoa(binary);
+};
+
 export default function OrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,7 +110,11 @@ export default function OrdersPage() {
   const alertedOrderIds = useRef<Set<string>>(new Set());
   const selectedOrderRef = useRef<Order | null>(selectedOrder);
 
-  // Refs for Web Audio API continuous alarm loop
+  // Refs and Audio Elements for continuous alarms
+  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isAlarmPlayingRef = useRef<boolean>(false);
+  const [alarmActive, setAlarmActive] = useState(false);
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const alarmOscRef = useRef<OscillatorNode | null>(null);
   const alarmLfoRef = useRef<OscillatorNode | null>(null);
@@ -88,6 +169,30 @@ export default function OrdersPage() {
 
   const startAlarm = () => {
     if (activeRoleRef.current !== 'waiter' && activeRoleRef.current !== 'owner' && activeRoleRef.current !== 'manager') return;
+    if (isAlarmPlayingRef.current) return;
+
+    console.log('Alarm started');
+    isAlarmPlayingRef.current = true;
+    setAlarmActive(true);
+
+    // Try HTMLAudioElement first
+    if (!alarmAudioRef.current) {
+      const dataUri = createBeepWavDataUri();
+      alarmAudioRef.current = new Audio(dataUri);
+      alarmAudioRef.current.loop = true;
+    }
+
+    alarmAudioRef.current.play()
+      .then(() => {
+        // Successfully playing
+      })
+      .catch((err) => {
+        console.warn('HTMLAudioElement play blocked, falling back to Web Audio API:', err);
+        startWebAudioSiren();
+      });
+  };
+
+  const startWebAudioSiren = () => {
     try {
       let ctx = audioCtxRef.current;
       if (!ctx) {
@@ -104,29 +209,29 @@ export default function OrdersPage() {
 
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
-      osc.type = 'sawtooth'; // piercing siren sound
+      osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(800, now);
 
       const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, now); // start at silence
+      gainNode.gain.setValueAtTime(0, now);
 
-      // LFO to modulate gain (pulse it)
+      // Loop LFO every 2 seconds (0.5Hz square wave)
       const lfo = ctx.createOscillator();
       lfo.type = 'square';
-      lfo.frequency.setValueAtTime(1.5, now); // 1.5 pulses per second
+      lfo.frequency.setValueAtTime(0.5, now);
 
       const lfoGain = ctx.createGain();
-      lfoGain.gain.setValueAtTime(0.4, now); // pulse volume up to 0.4
+      lfoGain.gain.setValueAtTime(0.4, now);
 
       lfo.connect(lfoGain);
       lfoGain.connect(gainNode.gain);
 
-      // Connect pitch modulation too for siren effect!
+      // Pitch wobble
       const pitchLfo = ctx.createOscillator();
       pitchLfo.type = 'sine';
-      pitchLfo.frequency.setValueAtTime(2, now); // 2Hz pitch wobble
+      pitchLfo.frequency.setValueAtTime(2, now);
       const pitchLfoGain = ctx.createGain();
-      pitchLfoGain.gain.setValueAtTime(200, now); // wobble range of +/- 200 Hz
+      pitchLfoGain.gain.setValueAtTime(200, now);
       pitchLfo.connect(pitchLfoGain);
       pitchLfoGain.connect(osc.frequency);
 
@@ -142,13 +247,23 @@ export default function OrdersPage() {
       alarmGainRef.current = gainNode;
       (osc as any).pitchLfo = pitchLfo;
       (osc as any).pitchLfoGain = pitchLfoGain;
-      console.log('Waiter looping synthesized alarm started');
     } catch (e) {
-      console.warn('Failed to start looping alarm:', e);
+      console.warn('Failed to start Web Audio API fallback:', e);
     }
   };
 
   const stopAlarm = () => {
+    if (!isAlarmPlayingRef.current) return;
+
+    console.log('Alarm stopped');
+    isAlarmPlayingRef.current = false;
+    setAlarmActive(false);
+
+    if (alarmAudioRef.current) {
+      alarmAudioRef.current.pause();
+      alarmAudioRef.current.currentTime = 0;
+    }
+
     try {
       if (alarmOscRef.current) {
         alarmOscRef.current.stop();
@@ -168,9 +283,8 @@ export default function OrdersPage() {
         alarmGainRef.current.disconnect();
         alarmGainRef.current = null;
       }
-      console.log('Waiter looping alarm stopped');
     } catch (e) {
-      console.warn('Failed to stop looping alarm:', e);
+      console.warn('Failed to stop Web Audio API fallback:', e);
     }
   };
 
@@ -280,6 +394,7 @@ export default function OrdersPage() {
           filter: `restaurant_id=eq.${restId}`
         },
         async (payload) => {
+          console.log('Realtime event received');
           console.log('Realtime Live Orders order change payload received:', payload);
           loadOrders();
 
@@ -318,6 +433,7 @@ export default function OrdersPage() {
           filter: `restaurant_id=eq.${restId}`
         },
         (payload) => {
+          console.log('Realtime event received');
           console.log('Realtime Live Orders request change payload received:', payload);
           loadRequests();
         }
@@ -534,21 +650,21 @@ export default function OrdersPage() {
   return (
     <div className="space-y-8 flex flex-col h-[calc(100vh-8rem)]">
       {/* Alarm alerting cards for waiters */}
-      {activeRole === 'waiter' && (
+      {(activeRole === 'waiter' || activeRole === 'owner' || activeRole === 'manager') && (
         <div className="flex flex-col gap-4 shrink-0 animate-fade-in">
           {orders.some(o => o.status === 'ready') && (
-            <div className="bg-amber-500 text-white rounded-2xl p-6 shadow-xl border border-amber-400 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-orange-500 text-white rounded-2xl p-6 shadow-xl border border-orange-400 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4 text-center md:text-left">
                 <div className="bg-white/20 p-3.5 rounded-2xl animate-bounce">
                   <ChefHat className="h-8 w-8 text-white" />
                 </div>
                 <div>
                   <h3 className="text-2xl font-black tracking-wide uppercase">READY FOR PICKUP!</h3>
-                  <p className="text-sm text-amber-100 font-semibold mt-1">Order food is ready in the kitchen. Deliver it to the table and mark as served to stop the alarm.</p>
+                  <p className="text-sm text-orange-100 font-semibold mt-1">Order food is ready in the kitchen. Deliver it to the table and mark as served to stop the alarm.</p>
                 </div>
               </div>
               <Button
-                className="bg-white text-amber-700 hover:bg-amber-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+                className="bg-white text-orange-700 hover:bg-orange-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
                 onClick={async () => {
                   const firstReady = orders.find(o => o.status === 'ready');
                   if (firstReady) {
@@ -566,7 +682,7 @@ export default function OrdersPage() {
             <div className="bg-blue-600 text-white rounded-2xl p-6 shadow-xl border border-blue-500 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4 text-center md:text-left">
                 <div className="bg-white/20 p-3.5 rounded-2xl animate-bounce">
-                  <Bell className="h-8 w-8 text-white fill-current" />
+                  <Bell className="h-8 w-8 text-white fill-current animate-wiggle" />
                 </div>
                 <div>
                   <h3 className="text-2xl font-black tracking-wide uppercase">TABLE CALLING WAITER!</h3>

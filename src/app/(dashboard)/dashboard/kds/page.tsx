@@ -14,6 +14,83 @@ import {
   X, AlertCircle, Volume2, Sparkles, Bell
 } from 'lucide-react';
 
+// Helper to generate a 2-second WAV file (0.5s A5 880Hz square wave beep followed by 1.5s of silence)
+const createBeepWavDataUri = () => {
+  const sampleRate = 8000;
+  const duration = 2.0;
+  const numSamples = sampleRate * duration;
+  const buffer = new Uint8Array(44 + numSamples);
+  
+  // RIFF header
+  buffer[0] = 0x52; // 'R'
+  buffer[1] = 0x49; // 'I'
+  buffer[2] = 0x46; // 'F'
+  buffer[3] = 0x46; // 'F'
+  
+  const fileSize = 36 + numSamples;
+  buffer[4] = fileSize & 0xff;
+  buffer[5] = (fileSize >> 8) & 0xff;
+  buffer[6] = (fileSize >> 16) & 0xff;
+  buffer[7] = (fileSize >> 24) & 0xff;
+  
+  buffer[8] = 0x57; // 'W'
+  buffer[9] = 0x41; // 'A'
+  buffer[10] = 0x56; // 'V'
+  buffer[11] = 0x45; // 'E'
+  
+  // fmt chunk
+  buffer[12] = 0x66; // 'f'
+  buffer[13] = 0x6d; // 'm'
+  buffer[14] = 0x74; // 't'
+  buffer[15] = 0x20; // ' '
+  
+  buffer[16] = 16; buffer[17] = 0; buffer[18] = 0; buffer[19] = 0;
+  buffer[20] = 1; buffer[21] = 0;
+  buffer[22] = 1; buffer[23] = 0;
+  
+  buffer[24] = sampleRate & 0xff;
+  buffer[25] = (sampleRate >> 8) & 0xff;
+  buffer[26] = (sampleRate >> 16) & 0xff;
+  buffer[27] = (sampleRate >> 24) & 0xff;
+  
+  buffer[28] = sampleRate & 0xff;
+  buffer[29] = (sampleRate >> 8) & 0xff;
+  buffer[30] = (sampleRate >> 16) & 0xff;
+  buffer[31] = (sampleRate >> 24) & 0xff;
+  
+  buffer[32] = 1; buffer[33] = 0;
+  buffer[34] = 8; buffer[35] = 0;
+  
+  // data chunk
+  buffer[36] = 0x64; // 'd'
+  buffer[37] = 0x61; // 'a'
+  buffer[38] = 0x74; // 't'
+  buffer[39] = 0x61; // 'a'
+  
+  buffer[40] = numSamples & 0xff;
+  buffer[41] = (numSamples >> 8) & 0xff;
+  buffer[42] = (numSamples >> 16) & 0xff;
+  buffer[43] = (numSamples >> 24) & 0xff;
+  
+  // Generate square wave for 0.5s, then 1.5s silence
+  const frequency = 880;
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    if (t < 0.5) {
+      const sample = Math.sin(2 * Math.PI * frequency * t) >= 0 ? 225 : 30;
+      buffer[44 + i] = sample;
+    } else {
+      buffer[44 + i] = 128;
+    }
+  }
+  
+  let binary = '';
+  for (let i = 0; i < buffer.length; i++) {
+    binary += String.fromCharCode(buffer[i]);
+  }
+  return 'data:audio/wav;base64,' + btoa(binary);
+};
+
 export default function KitchenDisplayPage() {
   const { restaurant } = useRestaurant();
   const [restaurantId, setRestaurantId] = useState('');
@@ -32,7 +109,11 @@ export default function KitchenDisplayPage() {
   // Time state for relative elapsed calculations
   const [nowTime, setNowTime] = useState<number>(Date.now());
 
-  // Refs for Web Audio API continuous alarm loop
+  // Refs and Audio Elements for continuous alarms
+  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isAlarmPlayingRef = useRef<boolean>(false);
+  const [alarmActive, setAlarmActive] = useState(false);
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const alarmOscRef = useRef<OscillatorNode | null>(null);
   const alarmLfoRef = useRef<OscillatorNode | null>(null);
@@ -111,6 +192,30 @@ export default function KitchenDisplayPage() {
 
   const startAlarm = () => {
     if (!soundEnabledRef.current) return;
+    if (isAlarmPlayingRef.current) return;
+
+    console.log('Alarm started');
+    isAlarmPlayingRef.current = true;
+    setAlarmActive(true);
+
+    // Try HTMLAudioElement first
+    if (!alarmAudioRef.current) {
+      const dataUri = createBeepWavDataUri();
+      alarmAudioRef.current = new Audio(dataUri);
+      alarmAudioRef.current.loop = true;
+    }
+
+    alarmAudioRef.current.play()
+      .then(() => {
+        // Successfully playing
+      })
+      .catch((err) => {
+        console.warn('HTMLAudioElement play blocked, falling back to Web Audio API:', err);
+        startWebAudioSiren();
+      });
+  };
+
+  const startWebAudioSiren = () => {
     try {
       let ctx = audioCtxRef.current;
       if (!ctx) {
@@ -127,29 +232,29 @@ export default function KitchenDisplayPage() {
 
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
-      osc.type = 'sawtooth'; // piercing siren sound
+      osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(600, now);
 
       const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, now); // start at silence
+      gainNode.gain.setValueAtTime(0, now);
 
-      // LFO to modulate gain (pulse it)
+      // Loop LFO every 2 seconds (0.5Hz square wave)
       const lfo = ctx.createOscillator();
       lfo.type = 'square';
-      lfo.frequency.setValueAtTime(2, now); // 2 pulses per second
+      lfo.frequency.setValueAtTime(0.5, now);
 
       const lfoGain = ctx.createGain();
-      lfoGain.gain.setValueAtTime(0.4, now); // pulse volume up to 0.4
+      lfoGain.gain.setValueAtTime(0.4, now);
 
       lfo.connect(lfoGain);
       lfoGain.connect(gainNode.gain);
 
-      // Connect pitch modulation too for siren effect!
+      // Pitch wobble
       const pitchLfo = ctx.createOscillator();
       pitchLfo.type = 'sine';
-      pitchLfo.frequency.setValueAtTime(1, now); // 1Hz pitch wobble
+      pitchLfo.frequency.setValueAtTime(1, now);
       const pitchLfoGain = ctx.createGain();
-      pitchLfoGain.gain.setValueAtTime(150, now); // wobble range of +/- 150 Hz
+      pitchLfoGain.gain.setValueAtTime(150, now);
       pitchLfo.connect(pitchLfoGain);
       pitchLfoGain.connect(osc.frequency);
 
@@ -165,13 +270,23 @@ export default function KitchenDisplayPage() {
       alarmGainRef.current = gainNode;
       (osc as any).pitchLfo = pitchLfo;
       (osc as any).pitchLfoGain = pitchLfoGain;
-      console.log('KDS looping synthesized alarm started');
     } catch (e) {
-      console.warn('Failed to start looping alarm:', e);
+      console.warn('Failed to start Web Audio API fallback:', e);
     }
   };
 
   const stopAlarm = () => {
+    if (!isAlarmPlayingRef.current) return;
+
+    console.log('Alarm stopped');
+    isAlarmPlayingRef.current = false;
+    setAlarmActive(false);
+
+    if (alarmAudioRef.current) {
+      alarmAudioRef.current.pause();
+      alarmAudioRef.current.currentTime = 0;
+    }
+
     try {
       if (alarmOscRef.current) {
         alarmOscRef.current.stop();
@@ -191,9 +306,8 @@ export default function KitchenDisplayPage() {
         alarmGainRef.current.disconnect();
         alarmGainRef.current = null;
       }
-      console.log('KDS looping alarm stopped');
     } catch (e) {
-      console.warn('Failed to stop looping alarm:', e);
+      console.warn('Failed to stop Web Audio API fallback:', e);
     }
   };
 
@@ -241,6 +355,7 @@ export default function KitchenDisplayPage() {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         async (payload) => {
+          console.log('Realtime event received');
           console.log('Realtime KDS order change payload received:', payload);
           
           // Reload orders list
@@ -357,19 +472,19 @@ export default function KitchenDisplayPage() {
 
       {/* Large Pulsing Red Alert Card for New Orders */}
       {orders.some(o => o.status === 'new') && (
-        <div className="bg-rose-600 text-white rounded-2xl p-6 shadow-xl border border-rose-500 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
+        <div className="bg-red-600 text-white rounded-2xl p-6 shadow-xl border border-red-500 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-4 text-center md:text-left">
             <div className="bg-white/20 p-3.5 rounded-2xl animate-bounce">
               <Bell className="h-8 w-8 text-white fill-current animate-wiggle" />
             </div>
             <div>
               <h3 className="text-2xl font-black tracking-wide uppercase">NEW ORDER WAITING FOR CONFIRMATION!</h3>
-              <p className="text-sm text-rose-100 font-semibold mt-1">Loud continuous alarm is active. Accept the order to confirm and stop the alarm.</p>
+              <p className="text-sm text-red-100 font-semibold mt-1">Loud continuous alarm is active. Accept the order to confirm and stop the alarm.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Button
-              className="bg-white text-rose-700 hover:bg-rose-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+              className="bg-white text-red-700 hover:bg-red-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
               onClick={async () => {
                 const firstNew = orders.find(o => o.status === 'new');
                 if (firstNew) {
