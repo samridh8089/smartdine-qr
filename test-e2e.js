@@ -163,9 +163,9 @@ async function runTests() {
     await page.keyboard.up('Control');
     await page.keyboard.press('Backspace');
     await page.type('input[placeholder="e.g. Table 1, Outdoor 4, Cabin B"]', 'Table 5');
-    await sleep(500);
-    // Press Enter to submit the table creation form
-    await page.keyboard.press('Enter');
+    await sleep(1000);
+    // Click the "Create Table" button
+    await clickButton(page, 'Create Table');
     await sleep(3500); // wait for QR generation
     await page.screenshot({ path: path.join(ARTIFACT_DIR, '05_tables_final.png') });
     console.log('Saved 05_tables_final.png');

@@ -27,10 +27,57 @@ export default function KitchenDisplayPage() {
   // Prevent duplicate chimes/alerts for the same order
   const alertedOrderIds = useRef<Set<string>>(new Set());
 
+  // Unlock audio context on user interaction
+  useEffect(() => {
+    const unlock = () => {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const tempCtx = new AudioContextClass();
+        if (tempCtx.state === 'suspended') {
+          tempCtx.resume();
+        }
+      }
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+    window.addEventListener('click', unlock);
+    window.addEventListener('touchstart', unlock);
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+  }, []);
+
+  // Request browser notifications permission
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  const showDesktopNotification = (order: Order) => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(`New Order - ${order.table_name || 'Table'}`, {
+          body: `Items: ${order.items?.map(i => `${i.quantity}x ${i.menu_item_name}`).join(', ') || 'No items'}. Total: ₹${order.total}`,
+          icon: '/favicon.ico'
+        });
+      } catch (e) {
+        console.error('Notification error:', e);
+      }
+    }
+  };
+
   const loadKdsData = async (restId: string) => {
     const allOrders = await db.getOrders(restId);
     const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
     setOrders(activeOrders);
+    
+    // Add existing order IDs to the alerted set so they don't trigger the bell on load
+    allOrders.forEach(o => alertedOrderIds.current.add(o.id));
+    
     setLoading(false);
   };
 
@@ -89,6 +136,7 @@ export default function KitchenDisplayPage() {
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
                 setNewOrderAlert(fullOrder);
+                showDesktopNotification(fullOrder);
               }
             }
           }
@@ -103,29 +151,40 @@ export default function KitchenDisplayPage() {
 
   const playOrderSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioCtx = new AudioContextClass();
+      const now = audioCtx.currentTime;
 
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-      
-      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.15);
+      // Master Volume Control - Loud and Noticeable!
+      const mainGain = audioCtx.createGain();
+      mainGain.gain.setValueAtTime(0.8, now);
+      mainGain.gain.exponentialRampToValueAtTime(0.01, now + 2.0); // 2 second decay
+      mainGain.connect(audioCtx.destination);
 
-      setTimeout(() => {
-        const osc2 = audioCtx.createOscillator();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(1200, audioCtx.currentTime);
-        osc2.connect(gainNode);
-        osc2.start();
-        osc2.stop(audioCtx.currentTime + 0.25);
-      }, 150);
+      // Frequencies for a bright, resonant bell chime
+      const frequencies = [587.33, 880, 1174.66, 1760];
+      const types: OscillatorType[] = ['sine', 'sine', 'triangle', 'sine'];
+      const gains = [0.6, 0.4, 0.2, 0.1];
+
+      frequencies.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const oscGain = audioCtx.createGain();
+        
+        osc.type = types[i];
+        osc.frequency.setValueAtTime(freq, now);
+        
+        oscGain.gain.setValueAtTime(gains[i], now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + (i === 0 ? 2.0 : 0.8));
+        
+        osc.connect(oscGain);
+        oscGain.connect(mainGain);
+        
+        osc.start(now);
+        osc.stop(now + 2.0);
+      });
     } catch (e) {
-      console.log('Audio playback blocked or unsupported');
+      console.warn('Audio playback blocked or unsupported', e);
     }
   };
 

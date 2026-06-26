@@ -38,7 +38,7 @@ export function Dialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto">
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity" 
@@ -46,7 +46,7 @@ export function Dialog({
       />
       
       {/* Dialog Content */}
-      <div className={`relative bg-white rounded-xl shadow-xl w-full ${sizeClasses[size]} overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in-50 zoom-in-95 duration-200 z-10`}>
+      <div className={`relative bg-white rounded-xl shadow-xl w-full ${sizeClasses[size]} overflow-hidden flex flex-col max-h-[90vh] animate-pop z-10`}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-base md:text-lg font-semibold text-slate-900">{title}</h3>

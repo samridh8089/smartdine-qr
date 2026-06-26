@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { db, Profile, Restaurant } from '@/lib/db';
 import MockBanner from '@/components/shared/MockBanner';
-import ThemeToggle from '@/components/shared/ThemeToggle';
+
 import { 
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
@@ -289,8 +289,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Light/Dark mode switcher */}
-                <ThemeToggle />
+                
 
                 {restaurant?.subscription_plan && (
                   <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">

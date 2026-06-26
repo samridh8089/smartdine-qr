@@ -105,6 +105,28 @@ export default function SettingsPage() {
     setStaffLoading(true);
     setStaffError('');
 
+    // Pre-signup validations
+    if (!staffName.trim()) {
+      setStaffError('Staff Full Name is required.');
+      setStaffLoading(false);
+      return;
+    }
+    if (!staffEmail.trim() || !staffEmail.includes('@')) {
+      setStaffError('Please enter a valid email address.');
+      setStaffLoading(false);
+      return;
+    }
+    if (staffPassword.length < 6) {
+      setStaffError('Password must be at least 6 characters long.');
+      setStaffLoading(false);
+      return;
+    }
+    if (!['manager', 'waiter', 'kitchen', 'cashier'].includes(staffRole)) {
+      setStaffError('Please select a valid staff role.');
+      setStaffLoading(false);
+      return;
+    }
+
     try {
       await db.createStaffProfile(
         staffEmail,
@@ -128,7 +150,14 @@ export default function SettingsPage() {
       alert('Staff member registered successfully!');
       await loadStaffAndLogs();
     } catch (err: any) {
-      setStaffError(err.message || 'Failed to create staff member');
+      let msg = err.message || 'Failed to create staff member';
+      if (typeof msg === 'object') {
+        msg = JSON.stringify(msg);
+      }
+      if (msg === '{}' || msg === 'Object' || !msg.trim()) {
+        msg = 'Database constraint error: Check if the role is allowed. Please execute the SQL commands in supabase/migrations/20260625000000_schema_updates.sql in your Supabase SQL Editor to allow manager/waiter/kitchen roles in your database.';
+      }
+      setStaffError(msg);
     } finally {
       setStaffLoading(false);
     }

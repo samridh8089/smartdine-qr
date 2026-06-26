@@ -26,6 +26,90 @@ export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
 
+  const alertedOrderIds = useRef<Set<string>>(new Set());
+
+  // Unlock audio context on user interaction
+  useEffect(() => {
+    const unlock = () => {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const tempCtx = new AudioContextClass();
+        if (tempCtx.state === 'suspended') {
+          tempCtx.resume();
+        }
+      }
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+    window.addEventListener('click', unlock);
+    window.addEventListener('touchstart', unlock);
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+  }, []);
+
+  // Request browser notifications permission
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  const playBellSound = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const audioCtx = new AudioContextClass();
+      const now = audioCtx.currentTime;
+
+      // Master Volume Control - Loud and Noticeable!
+      const mainGain = audioCtx.createGain();
+      mainGain.gain.setValueAtTime(0.8, now);
+      mainGain.gain.exponentialRampToValueAtTime(0.01, now + 2.0); // 2 second decay
+      mainGain.connect(audioCtx.destination);
+
+      // Frequencies for a bright, resonant bell chime
+      const frequencies = [587.33, 880, 1174.66, 1760];
+      const types: OscillatorType[] = ['sine', 'sine', 'triangle', 'sine'];
+      const gains = [0.6, 0.4, 0.2, 0.1];
+
+      frequencies.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const oscGain = audioCtx.createGain();
+        
+        osc.type = types[i];
+        osc.frequency.setValueAtTime(freq, now);
+        
+        oscGain.gain.setValueAtTime(gains[i], now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + (i === 0 ? 2.0 : 0.8));
+        
+        osc.connect(oscGain);
+        oscGain.connect(mainGain);
+        
+        osc.start(now);
+        osc.stop(now + 2.0);
+      });
+    } catch (e) {
+      console.warn('Audio playback blocked or unsupported', e);
+    }
+  };
+
+  const showDesktopNotification = (order: Order) => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(`New Order - ${order.table_name || 'Table'}`, {
+          body: `Items: ${order.items?.map(i => `${i.quantity}x ${i.menu_item_name}`).join(', ') || 'No items'}. Total: ₹${order.total}`,
+          icon: '/favicon.ico'
+        });
+      } catch (e) {
+        console.error('Notification error:', e);
+      }
+    }
+  };
+
   useEffect(() => {
     async function loadInitialData() {
       const user = await getActiveUser();
@@ -37,6 +121,9 @@ export default function OrdersPage() {
 
       const allOrders = await db.getOrders(restId);
       setOrders(allOrders);
+
+      // Cache existing order IDs on initial load so we don't chime for them
+      allOrders.forEach(o => alertedOrderIds.current.add(o.id));
 
       // Load pending requests
       const reqs = await db.getCustomerRequests(restId);
@@ -83,8 +170,29 @@ export default function OrdersPage() {
           table: 'orders',
           filter: `restaurant_id=eq.${restId}`
         },
-        () => {
+        async (payload) => {
           loadOrders();
+
+          if (payload.eventType === 'INSERT') {
+            const newOrderPayload = payload.new as Order;
+            if (!alertedOrderIds.current.has(newOrderPayload.id)) {
+              alertedOrderIds.current.add(newOrderPayload.id);
+              
+              // Play bell sound
+              playBellSound();
+              
+              // Trigger hardware vibration
+              if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                navigator.vibrate([200, 100, 200]);
+              }
+
+              // Fetch full order with items and display desktop notification
+              const fullOrder = await db.getOrderById(newOrderPayload.id);
+              if (fullOrder) {
+                showDesktopNotification(fullOrder);
+              }
+            }
+          }
         }
       )
       .on(

@@ -168,3 +168,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+
+-- 8. ADD POLICY TO ALLOW RESTAURANT STAFF TO READ ALL PROFILES IN THE SAME RESTAURANT
+CREATE OR REPLACE FUNCTION public.get_user_restaurant_id(user_id UUID)
+RETURNS UUID AS $$
+  SELECT restaurant_id FROM public.profiles WHERE id = user_id;
+$$ LANGUAGE sql SECURITY DEFINER;
+
+DROP POLICY IF EXISTS "Allow users of same restaurant to read profiles" ON public.profiles;
+CREATE POLICY "Allow users of same restaurant to read profiles"
+    ON public.profiles FOR SELECT
+    USING (
+        restaurant_id = public.get_user_restaurant_id(auth.uid())
+    );
+

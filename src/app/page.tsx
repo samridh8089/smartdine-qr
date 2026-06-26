@@ -6,7 +6,7 @@ import {
   UtensilsCrossed, QrCode, ClipboardList, ChefHat, BarChart3, 
   CreditCard, Smartphone, Check, Sparkles, ShieldCheck, Menu, X
 } from 'lucide-react';
-import ThemeToggle from '@/components/shared/ThemeToggle';
+
 import { db, PricingPlan } from '@/lib/db';
 import { formatPrice } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
@@ -53,7 +53,6 @@ export default function LandingPage() {
         <div className="hidden md:flex items-center gap-6">
           <a href="#features" className="text-sm font-bold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">Features</a>
           <a href="#pricing" className="text-sm font-bold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors">Pricing</a>
-          <ThemeToggle />
           <Link href="/login" className="text-sm font-bold text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white transition-colors">
             Sign In
           </Link>
@@ -66,7 +65,6 @@ export default function LandingPage() {
 
         {/* Mobile Header Buttons - Fixed alignments */}
         <div className="flex md:hidden items-center gap-2">
-          <ThemeToggle />
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
