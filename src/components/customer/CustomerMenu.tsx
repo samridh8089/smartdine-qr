@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { db, Restaurant, Category, MenuItem, Table } from '@/lib/db';
+import { db, Restaurant, Category, MenuItem, Table, CustomerRequest } from '@/lib/db';
 import { formatPrice } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -104,6 +105,73 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
   // Call Staff States
   const [callLoading, setCallLoading] = useState(false);
   const [requestSent, setRequestSent] = useState<string | null>(null);
+  const [activeRequest, setActiveRequest] = useState<CustomerRequest | null>(null);
+
+  // Load active request from sessionStorage on mount
+  useEffect(() => {
+    if (!restaurant || !tableId) return;
+    const savedReqStr = sessionStorage.getItem(`smartdine_active_req_${tableId}`);
+    if (savedReqStr) {
+      try {
+        const savedReq = JSON.parse(savedReqStr) as CustomerRequest;
+        // Fetch fresh status from DB
+        supabase.from('customer_requests').select('*').eq('id', savedReq.id).then(({ data }) => {
+          if (data && data.length > 0 && data[0].status !== 'completed') {
+            setActiveRequest(data[0] as CustomerRequest);
+          } else {
+            sessionStorage.removeItem(`smartdine_active_req_${tableId}`);
+          }
+        });
+      } catch (e) {
+        sessionStorage.removeItem(`smartdine_active_req_${tableId}`);
+      }
+    }
+  }, [restaurant, tableId]);
+
+  // Sync activeRequest to sessionStorage
+  useEffect(() => {
+    if (!tableId) return;
+    if (activeRequest) {
+      sessionStorage.setItem(`smartdine_active_req_${tableId}`, JSON.stringify(activeRequest));
+    } else {
+      sessionStorage.removeItem(`smartdine_active_req_${tableId}`);
+    }
+  }, [activeRequest, tableId]);
+
+  // Realtime subscription for customer request changes
+  useEffect(() => {
+    if (!activeRequest?.id) return;
+
+    console.log(`Subscribing to realtime updates for customer request: ${activeRequest.id}`);
+    const channel = supabase
+      .channel(`customer_request_tracking_${activeRequest.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'customer_requests',
+          filter: `id=eq.${activeRequest.id}`
+        },
+        (payload) => {
+          console.log('Customer Request status update payload received:', payload.new);
+          const updated = payload.new as CustomerRequest;
+          setActiveRequest(updated);
+
+          // Auto-clear notification if it becomes completed
+          if (updated.status === 'completed') {
+            setTimeout(() => {
+              setActiveRequest(null);
+            }, 3000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeRequest?.id]);
 
   useEffect(() => {
     async function loadData() {
@@ -221,7 +289,8 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
     if (!restaurant || !table) return;
     setCallLoading(true);
     try {
-      await db.createCustomerRequest(restaurant.id, table.id, type);
+      const newRequest = await db.createCustomerRequest(restaurant.id, table.id, type);
+      setActiveRequest(newRequest);
       setRequestSent(type);
       setTimeout(() => setRequestSent(null), 4000);
     } catch (err: any) {
@@ -367,12 +436,55 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 space-y-6">
         
         {/* Call Waiter confirmation alert banner */}
-        {requestSent && (
+        {requestSent && !activeRequest && (
           <div className="bg-emerald-500 border border-emerald-400 text-white rounded-2xl p-4 flex items-center gap-3 text-xs md:text-sm font-bold shadow-lg animate-pop">
             <CheckCircle2 className="h-5 w-5 shrink-0" />
             <div>
               {requestSent === 'call_waiter' ? 'Staff has been notified. A waiter will visit your table shortly!' : 'Bill invoice request sent! Staff will bring the printout.'}
             </div>
+          </div>
+        )}
+
+        {/* Persistent active Call Waiter request card */}
+        {activeRequest && (
+          <div className={`p-5 rounded-2xl border flex items-center justify-between gap-4 shadow-lg animate-pop ${
+            activeRequest.status === 'pending'
+              ? 'bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900/40 text-blue-900 dark:text-blue-200 animate-pulse'
+              : 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/40 text-emerald-900 dark:text-emerald-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl ${
+                activeRequest.status === 'pending' ? 'bg-blue-500 text-white' : 'bg-emerald-500 text-white'
+              }`}>
+                <Bell className={`h-6 w-6 ${activeRequest.status === 'pending' ? 'animate-bounce' : 'animate-pulse'}`} />
+              </div>
+              <div>
+                <h4 className="font-extrabold text-sm md:text-base uppercase tracking-wide">
+                  {activeRequest.status === 'pending' ? 'Waiter Called' : 'Waiter is on the way'}
+                </h4>
+                <p className="text-xs font-semibold opacity-90 mt-1">
+                  {activeRequest.status === 'pending' 
+                    ? 'Staff has been notified. A waiter will visit your table shortly!' 
+                    : 'A waiter has accepted your request and is coming to your table now!'}
+                </p>
+                <p className="text-[10px] opacity-75 mt-1.5 font-mono">
+                  Requested at {new Date(activeRequest.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+            {activeRequest.status === 'pending' && (
+              <button
+                onClick={async () => {
+                  try {
+                    await db.resolveCustomerRequest(activeRequest.id);
+                    setActiveRequest(null);
+                  } catch (e) {}
+                }}
+                className="text-xs font-bold underline cursor-pointer hover:opacity-80"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         )}
 

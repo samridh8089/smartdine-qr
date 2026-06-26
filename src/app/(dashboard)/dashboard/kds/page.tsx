@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { db, Order } from '@/lib/db';
-import { getActiveUser, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
+import { useRestaurant } from '../../layout';
 import { formatPrice } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 
 export default function KitchenDisplayPage() {
+  const { restaurant } = useRestaurant();
   const [restaurantId, setRestaurantId] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,34 +32,58 @@ export default function KitchenDisplayPage() {
   // Time state for relative elapsed calculations
   const [nowTime, setNowTime] = useState<number>(Date.now());
 
+  // Refs for Web Audio API continuous alarm loop
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const alarmOscRef = useRef<OscillatorNode | null>(null);
+  const alarmLfoRef = useRef<OscillatorNode | null>(null);
+  const alarmGainRef = useRef<GainNode | null>(null);
+  const soundEnabledRef = useRef<boolean>(soundEnabled);
+
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+    if (!soundEnabled) {
+      stopAlarm();
+    } else if (orders.some(o => o.status === 'new')) {
+      startAlarm();
+    }
+  }, [soundEnabled, orders]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setNowTime(Date.now());
     }, 15000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      stopAlarm();
+    };
   }, []);
 
   // Prevent duplicate chimes/alerts for the same order
   const alertedOrderIds = useRef<Set<string>>(new Set());
 
-  // Unlock audio context on user interaction
+  // Unlock and setup AudioContext on user interaction
   useEffect(() => {
-    const unlock = () => {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const tempCtx = new AudioContextClass();
-        if (tempCtx.state === 'suspended') {
-          tempCtx.resume();
+    const initAudio = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass && !audioCtxRef.current) {
+          const ctx = new AudioContextClass();
+          if (ctx.state === 'suspended') {
+            ctx.resume();
+          }
+          audioCtxRef.current = ctx;
         }
+      } catch (e) {
+        console.warn('Failed to initialize AudioContext:', e);
       }
-      window.removeEventListener('click', unlock);
-      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('click', initAudio);
+      window.removeEventListener('touchstart', initAudio);
     };
-    window.addEventListener('click', unlock);
-    window.addEventListener('touchstart', unlock);
+    window.addEventListener('click', initAudio);
+    window.addEventListener('touchstart', initAudio);
     return () => {
-      window.removeEventListener('click', unlock);
-      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('click', initAudio);
+      window.removeEventListener('touchstart', initAudio);
     };
   }, []);
 
@@ -83,6 +109,103 @@ export default function KitchenDisplayPage() {
     }
   };
 
+  const startAlarm = () => {
+    if (!soundEnabledRef.current) return;
+    try {
+      let ctx = audioCtxRef.current;
+      if (!ctx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+        ctx = new AudioContextClass();
+        audioCtxRef.current = ctx;
+      }
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      if (alarmOscRef.current) return; // already running
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth'; // piercing siren sound
+      osc.frequency.setValueAtTime(600, now);
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0, now); // start at silence
+
+      // LFO to modulate gain (pulse it)
+      const lfo = ctx.createOscillator();
+      lfo.type = 'square';
+      lfo.frequency.setValueAtTime(2, now); // 2 pulses per second
+
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.setValueAtTime(0.4, now); // pulse volume up to 0.4
+
+      lfo.connect(lfoGain);
+      lfoGain.connect(gainNode.gain);
+
+      // Connect pitch modulation too for siren effect!
+      const pitchLfo = ctx.createOscillator();
+      pitchLfo.type = 'sine';
+      pitchLfo.frequency.setValueAtTime(1, now); // 1Hz pitch wobble
+      const pitchLfoGain = ctx.createGain();
+      pitchLfoGain.gain.setValueAtTime(150, now); // wobble range of +/- 150 Hz
+      pitchLfo.connect(pitchLfoGain);
+      pitchLfoGain.connect(osc.frequency);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      lfo.start(now);
+      pitchLfo.start(now);
+      osc.start(now);
+
+      alarmOscRef.current = osc;
+      alarmLfoRef.current = lfo;
+      alarmGainRef.current = gainNode;
+      (osc as any).pitchLfo = pitchLfo;
+      (osc as any).pitchLfoGain = pitchLfoGain;
+      console.log('KDS looping synthesized alarm started');
+    } catch (e) {
+      console.warn('Failed to start looping alarm:', e);
+    }
+  };
+
+  const stopAlarm = () => {
+    try {
+      if (alarmOscRef.current) {
+        alarmOscRef.current.stop();
+        alarmOscRef.current.disconnect();
+        if ((alarmOscRef.current as any).pitchLfo) {
+          (alarmOscRef.current as any).pitchLfo.stop();
+          (alarmOscRef.current as any).pitchLfo.disconnect();
+        }
+        alarmOscRef.current = null;
+      }
+      if (alarmLfoRef.current) {
+        alarmLfoRef.current.stop();
+        alarmLfoRef.current.disconnect();
+        alarmLfoRef.current = null;
+      }
+      if (alarmGainRef.current) {
+        alarmGainRef.current.disconnect();
+        alarmGainRef.current = null;
+      }
+      console.log('KDS looping alarm stopped');
+    } catch (e) {
+      console.warn('Failed to stop looping alarm:', e);
+    }
+  };
+
+  const syncAlarmState = (activeOrdersList: Order[]) => {
+    const hasNew = activeOrdersList.some(o => o.status === 'new');
+    if (hasNew) {
+      startAlarm();
+    } else {
+      stopAlarm();
+    }
+  };
+
   const loadKdsData = async (restId: string) => {
     const allOrders = await db.getOrders(restId);
     const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
@@ -92,18 +215,15 @@ export default function KitchenDisplayPage() {
     allOrders.forEach(o => alertedOrderIds.current.add(o.id));
     
     setLoading(false);
+    syncAlarmState(activeOrders);
   };
 
   useEffect(() => {
-    async function loadKds() {
-      const user = await getActiveUser();
-      if (!user || !user.restaurant_id) return;
-      const restId = user.restaurant_id;
-      setRestaurantId(restId);
-      await loadKdsData(restId);
+    if (restaurant?.id) {
+      setRestaurantId(restaurant.id);
+      loadKdsData(restaurant.id);
     }
-    loadKds();
-  }, []);
+  }, [restaurant]);
 
   // Setup Supabase Realtime for Incoming Orders
   useEffect(() => {
@@ -127,6 +247,7 @@ export default function KitchenDisplayPage() {
           const allOrders = await db.getOrders(restaurantId);
           const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
           setOrders(activeOrders);
+          syncAlarmState(activeOrders);
 
           // Handle new order insertion chimes
           if (payload.eventType === 'INSERT') {
@@ -135,12 +256,7 @@ export default function KitchenDisplayPage() {
             // Check if we already alerted for this order
             if (!alertedOrderIds.current.has(newOrderPayload.id)) {
               alertedOrderIds.current.add(newOrderPayload.id);
-              console.log(`New order detected! Playing chimes for order ID: ${newOrderPayload.id}`);
-
-              // Play double chime
-              if (soundEnabled) {
-                playOrderSound();
-              }
+              console.log(`New order detected! Playing alarm for order ID: ${newOrderPayload.id}`);
 
               // Trigger hardware vibration (mobile/tablets support)
               if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -173,47 +289,9 @@ export default function KitchenDisplayPage() {
     return () => {
       console.log('Cleaning up KDS realtime channel subscription...');
       supabase.removeChannel(channel);
+      stopAlarm();
     };
-  }, [restaurantId, soundEnabled]);
-
-  function playOrderSound() {
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-      const audioCtx = new AudioContextClass();
-      const now = audioCtx.currentTime;
-
-      // Master Volume Control - Loud and Noticeable!
-      const mainGain = audioCtx.createGain();
-      mainGain.gain.setValueAtTime(0.8, now);
-      mainGain.gain.exponentialRampToValueAtTime(0.01, now + 2.0); // 2 second decay
-      mainGain.connect(audioCtx.destination);
-
-      // Frequencies for a bright, resonant bell chime
-      const frequencies = [587.33, 880, 1174.66, 1760];
-      const types: OscillatorType[] = ['sine', 'sine', 'triangle', 'sine'];
-      const gains = [0.6, 0.4, 0.2, 0.1];
-
-      frequencies.forEach((freq, i) => {
-        const osc = audioCtx.createOscillator();
-        const oscGain = audioCtx.createGain();
-        
-        osc.type = types[i];
-        osc.frequency.setValueAtTime(freq, now);
-        
-        oscGain.gain.setValueAtTime(gains[i], now);
-        oscGain.gain.exponentialRampToValueAtTime(0.001, now + (i === 0 ? 2.0 : 0.8));
-        
-        osc.connect(oscGain);
-        oscGain.connect(mainGain);
-        
-        osc.start(now);
-        osc.stop(now + 2.0);
-      });
-    } catch (e) {
-      console.warn('Audio playback blocked or unsupported', e);
-    }
-  };
+  }, [restaurantId]);
 
   const updateStatus = async (orderId: string, nextStatus: Order['status']) => {
     try {
@@ -276,6 +354,34 @@ export default function KitchenDisplayPage() {
           {soundEnabled ? 'Kitchen Bell On' : 'Kitchen Bell Off'}
         </button>
       </div>
+
+      {/* Large Pulsing Red Alert Card for New Orders */}
+      {orders.some(o => o.status === 'new') && (
+        <div className="bg-rose-600 text-white rounded-2xl p-6 shadow-xl border border-rose-500 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-4 text-center md:text-left">
+            <div className="bg-white/20 p-3.5 rounded-2xl animate-bounce">
+              <Bell className="h-8 w-8 text-white fill-current animate-wiggle" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-black tracking-wide uppercase">NEW ORDER WAITING FOR CONFIRMATION!</h3>
+              <p className="text-sm text-rose-100 font-semibold mt-1">Loud continuous alarm is active. Accept the order to confirm and stop the alarm.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              className="bg-white text-rose-700 hover:bg-rose-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+              onClick={async () => {
+                const firstNew = orders.find(o => o.status === 'new');
+                if (firstNew) {
+                  await updateStatus(firstNew.id, 'accepted');
+                }
+              }}
+            >
+              Accept Order
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Grid Columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-[70vh]">
@@ -452,14 +558,10 @@ export default function KitchenDisplayPage() {
                       ))}
                     </ul>
 
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <Button 
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 cursor-pointer" 
-                        size="sm"
-                        onClick={() => updateStatus(order.id, 'served')}
-                      >
-                        <Check className="h-3.5 w-3.5 mr-1" /> Serve & Complete
-                      </Button>
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+                      <span className="text-xs text-slate-400 font-semibold italic flex items-center justify-center gap-1.5 py-1">
+                        <Clock className="h-3.5 w-3.5 text-purple-500" /> Waiting for waiter pickup
+                      </span>
                     </div>
                   </CardContent>
                 </Card>

@@ -4,18 +4,19 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { db, Order, Restaurant, CustomerRequest } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
+import { useRestaurant } from '../../layout';
 import { formatPrice, formatDate } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle } from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat } from 'lucide-react';
 
 export default function OrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const orderIdParam = searchParams.get('id');
 
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const { restaurant, activeRole } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,25 +31,49 @@ export default function OrdersPage() {
   const [toast, setToast] = useState<{ message: string; visible: boolean } | null>(null);
 
   const alertedOrderIds = useRef<Set<string>>(new Set());
+  const selectedOrderRef = useRef<Order | null>(selectedOrder);
 
-  // Unlock audio context on user interaction
+  // Refs for Web Audio API continuous alarm loop
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const alarmOscRef = useRef<OscillatorNode | null>(null);
+  const alarmLfoRef = useRef<OscillatorNode | null>(null);
+  const alarmGainRef = useRef<GainNode | null>(null);
+  const activeRoleRef = useRef<string>('');
+
+  // Sync ref with state changes
   useEffect(() => {
-    const unlock = () => {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const tempCtx = new AudioContextClass();
-        if (tempCtx.state === 'suspended') {
-          tempCtx.resume();
+    selectedOrderRef.current = selectedOrder;
+  }, [selectedOrder]);
+
+  useEffect(() => {
+    activeRoleRef.current = activeRole;
+    syncAlarmState(orders, customerRequests);
+  }, [activeRole, orders, customerRequests]);
+
+  // Unlock and setup AudioContext on user interaction
+  useEffect(() => {
+    const initAudio = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass && !audioCtxRef.current) {
+          const ctx = new AudioContextClass();
+          if (ctx.state === 'suspended') {
+            ctx.resume();
+          }
+          audioCtxRef.current = ctx;
         }
+      } catch (e) {
+        console.warn('Failed to initialize AudioContext:', e);
       }
-      window.removeEventListener('click', unlock);
-      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('click', initAudio);
+      window.removeEventListener('touchstart', initAudio);
     };
-    window.addEventListener('click', unlock);
-    window.addEventListener('touchstart', unlock);
+    window.addEventListener('click', initAudio);
+    window.addEventListener('touchstart', initAudio);
     return () => {
-      window.removeEventListener('click', unlock);
-      window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('click', initAudio);
+      window.removeEventListener('touchstart', initAudio);
+      stopAlarm();
     };
   }, []);
 
@@ -61,42 +86,105 @@ export default function OrdersPage() {
     }
   }, []);
 
-  const playBellSound = () => {
+  const startAlarm = () => {
+    if (activeRoleRef.current !== 'waiter' && activeRoleRef.current !== 'owner' && activeRoleRef.current !== 'manager') return;
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-      const audioCtx = new AudioContextClass();
-      const now = audioCtx.currentTime;
+      let ctx = audioCtxRef.current;
+      if (!ctx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+        ctx = new AudioContextClass();
+        audioCtxRef.current = ctx;
+      }
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
 
-      // Master Volume Control - Loud and Noticeable!
-      const mainGain = audioCtx.createGain();
-      mainGain.gain.setValueAtTime(0.8, now);
-      mainGain.gain.exponentialRampToValueAtTime(0.01, now + 2.0); // 2 second decay
-      mainGain.connect(audioCtx.destination);
+      if (alarmOscRef.current) return; // already running
 
-      // Frequencies for a bright, resonant bell chime
-      const frequencies = [587.33, 880, 1174.66, 1760];
-      const types: OscillatorType[] = ['sine', 'sine', 'triangle', 'sine'];
-      const gains = [0.6, 0.4, 0.2, 0.1];
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth'; // piercing siren sound
+      osc.frequency.setValueAtTime(800, now);
 
-      frequencies.forEach((freq, i) => {
-        const osc = audioCtx.createOscillator();
-        const oscGain = audioCtx.createGain();
-        
-        osc.type = types[i];
-        osc.frequency.setValueAtTime(freq, now);
-        
-        oscGain.gain.setValueAtTime(gains[i], now);
-        oscGain.gain.exponentialRampToValueAtTime(0.001, now + (i === 0 ? 2.0 : 0.8));
-        
-        osc.connect(oscGain);
-        oscGain.connect(mainGain);
-        
-        osc.start(now);
-        osc.stop(now + 2.0);
-      });
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0, now); // start at silence
+
+      // LFO to modulate gain (pulse it)
+      const lfo = ctx.createOscillator();
+      lfo.type = 'square';
+      lfo.frequency.setValueAtTime(1.5, now); // 1.5 pulses per second
+
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.setValueAtTime(0.4, now); // pulse volume up to 0.4
+
+      lfo.connect(lfoGain);
+      lfoGain.connect(gainNode.gain);
+
+      // Connect pitch modulation too for siren effect!
+      const pitchLfo = ctx.createOscillator();
+      pitchLfo.type = 'sine';
+      pitchLfo.frequency.setValueAtTime(2, now); // 2Hz pitch wobble
+      const pitchLfoGain = ctx.createGain();
+      pitchLfoGain.gain.setValueAtTime(200, now); // wobble range of +/- 200 Hz
+      pitchLfo.connect(pitchLfoGain);
+      pitchLfoGain.connect(osc.frequency);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      lfo.start(now);
+      pitchLfo.start(now);
+      osc.start(now);
+
+      alarmOscRef.current = osc;
+      alarmLfoRef.current = lfo;
+      alarmGainRef.current = gainNode;
+      (osc as any).pitchLfo = pitchLfo;
+      (osc as any).pitchLfoGain = pitchLfoGain;
+      console.log('Waiter looping synthesized alarm started');
     } catch (e) {
-      console.warn('Audio playback blocked or unsupported', e);
+      console.warn('Failed to start looping alarm:', e);
+    }
+  };
+
+  const stopAlarm = () => {
+    try {
+      if (alarmOscRef.current) {
+        alarmOscRef.current.stop();
+        alarmOscRef.current.disconnect();
+        if ((alarmOscRef.current as any).pitchLfo) {
+          (alarmOscRef.current as any).pitchLfo.stop();
+          (alarmOscRef.current as any).pitchLfo.disconnect();
+        }
+        alarmOscRef.current = null;
+      }
+      if (alarmLfoRef.current) {
+        alarmLfoRef.current.stop();
+        alarmLfoRef.current.disconnect();
+        alarmLfoRef.current = null;
+      }
+      if (alarmGainRef.current) {
+        alarmGainRef.current.disconnect();
+        alarmGainRef.current = null;
+      }
+      console.log('Waiter looping alarm stopped');
+    } catch (e) {
+      console.warn('Failed to stop looping alarm:', e);
+    }
+  };
+
+  const syncAlarmState = (activeOrdersList: Order[], requestsList: CustomerRequest[]) => {
+    if (activeRoleRef.current !== 'waiter' && activeRoleRef.current !== 'owner' && activeRoleRef.current !== 'manager') {
+      stopAlarm();
+      return;
+    }
+    const hasReady = activeOrdersList.some(o => o.status === 'ready');
+    const hasPendingCall = requestsList.some(r => r.status === 'pending');
+    if (hasReady || hasPendingCall) {
+      startAlarm();
+    } else {
+      stopAlarm();
     }
   };
 
@@ -113,36 +201,37 @@ export default function OrdersPage() {
     }
   };
 
-  useEffect(() => {
-    async function loadInitialData() {
-      const user = await getActiveUser();
-      if (!user || !user.restaurant_id) return;
-      const restId = user.restaurant_id;
+  const loadInitialData = async (restId: string) => {
+    const allOrders = await db.getOrders(restId);
+    const filteredForRole = activeRole === 'waiter'
+      ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+      : allOrders;
+    setOrders(filteredForRole);
 
-      const rest = await db.getRestaurantById(restId);
-      if (rest) setRestaurant(rest);
+    // Cache existing order IDs on initial load so we don't chime for them
+    allOrders.forEach(o => alertedOrderIds.current.add(o.id));
 
-      const allOrders = await db.getOrders(restId);
-      setOrders(allOrders);
+    // Load pending & accepted requests
+    const reqs = await db.getCustomerRequests(restId);
+    const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+    setCustomerRequests(activeReqs);
 
-      // Cache existing order IDs on initial load so we don't chime for them
-      allOrders.forEach(o => alertedOrderIds.current.add(o.id));
-
-      // Load pending requests
-      const reqs = await db.getCustomerRequests(restId);
-      setCustomerRequests(reqs.filter(r => r.status === 'pending'));
-
-      if (orderIdParam) {
-        const selected = allOrders.find(o => o.id === orderIdParam);
-        if (selected) setSelectedOrder(selected);
-      } else if (allOrders.length > 0 && !selectedOrder) {
-        setSelectedOrder(allOrders[0]);
-      }
-
-      setLoading(false);
+    if (orderIdParam) {
+      const selected = filteredForRole.find(o => o.id === orderIdParam);
+      if (selected) setSelectedOrder(selected);
+    } else if (filteredForRole.length > 0 && !selectedOrder) {
+      setSelectedOrder(filteredForRole[0]);
     }
-    loadInitialData();
-  }, [orderIdParam]);
+
+    setLoading(false);
+    syncAlarmState(filteredForRole, activeReqs);
+  };
+
+  useEffect(() => {
+    if (restaurant?.id) {
+      loadInitialData(restaurant.id);
+    }
+  }, [restaurant, orderIdParam]);
 
   // Realtime Supabase Subscription for Orders & Customer Requests
   useEffect(() => {
@@ -151,16 +240,32 @@ export default function OrdersPage() {
 
     const loadRequests = async () => {
       const reqs = await db.getCustomerRequests(restId);
-      setCustomerRequests(reqs.filter(r => r.status === 'pending'));
+      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      setCustomerRequests(activeReqs);
+      
+      const currentOrders = await db.getOrders(restId);
+      const filteredOrders = activeRole === 'waiter'
+        ? currentOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+        : currentOrders;
+      syncAlarmState(filteredOrders, activeReqs);
     };
 
     const loadOrders = async () => {
       const allOrders = await db.getOrders(restId);
-      setOrders(allOrders);
-      if (selectedOrder) {
-        const updated = allOrders.find(o => o.id === selectedOrder.id);
+      const filteredOrders = activeRole === 'waiter'
+        ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+        : allOrders;
+      setOrders(filteredOrders);
+      
+      const currentSelected = selectedOrderRef.current;
+      if (currentSelected) {
+        const updated = filteredOrders.find(o => o.id === currentSelected.id);
         if (updated) setSelectedOrder(updated);
       }
+      
+      const reqs = await db.getCustomerRequests(restId);
+      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      syncAlarmState(filteredOrders, activeReqs);
     };
 
     console.log(`Subscribing to live orders & requests updates for restaurant: ${restId}`);
@@ -183,9 +288,6 @@ export default function OrdersPage() {
             if (!alertedOrderIds.current.has(newOrderPayload.id)) {
               alertedOrderIds.current.add(newOrderPayload.id);
               console.log(`New order detected! Playing chimes for order ID: ${newOrderPayload.id}`);
-              
-              // Play bell sound
-              playBellSound();
               
               // Trigger hardware vibration
               if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -230,8 +332,9 @@ export default function OrdersPage() {
     return () => {
       console.log('Cleaning up Live Orders realtime channel subscription...');
       supabase.removeChannel(channel);
+      stopAlarm();
     };
-  }, [restaurant, selectedOrder]);
+  }, [restaurant]);
 
   const handleSelectOrder = (order: Order) => {
     setSelectedOrder(order);
@@ -254,10 +357,25 @@ export default function OrdersPage() {
     }
   };
 
+  const handleAcceptRequest = async (requestId: string) => {
+    try {
+      await db.acceptCustomerRequest(requestId);
+      const reqs = await db.getCustomerRequests(restaurant!.id);
+      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      setCustomerRequests(activeReqs);
+      syncAlarmState(orders, activeReqs);
+    } catch (err: any) {
+      alert(`Failed to accept request: ${err.message}`);
+    }
+  };
+
   const handleResolveRequest = async (requestId: string) => {
     try {
       await db.resolveCustomerRequest(requestId);
-      setCustomerRequests(customerRequests.filter(r => r.id !== requestId));
+      const reqs = await db.getCustomerRequests(restaurant!.id);
+      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      setCustomerRequests(activeReqs);
+      syncAlarmState(orders, activeReqs);
       alert('Request marked resolved.');
     } catch (err: any) {
       alert(`Failed to resolve request: ${err.message}`);
@@ -415,6 +533,66 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-8 flex flex-col h-[calc(100vh-8rem)]">
+      {/* Alarm alerting cards for waiters */}
+      {activeRole === 'waiter' && (
+        <div className="flex flex-col gap-4 shrink-0 animate-fade-in">
+          {orders.some(o => o.status === 'ready') && (
+            <div className="bg-amber-500 text-white rounded-2xl p-6 shadow-xl border border-amber-400 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4 text-center md:text-left">
+                <div className="bg-white/20 p-3.5 rounded-2xl animate-bounce">
+                  <ChefHat className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black tracking-wide uppercase">READY FOR PICKUP!</h3>
+                  <p className="text-sm text-amber-100 font-semibold mt-1">Order food is ready in the kitchen. Deliver it to the table and mark as served to stop the alarm.</p>
+                </div>
+              </div>
+              <Button
+                className="bg-white text-amber-700 hover:bg-amber-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+                onClick={async () => {
+                  const firstReady = orders.find(o => o.status === 'ready');
+                  if (firstReady) {
+                    setSelectedOrder(firstReady);
+                    await updateOrderStatus('served');
+                  }
+                }}
+              >
+                Serve Order
+              </Button>
+            </div>
+          )}
+
+          {customerRequests.some(r => r.status === 'pending') && (
+            <div className="bg-blue-600 text-white rounded-2xl p-6 shadow-xl border border-blue-500 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4 text-center md:text-left">
+                <div className="bg-white/20 p-3.5 rounded-2xl animate-bounce">
+                  <Bell className="h-8 w-8 text-white fill-current" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black tracking-wide uppercase">TABLE CALLING WAITER!</h3>
+                  <div className="space-y-1 mt-1 text-sm text-blue-100 font-semibold">
+                    {customerRequests.filter(r => r.status === 'pending').map(r => (
+                      <p key={r.id}>🚨 {r.table_name} is calling a waiter ({r.type === 'call_waiter' ? 'Service Request' : 'Bill Request'}).</p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <Button
+                className="bg-white text-blue-700 hover:bg-blue-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+                onClick={async () => {
+                  const firstPending = customerRequests.find(r => r.status === 'pending');
+                  if (firstPending) {
+                    await handleAcceptRequest(firstPending.id);
+                  }
+                }}
+              >
+                Accept Request
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header section with Tabs */}
       <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -552,24 +730,24 @@ export default function OrdersPage() {
                   <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-3">
                     <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
                     <div className="flex flex-wrap gap-2">
-                      {selectedOrder.status === 'new' && (
+                      {activeRole !== 'waiter' && selectedOrder.status === 'new' && (
                         <Button size="sm" variant="primary" className="cursor-pointer" onClick={() => updateOrderStatus('accepted')}>
                           Accept Order
                         </Button>
                       )}
-                      {(selectedOrder.status === 'accepted' || selectedOrder.status === 'new') && (
+                      {activeRole !== 'waiter' && (selectedOrder.status === 'accepted' || selectedOrder.status === 'new') && (
                         <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white cursor-pointer" onClick={() => updateOrderStatus('preparing')}>
                           Start Preparing
                         </Button>
                       )}
-                      {selectedOrder.status === 'preparing' && (
+                      {activeRole !== 'waiter' && selectedOrder.status === 'preparing' && (
                         <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" onClick={() => updateOrderStatus('ready')}>
                           Mark Ready for Pickup
                         </Button>
                       )}
                       {selectedOrder.status === 'ready' && (
                         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" onClick={() => updateOrderStatus('served')}>
-                          Mark Served
+                          Serve Order
                         </Button>
                       )}
                       {selectedOrder.status === 'served' && (
@@ -577,7 +755,7 @@ export default function OrdersPage() {
                           Complete Order
                         </Button>
                       )}
-                      {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
+                      {activeRole !== 'waiter' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
                         <Button size="sm" variant="danger" className="cursor-pointer" onClick={() => updateOrderStatus('cancelled')}>
                           Cancel Order
                         </Button>
@@ -682,23 +860,36 @@ export default function OrdersPage() {
                           {req.table_name}
                         </td>
                         <td className="px-6 py-4">
-                          {req.type === 'call_waiter' ? (
-                            <Badge variant="purple">🙋 Call Waiter</Badge>
+                          {req.status === 'pending' ? (
+                            <Badge variant="purple">🙋 Pending</Badge>
+                          ) : req.status === 'accepted' ? (
+                            <Badge variant="warning">🚶 Waiter On Way</Badge>
                           ) : (
-                            <Badge variant="warning">💳 Request Bill</Badge>
+                            <Badge variant="success">✅ Completed</Badge>
                           )}
                         </td>
                         <td className="px-6 py-4 text-xs text-slate-400">
                           {new Date(req.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <Button
-                            size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                            onClick={() => handleResolveRequest(req.id)}
-                          >
-                            <Check className="h-3.5 w-3.5 mr-1" /> Mark Resolved
-                          </Button>
+                        <td className="px-6 py-4 text-right flex justify-end gap-2">
+                          {req.status === 'pending' && (
+                            <Button
+                              size="sm"
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
+                              onClick={() => handleAcceptRequest(req.id)}
+                            >
+                              Accept Request
+                            </Button>
+                          )}
+                          {req.status !== 'completed' && (
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                              onClick={() => handleResolveRequest(req.id)}
+                            >
+                              <Check className="h-3.5 w-3.5 mr-1" /> Mark Completed
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))}

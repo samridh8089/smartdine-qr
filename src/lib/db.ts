@@ -46,7 +46,7 @@ export interface CustomerRequest {
   table_id: string;
   table_name: string;
   type: 'call_waiter' | 'request_bill';
-  status: 'pending' | 'completed';
+  status: 'pending' | 'accepted' | 'completed';
   created_at: string;
 }
 
@@ -644,6 +644,18 @@ export const db = {
       .select();
     if (error || !data || data.length === 0) {
       throw new Error(error?.message || 'Failed to submit call request');
+    }
+    return data[0] as CustomerRequest;
+  },
+
+  async acceptCustomerRequest(requestId: string): Promise<CustomerRequest> {
+    const { data, error } = await supabase
+      .from('customer_requests')
+      .update({ status: 'accepted' })
+      .eq('id', requestId)
+      .select();
+    if (error || !data || data.length === 0) {
+      throw new Error(error?.message || 'Failed to accept request');
     }
     return data[0] as CustomerRequest;
   },
