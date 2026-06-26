@@ -651,7 +651,7 @@ export const db = {
   async acceptCustomerRequest(requestId: string): Promise<CustomerRequest> {
     const { data, error } = await supabase
       .from('customer_requests')
-      .update({ status: 'accepted' })
+      .update({ status: 'completed' })
       .eq('id', requestId)
       .select();
     if (error || !data || data.length === 0) {

@@ -325,9 +325,9 @@ export default function OrdersPage() {
     // Cache existing order IDs on initial load so we don't chime for them
     allOrders.forEach(o => alertedOrderIds.current.add(o.id));
 
-    // Load pending & accepted requests
+    // Load pending & active requests
     const reqs = await db.getCustomerRequests(restId);
-    const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+    const activeReqs = reqs.filter(r => r.status === 'pending');
     setCustomerRequests(activeReqs);
 
     if (orderIdParam) {
@@ -354,7 +354,7 @@ export default function OrdersPage() {
 
     const loadRequests = async () => {
       const reqs = await db.getCustomerRequests(restId);
-      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      const activeReqs = reqs.filter(r => r.status === 'pending');
       setCustomerRequests(activeReqs);
       
       const currentOrders = await db.getOrders(restId);
@@ -378,7 +378,7 @@ export default function OrdersPage() {
       }
       
       const reqs = await db.getCustomerRequests(restId);
-      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      const activeReqs = reqs.filter(r => r.status === 'pending');
       syncAlarmState(filteredOrders, activeReqs);
     };
 
@@ -477,7 +477,7 @@ export default function OrdersPage() {
     try {
       await db.acceptCustomerRequest(requestId);
       const reqs = await db.getCustomerRequests(restaurant!.id);
-      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      const activeReqs = reqs.filter(r => r.status === 'pending');
       setCustomerRequests(activeReqs);
       syncAlarmState(orders, activeReqs);
     } catch (err: any) {
@@ -489,7 +489,7 @@ export default function OrdersPage() {
     try {
       await db.resolveCustomerRequest(requestId);
       const reqs = await db.getCustomerRequests(restaurant!.id);
-      const activeReqs = reqs.filter(r => r.status === 'pending' || r.status === 'accepted');
+      const activeReqs = reqs.filter(r => r.status === 'pending');
       setCustomerRequests(activeReqs);
       syncAlarmState(orders, activeReqs);
       alert('Request marked resolved.');
@@ -812,6 +812,31 @@ export default function OrdersPage() {
                       <div className="text-right space-y-1">
                         <p className="font-extrabold text-sm">{formatPrice(order.total, restaurant.settings.currency)}</p>
                         <p className="text-[10px] text-slate-400">{new Date(order.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</p>
+                        {order.status === 'ready' && (
+                          <div className="pt-1">
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await db.updateOrderStatus(order.id, 'served');
+                                  const allOrders = await db.getOrders(restaurant.id);
+                                  const filteredOrders = activeRole === 'waiter'
+                                    ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+                                    : allOrders;
+                                  setOrders(filteredOrders);
+                                  syncAlarmState(filteredOrders, customerRequests);
+                                  window.dispatchEvent(new Event('storage'));
+                                } catch (err: any) {
+                                  alert(`Failed to serve order: ${err.message}`);
+                                }
+                              }}
+                            >
+                              Serve
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </button>
                   );

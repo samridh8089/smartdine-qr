@@ -10,7 +10,7 @@ CREATE PUBLICATION supabase_realtime FOR TABLE public.orders, public.order_items
 
 -- 3. DROP AND RECREATE CUSTOMER REQUESTS STATUS CHECK CONSTRAINT
 ALTER TABLE public.customer_requests DROP CONSTRAINT IF EXISTS customer_requests_status_check;
-ALTER TABLE public.customer_requests ADD CONSTRAINT customer_requests_status_check CHECK (status IN ('pending', 'accepted', 'completed'));
+ALTER TABLE public.customer_requests ADD CONSTRAINT customer_requests_status_check CHECK (status IN ('pending', 'completed'));
 
 -- 4. MIGRATE EXISTING USERS' METADATA TO INCLUDE RESTAURANT_ID AND ROLE
 UPDATE auth.users u
