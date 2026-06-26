@@ -26,6 +26,9 @@ export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
 
+  // Real-time toast state
+  const [toast, setToast] = useState<{ message: string; visible: boolean } | null>(null);
+
   const alertedOrderIds = useRef<Set<string>>(new Set());
 
   // Unlock audio context on user interaction
@@ -160,6 +163,7 @@ export default function OrdersPage() {
       }
     };
 
+    console.log(`Subscribing to live orders & requests updates for restaurant: ${restId}`);
     const channel = supabase
       .channel('live_orders_requests')
       .on(
@@ -171,12 +175,14 @@ export default function OrdersPage() {
           filter: `restaurant_id=eq.${restId}`
         },
         async (payload) => {
+          console.log('Realtime Live Orders order change payload received:', payload);
           loadOrders();
 
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
             if (!alertedOrderIds.current.has(newOrderPayload.id)) {
               alertedOrderIds.current.add(newOrderPayload.id);
+              console.log(`New order detected! Playing chimes for order ID: ${newOrderPayload.id}`);
               
               // Play bell sound
               playBellSound();
@@ -190,6 +196,12 @@ export default function OrdersPage() {
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
                 showDesktopNotification(fullOrder);
+                setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
+                
+                // Auto-hide toast after 5 seconds
+                setTimeout(() => {
+                  setToast(prev => prev && prev.message.includes(fullOrder.table_name || 'Table X') ? { ...prev, visible: false } : prev);
+                }, 5000);
               }
             }
           }
@@ -203,13 +215,20 @@ export default function OrdersPage() {
           table: 'customer_requests',
           filter: `restaurant_id=eq.${restId}`
         },
-        () => {
+        (payload) => {
+          console.log('Realtime Live Orders request change payload received:', payload);
           loadRequests();
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log(`Supabase Realtime Live Orders subscription status: ${status}`);
+        if (err) {
+          console.error(`Supabase Realtime Live Orders subscription error:`, err);
+        }
+      });
 
     return () => {
+      console.log('Cleaning up Live Orders realtime channel subscription...');
       supabase.removeChannel(channel);
     };
   }, [restaurant, selectedOrder]);
@@ -689,6 +708,25 @@ export default function OrdersPage() {
             )}
           </div>
         </Card>
+      )}
+
+      {/* Toast Notification */}
+      {toast && toast.visible && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 border border-emerald-500 animate-pop animate-fade-in">
+          <div className="bg-white/20 p-2 rounded-lg">
+            <Bell className="h-5 w-5 text-white animate-bounce" />
+          </div>
+          <div>
+            <p className="font-extrabold text-sm tracking-wide uppercase">New Order</p>
+            <p className="text-xs text-emerald-100">{toast.message}</p>
+          </div>
+          <button 
+            onClick={() => setToast(null)}
+            className="ml-4 hover:bg-white/10 p-1 rounded-lg transition-colors text-white/80 hover:text-white cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       )}
     </div>
   );

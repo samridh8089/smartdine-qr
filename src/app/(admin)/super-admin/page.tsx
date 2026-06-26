@@ -56,7 +56,7 @@ export default function SuperAdminPage() {
     checkAdminAuth();
   }, [router]);
 
-  const loadAdminData = async () => {
+  async function loadAdminData() {
     try {
       const rests = await db.getRestaurants();
       const stats = await db.getSuperAdminStats();

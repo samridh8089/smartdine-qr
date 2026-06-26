@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Force permanent light mode by only matching .dark class, which is never applied */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;

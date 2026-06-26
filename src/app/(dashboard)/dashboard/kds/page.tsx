@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { 
   ChefHat, Clock, Check, ArrowRight, Play, CheckCircle2, 
-  X, AlertCircle, Volume2, Sparkles
+  X, AlertCircle, Volume2, Sparkles, Bell
 } from 'lucide-react';
 
 export default function KitchenDisplayPage() {
@@ -23,6 +23,19 @@ export default function KitchenDisplayPage() {
 
   // Real-time new order alert popup state
   const [newOrderAlert, setNewOrderAlert] = useState<Order | null>(null);
+  
+  // Real-time toast state
+  const [toast, setToast] = useState<{ message: string; visible: boolean } | null>(null);
+
+  // Time state for relative elapsed calculations
+  const [nowTime, setNowTime] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTime(Date.now());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Prevent duplicate chimes/alerts for the same order
   const alertedOrderIds = useRef<Set<string>>(new Set());
@@ -96,6 +109,7 @@ export default function KitchenDisplayPage() {
   useEffect(() => {
     if (!restaurantId) return;
 
+    console.log(`Subscribing to realtime order updates for restaurant: ${restaurantId}`);
     const channel = supabase
       .channel('kds_orders_live')
       .on(
@@ -107,7 +121,7 @@ export default function KitchenDisplayPage() {
           filter: `restaurant_id=eq.${restaurantId}`
         },
         async (payload) => {
-          console.log('Realtime KDS order change:', payload);
+          console.log('Realtime KDS order change payload received:', payload);
           
           // Reload orders list
           const allOrders = await db.getOrders(restaurantId);
@@ -121,6 +135,7 @@ export default function KitchenDisplayPage() {
             // Check if we already alerted for this order
             if (!alertedOrderIds.current.has(newOrderPayload.id)) {
               alertedOrderIds.current.add(newOrderPayload.id);
+              console.log(`New order detected! Playing chimes for order ID: ${newOrderPayload.id}`);
 
               // Play double chime
               if (soundEnabled) {
@@ -137,19 +152,31 @@ export default function KitchenDisplayPage() {
               if (fullOrder) {
                 setNewOrderAlert(fullOrder);
                 showDesktopNotification(fullOrder);
+                setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
+                
+                // Auto-hide toast after 5 seconds
+                setTimeout(() => {
+                  setToast(prev => prev && prev.message.includes(fullOrder.table_name || 'Table X') ? { ...prev, visible: false } : prev);
+                }, 5000);
               }
             }
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log(`Supabase Realtime KDS subscription status: ${status}`);
+        if (err) {
+          console.error(`Supabase Realtime KDS subscription error:`, err);
+        }
+      });
 
     return () => {
+      console.log('Cleaning up KDS realtime channel subscription...');
       supabase.removeChannel(channel);
     };
   }, [restaurantId, soundEnabled]);
 
-  const playOrderSound = () => {
+  function playOrderSound() {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) return;
@@ -201,8 +228,8 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  const getTimeElapsed = (dateString: string) => {
-    const elapsedMs = Date.now() - new Date(dateString).getTime();
+  const getTimeElapsed = (dateString: string, currentNow: number) => {
+    const elapsedMs = currentNow - new Date(dateString).getTime();
     const mins = Math.floor(elapsedMs / 60000);
     if (mins < 1) return 'Just now';
     return `${mins}m ago`;
@@ -277,7 +304,7 @@ export default function KitchenDisplayPage() {
                         <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">ORDER #{order.id.slice(-5).toUpperCase()}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at)}
+                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
                       </span>
                     </div>
 
@@ -344,7 +371,7 @@ export default function KitchenDisplayPage() {
                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider">ORDER #{order.id.slice(-5).toUpperCase()}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at)}
+                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
                       </span>
                     </div>
 
@@ -413,7 +440,7 @@ export default function KitchenDisplayPage() {
                         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tracking-wider">ORDER #{order.id.slice(-5).toUpperCase()}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at)}
+                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
                       </span>
                     </div>
 
@@ -499,6 +526,25 @@ export default function KitchenDisplayPage() {
           </div>
         )}
       </Dialog>
+
+      {/* Toast Notification */}
+      {toast && toast.visible && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 border border-emerald-500 animate-pop">
+          <div className="bg-white/20 p-2 rounded-lg">
+            <Bell className="h-5 w-5 text-white animate-bounce" />
+          </div>
+          <div>
+            <p className="font-extrabold text-sm tracking-wide uppercase">New Order</p>
+            <p className="text-xs text-emerald-100">{toast.message}</p>
+          </div>
+          <button 
+            onClick={() => setToast(null)}
+            className="ml-4 hover:bg-white/10 p-1 rounded-lg transition-colors text-white/80 hover:text-white cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
