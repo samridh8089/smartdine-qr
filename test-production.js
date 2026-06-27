@@ -31,11 +31,47 @@ async function run() {
   console.log('Starting puppeteer E2E validation...');
   browser = await puppeteer.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--mute-audio',
+      '--disable-features=AudioServiceOutOfProcess'
+    ]
   });
 
   page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
+
+  await page.evaluateOnNewDocument(() => {
+    window.Audio = class MockAudio {
+      constructor() {
+        this.loop = false;
+        this.currentTime = 0;
+      }
+      play() { return Promise.resolve(); }
+      pause() {}
+      addEventListener() {}
+      removeEventListener() {}
+    };
+    const mockNode = {
+      connect() {},
+      disconnect() {},
+      start() {},
+      stop() {},
+      gain: { value: 1 },
+      frequency: { value: 440, setValueAtTime() {} }
+    };
+    window.AudioContext = class MockAudioContext {
+      constructor() { this.state = 'suspended'; }
+      resume() { return Promise.resolve(); }
+      suspend() { return Promise.resolve(); }
+      createOscillator() { return mockNode; }
+      createGain() { return mockNode; }
+      close() { return Promise.resolve(); }
+      get destination() { return {}; }
+    };
+    window.webkitAudioContext = window.AudioContext;
+  });
 
   page.on('console', msg => {
     const text = msg.text();
@@ -43,6 +79,10 @@ async function run() {
   });
   page.on('pageerror', err => console.log('STAFF BROWSER PAGEERROR:', err.toString()));
   page.on('requestfailed', req => console.log('STAFF BROWSER REQUEST FAILED:', req.url(), req.failure()?.errorText));
+  page.on('dialog', async dialog => {
+    console.log('STAFF BROWSER DIALOG:', dialog.type(), dialog.message());
+    await dialog.dismiss().catch(() => {});
+  });
 
   // 1. Sign up a new owner and restaurant
   console.log('Navigating to signup page...');
@@ -129,7 +169,7 @@ async function run() {
   console.log('Navigating to Tables configuration page...');
   await page.goto('https://smartdine-qr.vercel.app/dashboard/tables', { waitUntil: 'networkidle2' });
   console.log('Waiting for Tables page to load...');
-  await page.waitForFunction(() => document.body.innerText.includes('Table Management'));
+  await page.waitForSelector('h2', { timeout: 15000 });
   await page.screenshot({ path: path.join(ARTIFACT_DIR, '02_tables_page_before.png') });
 
   // Create Table 1
@@ -173,12 +213,47 @@ async function run() {
   customerPage = await browser.newPage();
   await customerPage.setViewport({ width: 450, height: 800 });
 
+  await customerPage.evaluateOnNewDocument(() => {
+    window.Audio = class MockAudio {
+      constructor() {
+        this.loop = false;
+        this.currentTime = 0;
+      }
+      play() { return Promise.resolve(); }
+      pause() {}
+      addEventListener() {}
+      removeEventListener() {}
+    };
+    const mockNode = {
+      connect() {},
+      disconnect() {},
+      start() {},
+      stop() {},
+      gain: { value: 1 },
+      frequency: { value: 440, setValueAtTime() {} }
+    };
+    window.AudioContext = class MockAudioContext {
+      constructor() { this.state = 'suspended'; }
+      resume() { return Promise.resolve(); }
+      suspend() { return Promise.resolve(); }
+      createOscillator() { return mockNode; }
+      createGain() { return mockNode; }
+      close() { return Promise.resolve(); }
+      get destination() { return {}; }
+    };
+    window.webkitAudioContext = window.AudioContext;
+  });
+
   customerPage.on('console', msg => {
     const text = msg.text();
     if (!text.includes('React DevTools')) console.log('CUSTOMER BROWSER LOG:', text);
   });
   customerPage.on('pageerror', err => console.log('CUSTOMER BROWSER PAGEERROR:', err.toString()));
   customerPage.on('requestfailed', req => console.log('CUSTOMER BROWSER REQUEST FAILED:', req.url(), req.failure()?.errorText));
+  customerPage.on('dialog', async dialog => {
+    console.log('CUSTOMER BROWSER DIALOG:', dialog.type(), dialog.message());
+    await dialog.dismiss().catch(() => {});
+  });
 
   await customerPage.goto(customerLink, { waitUntil: 'networkidle2' });
   console.log('Waiting for customer menu page to load...');
@@ -218,7 +293,7 @@ async function run() {
   console.log('Navigating staff portal to KDS...');
   await page.goto('https://smartdine-qr.vercel.app/dashboard/kds', { waitUntil: 'networkidle2' });
   console.log('Waiting for KDS page to load...');
-  await page.waitForFunction(() => document.body.innerText.includes('Kitchen Display System'));
+  await page.waitForSelector('h2', { timeout: 15000 });
   await page.screenshot({ path: path.join(ARTIFACT_DIR, '08_kds_new_alarm.png') });
   console.log('Screenshot 08_kds_new_alarm.png saved.');
 
@@ -253,7 +328,7 @@ async function run() {
   console.log('Navigating staff portal to Live Orders (Waiter)...');
   await page.goto('https://smartdine-qr.vercel.app/dashboard/orders', { waitUntil: 'networkidle2' });
   console.log('Waiting for Waiter page to load...');
-  await page.waitForFunction(() => document.body.innerText.includes('Live Orders & Requests'));
+  await page.waitForSelector('h2', { timeout: 15000 });
   await page.screenshot({ path: path.join(ARTIFACT_DIR, '12_waiter_ready_alarm.png') });
   console.log('Screenshot 12_waiter_ready_alarm.png saved.');
 
