@@ -579,12 +579,6 @@ export const db = {
         throw new Error(itemsError.message || 'Failed to submit order items');
       }
 
-      // Update main order's totals and status back to 'new' (so KDS and alerts trigger)
-      const newSubtotal = Number(activeOrder.subtotal) + batchSubtotal;
-      const gst = parseFloat(((newSubtotal * (restaurant.settings.gst_percentage || 0)) / 100).toFixed(2));
-      const serviceCharge = parseFloat(((newSubtotal * (restaurant.settings.service_charge_percentage || 0)) / 100).toFixed(2));
-      const total = parseFloat((newSubtotal + gst + serviceCharge).toFixed(2));
-
       // Append new special instructions to old ones if present
       const updatedInstructions = activeOrder.special_instructions
         ? `${activeOrder.special_instructions}\n[Batch #${nextBatchNum}]: ${specialInstructions || ''}`
@@ -594,10 +588,6 @@ export const db = {
         .from('orders')
         .update({
           status: 'new',
-          subtotal: newSubtotal,
-          gst,
-          service_charge: serviceCharge,
-          total,
           special_instructions: updatedInstructions
         })
         .eq('id', activeOrder.id);
@@ -667,24 +657,15 @@ export const db = {
       throw new Error(allBatchesErr?.message || 'Failed to fetch order batches');
     }
 
-    // Recalculate status of the order based on its batches
+    // Recalculate status of the order based on its latest active batch
     let nextOrderStatus: Order['status'] = 'served';
 
-    const hasNew = allBatches.some(b => b.status === 'new');
-    const hasAccepted = allBatches.some(b => b.status === 'accepted');
-    const hasPreparing = allBatches.some(b => b.status === 'preparing');
-    const hasReady = allBatches.some(b => b.status === 'ready');
-
-    if (hasNew) {
-      nextOrderStatus = 'new';
-    } else if (hasAccepted) {
-      nextOrderStatus = 'accepted';
-    } else if (hasPreparing) {
-      nextOrderStatus = 'preparing';
-    } else if (hasReady) {
-      nextOrderStatus = 'ready';
+    if (allBatches && allBatches.length > 0) {
+      const sortedBatches = [...allBatches].sort((a, b) => b.batch_number - a.batch_number);
+      const latestActiveBatch = sortedBatches.find(b => b.status !== 'served') || sortedBatches[0];
+      nextOrderStatus = latestActiveBatch.status as any;
     } else {
-      nextOrderStatus = 'served';
+      nextOrderStatus = status as any;
     }
 
     // Update parent order status

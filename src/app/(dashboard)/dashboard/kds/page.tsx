@@ -120,12 +120,14 @@ export default function KitchenDisplayPage() {
   const alarmLfoRef = useRef<OscillatorNode | null>(null);
   const alarmGainRef = useRef<GainNode | null>(null);
   const soundEnabledRef = useRef<boolean>(soundEnabled);
+  const isReloadingRef = useRef(false);
+  const pendingReloadRef = useRef(false);
 
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
     if (!soundEnabled) {
       stopAlarm();
-    } else if (orders.some(o => o.status === 'new')) {
+    } else if (orders.some(o => o.batches?.some(b => b.status === 'new'))) {
       startAlarm();
     }
   }, [soundEnabled, orders]);
@@ -142,6 +144,7 @@ export default function KitchenDisplayPage() {
 
   // Prevent duplicate chimes/alerts for the same order
   const alertedOrderIds = useRef<Set<string>>(new Set());
+  const alertedBatchIds = useRef<Set<string>>(new Set());
 
   // Unlock and setup AudioContext on user interaction
   useEffect(() => {
@@ -326,11 +329,36 @@ export default function KitchenDisplayPage() {
     const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
     setOrders(activeOrders);
     
-    // Add existing order IDs to the alerted set so they don't trigger the bell on load
-    allOrders.forEach(o => alertedOrderIds.current.add(o.id));
+    // Add existing order and batch IDs to the alerted sets so they don't trigger the bell on load
+    allOrders.forEach(o => {
+      alertedOrderIds.current.add(o.id);
+      o.batches?.forEach(b => alertedBatchIds.current.add(b.id));
+    });
     
     setLoading(false);
     syncAlarmState(activeOrders);
+  };
+
+  const safeReloadKdsData = async (restId: string) => {
+    if (isReloadingRef.current) {
+      pendingReloadRef.current = true;
+      return;
+    }
+    isReloadingRef.current = true;
+    try {
+      const allOrders = await db.getOrders(restId);
+      const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
+      setOrders(activeOrders);
+      syncAlarmState(activeOrders);
+    } catch (e) {
+      console.error('Failed to reload KDS data:', e);
+    } finally {
+      isReloadingRef.current = false;
+      if (pendingReloadRef.current) {
+        pendingReloadRef.current = false;
+        await safeReloadKdsData(restId);
+      }
+    }
   };
 
   useEffect(() => {
@@ -340,41 +368,32 @@ export default function KitchenDisplayPage() {
     }
   }, [restaurant]);
 
-  // Setup Supabase Realtime for Incoming Orders
+  // Setup Supabase Realtime for Incoming Orders & Batches
   useEffect(() => {
     if (!restaurantId) return;
 
-    console.log(`Subscribing to realtime order updates for restaurant: ${restaurantId}`);
+    console.log(`Subscribing to realtime updates (orders & batches) for restaurant: ${restaurantId}`);
     const channel = supabase
       .channel('kds_orders_live')
       .on(
         'postgres_changes',
         {
-          event: '*', // listen to all events: INSERT, UPDATE, DELETE
+          event: '*',
           schema: 'public',
           table: 'orders',
           filter: `restaurant_id=eq.${restaurantId}`
         },
         async (payload) => {
-          console.log('Realtime event received');
           console.log('Realtime KDS order change payload received:', payload);
-          
-          // Reload orders list
-          const allOrders = await db.getOrders(restaurantId);
-          const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
-          setOrders(activeOrders);
-          syncAlarmState(activeOrders);
+          await safeReloadKdsData(restaurantId);
 
-          // Handle new order insertion chimes
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
-            
-            // Check if we already alerted for this order
             if (!alertedOrderIds.current.has(newOrderPayload.id)) {
               alertedOrderIds.current.add(newOrderPayload.id);
               console.log(`New order detected! Playing alarm for order ID: ${newOrderPayload.id}`);
 
-              // Trigger hardware vibration (mobile/tablets support)
+              // Trigger hardware vibration
               if (typeof navigator !== 'undefined' && navigator.vibrate) {
                 navigator.vibrate([200, 100, 200]);
               }
@@ -386,12 +405,65 @@ export default function KitchenDisplayPage() {
                 showDesktopNotification(fullOrder);
                 setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
                 
-                // Auto-hide toast after 5 seconds
                 setTimeout(() => {
                   setToast(prev => prev && prev.message.includes(fullOrder.table_name || 'Table X') ? { ...prev, visible: false } : prev);
                 }, 5000);
               }
             }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'order_batches'
+        },
+        async (payload) => {
+          console.log('Realtime KDS batch insert payload received:', payload);
+          const newBatch = payload.new as OrderBatch;
+          
+          await safeReloadKdsData(restaurantId);
+
+          if (!alertedBatchIds.current.has(newBatch.id)) {
+            alertedBatchIds.current.add(newBatch.id);
+            console.log(`New batch detected! Playing alarm for batch ID: ${newBatch.id}`);
+
+            // Trigger hardware vibration
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+              navigator.vibrate([200, 100, 200]);
+            }
+
+            // Fetch parent order to display alert for new items
+            const fullOrder = await db.getOrderById(newBatch.order_id);
+            if (fullOrder && fullOrder.restaurant_id === restaurantId) {
+              setNewOrderAlert(fullOrder);
+              showDesktopNotification(fullOrder);
+              setToast({ message: `New Items Added - ${fullOrder.table_name || 'Table X'}`, visible: true });
+              
+              setTimeout(() => {
+                setToast(prev => prev && prev.message.includes(fullOrder.table_name || 'Table X') ? { ...prev, visible: false } : prev);
+              }, 5000);
+            }
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'order_batches'
+        },
+        async (payload) => {
+          console.log('Realtime KDS batch update payload received:', payload);
+          const updatedBatch = payload.new as OrderBatch;
+          
+          // Verify this batch belongs to our restaurant by checking loaded orders
+          const belongsToUs = orders.some(o => o.id === updatedBatch.order_id);
+          if (belongsToUs || payload.old) {
+            await safeReloadKdsData(restaurantId);
           }
         }
       )
@@ -407,7 +479,7 @@ export default function KitchenDisplayPage() {
       supabase.removeChannel(channel);
       stopAlarm();
     };
-  }, [restaurantId]);
+  }, [restaurantId, orders]);
 
   const updateBatchStatus = async (batchId: string, nextStatus: OrderBatch['status']) => {
     if (processingBatchIds.includes(batchId)) return;

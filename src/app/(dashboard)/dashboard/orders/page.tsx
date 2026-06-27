@@ -111,7 +111,10 @@ export default function OrdersPage() {
   const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
 
   const alertedOrderIds = useRef<Set<string>>(new Set());
+  const alertedBatchIds = useRef<Set<string>>(new Set());
   const selectedOrderRef = useRef<Order | null>(selectedOrder);
+  const isReloadingRef = useRef(false);
+  const pendingReloadRef = useRef(false);
 
   // Refs and Audio Elements for continuous alarms
   const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -350,42 +353,53 @@ export default function OrdersPage() {
     }
   }, [restaurant, orderIdParam]);
 
-  // Realtime Supabase Subscription for Orders & Customer Requests
-  useEffect(() => {
-    if (!restaurant) return;
-    const restId = restaurant.id;
-
-    const loadRequests = async () => {
-      const reqs = await db.getCustomerRequests(restId);
-      const activeReqs = reqs.filter(r => r.status === 'pending');
-      setCustomerRequests(activeReqs);
-      
-      const currentOrders = await db.getOrders(restId);
-      const filteredOrders = activeRole === 'waiter'
-        ? currentOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
-        : currentOrders;
-      syncAlarmState(filteredOrders, activeReqs);
-    };
-
-    const loadOrders = async () => {
+  const safeReloadOrders = async (restId: string) => {
+    if (isReloadingRef.current) {
+      pendingReloadRef.current = true;
+      return;
+    }
+    isReloadingRef.current = true;
+    try {
       const allOrders = await db.getOrders(restId);
       const filteredOrders = activeRole === 'waiter'
         ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
         : allOrders;
       setOrders(filteredOrders);
-      
+
       const currentSelected = selectedOrderRef.current;
       if (currentSelected) {
         const updated = filteredOrders.find(o => o.id === currentSelected.id);
         if (updated) setSelectedOrder(updated);
       }
-      
+
       const reqs = await db.getCustomerRequests(restId);
       const activeReqs = reqs.filter(r => r.status === 'pending');
+      setCustomerRequests(activeReqs);
+      
       syncAlarmState(filteredOrders, activeReqs);
-    };
+    } catch (e) {
+      console.error('Failed to reload orders:', e);
+    } finally {
+      isReloadingRef.current = false;
+      if (pendingReloadRef.current) {
+        pendingReloadRef.current = false;
+        await safeReloadOrders(restId);
+      }
+    }
+  };
 
-    console.log(`Subscribing to live orders & requests updates for restaurant: ${restId}`);
+  useEffect(() => {
+    if (restaurant?.id) {
+      loadInitialData(restaurant.id);
+    }
+  }, [restaurant, orderIdParam]);
+
+  // Realtime Supabase Subscription for Orders, Requests & Batches
+  useEffect(() => {
+    if (!restaurant) return;
+    const restId = restaurant.id;
+
+    console.log(`Subscribing to live orders, requests & batches updates for restaurant: ${restId}`);
     const channel = supabase
       .channel('live_orders_requests')
       .on(
@@ -397,9 +411,8 @@ export default function OrdersPage() {
           filter: `restaurant_id=eq.${restId}`
         },
         async (payload) => {
-          console.log('Realtime event received');
           console.log('Realtime Live Orders order change payload received:', payload);
-          loadOrders();
+          await safeReloadOrders(restId);
 
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
@@ -418,7 +431,6 @@ export default function OrdersPage() {
                 showDesktopNotification(fullOrder);
                 setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
                 
-                // Auto-hide toast after 5 seconds
                 setTimeout(() => {
                   setToast(prev => prev && prev.message.includes(fullOrder.table_name || 'Table X') ? { ...prev, visible: false } : prev);
                 }, 5000);
@@ -435,10 +447,27 @@ export default function OrdersPage() {
           table: 'customer_requests',
           filter: `restaurant_id=eq.${restId}`
         },
-        (payload) => {
-          console.log('Realtime event received');
+        async (payload) => {
           console.log('Realtime Live Orders request change payload received:', payload);
-          loadRequests();
+          await safeReloadOrders(restId);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'order_batches'
+        },
+        async (payload) => {
+          console.log('Realtime Live Orders batch change payload received:', payload);
+          const batch = payload.new as OrderBatch;
+          
+          // Verify if this belongs to our restaurant by checking currently loaded orders
+          const belongsToUs = orders.some(o => o.id === batch.order_id);
+          if (belongsToUs || payload.old) {
+            await safeReloadOrders(restId);
+          }
         }
       )
       .subscribe((status, err) => {
@@ -453,7 +482,7 @@ export default function OrdersPage() {
       supabase.removeChannel(channel);
       stopAlarm();
     };
-  }, [restaurant]);
+  }, [restaurant, orders, activeRole]);
 
   const handleSelectOrder = (order: Order) => {
     setSelectedOrder(order);

@@ -140,13 +140,13 @@ export default function OrderTrackingPage({ params }: PageProps) {
       return null;
     }
     const sortedBatches = [...order.batches].sort((a, b) => b.batch_number - a.batch_number);
-    for (const b of sortedBatches) {
-      if (stepKey === 'new' && b.created_at) return b.created_at;
-      if (stepKey === 'accepted' && b.accepted_at) return b.accepted_at;
-      if (stepKey === 'preparing' && b.preparing_at) return b.preparing_at;
-      if (stepKey === 'ready' && b.ready_at) return b.ready_at;
-      if (stepKey === 'served' && b.served_at) return b.served_at;
-    }
+    const latestActiveBatch = sortedBatches.find(b => b.status !== 'served') || sortedBatches[0];
+
+    if (stepKey === 'new') return latestActiveBatch.created_at;
+    if (stepKey === 'accepted') return latestActiveBatch.accepted_at;
+    if (stepKey === 'preparing') return latestActiveBatch.preparing_at;
+    if (stepKey === 'ready') return latestActiveBatch.ready_at;
+    if (stepKey === 'served') return latestActiveBatch.served_at;
     return null;
   };
 
