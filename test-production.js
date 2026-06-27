@@ -86,7 +86,7 @@ async function run() {
 
   // 1. Sign up a new owner and restaurant
   console.log('Navigating to signup page...');
-  await page.goto('https://smartdine-qr.vercel.app/signup', { waitUntil: 'networkidle2' });
+  await page.goto('https://smartdine-qr.vercel.app/signup', { waitUntil: 'load' });
 
   const randomSuffix = Math.random().toString(36).substr(2, 5);
   const email = `owner_${randomSuffix}@smartdine.com`;
@@ -167,7 +167,7 @@ async function run() {
 
   // 2. Add a table
   console.log('Navigating to Tables configuration page...');
-  await page.goto('https://smartdine-qr.vercel.app/dashboard/tables', { waitUntil: 'networkidle2' });
+  await page.goto('https://smartdine-qr.vercel.app/dashboard/tables', { waitUntil: 'load' });
   console.log('Waiting for Tables page to load...');
   await page.waitForSelector('h2', { timeout: 15000 });
   await page.screenshot({ path: path.join(ARTIFACT_DIR, '02_tables_page_before.png') });
@@ -255,7 +255,7 @@ async function run() {
     await dialog.dismiss().catch(() => {});
   });
 
-  await customerPage.goto(customerLink, { waitUntil: 'networkidle2' });
+  await customerPage.goto(customerLink, { waitUntil: 'load' });
   console.log('Waiting for customer menu page to load...');
   await customerPage.waitForSelector('input[placeholder="Search dishes..."]');
   await customerPage.screenshot({ path: path.join(ARTIFACT_DIR, '04_customer_menu.png') });
@@ -291,7 +291,7 @@ async function run() {
 
   // 4. Open KDS page to Accept & Cook
   console.log('Navigating staff portal to KDS...');
-  await page.goto('https://smartdine-qr.vercel.app/dashboard/kds', { waitUntil: 'networkidle2' });
+  await page.goto('https://smartdine-qr.vercel.app/dashboard/kds', { waitUntil: 'load' });
   console.log('Waiting for KDS page to load...');
   await page.waitForSelector('h2', { timeout: 15000 });
   await page.screenshot({ path: path.join(ARTIFACT_DIR, '08_kds_new_alarm.png') });
@@ -326,7 +326,7 @@ async function run() {
 
   // 5. Open Waiter Portal to Serve
   console.log('Navigating staff portal to Live Orders (Waiter)...');
-  await page.goto('https://smartdine-qr.vercel.app/dashboard/orders', { waitUntil: 'networkidle2' });
+  await page.goto('https://smartdine-qr.vercel.app/dashboard/orders', { waitUntil: 'load' });
   console.log('Waiting for Waiter page to load...');
   await page.waitForSelector('h2', { timeout: 15000 });
   await page.screenshot({ path: path.join(ARTIFACT_DIR, '12_waiter_ready_alarm.png') });
