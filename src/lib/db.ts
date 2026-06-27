@@ -93,6 +93,22 @@ export interface OrderItem {
   quantity: number;
   price: number;
   notes?: string;
+  batch_id?: string;
+}
+
+export interface OrderBatch {
+  id: string;
+  order_id: string;
+  batch_number: number;
+  status: 'new' | 'accepted' | 'preparing' | 'ready' | 'served';
+  special_instructions?: string;
+  created_at: string;
+  updated_at: string;
+  accepted_at?: string;
+  preparing_at?: string;
+  ready_at?: string;
+  served_at?: string;
+  items: OrderItem[];
 }
 
 export interface Order {
@@ -108,6 +124,7 @@ export interface Order {
   total: number;
   created_at: string;
   items: OrderItem[];
+  batches?: OrderBatch[];
 }
 
 export const PLAN_LIMITS = {
@@ -295,43 +312,104 @@ export const db = {
   async getOrders(restaurantId: string): Promise<Order[]> {
     const { data, error } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*, order_items(*), order_batches(*)')
       .eq('restaurant_id', restaurantId)
       .order('created_at', { ascending: false });
     if (error || !data) return [];
 
-    return data.map((o: any) => ({
-      id: o.id,
-      restaurant_id: o.restaurant_id,
-      table_id: o.table_id,
-      table_name: o.table_name || 'Table',
-      status: o.status,
-      special_instructions: o.special_instructions,
-      subtotal: Number(o.subtotal),
-      gst: Number(o.gst),
-      service_charge: Number(o.service_charge),
-      total: Number(o.total),
-      created_at: o.created_at,
-      items: (o.order_items || []).map((oi: any) => ({
+    return data.map((o: any) => {
+      const items = (o.order_items || []).map((oi: any) => ({
         id: oi.id,
         order_id: oi.order_id,
         menu_item_id: oi.menu_item_id,
         menu_item_name: oi.menu_item_name || 'Unknown Item',
         quantity: oi.quantity,
         price: Number(oi.price),
-        notes: oi.notes
-      }))
-    })) as Order[];
+        notes: oi.notes,
+        batch_id: oi.batch_id
+      }));
+
+      const batches = (o.order_batches || []).map((b: any) => ({
+        id: b.id,
+        order_id: b.order_id,
+        batch_number: b.batch_number,
+        status: b.status,
+        special_instructions: b.special_instructions,
+        created_at: b.created_at,
+        updated_at: b.updated_at,
+        accepted_at: b.accepted_at,
+        preparing_at: b.preparing_at,
+        ready_at: b.ready_at,
+        served_at: b.served_at,
+        items: [] as OrderItem[]
+      })).sort((a: any, b: any) => a.batch_number - b.batch_number);
+
+      items.forEach((item: any) => {
+        const batch = batches.find((b: any) => b.id === item.batch_id);
+        if (batch) {
+          batch.items.push(item);
+        }
+      });
+
+      return {
+        id: o.id,
+        restaurant_id: o.restaurant_id,
+        table_id: o.table_id,
+        table_name: o.table_name || 'Table',
+        status: o.status,
+        special_instructions: o.special_instructions,
+        subtotal: Number(o.subtotal),
+        gst: Number(o.gst),
+        service_charge: Number(o.service_charge),
+        total: Number(o.total),
+        created_at: o.created_at,
+        items,
+        batches
+      };
+    }) as Order[];
   },
 
   async getOrderById(id: string): Promise<Order | null> {
     const { data, error } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*, order_items(*), order_batches(*)')
       .eq('id', id);
     if (error || !data || data.length === 0) return null;
 
     const o = data[0];
+    const items = (o.order_items || []).map((oi: any) => ({
+      id: oi.id,
+      order_id: oi.order_id,
+      menu_item_id: oi.menu_item_id,
+      menu_item_name: oi.menu_item_name || 'Unknown Item',
+      quantity: oi.quantity,
+      price: Number(oi.price),
+      notes: oi.notes,
+      batch_id: oi.batch_id
+    }));
+
+    const batches = (o.order_batches || []).map((b: any) => ({
+      id: b.id,
+      order_id: b.order_id,
+      batch_number: b.batch_number,
+      status: b.status,
+      special_instructions: b.special_instructions,
+      created_at: b.created_at,
+      updated_at: b.updated_at,
+      accepted_at: b.accepted_at,
+      preparing_at: b.preparing_at,
+      ready_at: b.ready_at,
+      served_at: b.served_at,
+      items: [] as OrderItem[]
+    })).sort((a: any, b: any) => a.batch_number - b.batch_number);
+
+    items.forEach((item: any) => {
+      const batch = batches.find((b: any) => b.id === item.batch_id);
+      if (batch) {
+        batch.items.push(item);
+      }
+    });
+
     return {
       id: o.id,
       restaurant_id: o.restaurant_id,
@@ -344,15 +422,8 @@ export const db = {
       service_charge: Number(o.service_charge),
       total: Number(o.total),
       created_at: o.created_at,
-      items: (o.order_items || []).map((oi: any) => ({
-        id: oi.id,
-        order_id: oi.order_id,
-        menu_item_id: oi.menu_item_id,
-        menu_item_name: oi.menu_item_name || 'Unknown Item',
-        quantity: oi.quantity,
-        price: Number(oi.price),
-        notes: oi.notes
-      }))
+      items,
+      batches
     } as Order;
   },
 
@@ -371,7 +442,7 @@ export const db = {
 
     const allItems = await this.getMenuItems(restaurantId);
 
-    let subtotal = 0;
+    let batchSubtotal = 0;
     const itemsPayload: any[] = [];
 
     // Calculate subtotal and build items list
@@ -379,7 +450,7 @@ export const db = {
       const menuItem = allItems.find(i => i.id === entry.menuItemId);
       if (!menuItem) throw new Error(`Item ${entry.menuItemId} not found`);
 
-      subtotal += menuItem.price * entry.quantity;
+      batchSubtotal += menuItem.price * entry.quantity;
       itemsPayload.push({
         menu_item_id: menuItem.id,
         menu_item_name: menuItem.name,
@@ -389,71 +460,156 @@ export const db = {
       });
     }
 
-    const gst = parseFloat(((subtotal * (restaurant.settings.gst_percentage || 0)) / 100).toFixed(2));
-    const serviceCharge = parseFloat(((subtotal * (restaurant.settings.service_charge_percentage || 0)) / 100).toFixed(2));
-    const total = parseFloat((subtotal + gst + serviceCharge).toFixed(2));
-
-    // 1. Insert order
-    const { data: orderData, error: orderError } = await supabase
+    // Check if there is an active order for this table
+    const { data: activeOrders, error: activeOrdersErr } = await supabase
       .from('orders')
-      .insert({
-        restaurant_id: restaurantId,
-        table_id: tableId,
-        table_name: table.name,
-        status: 'new',
-        special_instructions: specialInstructions,
-        subtotal,
-        gst,
-        service_charge: serviceCharge,
-        total
-      })
-      .select();
+      .select('*')
+      .eq('table_id', tableId)
+      .not('status', 'in', '("completed","cancelled")')
+      .order('created_at', { ascending: false });
 
-    if (orderError || !orderData || orderData.length === 0) {
-      throw new Error(orderError?.message || 'Failed to submit order');
+    const activeOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
+
+    if (!activeOrder) {
+      // 1. Create a new order
+      const gst = parseFloat(((batchSubtotal * (restaurant.settings.gst_percentage || 0)) / 100).toFixed(2));
+      const serviceCharge = parseFloat(((batchSubtotal * (restaurant.settings.service_charge_percentage || 0)) / 100).toFixed(2));
+      const total = parseFloat((batchSubtotal + gst + serviceCharge).toFixed(2));
+
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          restaurant_id: restaurantId,
+          table_id: tableId,
+          table_name: table.name,
+          status: 'new',
+          special_instructions: specialInstructions,
+          subtotal: batchSubtotal,
+          gst,
+          service_charge: serviceCharge,
+          total
+        })
+        .select();
+
+      if (orderError || !orderData || orderData.length === 0) {
+        throw new Error(orderError?.message || 'Failed to submit order');
+      }
+
+      const newOrder = orderData[0];
+
+      // Create Batch #1
+      const { data: batchData, error: batchError } = await supabase
+        .from('order_batches')
+        .insert({
+          order_id: newOrder.id,
+          batch_number: 1,
+          status: 'new',
+          special_instructions: specialInstructions
+        })
+        .select();
+
+      if (batchError || !batchData || batchData.length === 0) {
+        await supabase.from('orders').delete().eq('id', newOrder.id);
+        throw new Error(batchError?.message || 'Failed to create order batch');
+      }
+
+      const newBatch = batchData[0];
+
+      // Create order items
+      const finalItemsPayload = itemsPayload.map(item => ({
+        order_id: newOrder.id,
+        batch_id: newBatch.id,
+        ...item
+      }));
+
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('order_items')
+        .insert(finalItemsPayload)
+        .select();
+
+      if (itemsError) {
+        await supabase.from('orders').delete().eq('id', newOrder.id);
+        throw new Error(itemsError.message || 'Failed to submit order items');
+      }
+
+      const fullOrder = await this.getOrderById(newOrder.id);
+      if (!fullOrder) throw new Error('Failed to retrieve new order');
+      return fullOrder;
+    } else {
+      // 2. Active order exists! Append batch to it.
+      // Fetch existing batches to determine batch number
+      const { data: existingBatches, error: batchesErr } = await supabase
+        .from('order_batches')
+        .select('*')
+        .eq('order_id', activeOrder.id);
+
+      const nextBatchNum = (existingBatches?.length || 0) + 1;
+
+      // Create new batch
+      const { data: batchData, error: batchError } = await supabase
+        .from('order_batches')
+        .insert({
+          order_id: activeOrder.id,
+          batch_number: nextBatchNum,
+          status: 'new',
+          special_instructions: specialInstructions
+        })
+        .select();
+
+      if (batchError || !batchData || batchData.length === 0) {
+        throw new Error(batchError?.message || 'Failed to create order batch');
+      }
+
+      const newBatch = batchData[0];
+
+      // Create order items
+      const finalItemsPayload = itemsPayload.map(item => ({
+        order_id: activeOrder.id,
+        batch_id: newBatch.id,
+        ...item
+      }));
+
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('order_items')
+        .insert(finalItemsPayload)
+        .select();
+
+      if (itemsError) {
+        await supabase.from('order_batches').delete().eq('id', newBatch.id);
+        throw new Error(itemsError.message || 'Failed to submit order items');
+      }
+
+      // Update main order's totals and status back to 'new' (so KDS and alerts trigger)
+      const newSubtotal = Number(activeOrder.subtotal) + batchSubtotal;
+      const gst = parseFloat(((newSubtotal * (restaurant.settings.gst_percentage || 0)) / 100).toFixed(2));
+      const serviceCharge = parseFloat(((newSubtotal * (restaurant.settings.service_charge_percentage || 0)) / 100).toFixed(2));
+      const total = parseFloat((newSubtotal + gst + serviceCharge).toFixed(2));
+
+      // Append new special instructions to old ones if present
+      const updatedInstructions = activeOrder.special_instructions
+        ? `${activeOrder.special_instructions}\n[Batch #${nextBatchNum}]: ${specialInstructions || ''}`
+        : specialInstructions;
+
+      const { error: updateOrderErr } = await supabase
+        .from('orders')
+        .update({
+          status: 'new',
+          subtotal: newSubtotal,
+          gst,
+          service_charge: serviceCharge,
+          total,
+          special_instructions: updatedInstructions
+        })
+        .eq('id', activeOrder.id);
+
+      if (updateOrderErr) {
+        console.error('Failed to update parent order totals:', updateOrderErr.message);
+      }
+
+      const fullOrder = await this.getOrderById(activeOrder.id);
+      if (!fullOrder) throw new Error('Failed to retrieve updated order');
+      return fullOrder;
     }
-
-    const newOrder = orderData[0];
-
-    // 2. Insert order items
-    const finalItemsPayload = itemsPayload.map(item => ({
-      order_id: newOrder.id,
-      ...item
-    }));
-
-    const { data: itemsData, error: itemsError } = await supabase
-      .from('order_items')
-      .insert(finalItemsPayload)
-      .select();
-
-    if (itemsError) {
-      // Clean up orphaned order if items fail
-      await supabase.from('orders').delete().eq('id', newOrder.id);
-      throw new Error(itemsError.message || 'Failed to submit order items');
-    }
-
-    return {
-      id: newOrder.id,
-      restaurant_id: newOrder.restaurant_id,
-      table_id: newOrder.table_id,
-      table_name: newOrder.table_name,
-      status: newOrder.status,
-      special_instructions: newOrder.special_instructions,
-      subtotal: Number(newOrder.subtotal),
-      gst: Number(newOrder.gst),
-      service_charge: Number(newOrder.service_charge),
-      total: Number(newOrder.total),
-      created_at: newOrder.created_at,
-      items: itemsData.map((oi: any) => ({
-        id: oi.id,
-        order_id: oi.order_id,
-        menu_item_id: oi.menu_item_id,
-        menu_item_name: oi.menu_item_name,
-        quantity: oi.quantity,
-        price: Number(oi.price),
-        notes: oi.notes
-      }))
-    };
   },
 
   async updateOrderStatus(id: string, status: Order['status']): Promise<Order> {
@@ -467,7 +623,81 @@ export const db = {
       throw new Error(error?.message || 'Order not found');
     }
 
+    // If status is completed or cancelled, sync batches
+    if (status === 'completed' || status === 'cancelled') {
+      await supabase
+        .from('order_batches')
+        .update({ status: 'served' })
+        .eq('order_id', id);
+    }
+
     const fullOrder = await this.getOrderById(id);
+    if (!fullOrder) throw new Error('Order not found');
+    return fullOrder;
+  },
+
+  async updateBatchStatus(batchId: string, status: OrderBatch['status']): Promise<Order> {
+    const updatePayload: any = { status, updated_at: new Date().toISOString() };
+    const now = new Date().toISOString();
+    if (status === 'accepted') updatePayload.accepted_at = now;
+    if (status === 'preparing') updatePayload.preparing_at = now;
+    if (status === 'ready') updatePayload.ready_at = now;
+    if (status === 'served') updatePayload.served_at = now;
+
+    const { data: updatedBatchData, error: batchErr } = await supabase
+      .from('order_batches')
+      .update(updatePayload)
+      .eq('id', batchId)
+      .select();
+
+    if (batchErr || !updatedBatchData || updatedBatchData.length === 0) {
+      throw new Error(batchErr?.message || 'Batch not found');
+    }
+
+    const batch = updatedBatchData[0];
+    const orderId = batch.order_id;
+
+    // Fetch all batches of this order to recalculate order status
+    const { data: allBatches, error: allBatchesErr } = await supabase
+      .from('order_batches')
+      .select('*')
+      .eq('order_id', orderId);
+
+    if (allBatchesErr || !allBatches) {
+      throw new Error(allBatchesErr?.message || 'Failed to fetch order batches');
+    }
+
+    // Recalculate status of the order based on its batches
+    let nextOrderStatus: Order['status'] = 'served';
+
+    const hasNew = allBatches.some(b => b.status === 'new');
+    const hasAccepted = allBatches.some(b => b.status === 'accepted');
+    const hasPreparing = allBatches.some(b => b.status === 'preparing');
+    const hasReady = allBatches.some(b => b.status === 'ready');
+
+    if (hasNew) {
+      nextOrderStatus = 'new';
+    } else if (hasAccepted) {
+      nextOrderStatus = 'accepted';
+    } else if (hasPreparing) {
+      nextOrderStatus = 'preparing';
+    } else if (hasReady) {
+      nextOrderStatus = 'ready';
+    } else {
+      nextOrderStatus = 'served';
+    }
+
+    // Update parent order status
+    const { error: orderUpdateErr } = await supabase
+      .from('orders')
+      .update({ status: nextOrderStatus })
+      .eq('id', orderId);
+
+    if (orderUpdateErr) {
+      throw new Error(orderUpdateErr.message);
+    }
+
+    const fullOrder = await this.getOrderById(orderId);
     if (!fullOrder) throw new Error('Order not found');
     return fullOrder;
   },

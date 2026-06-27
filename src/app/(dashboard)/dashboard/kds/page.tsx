@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { db, Order } from '@/lib/db';
+import { db, Order, OrderBatch } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
 import { formatPrice } from '@/lib/utils';
@@ -96,6 +96,7 @@ export default function KitchenDisplayPage() {
   const [restaurantId, setRestaurantId] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processingBatchIds, setProcessingBatchIds] = useState<string[]>([]);
 
   // sound toggle state
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -312,7 +313,7 @@ export default function KitchenDisplayPage() {
   };
 
   const syncAlarmState = (activeOrdersList: Order[]) => {
-    const hasNew = activeOrdersList.some(o => o.status === 'new');
+    const hasNew = activeOrdersList.some(o => o.batches?.some(b => b.status === 'new'));
     if (hasNew) {
       startAlarm();
     } else {
@@ -408,16 +409,31 @@ export default function KitchenDisplayPage() {
     };
   }, [restaurantId]);
 
-  const updateStatus = async (orderId: string, nextStatus: Order['status']) => {
+  const updateBatchStatus = async (batchId: string, nextStatus: OrderBatch['status']) => {
+    if (processingBatchIds.includes(batchId)) return;
+    setProcessingBatchIds(prev => [...prev, batchId]);
     try {
-      await db.updateOrderStatus(orderId, nextStatus);
+      await db.updateBatchStatus(batchId, nextStatus);
       if (restaurantId) {
         await loadKdsData(restaurantId);
-        // Dispatch local event to sync with other dashboard tabs
         window.dispatchEvent(new Event('storage'));
       }
     } catch (err: any) {
-      alert(`Failed to update order status: ${err.message}`);
+      alert(`Failed to update status: ${err.message}`);
+    } finally {
+      setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
+    }
+  };
+
+  const cancelOrder = async (orderId: string) => {
+    try {
+      await db.updateOrderStatus(orderId, 'cancelled');
+      if (restaurantId) {
+        await loadKdsData(restaurantId);
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (err: any) {
+      alert(`Failed to cancel order: ${err.message}`);
     }
   };
 
@@ -441,10 +457,26 @@ export default function KitchenDisplayPage() {
     );
   }
 
-  // Group active orders by columns
-  const newOrders = orders.filter(o => o.status === 'new');
-  const preparingOrders = orders.filter(o => o.status === 'accepted' || o.status === 'preparing');
-  const readyOrders = orders.filter(o => o.status === 'ready');
+  // Extract active batches from active orders
+  const activeBatches = orders.reduce((acc: any[], order) => {
+    if (order.batches) {
+      order.batches.forEach(batch => {
+        if (batch.status !== 'served') {
+          acc.push({
+            ...batch,
+            table_name: order.table_name,
+            restaurant_id: order.restaurant_id,
+            order_id: order.id
+          });
+        }
+      });
+    }
+    return acc;
+  }, []);
+
+  const newOrders = activeBatches.filter(b => b.status === 'new');
+  const preparingOrders = activeBatches.filter(b => b.status === 'accepted' || b.status === 'preparing');
+  const readyOrders = activeBatches.filter(b => b.status === 'ready');
 
   return (
     <div className="space-y-6 h-full flex flex-col">
@@ -471,7 +503,7 @@ export default function KitchenDisplayPage() {
       </div>
 
       {/* Large Pulsing Red Alert Card for New Orders */}
-      {orders.some(o => o.status === 'new') && (
+      {newOrders.length > 0 && (
         <div className="bg-red-600 text-white rounded-2xl p-6 shadow-xl border border-red-500 animate-pulse flex flex-col md:flex-row items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-4 text-center md:text-left">
             <div className="bg-white/20 p-3.5 rounded-2xl animate-bounce">
@@ -483,17 +515,21 @@ export default function KitchenDisplayPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              className="bg-white text-red-700 hover:bg-red-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+            <button
+              disabled={newOrders[0] ? processingBatchIds.includes(newOrders[0].id) : false}
+              className="!bg-white !text-red-750 hover:bg-red-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer disabled:opacity-50 transition-all flex items-center justify-center gap-2 shrink-0 z-10"
               onClick={async () => {
-                const firstNew = orders.find(o => o.status === 'new');
+                const firstNew = newOrders[0];
                 if (firstNew) {
-                  await updateStatus(firstNew.id, 'accepted');
+                  await updateBatchStatus(firstNew.id, 'accepted');
                 }
               }}
             >
+              {newOrders[0] && processingBatchIds.includes(newOrders[0].id) && (
+                <div className="h-4 w-4 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
+              )}
               Accept Order
-            </Button>
+            </button>
           </div>
         </div>
       )}
@@ -522,7 +558,7 @@ export default function KitchenDisplayPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
-                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">ORDER #{order.id.slice(-5).toUpperCase()}</span>
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
@@ -530,7 +566,7 @@ export default function KitchenDisplayPage() {
                     </div>
 
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
-                      {order.items.map(item => (
+                      {order.items.map((item: any) => (
                         <li key={item.id} className="py-1.5 flex justify-between">
                           <span>{item.quantity}x {item.menu_item_name}</span>
                           {item.notes && <span className="text-[10px] text-rose-500 font-medium">({item.notes})</span>}
@@ -539,27 +575,29 @@ export default function KitchenDisplayPage() {
                     </ul>
 
                     {order.special_instructions && (
-                      <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-lg p-2.5 text-xs text-amber-800 dark:text-amber-400">
+                      <div className="bg-amber-50 dark:bg-amber-955/20 border border-amber-100 dark:border-amber-900/30 rounded-lg p-2.5 text-xs text-amber-800 dark:text-amber-400">
                         <strong>Note:</strong> {order.special_instructions}
                       </div>
                     )}
 
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-rose-600 border-rose-100 dark:border-rose-900/30 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
-                        onClick={() => updateStatus(order.id, 'cancelled')}
+                      <button 
+                        disabled={processingBatchIds.includes(order.id)}
+                        className="inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg border border-rose-150 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 text-rose-600 bg-transparent transition-all disabled:opacity-50 cursor-pointer"
+                        onClick={() => cancelOrder(order.order_id)}
                       >
                         Decline
-                      </Button>
-                      <Button 
-                        size="sm"
-                        className="cursor-pointer"
-                        onClick={() => updateStatus(order.id, 'accepted')}
+                      </button>
+                      <button 
+                        disabled={processingBatchIds.includes(order.id)}
+                        className="inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50 cursor-pointer"
+                        onClick={() => updateBatchStatus(order.id, 'accepted')}
                       >
+                        {processingBatchIds.includes(order.id) && (
+                          <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5" />
+                        )}
                         Accept
-                      </Button>
+                      </button>
                     </div>
                   </CardContent>
                 </Card>
@@ -589,7 +627,7 @@ export default function KitchenDisplayPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider">ORDER #{order.id.slice(-5).toUpperCase()}</span>
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
@@ -597,7 +635,7 @@ export default function KitchenDisplayPage() {
                     </div>
 
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
-                      {order.items.map(item => (
+                      {order.items.map((item: any) => (
                         <li key={item.id} className="py-1.5 flex justify-between">
                           <span>{item.quantity}x {item.menu_item_name}</span>
                           {item.notes && <span className="text-[10px] text-rose-500 font-medium">({item.notes})</span>}
@@ -606,28 +644,38 @@ export default function KitchenDisplayPage() {
                     </ul>
 
                     {order.special_instructions && (
-                      <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-lg p-2.5 text-xs text-amber-800 dark:text-amber-400">
+                      <div className="bg-amber-50 dark:bg-amber-955/20 border border-amber-100 dark:border-amber-900/30 rounded-lg p-2.5 text-xs text-amber-800 dark:text-amber-400">
                         <strong>Note:</strong> {order.special_instructions}
                       </div>
                     )}
 
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                       {order.status === 'accepted' ? (
-                        <Button 
-                          className="w-full bg-amber-500 hover:bg-amber-600 cursor-pointer" 
-                          size="sm"
-                          onClick={() => updateStatus(order.id, 'preparing')}
+                        <button 
+                          disabled={processingBatchIds.includes(order.id)}
+                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-all disabled:opacity-50 cursor-pointer"
+                          onClick={() => updateBatchStatus(order.id, 'preparing')}
                         >
-                          <Play className="h-3.5 w-3.5 mr-1" /> Start Cooking
-                        </Button>
+                          {processingBatchIds.includes(order.id) ? (
+                            <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5" />
+                          ) : (
+                            <Play className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Start Cooking
+                        </button>
                       ) : (
-                        <Button 
-                          className="w-full bg-purple-600 hover:bg-purple-700 cursor-pointer" 
-                          size="sm"
-                          onClick={() => updateStatus(order.id, 'ready')}
+                        <button 
+                          disabled={processingBatchIds.includes(order.id)}
+                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all disabled:opacity-50 cursor-pointer"
+                          onClick={() => updateBatchStatus(order.id, 'ready')}
                         >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Ready for Pickup
-                        </Button>
+                          {processingBatchIds.includes(order.id) ? (
+                            <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5" />
+                          ) : (
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                          )}
+                          Ready for Pickup
+                        </button>
                       )}
                     </div>
                   </CardContent>
@@ -658,7 +706,7 @@ export default function KitchenDisplayPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
-                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tracking-wider">ORDER #{order.id.slice(-5).toUpperCase()}</span>
+                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
                         <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
@@ -666,7 +714,7 @@ export default function KitchenDisplayPage() {
                     </div>
 
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
-                      {order.items.map(item => (
+                      {order.items.map((item: any) => (
                         <li key={item.id} className="py-1.5 flex justify-between">
                           <span>{item.quantity}x {item.menu_item_name}</span>
                         </li>
@@ -694,24 +742,30 @@ export default function KitchenDisplayPage() {
         title="🔔 New Table Order Received!"
         footer={
           <div className="flex gap-2 w-full">
-            <Button 
-              variant="outline" 
-              className="flex-1 cursor-pointer" 
+            <button 
+              className="flex-1 border border-slate-200 dark:border-slate-750 text-slate-650 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-50" 
               onClick={() => setNewOrderAlert(null)}
             >
               Close
-            </Button>
-            <Button 
-              className="flex-1 cursor-pointer" 
-              onClick={() => {
+            </button>
+            <button 
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2" 
+              onClick={async () => {
                 if (newOrderAlert) {
-                  updateStatus(newOrderAlert.id, 'accepted');
+                  const newBatches = newOrderAlert.batches?.filter(b => b.status === 'new') || [];
+                  for (const batch of newBatches) {
+                    await db.updateBatchStatus(batch.id, 'accepted');
+                  }
+                  if (restaurantId) {
+                    await loadKdsData(restaurantId);
+                    window.dispatchEvent(new Event('storage'));
+                  }
                   setNewOrderAlert(null);
                 }
               }}
             >
               Accept Order
-            </Button>
+            </button>
           </div>
         }
       >

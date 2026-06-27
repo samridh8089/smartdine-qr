@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import Link from 'next/link';
 import { 
   CheckCircle2, AlertTriangle, ArrowLeft, 
-  RotateCcw, Printer, ChefHat, Clock
+  RotateCcw, Printer, ChefHat, Clock, Plus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -134,6 +134,38 @@ export default function OrderTrackingPage({ params }: PageProps) {
     );
   }
 
+  const getStepTimestamp = (stepKey: string) => {
+    if (!order.batches || order.batches.length === 0) {
+      if (stepKey === 'new') return order.created_at;
+      return null;
+    }
+    const sortedBatches = [...order.batches].sort((a, b) => b.batch_number - a.batch_number);
+    for (const b of sortedBatches) {
+      if (stepKey === 'new' && b.created_at) return b.created_at;
+      if (stepKey === 'accepted' && b.accepted_at) return b.accepted_at;
+      if (stepKey === 'preparing' && b.preparing_at) return b.preparing_at;
+      if (stepKey === 'ready' && b.ready_at) return b.ready_at;
+      if (stepKey === 'served' && b.served_at) return b.served_at;
+    }
+    return null;
+  };
+
+  const formatTimelineTime = (isoString: string | null) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const dateStr = date.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+    const timeStr = date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    return `${dateStr}, ${timeStr}`;
+  };
+
   // Define status steps
   const steps = [
     { key: 'new', label: 'Order Sent', desc: 'Sent to kitchen' },
@@ -172,7 +204,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
         {/* Restaurant Header Info */}
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-none">{restaurant.name}</h1>
-          <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold uppercase">{order.table_name || 'Table'} • Receipt #{order.id.slice(-5).toUpperCase()}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-550 font-semibold uppercase">{order.table_name || 'Table'} • Receipt #{order.id.slice(-5).toUpperCase()}</p>
         </div>
 
         {/* Live Timeline State Card */}
@@ -214,12 +246,19 @@ export default function OrderTrackingPage({ params }: PageProps) {
                       </span>
                       
                       {/* Step Labels */}
-                      <div className="space-y-0.5">
-                        <h4 className={`text-sm font-extrabold transition-colors duration-300 ${
-                          isCurrent ? 'text-emerald-600 dark:text-emerald-400' : isDone ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
-                        }`}>
-                          {step.label}
-                        </h4>
+                      <div className="space-y-0.5 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <h4 className={`text-sm font-extrabold transition-colors duration-300 ${
+                            isCurrent ? 'text-emerald-600 dark:text-emerald-400' : isDone ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
+                          }`}>
+                            {step.label}
+                          </h4>
+                          {(isDone || isCurrent) && getStepTimestamp(step.key) && (
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold shrink-0">
+                              {formatTimelineTime(getStepTimestamp(step.key))}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-400 dark:text-slate-500 font-semibold">{step.desc}</p>
                       </div>
                     </div>
@@ -270,20 +309,33 @@ export default function OrderTrackingPage({ params }: PageProps) {
             </div>
 
             {/* Action buttons */}
-            <div className="pt-2 flex flex-col sm:flex-row gap-2">
-              <Button 
-                variant="outline" 
-                className="w-full gap-1.5 cursor-pointer"
-                onClick={handleReorder}
-              >
-                <RotateCcw className="h-4 w-4 text-slate-500" /> Reorder Items
-              </Button>
-              <Button 
-                className="w-full gap-1.5 cursor-pointer"
-                onClick={() => window.print()}
-              >
-                <Printer className="h-4 w-4" /> Print Receipt
-              </Button>
+            <div className="pt-2 flex flex-col gap-2">
+              {order.status !== 'completed' && order.status !== 'cancelled' && (
+                <Button 
+                  className={`w-full gap-1.5 cursor-pointer flex items-center justify-center ${
+                    order.status === 'served' ? 'bg-emerald-650 hover:bg-emerald-700 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                  }`}
+                  onClick={() => router.push(`/menu/${restaurant.slug}/table/${order.table_id}`)}
+                >
+                  <Plus className="h-4 w-4" /> Add More Items
+                </Button>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2 w-full">
+                <Button 
+                  variant="outline" 
+                  className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
+                  onClick={handleReorder}
+                >
+                  <RotateCcw className="h-4 w-4 text-slate-500" /> Reorder Items
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="h-4 w-4 text-slate-500" /> Print Receipt
+                </Button>
+              </div>
             </div>
 
           </CardContent>

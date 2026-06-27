@@ -107,6 +107,9 @@ export default function OrdersPage() {
   // Real-time toast state
   const [toast, setToast] = useState<{ message: string; visible: boolean } | null>(null);
 
+  const [processingRequestIds, setProcessingRequestIds] = useState<string[]>([]);
+  const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
+
   const alertedOrderIds = useRef<Set<string>>(new Set());
   const selectedOrderRef = useRef<Order | null>(selectedOrder);
 
@@ -459,6 +462,9 @@ export default function OrdersPage() {
 
   const updateOrderStatus = async (status: Order['status']) => {
     if (!selectedOrder || !restaurant) return;
+    if (processingOrderIds.includes(selectedOrder.id)) return;
+
+    setProcessingOrderIds(prev => [...prev, selectedOrder.id]);
     try {
       const updated = await db.updateOrderStatus(selectedOrder.id, status);
       setSelectedOrder(updated);
@@ -470,31 +476,47 @@ export default function OrdersPage() {
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
       alert(`Failed to update order status: ${err.message}`);
+    } finally {
+      setProcessingOrderIds(prev => prev.filter(id => id !== selectedOrder.id));
     }
   };
 
   const handleAcceptRequest = async (requestId: string) => {
+    if (processingRequestIds.includes(requestId)) return;
+
+    const originalRequests = [...customerRequests];
+    setCustomerRequests(prev => prev.filter(r => r.id !== requestId));
+    setProcessingRequestIds(prev => [...prev, requestId]);
+
     try {
       await db.acceptCustomerRequest(requestId);
-      const reqs = await db.getCustomerRequests(restaurant!.id);
-      const activeReqs = reqs.filter(r => r.status === 'pending');
-      setCustomerRequests(activeReqs);
-      syncAlarmState(orders, activeReqs);
+      const updatedReqs = originalRequests.filter(r => r.id !== requestId);
+      syncAlarmState(orders, updatedReqs);
     } catch (err: any) {
+      setCustomerRequests(originalRequests);
       alert(`Failed to accept request: ${err.message}`);
+    } finally {
+      setProcessingRequestIds(prev => prev.filter(id => id !== requestId));
     }
   };
 
   const handleResolveRequest = async (requestId: string) => {
+    if (processingRequestIds.includes(requestId)) return;
+
+    const originalRequests = [...customerRequests];
+    setCustomerRequests(prev => prev.filter(r => r.id !== requestId));
+    setProcessingRequestIds(prev => [...prev, requestId]);
+
     try {
       await db.resolveCustomerRequest(requestId);
-      const reqs = await db.getCustomerRequests(restaurant!.id);
-      const activeReqs = reqs.filter(r => r.status === 'pending');
-      setCustomerRequests(activeReqs);
-      syncAlarmState(orders, activeReqs);
+      const updatedReqs = originalRequests.filter(r => r.id !== requestId);
+      syncAlarmState(orders, updatedReqs);
       alert('Request marked resolved.');
     } catch (err: any) {
+      setCustomerRequests(originalRequests);
       alert(`Failed to resolve request: ${err.message}`);
+    } finally {
+      setProcessingRequestIds(prev => prev.filter(id => id !== requestId));
     }
   };
 
@@ -663,18 +685,36 @@ export default function OrdersPage() {
                   <p className="text-sm text-orange-100 font-semibold mt-1">Order food is ready in the kitchen. Deliver it to the table and mark as served to stop the alarm.</p>
                 </div>
               </div>
-              <Button
-                className="bg-white text-orange-700 hover:bg-orange-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+              <button
+                disabled={orders.find(o => o.status === 'ready') ? processingOrderIds.includes(orders.find(o => o.status === 'ready')!.id) : false}
+                className="!bg-white !text-orange-700 hover:bg-orange-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer disabled:opacity-50 transition-all flex items-center justify-center gap-2 shrink-0 z-10"
                 onClick={async () => {
                   const firstReady = orders.find(o => o.status === 'ready');
                   if (firstReady) {
-                    setSelectedOrder(firstReady);
-                    await updateOrderStatus('served');
+                    setProcessingOrderIds(prev => [...prev, firstReady.id]);
+                    try {
+                      const readyBatches = firstReady.batches?.filter(b => b.status === 'ready') || [];
+                      for (const batch of readyBatches) {
+                        await db.updateBatchStatus(batch.id, 'served');
+                      }
+                      const allOrders = await db.getOrders(restaurant.id);
+                      setOrders(allOrders);
+                      const updatedSelected = allOrders.find(o => o.id === (selectedOrder?.id || firstReady.id));
+                      if (updatedSelected) setSelectedOrder(updatedSelected);
+                      window.dispatchEvent(new Event('storage'));
+                    } catch (err: any) {
+                      alert(`Failed to serve order: ${err.message}`);
+                    } finally {
+                      setProcessingOrderIds(prev => prev.filter(id => id !== firstReady.id));
+                    }
                   }
                 }}
               >
+                {orders.find(o => o.status === 'ready') && processingOrderIds.includes(orders.find(o => o.status === 'ready')!.id) && (
+                  <div className="h-4 w-4 border-2 border-orange-700 border-t-transparent rounded-full animate-spin" />
+                )}
                 Serve Order
-              </Button>
+              </button>
             </div>
           )}
 
@@ -693,8 +733,9 @@ export default function OrdersPage() {
                   </div>
                 </div>
               </div>
-              <Button
-                className="bg-white text-blue-700 hover:bg-blue-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer"
+              <button
+                disabled={customerRequests.find(r => r.status === 'pending') ? processingRequestIds.includes(customerRequests.find(r => r.status === 'pending')!.id) : false}
+                className="!bg-white !text-blue-700 hover:bg-blue-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer disabled:opacity-50 transition-all flex items-center justify-center gap-2 shrink-0 z-10"
                 onClick={async () => {
                   const firstPending = customerRequests.find(r => r.status === 'pending');
                   if (firstPending) {
@@ -702,8 +743,11 @@ export default function OrdersPage() {
                   }
                 }}
               >
+                {customerRequests.find(r => r.status === 'pending') && processingRequestIds.includes(customerRequests.find(r => r.status === 'pending')!.id) && (
+                  <div className="h-4 w-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin" />
+                )}
                 Accept Request
-              </Button>
+              </button>
             </div>
           )}
         </div>
@@ -817,10 +861,16 @@ export default function OrdersPage() {
                             <Button
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
+                              isLoading={processingOrderIds.includes(order.id)}
+                              disabled={processingOrderIds.includes(order.id)}
                               onClick={async (e) => {
                                 e.stopPropagation();
+                                setProcessingOrderIds(prev => [...prev, order.id]);
                                 try {
-                                  await db.updateOrderStatus(order.id, 'served');
+                                  const readyBatches = order.batches?.filter(b => b.status === 'ready') || [];
+                                  for (const batch of readyBatches) {
+                                    await db.updateBatchStatus(batch.id, 'served');
+                                  }
                                   const allOrders = await db.getOrders(restaurant.id);
                                   const filteredOrders = activeRole === 'waiter'
                                     ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
@@ -830,6 +880,8 @@ export default function OrdersPage() {
                                   window.dispatchEvent(new Event('storage'));
                                 } catch (err: any) {
                                   alert(`Failed to serve order: ${err.message}`);
+                                } finally {
+                                  setProcessingOrderIds(prev => prev.filter(id => id !== order.id));
                                 }
                               }}
                             >
@@ -872,32 +924,87 @@ export default function OrdersPage() {
                     <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
                     <div className="flex flex-wrap gap-2">
                       {activeRole !== 'waiter' && selectedOrder.status === 'new' && (
-                        <Button size="sm" variant="primary" className="cursor-pointer" onClick={() => updateOrderStatus('accepted')}>
+                        <Button 
+                          size="sm" 
+                          variant="primary" 
+                          className="cursor-pointer" 
+                          isLoading={processingOrderIds.includes(selectedOrder.id)}
+                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          onClick={() => updateOrderStatus('accepted')}
+                        >
                           Accept Order
                         </Button>
                       )}
                       {activeRole !== 'waiter' && (selectedOrder.status === 'accepted' || selectedOrder.status === 'new') && (
-                        <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white cursor-pointer" onClick={() => updateOrderStatus('preparing')}>
+                        <Button 
+                          size="sm" 
+                          className="bg-amber-500 hover:bg-amber-600 text-white cursor-pointer" 
+                          isLoading={processingOrderIds.includes(selectedOrder.id)}
+                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          onClick={() => updateOrderStatus('preparing')}
+                        >
                           Start Preparing
                         </Button>
                       )}
                       {activeRole !== 'waiter' && selectedOrder.status === 'preparing' && (
-                        <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" onClick={() => updateOrderStatus('ready')}>
+                        <Button 
+                          size="sm" 
+                          className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" 
+                          isLoading={processingOrderIds.includes(selectedOrder.id)}
+                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          onClick={() => updateOrderStatus('ready')}
+                        >
                           Mark Ready for Pickup
                         </Button>
                       )}
                       {selectedOrder.status === 'ready' && (
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" onClick={() => updateOrderStatus('served')}>
+                        <Button 
+                          size="sm" 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" 
+                          isLoading={processingOrderIds.includes(selectedOrder.id)}
+                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          onClick={async () => {
+                            setProcessingOrderIds(prev => [...prev, selectedOrder.id]);
+                            try {
+                              const readyBatches = selectedOrder.batches?.filter(b => b.status === 'ready') || [];
+                              for (const batch of readyBatches) {
+                                await db.updateBatchStatus(batch.id, 'served');
+                              }
+                              const allOrders = await db.getOrders(restaurant.id);
+                              setOrders(allOrders);
+                              const updated = allOrders.find(o => o.id === selectedOrder.id);
+                              if (updated) setSelectedOrder(updated);
+                              window.dispatchEvent(new Event('storage'));
+                            } catch (err: any) {
+                              alert(`Failed to serve order: ${err.message}`);
+                            } finally {
+                              setProcessingOrderIds(prev => prev.filter(id => id !== selectedOrder.id));
+                            }
+                          }}
+                        >
                           Serve Order
                         </Button>
                       )}
                       {selectedOrder.status === 'served' && (
-                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white cursor-pointer" onClick={() => updateOrderStatus('completed')}>
+                        <Button 
+                          size="sm" 
+                          className="bg-teal-600 hover:bg-teal-700 text-white cursor-pointer" 
+                          isLoading={processingOrderIds.includes(selectedOrder.id)}
+                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          onClick={() => updateOrderStatus('completed')}
+                        >
                           Complete Order
                         </Button>
                       )}
                       {activeRole !== 'waiter' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
-                        <Button size="sm" variant="danger" className="cursor-pointer" onClick={() => updateOrderStatus('cancelled')}>
+                        <Button 
+                          size="sm" 
+                          variant="danger" 
+                          className="cursor-pointer" 
+                          isLoading={processingOrderIds.includes(selectedOrder.id)}
+                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          onClick={() => updateOrderStatus('cancelled')}
+                        >
                           Cancel Order
                         </Button>
                       )}
@@ -1014,22 +1121,30 @@ export default function OrdersPage() {
                         </td>
                         <td className="px-6 py-4 text-right flex justify-end gap-2">
                           {req.status === 'pending' && (
-                            <Button
-                              size="sm"
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
+                            <button
+                              disabled={processingRequestIds.includes(req.id)}
+                              className="inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition-all disabled:opacity-50 cursor-pointer"
                               onClick={() => handleAcceptRequest(req.id)}
                             >
+                              {processingRequestIds.includes(req.id) && (
+                                <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5" />
+                              )}
                               Accept Request
-                            </Button>
+                            </button>
                           )}
                           {req.status !== 'completed' && (
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                            <button
+                              disabled={processingRequestIds.includes(req.id)}
+                              className="inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50 cursor-pointer ml-2"
                               onClick={() => handleResolveRequest(req.id)}
                             >
-                              <Check className="h-3.5 w-3.5 mr-1" /> Mark Completed
-                            </Button>
+                              {processingRequestIds.includes(req.id) ? (
+                                <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5" />
+                              ) : (
+                                <Check className="h-3.5 w-3.5 mr-1" />
+                              )}
+                              Mark Completed
+                            </button>
                           )}
                         </td>
                       </tr>

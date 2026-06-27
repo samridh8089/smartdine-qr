@@ -82,6 +82,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [router]);
 
+  // Redirect waiters and kitchen from /dashboard root route
+  useEffect(() => {
+    if (!loading && profile && pathname === '/dashboard') {
+      if (dbRole === 'kitchen') {
+        router.replace('/dashboard/kds');
+      } else if (dbRole === 'waiter' || dbRole === 'cashier') {
+        router.replace('/dashboard/orders');
+      }
+    }
+  }, [loading, profile, dbRole, pathname, router]);
+
   // Realtime Supabase Subscription for Restaurant License/Plan updates
   useEffect(() => {
     if (!profile?.restaurant_id) return;
