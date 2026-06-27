@@ -46,7 +46,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
     loadOrderData();
   }, [orderId]);
 
-  // Realtime Supabase Subscription for Order Status updates
+  // Realtime Supabase Subscription for Order Status and Batch updates
   useEffect(() => {
     if (!orderId) return;
 
@@ -55,14 +55,29 @@ export default function OrderTrackingPage({ params }: PageProps) {
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'orders',
           filter: `id=eq.${orderId}`
         },
         async (payload) => {
-          console.log('Realtime Order Tracking Update:', payload.new);
-          // Refetch order details with item mappings
+          console.log('Realtime Customer Order Update:', payload);
+          const updatedOrder = await db.getOrderById(orderId);
+          if (updatedOrder) {
+            setOrder(updatedOrder);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'order_batches',
+          filter: `order_id=eq.${orderId}`
+        },
+        async (payload) => {
+          console.log('Realtime Customer Batch Update:', payload);
           const updatedOrder = await db.getOrderById(orderId);
           if (updatedOrder) {
             setOrder(updatedOrder);

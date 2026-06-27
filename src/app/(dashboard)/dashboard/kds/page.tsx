@@ -361,6 +361,11 @@ export default function KitchenDisplayPage() {
     }
   };
 
+  const reloadFnRef = useRef(safeReloadKdsData);
+  useEffect(() => {
+    reloadFnRef.current = safeReloadKdsData;
+  });
+
   useEffect(() => {
     if (restaurant?.id) {
       setRestaurantId(restaurant.id);
@@ -385,7 +390,7 @@ export default function KitchenDisplayPage() {
         },
         async (payload) => {
           console.log('Realtime KDS order change payload received:', payload);
-          await safeReloadKdsData(restaurantId);
+          await reloadFnRef.current(restaurantId);
 
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
@@ -423,21 +428,21 @@ export default function KitchenDisplayPage() {
         async (payload) => {
           console.log('Realtime KDS batch insert payload received:', payload);
           const newBatch = payload.new as OrderBatch;
-          
-          await safeReloadKdsData(restaurantId);
 
-          if (!alertedBatchIds.current.has(newBatch.id)) {
-            alertedBatchIds.current.add(newBatch.id);
-            console.log(`New batch detected! Playing alarm for batch ID: ${newBatch.id}`);
+          // Fetch parent order to verify restaurant ID
+          const fullOrder = await db.getOrderById(newBatch.order_id);
+          if (fullOrder && fullOrder.restaurant_id === restaurantId) {
+            await reloadFnRef.current(restaurantId);
 
-            // Trigger hardware vibration
-            if (typeof navigator !== 'undefined' && navigator.vibrate) {
-              navigator.vibrate([200, 100, 200]);
-            }
+            if (!alertedBatchIds.current.has(newBatch.id)) {
+              alertedBatchIds.current.add(newBatch.id);
+              console.log(`New batch detected! Playing alarm for batch ID: ${newBatch.id}`);
 
-            // Fetch parent order to display alert for new items
-            const fullOrder = await db.getOrderById(newBatch.order_id);
-            if (fullOrder && fullOrder.restaurant_id === restaurantId) {
+              // Trigger hardware vibration
+              if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                navigator.vibrate([200, 100, 200]);
+              }
+
               setNewOrderAlert(fullOrder);
               showDesktopNotification(fullOrder);
               setToast({ message: `New Items Added - ${fullOrder.table_name || 'Table X'}`, visible: true });
@@ -460,10 +465,15 @@ export default function KitchenDisplayPage() {
           console.log('Realtime KDS batch update payload received:', payload);
           const updatedBatch = payload.new as OrderBatch;
           
-          // Verify this batch belongs to our restaurant by checking loaded orders
-          const belongsToUs = orders.some(o => o.id === updatedBatch.order_id);
-          if (belongsToUs || payload.old) {
-            await safeReloadKdsData(restaurantId);
+          // Verify this batch belongs to our restaurant by checking its parent order
+          const { data: parentOrder } = await supabase
+            .from('orders')
+            .select('restaurant_id')
+            .eq('id', updatedBatch.order_id)
+            .single();
+
+          if (parentOrder && parentOrder.restaurant_id === restaurantId) {
+            await reloadFnRef.current(restaurantId);
           }
         }
       )
@@ -479,7 +489,7 @@ export default function KitchenDisplayPage() {
       supabase.removeChannel(channel);
       stopAlarm();
     };
-  }, [restaurantId, orders]);
+  }, [restaurantId]);
 
   const updateBatchStatus = async (batchId: string, nextStatus: OrderBatch['status']) => {
     if (processingBatchIds.includes(batchId)) return;

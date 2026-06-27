@@ -394,6 +394,11 @@ export default function OrdersPage() {
     }
   }, [restaurant, orderIdParam]);
 
+  const reloadFnRef = useRef(safeReloadOrders);
+  useEffect(() => {
+    reloadFnRef.current = safeReloadOrders;
+  });
+
   // Realtime Supabase Subscription for Orders, Requests & Batches
   useEffect(() => {
     if (!restaurant) return;
@@ -412,7 +417,7 @@ export default function OrdersPage() {
         },
         async (payload) => {
           console.log('Realtime Live Orders order change payload received:', payload);
-          await safeReloadOrders(restId);
+          await reloadFnRef.current(restId);
 
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
@@ -449,7 +454,7 @@ export default function OrdersPage() {
         },
         async (payload) => {
           console.log('Realtime Live Orders request change payload received:', payload);
-          await safeReloadOrders(restId);
+          await reloadFnRef.current(restId);
         }
       )
       .on(
@@ -462,11 +467,17 @@ export default function OrdersPage() {
         async (payload) => {
           console.log('Realtime Live Orders batch change payload received:', payload);
           const batch = payload.new as OrderBatch;
+          if (!batch) return;
           
-          // Verify if this belongs to our restaurant by checking currently loaded orders
-          const belongsToUs = orders.some(o => o.id === batch.order_id);
-          if (belongsToUs || payload.old) {
-            await safeReloadOrders(restId);
+          // Verify if this belongs to our restaurant by checking its parent order
+          const { data: parentOrder } = await supabase
+            .from('orders')
+            .select('restaurant_id')
+            .eq('id', batch.order_id)
+            .single();
+
+          if (parentOrder && parentOrder.restaurant_id === restId) {
+            await reloadFnRef.current(restId);
           }
         }
       )
@@ -482,7 +493,7 @@ export default function OrdersPage() {
       supabase.removeChannel(channel);
       stopAlarm();
     };
-  }, [restaurant, orders, activeRole]);
+  }, [restaurant]);
 
   const handleSelectOrder = (order: Order) => {
     setSelectedOrder(order);

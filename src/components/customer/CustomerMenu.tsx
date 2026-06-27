@@ -217,30 +217,42 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
   };
 
   const handleAddToCart = (item: MenuItem, qty = 1, notes = '') => {
-    const existingIndex = cart.findIndex(c => c.menuItem.id === item.id && c.notes === notes);
-    let newCart = [...cart];
-
-    if (existingIndex > -1) {
-      newCart[existingIndex].quantity += qty;
-    } else {
-      newCart.push({ menuItem: item, quantity: qty, notes });
-    }
-
-    saveCart(newCart);
+    setCart((currentCart) => {
+      const existingIndex = currentCart.findIndex(c => c.menuItem.id === item.id && c.notes === notes);
+      let newCart = [...currentCart];
+      if (existingIndex > -1) {
+        newCart = newCart.map((c, idx) => 
+          idx === existingIndex ? { ...c, quantity: c.quantity + qty } : c
+        );
+      } else {
+        newCart.push({ menuItem: item, quantity: qty, notes });
+      }
+      if (restaurant) {
+        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
+      }
+      return newCart;
+    });
     setDetailedItem(null);
     setDetailNotes('');
     setDetailQty(1);
+    setCartBouncing(true);
+    setTimeout(() => setCartBouncing(false), 300);
   };
 
   const updateCartQty = (index: number, delta: number) => {
-    let newCart = [...cart];
-    newCart[index].quantity += delta;
-    
-    if (newCart[index].quantity <= 0) {
-      newCart.splice(index, 1);
-    }
-
-    saveCart(newCart);
+    setCart((currentCart) => {
+      if (!currentCart[index]) return currentCart;
+      let newCart = currentCart.map((c, idx) => 
+        idx === index ? { ...c, quantity: c.quantity + delta } : c
+      );
+      if (newCart[index] && newCart[index].quantity <= 0) {
+        newCart = newCart.filter((_, idx) => idx !== index);
+      }
+      if (restaurant) {
+        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
+      }
+      return newCart;
+    });
   };
 
   const calculateSubtotal = () => {
