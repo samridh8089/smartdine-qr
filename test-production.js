@@ -23,14 +23,18 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ARTIFACT_DIR = 'C:\\Users\\DELL\\.gemini\\antigravity\\brain\\c7049e86-5d99-4a09-8401-56b454e619a7';
 
+let browser;
+let page;
+let customerPage;
+
 async function run() {
   console.log('Starting puppeteer E2E validation...');
-  const browser = await puppeteer.launch({
+  browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
-  const page = await browser.newPage();
+  page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
   page.on('console', msg => {
@@ -166,7 +170,7 @@ async function run() {
 
   // 3. Open Customer Menu page
   console.log('Opening customer menu page in a new session...');
-  const customerPage = await browser.newPage();
+  customerPage = await browser.newPage();
   await customerPage.setViewport({ width: 450, height: 800 });
 
   customerPage.on('console', msg => {
@@ -205,7 +209,7 @@ async function run() {
     if (placeBtn) placeBtn.click();
   });
   console.log('Waiting for tracking page Order Summary...');
-  await customerPage.waitForFunction(() => document.body.innerText.includes('Order Summary'), { timeout: 15000 });
+  await customerPage.waitForFunction(() => document.body.innerText.toLowerCase().includes('order summary'), { timeout: 15000 });
   console.log('Order placed. Tracking URL:', customerPage.url());
   await customerPage.screenshot({ path: path.join(ARTIFACT_DIR, '07_tracking_sent.png') });
   console.log('Screenshot 07_tracking_sent.png saved.');
@@ -265,7 +269,7 @@ async function run() {
   console.log('Checking customer tracking page for Served status and timestamps...');
   await customerPage.reload({ waitUntil: 'networkidle2' });
   console.log('Waiting for Customer Tracking reload...');
-  await customerPage.waitForFunction(() => document.body.innerText.includes('Order Summary'));
+  await customerPage.waitForFunction(() => document.body.innerText.toLowerCase().includes('order summary'));
   await customerPage.screenshot({ path: path.join(ARTIFACT_DIR, '14_tracking_served.png') });
   console.log('Screenshot 14_tracking_served.png saved.');
 
@@ -298,7 +302,7 @@ async function run() {
     if (placeBtn) placeBtn.click();
   });
   console.log('Waiting for tracking page Order Summary...');
-  await customerPage.waitForFunction(() => document.body.innerText.includes('Order Summary'), { timeout: 15000 });
+  await customerPage.waitForFunction(() => document.body.innerText.toLowerCase().includes('order summary'), { timeout: 15000 });
   console.log('Second order batch placed. Tracking URL:', customerPage.url());
   await customerPage.screenshot({ path: path.join(ARTIFACT_DIR, '16_tracking_appended.png') });
   console.log('Screenshot 16_tracking_appended.png saved.');
@@ -307,7 +311,22 @@ async function run() {
   console.log('E2E validation finished successfully!');
 }
 
-run().catch(err => {
+run().catch(async err => {
   console.error('Error during E2E validation:', err);
+  try {
+    if (typeof page !== 'undefined') {
+      await page.screenshot({ path: path.join(ARTIFACT_DIR, 'screenshot_error_staff.png') });
+      console.log('Saved screenshot_error_staff.png');
+    }
+    if (typeof customerPage !== 'undefined') {
+      await customerPage.screenshot({ path: path.join(ARTIFACT_DIR, 'screenshot_error_customer.png') });
+      console.log('Saved screenshot_error_customer.png');
+    }
+  } catch (ssErr) {
+    console.error('Failed to take failure screenshots:', ssErr);
+  }
+  if (typeof browser !== 'undefined') {
+    await browser.close().catch(() => {});
+  }
   process.exit(1);
 });

@@ -517,7 +517,7 @@ export default function KitchenDisplayPage() {
           <div className="flex items-center gap-2">
             <button
               disabled={newOrders[0] ? processingBatchIds.includes(newOrders[0].id) : false}
-              className="!bg-white !text-red-750 hover:bg-red-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer disabled:opacity-50 transition-all flex items-center justify-center gap-2 shrink-0 z-10"
+              className="!bg-white !text-red-700 hover:bg-red-50 font-extrabold px-6 py-3 rounded-xl shadow-lg border border-transparent cursor-pointer disabled:opacity-50 transition-all flex items-center justify-center gap-2 shrink-0 z-10"
               onClick={async () => {
                 const firstNew = newOrders[0];
                 if (firstNew) {
@@ -583,7 +583,7 @@ export default function KitchenDisplayPage() {
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                       <button 
                         disabled={processingBatchIds.includes(order.id)}
-                        className="inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg border border-rose-150 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 text-rose-600 bg-transparent transition-all disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg border border-rose-200 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 text-rose-600 bg-transparent transition-all disabled:opacity-50 cursor-pointer"
                         onClick={() => cancelOrder(order.order_id)}
                       >
                         Decline
@@ -743,7 +743,7 @@ export default function KitchenDisplayPage() {
         footer={
           <div className="flex gap-2 w-full">
             <button 
-              className="flex-1 border border-slate-200 dark:border-slate-750 text-slate-650 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-50" 
+              className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-650 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-50" 
               onClick={() => setNewOrderAlert(null)}
             >
               Close
