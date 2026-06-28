@@ -22,6 +22,7 @@ export interface Restaurant {
     upi_id?: string;
     upi_name?: string;
     payment_qr?: string;
+    takeaway_enabled?: boolean;
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';
@@ -147,6 +148,9 @@ export interface Order {
   payment_reference?: string;
   paid_at?: string;
   marked_paid_by?: string;
+  order_type?: 'dine_in' | 'takeaway';
+  customer_arrival_minutes?: number;
+  takeaway_notes?: string;
 }
 
 export const PLAN_LIMITS = {
@@ -400,6 +404,9 @@ export const db = {
         payment_reference: o.payment_reference,
         paid_at: o.paid_at,
         marked_paid_by: o.marked_paid_by,
+        order_type: o.order_type || 'dine_in',
+        customer_arrival_minutes: o.customer_arrival_minutes,
+        takeaway_notes: o.takeaway_notes,
         items,
         batches
       };
@@ -474,6 +481,9 @@ export const db = {
       payment_reference: o.payment_reference,
       paid_at: o.paid_at,
       marked_paid_by: o.marked_paid_by,
+      order_type: o.order_type || 'dine_in',
+      customer_arrival_minutes: o.customer_arrival_minutes,
+      takeaway_notes: o.takeaway_notes,
       items,
       batches
     } as Order;
@@ -483,7 +493,11 @@ export const db = {
     restaurantId: string,
     tableId: string,
     items: { menuItemId: string; quantity: number; notes?: string }[],
-    specialInstructions?: string
+    specialInstructions?: string,
+    orderType: 'dine_in' | 'takeaway' = 'dine_in',
+    customerArrivalMinutes?: number,
+    takeawayNotes?: string,
+    paymentStatus: 'pending' | 'customer_marked_paid' | 'paid' = 'pending'
   ): Promise<Order> {
     const restaurant = await this.getRestaurantById(restaurantId);
     if (!restaurant) throw new Error('Restaurant not found');
@@ -512,15 +526,17 @@ export const db = {
       });
     }
 
-    // Check if there is an active order for this table
-    const { data: activeOrders, error: activeOrdersErr } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('table_id', tableId)
-      .not('status', 'in', '("completed","cancelled")')
-      .order('created_at', { ascending: false });
-
-    const activeOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
+    // Check if there is an active order for this table (Dine-in only)
+    let activeOrder = null;
+    if (orderType === 'dine_in') {
+      const { data: activeOrders } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('table_id', tableId)
+        .not('status', 'in', '("completed","cancelled")')
+        .order('created_at', { ascending: false });
+      activeOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
+    }
 
     if (!activeOrder) {
       // 1. Create a new order
@@ -539,7 +555,12 @@ export const db = {
           subtotal: batchSubtotal,
           gst,
           service_charge: serviceCharge,
-          total
+          total,
+          order_type: orderType,
+          customer_arrival_minutes: customerArrivalMinutes,
+          takeaway_notes: takeawayNotes,
+          payment_status: paymentStatus,
+          paid_at: paymentStatus !== 'pending' ? new Date().toISOString() : null
         })
         .select();
 

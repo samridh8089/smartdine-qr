@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [upiId, setUpiId] = useState(restaurant?.settings?.upi_id || '');
   const [upiName, setUpiName] = useState(restaurant?.settings?.upi_name || '');
   const [paymentQr, setPaymentQr] = useState(restaurant?.settings?.payment_qr || '');
+  const [takeawayEnabled, setTakeawayEnabled] = useState(restaurant?.settings?.takeaway_enabled === true);
 
   // Profile Settings Form
   const [restName, setRestName] = useState(restaurant?.name || '');
@@ -78,6 +79,7 @@ export default function SettingsPage() {
       setUpiId(restaurant.settings?.upi_id || '');
       setUpiName(restaurant.settings?.upi_name || '');
       setPaymentQr(restaurant.settings?.payment_qr || '');
+      setTakeawayEnabled(restaurant.settings?.takeaway_enabled === true);
       loadStaffAndLogs();
     }
   }, [restaurant]);
@@ -194,7 +196,8 @@ export default function SettingsPage() {
           payment_enabled: paymentEnabled,
           upi_id: upiId,
           upi_name: upiName,
-          payment_qr: paymentQr
+          payment_qr: paymentQr,
+          takeaway_enabled: takeawayEnabled
         }
       });
 
@@ -979,6 +982,22 @@ export default function SettingsPage() {
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
+                  <div>
+                    <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Enable Takeaway Ordering</span>
+                    <span className="text-xs text-slate-400 mt-1 block">Toggle this switch to generate a dedicated Takeaway QR and allow prepaid customer orders.</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={takeawayEnabled} 
+                      onChange={() => setTakeawayEnabled(!takeawayEnabled)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-purple-650"></div>
                   </label>
                 </div>
 

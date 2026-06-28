@@ -440,7 +440,10 @@ export default function KitchenDisplayPage() {
             table_name: order.table_name,
             restaurant_id: order.restaurant_id,
             order_id: order.id,
-            payment_status: order.payment_status || 'pending'
+            payment_status: order.payment_status || 'pending',
+            order_type: order.order_type || 'dine_in',
+            customer_arrival_minutes: order.customer_arrival_minutes,
+            takeaway_notes: order.takeaway_notes
           });
         }
       });
@@ -532,13 +535,25 @@ export default function KitchenDisplayPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          {order.order_type === 'takeaway' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                              🟣 Takeaway
+                            </span>
+                          ) : (
+                            <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          )}
                           {order.payment_status === 'paid' ? (
                             <Badge variant="success">Paid</Badge>
                           ) : order.payment_status === 'customer_marked_paid' ? (
                             <Badge variant="warning">Marked Paid</Badge>
                           ) : null}
                         </div>
+                        {order.order_type === 'takeaway' && (
+                          <div className="text-xs font-black text-purple-600 dark:text-purple-400 mt-1">
+                            Arrives in {order.customer_arrival_minutes} mins
+                            {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
+                          </div>
+                        )}
                         <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
@@ -608,13 +623,25 @@ export default function KitchenDisplayPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          {order.order_type === 'takeaway' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                              🟣 Takeaway
+                            </span>
+                          ) : (
+                            <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          )}
                           {order.payment_status === 'paid' ? (
                             <Badge variant="success">Paid</Badge>
                           ) : order.payment_status === 'customer_marked_paid' ? (
                             <Badge variant="warning">Marked Paid</Badge>
                           ) : null}
                         </div>
+                        {order.order_type === 'takeaway' && (
+                          <div className="text-xs font-black text-purple-600 dark:text-purple-400 mt-1">
+                            Arrives in {order.customer_arrival_minutes} mins
+                            {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
+                          </div>
+                        )}
                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
@@ -701,13 +728,25 @@ export default function KitchenDisplayPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          {order.order_type === 'takeaway' ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                              🟣 Takeaway
+                            </span>
+                          ) : (
+                            <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          )}
                           {order.payment_status === 'paid' ? (
                             <Badge variant="success">Paid</Badge>
                           ) : order.payment_status === 'customer_marked_paid' ? (
                             <Badge variant="warning">Marked Paid</Badge>
                           ) : null}
                         </div>
+                        {order.order_type === 'takeaway' && (
+                          <div className="text-xs font-black text-purple-600 dark:text-purple-400 mt-1">
+                            Arrives in {order.customer_arrival_minutes} mins
+                            {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
+                          </div>
+                        )}
                         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">

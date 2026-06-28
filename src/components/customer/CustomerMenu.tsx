@@ -18,6 +18,7 @@ import {
 interface CustomerMenuProps {
   restaurantSlug: string;
   tableId?: string;
+  isTakeaway?: boolean;
 }
 
 interface CartItem {
@@ -75,13 +76,18 @@ const THEME_MAP = {
   }
 };
 
-export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuProps) {
+export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = false }: CustomerMenuProps) {
   const router = useRouter();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [table, setTable] = useState<Table | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  
+  // Takeaway States
+  const [arrivalMinutes, setArrivalMinutes] = useState<number>(10);
+  const [takeawayNotes, setTakeawayNotes] = useState<string>('');
+  const [takeawayPaymentCompleted, setTakeawayPaymentCompleted] = useState<boolean>(false);
   
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -182,7 +188,18 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
       }
       setRestaurant(rest);
 
-      if (tableId) {
+      if (isTakeaway) {
+        const tbls = await db.getTables(rest.id);
+        let tbl = tbls.find(t => t.name === 'Takeaway');
+        if (!tbl) {
+          try {
+            tbl = await db.createTable(rest.id, 'Takeaway');
+          } catch (e) {
+            console.error('Failed to create virtual Takeaway table:', e);
+          }
+        }
+        if (tbl) setTable(tbl);
+      } else if (tableId) {
         const tbls = await db.getTables(rest.id);
         const tbl = tbls.find(t => t.id === tableId);
         if (tbl) setTable(tbl);
@@ -204,7 +221,7 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
       }
     }
     loadData();
-  }, [restaurantSlug, tableId]);
+  }, [restaurantSlug, tableId, isTakeaway]);
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
@@ -267,6 +284,11 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
     }
     if (cart.length === 0) return;
 
+    if (isTakeaway && !takeawayPaymentCompleted) {
+      alert('Please complete the UPI payment before placing a takeaway order.');
+      return;
+    }
+
     setOrderPlacing(true);
 
     try {
@@ -280,7 +302,11 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
         restaurant.id,
         table.id,
         orderPayload,
-        specialInstructions
+        specialInstructions,
+        isTakeaway ? 'takeaway' : 'dine_in',
+        isTakeaway ? arrivalMinutes : undefined,
+        isTakeaway ? takeawayNotes : undefined,
+        isTakeaway ? 'customer_marked_paid' : 'pending'
       );
 
       saveCart([]);
@@ -363,6 +389,21 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
     );
   }
 
+  // Check if Takeaway ordering is disabled
+  if (isTakeaway && restaurant.settings && !restaurant.settings.takeaway_enabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
+        <div className="max-w-md text-center space-y-4">
+          <div className="h-16 w-16 bg-rose-50 dark:bg-rose-950/20 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-100 dark:border-rose-900/30 shadow-md">
+            <AlertCircle className="h-8 w-8 text-rose-500" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Takeaway Ordering Unavailable</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Takeaway ordering is currently unavailable.</p>
+        </div>
+      </div>
+    );
+  }
+
   // Filters logic
   const filteredItems = menuItems.filter(item => {
     const matchesCategory = selectedCatId === 'all' || item.category_id === selectedCatId;
@@ -407,7 +448,11 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
             )}
             <div>
               <h1 className="font-extrabold text-slate-900 dark:text-white text-base md:text-lg">{restaurant.name}</h1>
-              {table ? (
+              {isTakeaway ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 mt-1 uppercase">
+                  🟣 Takeaway
+                </span>
+              ) : table ? (
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${theme.lightBg} ${theme.lightText} border ${theme.border} mt-1 uppercase`}>
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   {table.name}
@@ -421,7 +466,7 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
           </div>
 
           {/* Call waiter & Bill action keys (Staff Portal Caller) */}
-          {table && (
+          {table && !isTakeaway && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleCallStaff('call_waiter')}
@@ -727,11 +772,16 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
         footer={
           <div className="flex flex-col gap-3 w-full">
             <Button 
-              className={`w-full py-3 text-base font-extrabold cursor-pointer ${theme.bg} ${theme.hoverBg} text-white`}
+              className={`w-full py-3 text-base font-extrabold cursor-pointer ${
+                isTakeaway && !takeawayPaymentCompleted
+                  ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-800'
+                  : theme.bg + ' ' + theme.hoverBg + ' text-white'
+              }`}
               onClick={handlePlaceOrder}
               isLoading={orderPlacing}
+              disabled={isTakeaway && !takeawayPaymentCompleted}
             >
-              Place Order ticket • {formatPrice(cartTotal, restaurant.settings.currency)}
+              {isTakeaway ? `Pay ${formatPrice(cartTotal, restaurant.settings.currency)} & Place Order` : `Place Order ticket • ${formatPrice(cartTotal, restaurant.settings.currency)}`}
             </Button>
           </div>
         }
@@ -789,6 +839,92 @@ export default function CustomerMenu({ restaurantSlug, tableId }: CustomerMenuPr
               className="w-full px-3.5 py-2 text-xs md:text-sm bg-white dark:bg-slate-955 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 min-h-[60px]"
             />
           </div>
+
+          {/* Takeaway Arrival & Notes */}
+          {isTakeaway && (
+            <div className="space-y-4 pt-3.5 border-t border-slate-100 dark:border-slate-800">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Estimated Arrival Time</label>
+                <select
+                  value={arrivalMinutes}
+                  onChange={(e) => setArrivalMinutes(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
+                >
+                  <option value={10}>10 minutes</option>
+                  <option value={15}>15 minutes</option>
+                  <option value={20}>20 minutes</option>
+                  <option value={30}>30 minutes</option>
+                  <option value={45}>45 minutes</option>
+                  <option value={60}>60 minutes</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Takeaway Arrival Notes</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Package sauces separately, I'll arrive in a red car"
+                  value={takeawayNotes}
+                  onChange={(e) => setTakeawayNotes(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+
+              {/* Professional Warning message */}
+              <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30 rounded-xl p-3.5 text-[11px] font-semibold text-purple-700 dark:text-purple-400 leading-relaxed">
+                Please complete payment before placing a takeaway order.
+                If you prefer to pay at the restaurant, kindly visit the restaurant and place your order in person.
+              </div>
+
+              {/* UPI prepaid billing card */}
+              {restaurant.settings.payment_enabled && restaurant.settings.upi_id ? (
+                <div className="border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/10 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Prepaid UPI Transfer</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 text-[9px] font-black border border-purple-100 dark:border-purple-900/30 uppercase">
+                      Prepaid Only
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-3 rounded-lg">
+                    <div>
+                      <p className="text-[9px] text-slate-400 font-bold">UPI NAME</p>
+                      <p className="text-xs font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] text-slate-400 font-bold">UPI ID</p>
+                      <p className="text-xs font-mono font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_id}</p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={`upi://pay?pa=${restaurant.settings.upi_id}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${cartTotal}&cu=INR`}
+                    onClick={() => setTakeawayPaymentCompleted(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-purple-650 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer"
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Pay {formatPrice(cartTotal, restaurant.settings.currency)} Now
+                  </a>
+                  
+                  <label className="flex items-start gap-2.5 pt-1.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={takeawayPaymentCompleted}
+                      onChange={(e) => setTakeawayPaymentCompleted(e.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-purple-600 focus:ring-purple-500/20 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-bold text-slate-500 leading-tight">
+                      I have completed the UPI payment transfer of {formatPrice(cartTotal, restaurant.settings.currency)}
+                    </span>
+                  </label>
+                </div>
+              ) : (
+                <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-xl p-4 text-xs font-bold text-rose-700 dark:text-rose-400">
+                  Online payment is currently not configured for this restaurant. Please contact restaurant staff to pay in person.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Pricing Summary */}
           <div className="bg-slate-50 dark:bg-slate-950/20 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2">

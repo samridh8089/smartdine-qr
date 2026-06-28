@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { 
   TrendingUp, BarChart3, ShoppingCart, Calendar, 
-  Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle
+  Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle,
+  ShoppingBag, ClipboardList
 } from 'lucide-react';
 
 export default function ReportsPage() {
@@ -25,7 +26,12 @@ export default function ReportsPage() {
     chartData: [] as { label: string; value: number }[],
     totalCollected: 0,
     pendingVerificationCount: 0,
-    pendingPaymentCount: 0
+    pendingPaymentCount: 0,
+    takeawayCount: 0,
+    takeawayRevenue: 0,
+    takeawayAvgValue: 0,
+    dineinCount: 0,
+    dineinRevenue: 0
   });
 
   useEffect(() => {
@@ -62,6 +68,16 @@ export default function ReportsPage() {
     const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
     const orderCount = completedOrders.length;
     const averageOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
+
+    // Takeaway vs Dine-in stats
+    const takeawayOrders = completedOrders.filter(o => o.order_type === 'takeaway');
+    const takeawayRevenue = takeawayOrders.reduce((sum, o) => sum + o.total, 0);
+    const takeawayCount = takeawayOrders.length;
+    const takeawayAvgValue = takeawayCount > 0 ? takeawayRevenue / takeawayCount : 0;
+
+    const dineinOrders = completedOrders.filter(o => o.order_type !== 'takeaway');
+    const dineinRevenue = dineinOrders.reduce((sum, o) => sum + o.total, 0);
+    const dineinCount = dineinOrders.length;
 
     // Payments calculations
     const totalCollected = rangeOrders
@@ -157,7 +173,12 @@ export default function ReportsPage() {
       chartData,
       totalCollected,
       pendingVerificationCount,
-      pendingPaymentCount
+      pendingPaymentCount,
+      takeawayCount,
+      takeawayRevenue,
+      takeawayAvgValue,
+      dineinCount,
+      dineinRevenue
     });
   };
 
@@ -295,6 +316,71 @@ export default function ReportsPage() {
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Unpaid Active Orders</p>
               <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{analytics.pendingPaymentCount} orders</h3>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Takeaway vs Dine-in Distribution Panel */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="hover:shadow-md transition-shadow border-t-2 border-t-purple-600 bg-purple-50/10">
+          <CardContent className="flex items-center gap-4 py-6">
+            <div className="h-12 w-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <ShoppingBag className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Takeaway Revenue</p>
+              <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{formatPrice(analytics.takeawayRevenue)}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow border-t-2 border-t-purple-500 bg-purple-50/10">
+          <CardContent className="flex items-center gap-4 py-6">
+            <div className="h-12 w-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <ClipboardList className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Takeaway Orders</p>
+              <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{analytics.takeawayCount} orders</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow border-t-2 border-t-purple-400 bg-purple-50/10">
+          <CardContent className="flex items-center gap-4 py-6">
+            <div className="h-12 w-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+              <TrendingUp className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-bold">Takeaway Avg Ticket</p>
+              <h3 className="text-2xl font-extrabold text-slate-955 mt-1">{formatPrice(analytics.takeawayAvgValue)}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="py-4 space-y-3">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ordering Split</p>
+            <div className="space-y-1.5 text-xs font-semibold">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Dine-In:</span>
+                <span className="text-slate-800">{analytics.dineinCount} orders ({formatPrice(analytics.dineinRevenue)})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-purple-600 font-bold">Takeaway:</span>
+                <span className="text-purple-850 font-black">{analytics.takeawayCount} orders ({formatPrice(analytics.takeawayRevenue)})</span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden flex mt-2">
+                <div 
+                  className="bg-emerald-500 h-full" 
+                  style={{ width: `${analytics.orderCount > 0 ? (analytics.dineinCount / analytics.orderCount) * 100 : 50}%` }}
+                />
+                <div 
+                  className="bg-purple-600 h-full" 
+                  style={{ width: `${analytics.orderCount > 0 ? (analytics.takeawayCount / analytics.orderCount) * 100 : 50}%` }}
+                />
+              </div>
             </div>
           </CardContent>
         </Card>

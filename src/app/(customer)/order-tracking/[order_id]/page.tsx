@@ -199,8 +199,8 @@ export default function OrderTrackingPage({ params }: PageProps) {
     { key: 'new', label: 'Order Sent', desc: 'Sent to kitchen' },
     { key: 'accepted', label: 'Accepted', desc: 'Confirmed by staff' },
     { key: 'preparing', label: 'Preparing', desc: 'Chef is cooking' },
-    { key: 'ready', label: 'Ready', desc: 'Food is ready' },
-    { key: 'served', label: 'Served', desc: 'Brought to table' }
+    { key: 'ready', label: 'Ready', desc: order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Food is ready' },
+    { key: 'served', label: 'Served', desc: order.order_type === 'takeaway' ? 'Picked Up' : 'Brought to table' }
   ];
 
   const getStatusIndex = (status: Order['status']) => {
@@ -212,17 +212,17 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const currentStepIndex = getStatusIndex(order.status);
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950/40 pb-12 transition-colors">
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-955/40 pb-12 transition-colors">
       {/* Mini Header */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm sticky top-0 z-30 shrink-0">
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link 
-            href={`/menu/${restaurant.slug}/table/${order.table_id}`}
+            href={order.order_type === 'takeaway' ? `/menu/${restaurant.slug}/takeaway` : `/menu/${restaurant.slug}/table/${order.table_id}`}
             className="text-xs font-bold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white flex items-center gap-1 cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" /> Back to Menu
           </Link>
-          <span className="text-xs font-bold text-slate-400 dark:text-slate-500">SmartDine QR Order Tracking</span>
+          <span className="text-xs font-bold text-slate-400 dark:text-slate-550">SmartDine QR Order Tracking</span>
         </div>
       </header>
 
@@ -232,7 +232,16 @@ export default function OrderTrackingPage({ params }: PageProps) {
         {/* Restaurant Header Info */}
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-none">{restaurant.name}</h1>
-          <p className="text-xs text-slate-400 dark:text-slate-550 font-semibold uppercase">{order.table_name || 'Table'} • Receipt #{order.id.slice(-5).toUpperCase()}</p>
+          <p className="text-xs text-slate-450 dark:text-slate-500 font-semibold uppercase flex items-center justify-center gap-1.5">
+            {order.order_type === 'takeaway' ? (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-750 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                🟣 Takeaway
+              </span>
+            ) : (
+              <span>{order.table_name || 'Table'}</span>
+            )}
+            <span>• Receipt #{order.id.slice(-5).toUpperCase()}</span>
+          </p>
         </div>
 
         {/* PAYMENT CARD */}
@@ -375,6 +384,38 @@ export default function OrderTrackingPage({ params }: PageProps) {
           </CardContent>
         </Card>
 
+        {/* Takeaway Info Details */}
+        {order.order_type === 'takeaway' && (
+          <Card className="shadow-md dark:border-slate-800 animate-pop">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">Takeaway Info</h3>
+              
+              <div className="grid grid-cols-2 gap-4 text-xs font-semibold">
+                <div>
+                  <span className="text-slate-400 block">Order Type</span>
+                  <span className="text-purple-600 dark:text-purple-400 mt-1 block uppercase font-black">
+                    🟣 Takeaway
+                  </span>
+                </div>
+                
+                <div>
+                  <span className="text-slate-400 block">Estimated Arrival</span>
+                  <span className="text-slate-850 dark:text-slate-200 mt-1 block font-black">
+                    {order.customer_arrival_minutes} minutes
+                  </span>
+                </div>
+              </div>
+              
+              {order.takeaway_notes && (
+                <div className="bg-slate-50 dark:bg-slate-950/20 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 text-xs">
+                  <span className="text-slate-400 font-bold block">Arrival Notes</span>
+                  <span className="text-slate-700 dark:text-slate-300 block mt-1 font-medium">{order.takeaway_notes}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Order Details & Summary */}
         <Card className="dark:border-slate-800">
           <CardContent className="p-6 space-y-6">
@@ -431,13 +472,13 @@ export default function OrderTrackingPage({ params }: PageProps) {
               {order.status !== 'completed' && order.status !== 'cancelled' && (
                 <Button 
                   className={`w-full gap-1.5 cursor-pointer flex items-center justify-center ${
-                    order.status === 'served' ? 'bg-emerald-650 hover:bg-emerald-700 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    order.status === 'served' ? 'bg-emerald-600 hover:bg-emerald-750 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
                   }`}
                   onClick={() => {
                     if (restaurant) {
                       sessionStorage.removeItem(`smartdine_cart_${restaurant.id}`);
                     }
-                    router.push(`/menu/${restaurant.slug}/table/${order.table_id}`);
+                    router.push(order.order_type === 'takeaway' ? `/menu/${restaurant.slug}/takeaway` : `/menu/${restaurant.slug}/table/${order.table_id}`);
                   }}
                 >
                   <Plus className="h-4 w-4" /> Add More Items

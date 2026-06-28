@@ -536,7 +536,12 @@ export default function OrdersPage() {
           
           <div>
             <p><span class="bold">Receipt ID:</span> #${selectedOrder.id.slice(-5).toUpperCase()}</p>
-            <p><span class="bold">Table:</span> ${selectedOrder.table_name || 'N/A'}</p>
+            ${selectedOrder.order_type === 'takeaway' ? `
+              <p><span class="bold">Type:</span> 🟣 TAKEAWAY</p>
+              <p><span class="bold">Pickup Arrival:</span> ${selectedOrder.customer_arrival_minutes} minutes</p>
+            ` : `
+              <p><span class="bold">Table:</span> ${selectedOrder.table_name || 'N/A'}</p>
+            `}
             <p><span class="bold">Date:</span> ${new Date(selectedOrder.created_at).toLocaleString()}</p>
             <p><span class="bold">Status:</span> ${selectedOrder.status.toUpperCase()}</p>
           </div>
@@ -818,8 +823,20 @@ export default function OrdersPage() {
                             <Badge variant="warning">Marked Paid</Badge>
                           ) : null}
                         </div>
-                        <p className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
-                          {order.table_name || 'N/A'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items
+                        <p className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500 flex items-center gap-1.5 flex-wrap">
+                          {order.order_type === 'takeaway' ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                              🟣 Takeaway
+                            </span>
+                          ) : (
+                            <span>{order.table_name || 'N/A'}</span>
+                          )}
+                          <span>• {order.items.reduce((s, i) => s + i.quantity, 0)} items</span>
+                          {order.order_type === 'takeaway' && (
+                            <span className="text-purple-600 dark:text-purple-400 font-extrabold text-[9px]">
+                              (Pickup {order.customer_arrival_minutes}m)
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs truncate max-w-[200px] text-slate-500 dark:text-slate-400">
                           {order.items.map(i => i.menu_item_name).join(', ')}
@@ -875,8 +892,13 @@ export default function OrdersPage() {
               <div className="flex-1 flex flex-col min-h-0">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-extrabold text-slate-955 dark:text-white text-lg">Order #{selectedOrder.id.slice(-5).toUpperCase()}</h3>
+                      {selectedOrder.order_type === 'takeaway' && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase animate-pulse">
+                          🟣 Takeaway
+                        </span>
+                      )}
                       {getStatusBadge(selectedOrder.status)}
                       {selectedOrder.payment_status === 'paid' ? (
                         <Badge variant="success">Paid Verified</Badge>
@@ -886,8 +908,13 @@ export default function OrdersPage() {
                         <Badge variant="error">Payment Pending</Badge>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 font-semibold uppercase">
-                      {selectedOrder.table_name || 'N/A'} • {formatDate(selectedOrder.created_at)}
+                    <p className="text-xs text-slate-400 font-semibold uppercase flex items-center gap-1.5 flex-wrap">
+                      {selectedOrder.order_type === 'takeaway' ? (
+                        <span className="text-purple-600 dark:text-purple-400 font-black">Pickup Customer (Arrives in {selectedOrder.customer_arrival_minutes} mins)</span>
+                      ) : (
+                        <span>{selectedOrder.table_name || 'N/A'}</span>
+                      )}
+                      <span>• {formatDate(selectedOrder.created_at)}</span>
                     </p>
                   </div>
                   
