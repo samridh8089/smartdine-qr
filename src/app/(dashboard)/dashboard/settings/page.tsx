@@ -10,14 +10,20 @@ import { Badge } from '@/components/ui/Badge';
 import { formatPrice } from '@/lib/utils';
 import { 
   Settings, Users, History, Download, Upload, 
-  Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign
+  Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { restaurant, profile, refresh } = useRestaurant();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'staff' | 'backup' | 'logs' | 'charges'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'staff' | 'backup' | 'logs' | 'charges' | 'payments'>('profile');
   const [loading, setLoading] = useState(false);
+
+  // Payments settings state
+  const [paymentEnabled, setPaymentEnabled] = useState(restaurant?.settings?.payment_enabled === true);
+  const [upiId, setUpiId] = useState(restaurant?.settings?.upi_id || '');
+  const [upiName, setUpiName] = useState(restaurant?.settings?.upi_name || '');
+  const [paymentQr, setPaymentQr] = useState(restaurant?.settings?.payment_qr || '');
 
   // Profile Settings Form
   const [restName, setRestName] = useState(restaurant?.name || '');
@@ -68,6 +74,10 @@ export default function SettingsPage() {
       setServiceChargeEnabled(restaurant.settings?.service_charge_enabled !== false);
       setServiceChargePercentage(restaurant.settings?.service_charge_percentage ?? 5.0);
       setCustomCharges(restaurant.settings?.custom_charges || []);
+      setPaymentEnabled(restaurant.settings?.payment_enabled === true);
+      setUpiId(restaurant.settings?.upi_id || '');
+      setUpiName(restaurant.settings?.upi_name || '');
+      setPaymentQr(restaurant.settings?.payment_qr || '');
       loadStaffAndLogs();
     }
   }, [restaurant]);
@@ -167,6 +177,39 @@ export default function SettingsPage() {
       alert('Taxes and billing charges saved successfully!');
     } catch (err: any) {
       alert('Failed to save taxes and charges: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSavePaymentSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant || !profile) return;
+    setLoading(true);
+
+    try {
+      await db.updateRestaurant(restaurant.id, {
+        settings: {
+          ...restaurant.settings,
+          payment_enabled: paymentEnabled,
+          upi_id: upiId,
+          upi_name: upiName,
+          payment_qr: paymentQr
+        }
+      });
+
+      await db.createAuditLog(
+        restaurant.id,
+        profile.id,
+        profile.email,
+        'update_payment_settings',
+        `Updated UPI payments settings (Enabled: ${paymentEnabled}, UPI ID: ${upiId})`
+      );
+
+      await refresh();
+      alert('Payment settings saved successfully!');
+    } catch (err: any) {
+      alert('Failed to save payment settings: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -385,6 +428,16 @@ export default function SettingsPage() {
           }`}
         >
           <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> Taxes & Charges</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('payments')}
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${
+            activeTab === 'payments'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <span className="flex items-center gap-1.5"><CreditCard className="h-4 w-4" /> Payments Settings</span>
         </button>
       </div>
 
@@ -903,6 +956,73 @@ export default function SettingsPage() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* PAYMENTS CONFIGURATION PANEL */}
+        {activeTab === 'payments' && (
+          <form onSubmit={handleSavePaymentSettings} className="space-y-6">
+            <Card>
+              <CardHeader>
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Lightweight UPI Payments Settings</h3>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
+                  <div>
+                    <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Enable Online Payment</span>
+                    <span className="text-xs text-slate-400 mt-1 block">Toggle this switch to allow customers to initiate one-click UPI payments upon served orders.</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={paymentEnabled} 
+                      onChange={() => setPaymentEnabled(!paymentEnabled)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
+                {paymentEnabled && (
+                  <div className="space-y-4 pt-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input
+                        label="Restaurant UPI ID (pa)"
+                        placeholder="e.g. a2zitems@paytm, businessname@okaxis"
+                        value={upiId}
+                        onChange={(e) => setUpiId(e.target.value)}
+                        required
+                      />
+                      <Input
+                        label="UPI Name (pn)"
+                        placeholder="e.g. A2Z Items Restaurant"
+                        value={upiName}
+                        onChange={(e) => setUpiName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <Input
+                      label="Optional Payment QR Image URL"
+                      placeholder="e.g. https://example.com/qr-code.png"
+                      value={paymentQr}
+                      onChange={(e) => setPaymentQr(e.target.value)}
+                    />
+                    <div className="p-3 bg-amber-55/10 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 text-xs rounded-xl flex items-start gap-2.5 font-semibold">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>
+                        Payments are processed via UPI deep links directly on the customer's phone using a standard UPI app. No commissions or gateway fees are applied. Staff must manually verify collections inside the Live Orders portal.
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="pt-2 flex justify-end">
+                  <Button type="submit" variant="primary" disabled={loading}>
+                    {loading ? 'Saving...' : 'Save Configuration'}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </form>
         )}
 
         {/* AUDIT LOGS */}

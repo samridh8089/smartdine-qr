@@ -812,6 +812,11 @@ export default function OrdersPage() {
                         <div className="flex items-center gap-2">
                           <span className="font-extrabold text-sm text-slate-950 dark:text-white">#{order.id.slice(-5).toUpperCase()}</span>
                           {getStatusBadge(order.status)}
+                          {order.payment_status === 'paid' ? (
+                            <Badge variant="success">Paid</Badge>
+                          ) : order.payment_status === 'customer_marked_paid' ? (
+                            <Badge variant="warning">Marked Paid</Badge>
+                          ) : null}
                         </div>
                         <p className="text-[10px] font-semibold uppercase text-slate-400 dark:text-slate-500">
                           {order.table_name || 'N/A'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items
@@ -873,6 +878,13 @@ export default function OrdersPage() {
                     <div className="flex items-center gap-2">
                       <h3 className="font-extrabold text-slate-955 dark:text-white text-lg">Order #{selectedOrder.id.slice(-5).toUpperCase()}</h3>
                       {getStatusBadge(selectedOrder.status)}
+                      {selectedOrder.payment_status === 'paid' ? (
+                        <Badge variant="success">Paid Verified</Badge>
+                      ) : selectedOrder.payment_status === 'customer_marked_paid' ? (
+                        <Badge variant="warning">Customer Marked Paid</Badge>
+                      ) : (
+                        <Badge variant="error">Payment Pending</Badge>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 font-semibold uppercase">
                       {selectedOrder.table_name || 'N/A'} • {formatDate(selectedOrder.created_at)}
@@ -961,6 +973,39 @@ export default function OrdersPage() {
                           onClick={() => updateOrderStatus('completed')}
                         >
                           Complete Order
+                        </Button>
+                      )}
+                      {selectedOrder.payment_status !== 'paid' && (
+                        <Button 
+                          size="sm" 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" 
+                          isLoading={processingOrderIds.includes(selectedOrder.id)}
+                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          onClick={async () => {
+                            if (!confirm(`Verify receipt of ${formatPrice(selectedOrder.total, restaurant.settings.currency)} for Table ${selectedOrder.table_name || 'N/A'}?`)) return;
+                            setProcessingOrderIds(prev => [...prev, selectedOrder.id]);
+                            try {
+                              await db.updateOrderPaymentStatus(
+                                selectedOrder.id,
+                                'paid',
+                                profile?.full_name || 'Staff',
+                                'UPI',
+                                'Manual Verification'
+                              );
+                              const allOrders = await db.getOrders(restaurant.id);
+                              setOrders(allOrders);
+                              const updated = allOrders.find(o => o.id === selectedOrder.id);
+                              if (updated) setSelectedOrder(updated);
+                              window.dispatchEvent(new Event('storage'));
+                              alert('Payment successfully verified!');
+                            } catch (err: any) {
+                              alert(`Failed to verify payment: ${err.message}`);
+                            } finally {
+                              setProcessingOrderIds(prev => prev.filter(id => id !== selectedOrder.id));
+                            }
+                          }}
+                        >
+                          Verify Payment
                         </Button>
                       )}
                       {activeRole !== 'waiter' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (

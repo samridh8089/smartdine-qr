@@ -91,6 +91,19 @@ export default function OrderTrackingPage({ params }: PageProps) {
     };
   }, [orderId]);
 
+  const handleConfirmPayment = async () => {
+    if (!order) return;
+    if (!confirm('Have you completed the payment?')) return;
+
+    try {
+      await db.updateOrderPaymentStatus(order.id, 'customer_marked_paid');
+      await loadOrderData();
+      alert('Payment confirmation submitted to waiter. Please wait for verification.');
+    } catch (err: any) {
+      alert('Failed to submit payment confirmation: ' + err.message);
+    }
+  };
+
   const handleReorder = async () => {
     if (!order || !restaurant) return;
     
@@ -222,6 +235,83 @@ export default function OrderTrackingPage({ params }: PageProps) {
           <p className="text-xs text-slate-400 dark:text-slate-550 font-semibold uppercase">{order.table_name || 'Table'} • Receipt #{order.id.slice(-5).toUpperCase()}</p>
         </div>
 
+        {/* PAYMENT CARD */}
+        {restaurant.settings?.payment_enabled && order.status !== 'cancelled' && (
+          <Card className="shadow-md border-t-4 border-t-emerald-600 dark:border-slate-800 overflow-hidden">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Payment Status</h3>
+                <div>
+                  {order.payment_status === 'paid' ? (
+                    <Badge variant="success">Payment Received</Badge>
+                  ) : order.payment_status === 'customer_marked_paid' ? (
+                    <Badge variant="warning">Verification Pending</Badge>
+                  ) : (
+                    <Badge variant="error">Payment Pending</Badge>
+                  )}
+                </div>
+              </div>
+
+              {order.payment_status === 'paid' ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
+                  Thank you! Your payment of <strong>{formatPrice(order.total, restaurant.settings.currency)}</strong> was received and verified by {order.marked_paid_by || 'staff'}.
+                </p>
+              ) : order.payment_status === 'customer_marked_paid' ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
+                    You have marked this order as paid. Waiter is currently verifying the transaction.
+                  </p>
+                  <p className="text-[10px] text-slate-450 italic">
+                    Submitted: {order.paid_at ? new Date(order.paid_at).toLocaleTimeString() : 'Just now'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-550 dark:text-slate-400 font-semibold leading-relaxed">
+                    Pay <strong>{formatPrice(order.total, restaurant.settings.currency)}</strong> online using any UPI application.
+                  </p>
+                  
+                  <div className="bg-slate-55/60 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 font-semibold">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Payee Name</span>
+                      <span className="text-slate-700 dark:text-slate-300">{restaurant.settings.upi_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">UPI ID</span>
+                      <span className="text-slate-700 dark:text-slate-300 font-mono">{restaurant.settings.upi_id}</span>
+                    </div>
+                  </div>
+
+                  {['served', 'completed'].includes(order.status) ? (
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <a 
+                        href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || '')}&am=${order.total}&cu=INR`}
+                        className="w-full"
+                      >
+                        <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10 cursor-pointer py-3 rounded-xl text-xs sm:text-sm">
+                          Pay {formatPrice(order.total, restaurant.settings.currency)} Now
+                        </Button>
+                      </a>
+                      <Button 
+                        variant="outline" 
+                        onClick={handleConfirmPayment}
+                        className="w-full font-bold cursor-pointer py-3 rounded-xl text-xs sm:text-sm"
+                      >
+                        I have completed payment
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs rounded-xl font-semibold flex items-center gap-2">
+                      <Clock className="h-4 w-4 shrink-0 animate-pulse" />
+                      <span>Payment link will activate once your order is served.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Live Timeline State Card */}
         <Card className="shadow-md dark:border-slate-800 animate-pop">
           <CardContent className="p-6 space-y-6">
@@ -306,19 +396,32 @@ export default function OrderTrackingPage({ params }: PageProps) {
                 <span>Subtotal</span>
                 <span>{formatPrice(order.subtotal, restaurant.settings.currency)}</span>
               </div>
-              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                <span>GST ({restaurant.settings.gst_percentage}%)</span>
-                <span>{formatPrice(order.gst, restaurant.settings.currency)}</span>
-              </div>
+              {order.gst > 0 && (
+                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                  <span>GST</span>
+                  <span>{formatPrice(order.gst, restaurant.settings.currency)}</span>
+                </div>
+              )}
               {order.service_charge > 0 && (
                 <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                  <span>Service Charge ({restaurant.settings.service_charge_percentage}%)</span>
+                  <span>Service Charge</span>
                   <span>{formatPrice(order.service_charge, restaurant.settings.currency)}</span>
                 </div>
               )}
+              {order.custom_charges && order.custom_charges.map((charge: any) => {
+                const val = charge.type === 'percentage' 
+                  ? order.subtotal * (charge.value / 100) 
+                  : charge.value;
+                return (
+                  <div key={charge.id} className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    <span>{charge.name}</span>
+                    <span>{formatPrice(val, restaurant.settings.currency)}</span>
+                  </div>
+                );
+              })}
               <div className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
               <div className="flex justify-between text-slate-900 dark:text-white font-black text-sm md:text-base">
-                <span>Total Amount Paid</span>
+                <span>Total Amount</span>
                 <span>{formatPrice(order.total, restaurant.settings.currency)}</span>
               </div>
             </div>

@@ -439,7 +439,8 @@ export default function KitchenDisplayPage() {
             ...batch,
             table_name: order.table_name,
             restaurant_id: order.restaurant_id,
-            order_id: order.id
+            order_id: order.id,
+            payment_status: order.payment_status || 'pending'
           });
         }
       });
@@ -530,7 +531,14 @@ export default function KitchenDisplayPage() {
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          {order.payment_status === 'paid' ? (
+                            <Badge variant="success">Paid</Badge>
+                          ) : order.payment_status === 'customer_marked_paid' ? (
+                            <Badge variant="warning">Marked Paid</Badge>
+                          ) : null}
+                        </div>
                         <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
@@ -599,7 +607,14 @@ export default function KitchenDisplayPage() {
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          {order.payment_status === 'paid' ? (
+                            <Badge variant="success">Paid</Badge>
+                          ) : order.payment_status === 'customer_marked_paid' ? (
+                            <Badge variant="warning">Marked Paid</Badge>
+                          ) : null}
+                        </div>
                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
@@ -685,7 +700,14 @@ export default function KitchenDisplayPage() {
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                          {order.payment_status === 'paid' ? (
+                            <Badge variant="success">Paid</Badge>
+                          ) : order.payment_status === 'customer_marked_paid' ? (
+                            <Badge variant="warning">Marked Paid</Badge>
+                          ) : null}
+                        </div>
                         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tracking-wider">ORDER #{order.order_id.slice(-5).toUpperCase()} • BATCH #{order.batch_number}</span>
                       </div>
                       <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">

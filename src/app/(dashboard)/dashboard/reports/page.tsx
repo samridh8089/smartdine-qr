@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { 
   TrendingUp, BarChart3, ShoppingCart, Calendar, 
-  Sparkles, DollarSign, ArrowUpRight, Award
+  Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle
 } from 'lucide-react';
 
 export default function ReportsPage() {
@@ -22,7 +22,10 @@ export default function ReportsPage() {
     orderCount: 0,
     averageOrderValue: 0,
     topItems: [] as { name: string; quantity: number; revenue: number }[],
-    chartData: [] as { label: string; value: number }[]
+    chartData: [] as { label: string; value: number }[],
+    totalCollected: 0,
+    pendingVerificationCount: 0,
+    pendingPaymentCount: 0
   });
 
   useEffect(() => {
@@ -40,24 +43,38 @@ export default function ReportsPage() {
   }, [timeRange]);
 
   const computeStats = (allOrders: Order[], range: typeof timeRange) => {
-    let completedOrders = allOrders.filter(o => o.status === 'completed');
-
     const now = Date.now();
+    let rangeOrders = allOrders;
+
     if (range === 'daily') {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      completedOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= todayStart.getTime());
+      rangeOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= todayStart.getTime());
     } else if (range === 'weekly') {
       const pastWeek = now - 7 * 24 * 60 * 60 * 1000;
-      completedOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= pastWeek);
+      rangeOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= pastWeek);
     } else if (range === 'monthly') {
       const pastMonth = now - 30 * 24 * 60 * 60 * 1000;
-      completedOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= pastMonth);
+      rangeOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= pastMonth);
     }
 
+    const completedOrders = rangeOrders.filter(o => o.status === 'completed');
     const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
     const orderCount = completedOrders.length;
     const averageOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
+
+    // Payments calculations
+    const totalCollected = rangeOrders
+      .filter(o => o.payment_status === 'paid')
+      .reduce((sum, o) => sum + o.total, 0);
+
+    const pendingVerificationCount = rangeOrders
+      .filter(o => o.payment_status === 'customer_marked_paid')
+      .length;
+
+    const pendingPaymentCount = rangeOrders
+      .filter(o => o.payment_status === 'pending' && o.status !== 'cancelled')
+      .length;
 
     // Top selling items
     const itemMap: Record<string, { name: string; quantity: number; revenue: number }> = {};
@@ -137,7 +154,10 @@ export default function ReportsPage() {
       orderCount,
       averageOrderValue,
       topItems,
-      chartData
+      chartData,
+      totalCollected,
+      pendingVerificationCount,
+      pendingPaymentCount
     });
   };
 
@@ -236,6 +256,45 @@ export default function ReportsPage() {
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Average Order Ticket</p>
               <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{formatPrice(analytics.averageOrderValue)}</h3>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Payments Collections Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="hover:shadow-md transition-shadow border-t-2 border-t-emerald-555">
+          <CardContent className="flex items-center gap-4 py-6">
+            <div className="h-12 w-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <CreditCard className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">UPI Payments Collected</p>
+              <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{formatPrice(analytics.totalCollected)}</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow border-t-2 border-t-amber-500">
+          <CardContent className="flex items-center gap-4 py-6">
+            <div className="h-12 w-12 rounded-xl bg-amber-55/60 dark:bg-amber-905/20 text-amber-600 flex items-center justify-center">
+              <Clock className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Pending Verification</p>
+              <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{analytics.pendingVerificationCount} orders</h3>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-shadow border-t-2 border-t-rose-500">
+          <CardContent className="flex items-center gap-4 py-6">
+            <div className="h-12 w-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Unpaid Active Orders</p>
+              <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{analytics.pendingPaymentCount} orders</h3>
             </div>
           </CardContent>
         </Card>

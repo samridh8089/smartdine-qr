@@ -18,6 +18,10 @@ export interface Restaurant {
     gst_enabled?: boolean;
     service_charge_enabled?: boolean;
     custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[];
+    payment_enabled?: boolean;
+    upi_id?: string;
+    upi_name?: string;
+    payment_qr?: string;
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';
@@ -138,6 +142,11 @@ export interface Order {
   items: OrderItem[];
   batches?: OrderBatch[];
   custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[];
+  payment_status?: 'pending' | 'customer_marked_paid' | 'paid';
+  payment_method?: string;
+  payment_reference?: string;
+  paid_at?: string;
+  marked_paid_by?: string;
 }
 
 export const PLAN_LIMITS = {
@@ -386,6 +395,11 @@ export const db = {
         cancelled_by: o.cancelled_by,
         cancellation_reason: o.cancellation_reason,
         custom_charges: o.custom_charges,
+        payment_status: o.payment_status || 'pending',
+        payment_method: o.payment_method,
+        payment_reference: o.payment_reference,
+        paid_at: o.paid_at,
+        marked_paid_by: o.marked_paid_by,
         items,
         batches
       };
@@ -455,6 +469,11 @@ export const db = {
       cancelled_by: o.cancelled_by,
       cancellation_reason: o.cancellation_reason,
       custom_charges: o.custom_charges,
+      payment_status: o.payment_status || 'pending',
+      payment_method: o.payment_method,
+      payment_reference: o.payment_reference,
+      paid_at: o.paid_at,
+      marked_paid_by: o.marked_paid_by,
       items,
       batches
     } as Order;
@@ -666,6 +685,39 @@ export const db = {
     }
 
     const fullOrder = await this.getOrderById(id);
+    if (!fullOrder) throw new Error('Order not found');
+    return fullOrder;
+  },
+
+  async updateOrderPaymentStatus(
+    orderId: string,
+    paymentStatus: Order['payment_status'],
+    userName?: string,
+    method?: string,
+    reference?: string
+  ): Promise<Order> {
+    const updatePayload: any = { payment_status: paymentStatus };
+    const now = new Date().toISOString();
+    if (paymentStatus === 'customer_marked_paid' || paymentStatus === 'paid') {
+      updatePayload.paid_at = now;
+    }
+    if (paymentStatus === 'paid') {
+      if (userName) updatePayload.marked_paid_by = userName;
+      if (method) updatePayload.payment_method = method;
+      if (reference) updatePayload.payment_reference = reference;
+    }
+
+    const { data: updated, error } = await supabase
+      .from('orders')
+      .update(updatePayload)
+      .eq('id', orderId)
+      .select();
+
+    if (error || !updated || updated.length === 0) {
+      throw new Error(error?.message || 'Order not found');
+    }
+
+    const fullOrder = await this.getOrderById(orderId);
     if (!fullOrder) throw new Error('Order not found');
     return fullOrder;
   },
