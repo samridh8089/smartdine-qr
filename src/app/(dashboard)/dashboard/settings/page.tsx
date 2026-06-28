@@ -7,15 +7,16 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { formatPrice } from '@/lib/utils';
 import { 
   Settings, Users, History, Download, Upload, 
-  Sparkles, Check, AlertCircle, Plus, Trash2, Eye
+  Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign
 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { restaurant, profile, refresh } = useRestaurant();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'staff' | 'backup' | 'logs'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'staff' | 'backup' | 'logs' | 'charges'>('profile');
   const [loading, setLoading] = useState(false);
 
   // Profile Settings Form
@@ -26,6 +27,17 @@ export default function SettingsPage() {
   const [logoUrl, setLogoUrl] = useState(restaurant?.logo_url || '');
   const [coverUrl, setCoverUrl] = useState(restaurant?.cover_image_url || '');
   const [themeColor, setThemeColor] = useState(restaurant?.settings?.theme_color || 'emerald');
+
+  // Taxes & Charges state
+  const [gstEnabled, setGstEnabled] = useState(restaurant?.settings?.gst_enabled !== false);
+  const [gstPercentage, setGstPercentage] = useState(restaurant?.settings?.gst_percentage ?? 5.0);
+  const [serviceChargeEnabled, setServiceChargeEnabled] = useState(restaurant?.settings?.service_charge_enabled !== false);
+  const [serviceChargePercentage, setServiceChargePercentage] = useState(restaurant?.settings?.service_charge_percentage ?? 5.0);
+  const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[]>(restaurant?.settings?.custom_charges || []);
+  
+  const [newChargeName, setNewChargeName] = useState('');
+  const [newChargeType, setNewChargeType] = useState<'fixed' | 'percentage'>('fixed');
+  const [newChargeValue, setNewChargeValue] = useState(0);
 
   // Staff Management State
   const [staffList, setStaffList] = useState<Profile[]>([]);
@@ -51,6 +63,11 @@ export default function SettingsPage() {
       setLogoUrl(restaurant.logo_url || '');
       setCoverUrl(restaurant.cover_image_url || '');
       setThemeColor(restaurant.settings?.theme_color || 'emerald');
+      setGstEnabled(restaurant.settings?.gst_enabled !== false);
+      setGstPercentage(restaurant.settings?.gst_percentage ?? 5.0);
+      setServiceChargeEnabled(restaurant.settings?.service_charge_enabled !== false);
+      setServiceChargePercentage(restaurant.settings?.service_charge_percentage ?? 5.0);
+      setCustomCharges(restaurant.settings?.custom_charges || []);
       loadStaffAndLogs();
     }
   }, [restaurant]);
@@ -94,6 +111,62 @@ export default function SettingsPage() {
       alert('Restaurant settings updated successfully!');
     } catch (err: any) {
       alert('Failed to update settings: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddCustomCharge = () => {
+    if (!newChargeName.trim()) return;
+    const newCharge = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: newChargeName.trim(),
+      type: newChargeType,
+      value: Number(newChargeValue) || 0,
+      enabled: true
+    };
+    setCustomCharges(prev => [...prev, newCharge]);
+    setNewChargeName('');
+    setNewChargeValue(0);
+  };
+
+  const handleRemoveCustomCharge = (id: string) => {
+    setCustomCharges(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleToggleCustomCharge = (id: string) => {
+    setCustomCharges(prev => prev.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
+  };
+
+  const handleSaveCharges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant || !profile) return;
+    setLoading(true);
+
+    try {
+      await db.updateRestaurant(restaurant.id, {
+        settings: {
+          ...restaurant.settings,
+          gst_enabled: gstEnabled,
+          gst_percentage: Number(gstPercentage) || 0,
+          service_charge_enabled: serviceChargeEnabled,
+          service_charge_percentage: Number(serviceChargePercentage) || 0,
+          custom_charges: customCharges
+        }
+      });
+
+      await db.createAuditLog(
+        restaurant.id,
+        profile.id,
+        profile.email,
+        'update_settings',
+        'Updated restaurant tax rates, service charges, and custom billing fees'
+      );
+
+      await refresh();
+      alert('Taxes and billing charges saved successfully!');
+    } catch (err: any) {
+      alert('Failed to save taxes and charges: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -303,6 +376,16 @@ export default function SettingsPage() {
         >
           <span className="flex items-center gap-1.5"><History className="h-4 w-4" /> Audit History Logs</span>
         </button>
+        <button
+          onClick={() => setActiveTab('charges')}
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer ${
+            activeTab === 'charges'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <span className="flex items-center gap-1.5"><DollarSign className="h-4 w-4" /> Taxes & Charges</span>
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -427,6 +510,227 @@ export default function SettingsPage() {
                         themeColor === 'purple' ? 'bg-purple-600' : 'bg-emerald-600'
                       }`} />
                       <span className="text-xs capitalize font-semibold text-slate-600 dark:text-slate-400">{themeColor}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </form>
+        )}
+
+        {/* TAXES & CHARGES SETTINGS */}
+        {activeTab === 'charges' && (
+          <form onSubmit={handleSaveCharges} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* GST (Goods & Services Tax) */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Goods & Services Tax (GST)</h3>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Enable GST Charges</p>
+                      <p className="text-xs text-slate-400">Add government GST to every order invoice.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={gstEnabled} 
+                        onChange={(e) => setGstEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                  {gstEnabled && (
+                    <div className="pt-2">
+                      <Input
+                        label="GST Rate (Percentage)"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={gstPercentage}
+                        onChange={(e) => setGstPercentage(Number(e.target.value))}
+                        required
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Service Charge */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Service Charge</h3>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Enable Service Charge</p>
+                      <p className="text-xs text-slate-400">Apply a dining service charge to final bills.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={serviceChargeEnabled} 
+                        onChange={(e) => setServiceChargeEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                  {serviceChargeEnabled && (
+                    <div className="pt-2">
+                      <Input
+                        label="Service Charge Rate (Percentage)"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={serviceChargePercentage}
+                        onChange={(e) => setServiceChargePercentage(Number(e.target.value))}
+                        required
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Custom Charges & Fees */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Custom Charges & Fees</h3>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-3">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Add New Custom Charge</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                      <Input
+                        label="Charge Name"
+                        placeholder="e.g. Packaging Fee"
+                        value={newChargeName}
+                        onChange={(e) => setNewChargeName(e.target.value)}
+                      />
+                      <div>
+                        <label className="block text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-1.5">Charge Type</label>
+                        <select
+                          value={newChargeType}
+                          onChange={(e) => setNewChargeType(e.target.value as any)}
+                          className="block w-full px-3 py-2 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
+                        >
+                          <option value="fixed">Fixed Amount (Flat Fee)</option>
+                          <option value="percentage">Percentage (Percent of Subtotal)</option>
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <Input
+                            label="Value"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={newChargeValue === 0 ? '' : newChargeValue}
+                            onChange={(e) => setNewChargeValue(Number(e.target.value))}
+                          />
+                        </div>
+                        <Button 
+                          type="button" 
+                          variant="primary" 
+                          onClick={handleAddCustomCharge}
+                          className="shrink-0 mb-0.5"
+                        >
+                          Add
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Active Charges List</span>
+                    {customCharges.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No custom charges added yet. Click above to add packaging fees, delivery fees, dynamic tips, etc.</p>
+                    ) : (
+                      <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
+                        {customCharges.map(charge => (
+                          <div key={charge.id} className="p-3.5 flex items-center justify-between gap-4 bg-white dark:bg-slate-900">
+                            <div>
+                              <p className="font-semibold text-sm text-slate-800 dark:text-slate-250">{charge.name}</p>
+                              <p className="text-xs text-slate-400 capitalize">
+                                {charge.type === 'percentage' ? `${charge.value}% of Subtotal` : `${formatPrice(charge.value, restaurant?.settings?.currency || 'INR')} Flat Fee`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                  type="checkbox" 
+                                  checked={charge.enabled} 
+                                  onChange={() => handleToggleCustomCharge(charge.id)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-600"></div>
+                              </label>
+                              <button 
+                                type="button"
+                                onClick={() => handleRemoveCustomCharge(charge.id)}
+                                className="text-rose-500 hover:text-rose-600 dark:text-rose-400 p-1 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded transition-all cursor-pointer"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-end">
+                <Button type="submit" isLoading={loading}>Save Taxes & Charges</Button>
+              </div>
+
+            </div>
+            
+            <div className="lg:col-span-1">
+              <Card>
+                <CardHeader>
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Billing Calculation Mock</h3>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-slate-450 uppercase">Subtotal Mock: {formatPrice(100, restaurant?.settings?.currency || 'INR')}</p>
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
+                    {gstEnabled && (
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>GST ({gstPercentage}%)</span>
+                        <span>{formatPrice(100 * (gstPercentage / 100), restaurant?.settings?.currency || 'INR')}</span>
+                      </div>
+                    )}
+                    {serviceChargeEnabled && (
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Service Charge ({serviceChargePercentage}%)</span>
+                        <span>{formatPrice(100 * (serviceChargePercentage / 100), restaurant?.settings?.currency || 'INR')}</span>
+                      </div>
+                    )}
+                    {customCharges.filter(c => c.enabled).map(charge => (
+                      <div key={charge.id} className="flex justify-between text-xs text-slate-500">
+                        <span>{charge.name}</span>
+                        <span>{formatPrice(charge.type === 'percentage' ? 100 * (charge.value / 100) : charge.value, restaurant?.settings?.currency || 'INR')}</span>
+                      </div>
+                    ))}
+                    <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
+                    <div className="flex justify-between text-slate-800 dark:text-white font-extrabold text-sm">
+                      <span>Total Mock</span>
+                      <span>
+                        {formatPrice(
+                          100 + 
+                          (gstEnabled ? 100 * (gstPercentage / 100) : 0) + 
+                          (serviceChargeEnabled ? 100 * (serviceChargePercentage / 100) : 0) + 
+                          customCharges.filter(c => c.enabled).reduce((sum, c) => sum + (c.type === 'percentage' ? 100 * (c.value / 100) : c.value), 0),
+                          restaurant?.settings?.currency || 'INR'
+                        )}
+                      </span>
                     </div>
                   </div>
                 </CardContent>

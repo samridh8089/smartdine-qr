@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getActiveUser, supabase } from '@/lib/supabase';
@@ -81,6 +81,311 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [router]);
+
+  // ==========================================
+  // GLOBAL NOTIFICATION & SIREN ALARM SYSTEM
+  // ==========================================
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const alarmOscRef = useRef<OscillatorNode | null>(null);
+  const alarmLfoRef = useRef<OscillatorNode | null>(null);
+  const alarmGainRef = useRef<GainNode | null>(null);
+  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isAlarmPlayingRef = useRef<boolean>(false);
+
+  // Helper to generate a 2-second WAV file (0.5s A5 880Hz square wave beep followed by 1.5s of silence)
+  const createBeepWavDataUri = () => {
+    const sampleRate = 8000;
+    const duration = 2.0;
+    const numSamples = sampleRate * duration;
+    const buffer = new Uint8Array(44 + numSamples);
+    
+    buffer[0] = 0x52; buffer[1] = 0x49; buffer[2] = 0x46; buffer[3] = 0x46; // RIFF
+    const fileSize = 36 + numSamples;
+    buffer[4] = fileSize & 0xff;
+    buffer[5] = (fileSize >> 8) & 0xff;
+    buffer[6] = (fileSize >> 16) & 0xff;
+    buffer[7] = (fileSize >> 24) & 0xff;
+    
+    buffer[8] = 0x57; buffer[9] = 0x41; buffer[10] = 0x56; buffer[11] = 0x45; // WAVE
+    buffer[12] = 0x66; buffer[13] = 0x6d; buffer[14] = 0x74; buffer[15] = 0x20; // fmt 
+    buffer[16] = 16; buffer[17] = 0; buffer[18] = 0; buffer[19] = 0;
+    buffer[20] = 1; buffer[21] = 0; // Mono PCM
+    buffer[22] = 1; buffer[23] = 0; // 1 Channel
+    buffer[24] = sampleRate & 0xff;
+    buffer[25] = (sampleRate >> 8) & 0xff;
+    buffer[26] = (sampleRate >> 16) & 0xff;
+    buffer[27] = (sampleRate >> 24) & 0xff;
+    
+    const byteRate = sampleRate * 1;
+    buffer[28] = byteRate & 0xff;
+    buffer[29] = (byteRate >> 8) & 0xff;
+    buffer[30] = (byteRate >> 16) & 0xff;
+    buffer[31] = (byteRate >> 24) & 0xff;
+    
+    buffer[32] = 1; buffer[33] = 0;
+    buffer[34] = 8; buffer[35] = 0; // 8-bit
+    buffer[36] = 0x64; buffer[37] = 0x61; buffer[38] = 0x74; buffer[39] = 0x61; // data
+    buffer[40] = numSamples & 0xff;
+    buffer[41] = (numSamples >> 8) & 0xff;
+    buffer[42] = (numSamples >> 16) & 0xff;
+    buffer[43] = (numSamples >> 24) & 0xff;
+    
+    const beepSamples = sampleRate * 0.5;
+    const frequency = 880;
+    for (let i = 0; i < numSamples; i++) {
+      if (i < beepSamples) {
+        const sampleVal = Math.sin(2 * Math.PI * frequency * (i / sampleRate));
+        buffer[44 + i] = sampleVal >= 0 ? 200 : 56;
+      } else {
+        buffer[44 + i] = 128;
+      }
+    }
+    
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return 'data:audio/wav;base64,' + btoa(binary);
+  };
+
+  const startGlobalAlarm = () => {
+    if (isAlarmPlayingRef.current) return;
+    console.log('Global alarm started');
+    isAlarmPlayingRef.current = true;
+
+    if (!alarmAudioRef.current) {
+      const dataUri = createBeepWavDataUri();
+      alarmAudioRef.current = new Audio(dataUri);
+      alarmAudioRef.current.loop = true;
+    }
+
+    alarmAudioRef.current.play()
+      .then(() => {})
+      .catch((err) => {
+        console.warn('HTMLAudioElement play blocked, falling back to Web Audio:', err);
+        startGlobalWebAudioSiren();
+      });
+  };
+
+  const startGlobalWebAudioSiren = () => {
+    try {
+      let ctx = audioCtxRef.current;
+      if (!ctx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+        ctx = new AudioContextClass();
+        audioCtxRef.current = ctx;
+      }
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      if (alarmOscRef.current) return;
+
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(800, now);
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0, now);
+
+      const lfo = ctx.createOscillator();
+      lfo.type = 'square';
+      lfo.frequency.setValueAtTime(0.5, now);
+
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.setValueAtTime(0.4, now);
+
+      lfo.connect(lfoGain);
+      lfoGain.connect(gainNode.gain);
+
+      const pitchLfo = ctx.createOscillator();
+      pitchLfo.type = 'sine';
+      pitchLfo.frequency.setValueAtTime(2, now);
+      const pitchLfoGain = ctx.createGain();
+      pitchLfoGain.gain.setValueAtTime(200, now);
+      pitchLfo.connect(pitchLfoGain);
+      pitchLfoGain.connect(osc.frequency);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      lfo.start(now);
+      pitchLfo.start(now);
+      osc.start(now);
+
+      alarmOscRef.current = osc;
+      alarmLfoRef.current = lfo;
+      alarmGainRef.current = gainNode;
+      (osc as any).pitchLfo = pitchLfo;
+      (osc as any).pitchLfoGain = pitchLfoGain;
+    } catch (e) {
+      console.warn('Failed to start Web Audio API fallback:', e);
+    }
+  };
+
+  const stopGlobalAlarm = () => {
+    if (!isAlarmPlayingRef.current) return;
+    console.log('Global alarm stopped');
+    isAlarmPlayingRef.current = false;
+
+    if (alarmAudioRef.current) {
+      alarmAudioRef.current.pause();
+      alarmAudioRef.current.currentTime = 0;
+    }
+
+    try {
+      if (alarmOscRef.current) {
+        alarmOscRef.current.stop();
+        alarmOscRef.current.disconnect();
+        if ((alarmOscRef.current as any).pitchLfo) {
+          (alarmOscRef.current as any).pitchLfo.stop();
+          (alarmOscRef.current as any).pitchLfo.disconnect();
+        }
+        alarmOscRef.current = null;
+      }
+      if (alarmLfoRef.current) {
+        alarmLfoRef.current.stop();
+        alarmLfoRef.current.disconnect();
+        alarmLfoRef.current = null;
+      }
+      if (alarmGainRef.current) {
+        alarmGainRef.current.disconnect();
+        alarmGainRef.current = null;
+      }
+    } catch (e) {
+      console.warn('Failed to stop Web Audio API fallback:', e);
+    }
+  };
+
+  const checkActiveAlarmsGlobal = async (restId: string, role: string) => {
+    try {
+      const allOrders = await db.getOrders(restId);
+      
+      if (role === 'kitchen') {
+        const activeBatches = allOrders.reduce((acc: any[], order) => {
+          if (order.batches) {
+            order.batches.forEach(b => {
+              if (b.status !== 'served') acc.push(b);
+            });
+          }
+          return acc;
+        }, []);
+        const hasNew = activeBatches.some((b: any) => b.status === 'new');
+        if (hasNew) {
+          startGlobalAlarm();
+        } else {
+          stopGlobalAlarm();
+        }
+      } else if (['waiter', 'owner', 'manager'].includes(role)) {
+        const hasReady = allOrders.some(o => o.status === 'ready');
+        const pendingRequests = await db.getCustomerRequests(restId);
+        const hasPendingCall = pendingRequests.some((r: any) => r.status === 'pending');
+        if (hasReady || hasPendingCall) {
+          startGlobalAlarm();
+        } else {
+          stopGlobalAlarm();
+        }
+      } else {
+        stopGlobalAlarm();
+      }
+    } catch (e) {
+      console.warn('Error checking global alarms:', e);
+    }
+  };
+
+  // Audio Context unlock interaction listener
+  useEffect(() => {
+    const initAudioGlobal = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass && !audioCtxRef.current) {
+          const ctx = new AudioContextClass();
+          if (ctx.state === 'suspended') ctx.resume();
+          audioCtxRef.current = ctx;
+        }
+      } catch (e) {
+        console.warn('Failed to initialize AudioContext:', e);
+      }
+      window.removeEventListener('click', initAudioGlobal);
+      window.removeEventListener('touchstart', initAudioGlobal);
+    };
+    window.addEventListener('click', initAudioGlobal);
+    window.addEventListener('touchstart', initAudioGlobal);
+    return () => {
+      window.removeEventListener('click', initAudioGlobal);
+      window.removeEventListener('touchstart', initAudioGlobal);
+      stopGlobalAlarm();
+    };
+  }, []);
+
+  // Global Realtime Alarm Listener
+  useEffect(() => {
+    if (!restaurant?.id) return;
+    const restId = restaurant.id;
+
+    console.log(`Global notification listener subscribed for restaurant: ${restId}, role: ${activeRole}`);
+    checkActiveAlarmsGlobal(restId, activeRole);
+
+    const channel = supabase
+      .channel(`global_notifications_${restId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `restaurant_id=eq.${restId}`
+        },
+        async () => {
+          console.log('Global notification listener detected order update');
+          await checkActiveAlarmsGlobal(restId, activeRole);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customer_requests',
+          filter: `restaurant_id=eq.${restId}`
+        },
+        async () => {
+          console.log('Global notification listener detected customer request update');
+          await checkActiveAlarmsGlobal(restId, activeRole);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'order_batches'
+        },
+        async (payload) => {
+          console.log('Global notification listener detected batch update');
+          const batch = payload.new as any;
+          if (batch) {
+            const { data } = await supabase
+              .from('orders')
+              .select('restaurant_id')
+              .eq('id', batch.order_id)
+              .single();
+            if (data && data.restaurant_id === restId) {
+              await checkActiveAlarmsGlobal(restId, activeRole);
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      stopGlobalAlarm();
+    };
+  }, [restaurant?.id, activeRole]);
 
   // Redirect waiters and kitchen from /dashboard root route
   useEffect(() => {

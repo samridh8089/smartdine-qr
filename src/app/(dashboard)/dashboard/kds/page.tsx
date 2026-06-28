@@ -92,7 +92,7 @@ const createBeepWavDataUri = () => {
 };
 
 export default function KitchenDisplayPage() {
-  const { restaurant } = useRestaurant();
+  const { restaurant, profile } = useRestaurant();
   const [restaurantId, setRestaurantId] = useState('');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,124 +195,15 @@ export default function KitchenDisplayPage() {
   };
 
   const startAlarm = () => {
-    if (!soundEnabledRef.current) return;
     if (isAlarmPlayingRef.current) return;
-
-    console.log('Alarm started');
     isAlarmPlayingRef.current = true;
     setAlarmActive(true);
-
-    // Try HTMLAudioElement first
-    if (!alarmAudioRef.current) {
-      const dataUri = createBeepWavDataUri();
-      alarmAudioRef.current = new Audio(dataUri);
-      alarmAudioRef.current.loop = true;
-    }
-
-    alarmAudioRef.current.play()
-      .then(() => {
-        // Successfully playing
-      })
-      .catch((err) => {
-        console.warn('HTMLAudioElement play blocked, falling back to Web Audio API:', err);
-        startWebAudioSiren();
-      });
-  };
-
-  const startWebAudioSiren = () => {
-    try {
-      let ctx = audioCtxRef.current;
-      if (!ctx) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContextClass) return;
-        ctx = new AudioContextClass();
-        audioCtxRef.current = ctx;
-      }
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      if (alarmOscRef.current) return; // already running
-
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(600, now);
-
-      const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, now);
-
-      // Loop LFO every 2 seconds (0.5Hz square wave)
-      const lfo = ctx.createOscillator();
-      lfo.type = 'square';
-      lfo.frequency.setValueAtTime(0.5, now);
-
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.setValueAtTime(0.4, now);
-
-      lfo.connect(lfoGain);
-      lfoGain.connect(gainNode.gain);
-
-      // Pitch wobble
-      const pitchLfo = ctx.createOscillator();
-      pitchLfo.type = 'sine';
-      pitchLfo.frequency.setValueAtTime(1, now);
-      const pitchLfoGain = ctx.createGain();
-      pitchLfoGain.gain.setValueAtTime(150, now);
-      pitchLfo.connect(pitchLfoGain);
-      pitchLfoGain.connect(osc.frequency);
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      lfo.start(now);
-      pitchLfo.start(now);
-      osc.start(now);
-
-      alarmOscRef.current = osc;
-      alarmLfoRef.current = lfo;
-      alarmGainRef.current = gainNode;
-      (osc as any).pitchLfo = pitchLfo;
-      (osc as any).pitchLfoGain = pitchLfoGain;
-    } catch (e) {
-      console.warn('Failed to start Web Audio API fallback:', e);
-    }
   };
 
   const stopAlarm = () => {
     if (!isAlarmPlayingRef.current) return;
-
-    console.log('Alarm stopped');
     isAlarmPlayingRef.current = false;
     setAlarmActive(false);
-
-    if (alarmAudioRef.current) {
-      alarmAudioRef.current.pause();
-      alarmAudioRef.current.currentTime = 0;
-    }
-
-    try {
-      if (alarmOscRef.current) {
-        alarmOscRef.current.stop();
-        alarmOscRef.current.disconnect();
-        if ((alarmOscRef.current as any).pitchLfo) {
-          (alarmOscRef.current as any).pitchLfo.stop();
-          (alarmOscRef.current as any).pitchLfo.disconnect();
-        }
-        alarmOscRef.current = null;
-      }
-      if (alarmLfoRef.current) {
-        alarmLfoRef.current.stop();
-        alarmLfoRef.current.disconnect();
-        alarmLfoRef.current = null;
-      }
-      if (alarmGainRef.current) {
-        alarmGainRef.current.disconnect();
-        alarmGainRef.current = null;
-      }
-    } catch (e) {
-      console.warn('Failed to stop Web Audio API fallback:', e);
-    }
   };
 
   const syncAlarmState = (activeOrdersList: Order[]) => {
@@ -495,7 +386,7 @@ export default function KitchenDisplayPage() {
     if (processingBatchIds.includes(batchId)) return;
     setProcessingBatchIds(prev => [...prev, batchId]);
     try {
-      await db.updateBatchStatus(batchId, nextStatus);
+      await db.updateBatchStatus(batchId, nextStatus, profile?.full_name || 'Kitchen Staff');
       if (restaurantId) {
         await loadKdsData(restaurantId);
         window.dispatchEvent(new Event('storage'));
@@ -731,6 +622,13 @@ export default function KitchenDisplayPage() {
                       </div>
                     )}
 
+                    {(order.accepted_by || order.preparing_by) && (
+                      <div className="text-[10px] text-slate-400 font-semibold space-y-0.5 border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-1.5 pb-1">
+                        {order.accepted_by && <p>Accepted by: <span className="text-slate-600 dark:text-slate-300">{order.accepted_by}</span></p>}
+                        {order.preparing_by && <p>Cooking by: <span className="text-slate-600 dark:text-slate-300">{order.preparing_by}</span></p>}
+                      </div>
+                    )}
+
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                       {order.status === 'accepted' ? (
                         <button 
@@ -803,6 +701,14 @@ export default function KitchenDisplayPage() {
                       ))}
                     </ul>
 
+                    {(order.accepted_by || order.preparing_by || order.ready_by) && (
+                      <div className="text-[10px] text-slate-400 font-semibold space-y-0.5 border-t border-slate-100 dark:border-slate-800 pt-1.5 mt-1.5 pb-1">
+                        {order.accepted_by && <p>Accepted by: <span className="text-slate-600 dark:text-slate-300">{order.accepted_by}</span></p>}
+                        {order.preparing_by && <p>Cooking by: <span className="text-slate-600 dark:text-slate-300">{order.preparing_by}</span></p>}
+                        {order.ready_by && <p>Ready by: <span className="text-slate-600 dark:text-slate-300">{order.ready_by}</span></p>}
+                      </div>
+                    )}
+
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
                       <span className="text-xs text-slate-400 font-semibold italic flex items-center justify-center gap-1.5 py-1">
                         <Clock className="h-3.5 w-3.5 text-purple-500" /> Waiting for waiter pickup
@@ -836,7 +742,7 @@ export default function KitchenDisplayPage() {
                 if (newOrderAlert) {
                   const newBatches = newOrderAlert.batches?.filter(b => b.status === 'new') || [];
                   for (const batch of newBatches) {
-                    await db.updateBatchStatus(batch.id, 'accepted');
+                    await db.updateBatchStatus(batch.id, 'accepted', profile?.full_name || 'Kitchen Staff');
                   }
                   if (restaurantId) {
                     await loadKdsData(restaurantId);

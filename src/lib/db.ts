@@ -15,6 +15,9 @@ export interface Restaurant {
     gst_percentage: number;
     service_charge_percentage: number;
     theme_color?: string;
+    gst_enabled?: boolean;
+    service_charge_enabled?: boolean;
+    custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[];
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';
@@ -108,6 +111,10 @@ export interface OrderBatch {
   preparing_at?: string;
   ready_at?: string;
   served_at?: string;
+  accepted_by?: string;
+  preparing_by?: string;
+  ready_by?: string;
+  served_by?: string;
   items: OrderItem[];
 }
 
@@ -123,8 +130,14 @@ export interface Order {
   service_charge: number;
   total: number;
   created_at: string;
+  completed_at?: string;
+  completed_by?: string;
+  cancelled_at?: string;
+  cancelled_by?: string;
+  cancellation_reason?: string;
   items: OrderItem[];
   batches?: OrderBatch[];
+  custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[];
 }
 
 export const PLAN_LIMITS = {
@@ -341,6 +354,10 @@ export const db = {
         preparing_at: b.preparing_at,
         ready_at: b.ready_at,
         served_at: b.served_at,
+        accepted_by: b.accepted_by,
+        preparing_by: b.preparing_by,
+        ready_by: b.ready_by,
+        served_by: b.served_by,
         items: [] as OrderItem[]
       })).sort((a: any, b: any) => a.batch_number - b.batch_number);
 
@@ -363,6 +380,12 @@ export const db = {
         service_charge: Number(o.service_charge),
         total: Number(o.total),
         created_at: o.created_at,
+        completed_at: o.completed_at,
+        completed_by: o.completed_by,
+        cancelled_at: o.cancelled_at,
+        cancelled_by: o.cancelled_by,
+        cancellation_reason: o.cancellation_reason,
+        custom_charges: o.custom_charges,
         items,
         batches
       };
@@ -400,6 +423,10 @@ export const db = {
       preparing_at: b.preparing_at,
       ready_at: b.ready_at,
       served_at: b.served_at,
+      accepted_by: b.accepted_by,
+      preparing_by: b.preparing_by,
+      ready_by: b.ready_by,
+      served_by: b.served_by,
       items: [] as OrderItem[]
     })).sort((a: any, b: any) => a.batch_number - b.batch_number);
 
@@ -422,6 +449,12 @@ export const db = {
       service_charge: Number(o.service_charge),
       total: Number(o.total),
       created_at: o.created_at,
+      completed_at: o.completed_at,
+      completed_by: o.completed_by,
+      cancelled_at: o.cancelled_at,
+      cancelled_by: o.cancelled_by,
+      cancellation_reason: o.cancellation_reason,
+      custom_charges: o.custom_charges,
       items,
       batches
     } as Order;
@@ -602,10 +635,21 @@ export const db = {
     }
   },
 
-  async updateOrderStatus(id: string, status: Order['status']): Promise<Order> {
+  async updateOrderStatus(id: string, status: Order['status'], userName?: string, cancellationReason?: string): Promise<Order> {
+    const updatePayload: any = { status };
+    if (status === 'completed') {
+      updatePayload.completed_at = new Date().toISOString();
+      if (userName) updatePayload.completed_by = userName;
+    }
+    if (status === 'cancelled') {
+      updatePayload.cancelled_at = new Date().toISOString();
+      if (userName) updatePayload.cancelled_by = userName;
+      if (cancellationReason) updatePayload.cancellation_reason = cancellationReason;
+    }
+
     const { data: updated, error } = await supabase
       .from('orders')
-      .update({ status })
+      .update(updatePayload)
       .eq('id', id)
       .select();
 
@@ -626,13 +670,20 @@ export const db = {
     return fullOrder;
   },
 
-  async updateBatchStatus(batchId: string, status: OrderBatch['status']): Promise<Order> {
+  async updateBatchStatus(batchId: string, status: OrderBatch['status'], userName?: string): Promise<Order> {
     const updatePayload: any = { status, updated_at: new Date().toISOString() };
     const now = new Date().toISOString();
     if (status === 'accepted') updatePayload.accepted_at = now;
     if (status === 'preparing') updatePayload.preparing_at = now;
     if (status === 'ready') updatePayload.ready_at = now;
     if (status === 'served') updatePayload.served_at = now;
+
+    if (userName) {
+      if (status === 'accepted') updatePayload.accepted_by = userName;
+      if (status === 'preparing') updatePayload.preparing_by = userName;
+      if (status === 'ready') updatePayload.ready_by = userName;
+      if (status === 'served') updatePayload.served_by = userName;
+    }
 
     const { data: updatedBatchData, error: batchErr } = await supabase
       .from('order_batches')

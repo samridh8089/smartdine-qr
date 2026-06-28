@@ -40,7 +40,21 @@ export default function ReportsPage() {
   }, [timeRange]);
 
   const computeStats = (allOrders: Order[], range: typeof timeRange) => {
-    const completedOrders = allOrders.filter(o => o.status === 'completed');
+    let completedOrders = allOrders.filter(o => o.status === 'completed');
+
+    const now = Date.now();
+    if (range === 'daily') {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      completedOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= todayStart.getTime());
+    } else if (range === 'weekly') {
+      const pastWeek = now - 7 * 24 * 60 * 60 * 1000;
+      completedOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= pastWeek);
+    } else if (range === 'monthly') {
+      const pastMonth = now - 30 * 24 * 60 * 60 * 1000;
+      completedOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= pastMonth);
+    }
+
     const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
     const orderCount = completedOrders.length;
     const averageOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
@@ -91,11 +105,7 @@ export default function ReportsPage() {
         Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0
       };
       
-      // Filter for past 7 days
-      const pastWeek = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      const weeklyOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= pastWeek);
-      
-      weeklyOrders.forEach(o => {
+      completedOrders.forEach(o => {
         const dayName = days[new Date(o.created_at).getDay()];
         dailyRev[dayName] = (dailyRev[dayName] || 0) + o.total;
       });
@@ -107,10 +117,8 @@ export default function ReportsPage() {
     } else if (range === 'monthly') {
       // 4 Weeks of the month
       const weeklyRev = { 'Week 1': 0, 'Week 2': 0, 'Week 3': 0, 'Week 4': 0 };
-      const pastMonth = Date.now() - 30 * 24 * 60 * 60 * 1000;
-      const monthlyOrders = completedOrders.filter(o => new Date(o.created_at).getTime() >= pastMonth);
 
-      monthlyOrders.forEach(o => {
+      completedOrders.forEach(o => {
         const date = new Date(o.created_at).getDate();
         if (date <= 7) weeklyRev['Week 1'] += o.total;
         else if (date <= 14) weeklyRev['Week 2'] += o.total;

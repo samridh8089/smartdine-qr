@@ -93,7 +93,7 @@ export default function OrdersPage() {
   const searchParams = useSearchParams();
   const orderIdParam = searchParams.get('id');
 
-  const { restaurant, activeRole } = useRestaurant();
+  const { restaurant, activeRole, profile } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -176,122 +176,14 @@ export default function OrdersPage() {
   const startAlarm = () => {
     if (activeRoleRef.current !== 'waiter' && activeRoleRef.current !== 'owner' && activeRoleRef.current !== 'manager') return;
     if (isAlarmPlayingRef.current) return;
-
-    console.log('Alarm started');
     isAlarmPlayingRef.current = true;
     setAlarmActive(true);
-
-    // Try HTMLAudioElement first
-    if (!alarmAudioRef.current) {
-      const dataUri = createBeepWavDataUri();
-      alarmAudioRef.current = new Audio(dataUri);
-      alarmAudioRef.current.loop = true;
-    }
-
-    alarmAudioRef.current.play()
-      .then(() => {
-        // Successfully playing
-      })
-      .catch((err) => {
-        console.warn('HTMLAudioElement play blocked, falling back to Web Audio API:', err);
-        startWebAudioSiren();
-      });
-  };
-
-  const startWebAudioSiren = () => {
-    try {
-      let ctx = audioCtxRef.current;
-      if (!ctx) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContextClass) return;
-        ctx = new AudioContextClass();
-        audioCtxRef.current = ctx;
-      }
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      if (alarmOscRef.current) return; // already running
-
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(800, now);
-
-      const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, now);
-
-      // Loop LFO every 2 seconds (0.5Hz square wave)
-      const lfo = ctx.createOscillator();
-      lfo.type = 'square';
-      lfo.frequency.setValueAtTime(0.5, now);
-
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.setValueAtTime(0.4, now);
-
-      lfo.connect(lfoGain);
-      lfoGain.connect(gainNode.gain);
-
-      // Pitch wobble
-      const pitchLfo = ctx.createOscillator();
-      pitchLfo.type = 'sine';
-      pitchLfo.frequency.setValueAtTime(2, now);
-      const pitchLfoGain = ctx.createGain();
-      pitchLfoGain.gain.setValueAtTime(200, now);
-      pitchLfo.connect(pitchLfoGain);
-      pitchLfoGain.connect(osc.frequency);
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      lfo.start(now);
-      pitchLfo.start(now);
-      osc.start(now);
-
-      alarmOscRef.current = osc;
-      alarmLfoRef.current = lfo;
-      alarmGainRef.current = gainNode;
-      (osc as any).pitchLfo = pitchLfo;
-      (osc as any).pitchLfoGain = pitchLfoGain;
-    } catch (e) {
-      console.warn('Failed to start Web Audio API fallback:', e);
-    }
   };
 
   const stopAlarm = () => {
     if (!isAlarmPlayingRef.current) return;
-
-    console.log('Alarm stopped');
     isAlarmPlayingRef.current = false;
     setAlarmActive(false);
-
-    if (alarmAudioRef.current) {
-      alarmAudioRef.current.pause();
-      alarmAudioRef.current.currentTime = 0;
-    }
-
-    try {
-      if (alarmOscRef.current) {
-        alarmOscRef.current.stop();
-        alarmOscRef.current.disconnect();
-        if ((alarmOscRef.current as any).pitchLfo) {
-          (alarmOscRef.current as any).pitchLfo.stop();
-          (alarmOscRef.current as any).pitchLfo.disconnect();
-        }
-        alarmOscRef.current = null;
-      }
-      if (alarmLfoRef.current) {
-        alarmLfoRef.current.stop();
-        alarmLfoRef.current.disconnect();
-        alarmLfoRef.current = null;
-      }
-      if (alarmGainRef.current) {
-        alarmGainRef.current.disconnect();
-        alarmGainRef.current = null;
-      }
-    } catch (e) {
-      console.warn('Failed to stop Web Audio API fallback:', e);
-    }
   };
 
   const syncAlarmState = (activeOrdersList: Order[], requestsList: CustomerRequest[]) => {
@@ -500,13 +392,28 @@ export default function OrdersPage() {
     router.replace(`/dashboard/orders?id=${order.id}`);
   };
 
-  const updateOrderStatus = async (status: Order['status']) => {
+  const updateOrderStatus = async (status: Order['status'], cancellationReason?: string) => {
     if (!selectedOrder || !restaurant) return;
     if (processingOrderIds.includes(selectedOrder.id)) return;
 
+    if (status === 'cancelled' && !cancellationReason) {
+      const reason = window.prompt('Please enter a cancellation reason (mandatory):');
+      if (reason === null) return; // user cancelled the prompt
+      if (!reason.trim()) {
+        alert('You must provide a cancellation reason to cancel the order.');
+        return;
+      }
+      return updateOrderStatus('cancelled', reason.trim());
+    }
+
     setProcessingOrderIds(prev => [...prev, selectedOrder.id]);
     try {
-      const updated = await db.updateOrderStatus(selectedOrder.id, status);
+      const updated = await db.updateOrderStatus(
+        selectedOrder.id, 
+        status, 
+        profile?.full_name || 'Staff Member', 
+        cancellationReason
+      );
       setSelectedOrder(updated);
       
       const allOrders = await db.getOrders(restaurant.id);
@@ -573,6 +480,21 @@ export default function OrdersPage() {
       </tr>
     `).join('');
 
+    let customChargesHtml = '';
+    if (selectedOrder.custom_charges) {
+      selectedOrder.custom_charges.forEach((charge: any) => {
+        const val = charge.type === 'percentage' 
+          ? selectedOrder.subtotal * (charge.value / 100) 
+          : charge.value;
+        customChargesHtml += `
+          <tr>
+            <td>${charge.name}:</td>
+            <td class="text-right">${formatPrice(val, restaurant.settings.currency)}</td>
+          </tr>
+        `;
+      });
+    }
+
     printWindow.document.write(`
       <html>
         <head>
@@ -590,11 +512,13 @@ export default function OrdersPage() {
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             .bold { font-weight: bold; }
-            .divider { border-top: 1px dashed #000; margin: 10px 0; }
-            table { width: 100%; border-collapse: collapse; }
             .header { margin-bottom: 15px; }
-            .header h2 { margin: 0 0 5px 0; font-size: 16px; font-weight: bold; }
-            .header p { margin: 0; }
+            .header h2 { margin: 0 0 5px 0; font-size: 16px; }
+            .header p { margin: 0 0 3px 0; font-size: 11px; color: #555; }
+            .divider { border-top: 1px dashed #000; margin: 10px 0; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th { font-weight: bold; }
+            td, th { padding: 4px 0; vertical-align: top; }
             .footer { margin-top: 20px; font-size: 10px; }
             @media print {
               body { margin: 0; padding: 10px; width: 100%; }
@@ -638,16 +562,19 @@ export default function OrdersPage() {
               <td>Subtotal:</td>
               <td class="text-right">${formatPrice(selectedOrder.subtotal, restaurant.settings.currency)}</td>
             </tr>
-            <tr>
-              <td>GST (${restaurant.settings.gst_percentage}%):</td>
-              <td class="text-right">${formatPrice(selectedOrder.gst, restaurant.settings.currency)}</td>
-            </tr>
+            ${selectedOrder.gst > 0 ? `
+              <tr>
+                <td>GST:</td>
+                <td class="text-right">${formatPrice(selectedOrder.gst, restaurant.settings.currency)}</td>
+              </tr>
+            ` : ''}
             ${selectedOrder.service_charge > 0 ? `
               <tr>
-                <td>Service Charge (${restaurant.settings.service_charge_percentage}%):</td>
+                <td>Service Charge:</td>
                 <td class="text-right">${formatPrice(selectedOrder.service_charge, restaurant.settings.currency)}</td>
               </tr>
             ` : ''}
+            ${customChargesHtml}
             <tr class="bold" style="font-size: 14px;">
               <td style="padding-top: 5px;">Total:</td>
               <td class="text-right" style="padding-top: 5px;">${formatPrice(selectedOrder.total, restaurant.settings.currency)}</td>
@@ -909,7 +836,7 @@ export default function OrdersPage() {
                                 try {
                                   const readyBatches = order.batches?.filter(b => b.status === 'ready') || [];
                                   for (const batch of readyBatches) {
-                                    await db.updateBatchStatus(batch.id, 'served');
+                                    await db.updateBatchStatus(batch.id, 'served', profile?.full_name || 'Waiter');
                                   }
                                   const allOrders = await db.getOrders(restaurant.id);
                                   const filteredOrders = activeRole === 'waiter'
@@ -1008,7 +935,7 @@ export default function OrdersPage() {
                             try {
                               const readyBatches = selectedOrder.batches?.filter(b => b.status === 'ready') || [];
                               for (const batch of readyBatches) {
-                                await db.updateBatchStatus(batch.id, 'served');
+                                await db.updateBatchStatus(batch.id, 'served', profile?.full_name || 'Waiter');
                               }
                               const allOrders = await db.getOrders(restaurant.id);
                               setOrders(allOrders);
@@ -1076,6 +1003,35 @@ export default function OrdersPage() {
                     </div>
                   </div>
 
+                  {/* Order Activity Log */}
+                  {((selectedOrder.batches || []).some(b => b.accepted_by || b.preparing_by || b.ready_by || b.served_by) || selectedOrder.completed_by || selectedOrder.cancelled_by) && (
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Order Activity Log</h4>
+                      <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                        {selectedOrder.batches?.map((b) => (
+                          <div key={b.id} className="space-y-1">
+                            {selectedOrder.batches!.length > 1 && <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Batch #{b.batch_number}</p>}
+                            {b.accepted_by && <p>• Accepted by: <span className="text-slate-850 dark:text-slate-200">{b.accepted_by}</span></p>}
+                            {b.preparing_by && <p>• Cooking by: <span className="text-slate-850 dark:text-slate-200">{b.preparing_by}</span></p>}
+                            {b.ready_by && <p>• Ready by: <span className="text-slate-850 dark:text-slate-200">{b.ready_by}</span></p>}
+                            {b.served_by && <p>• Served by: <span className="text-slate-850 dark:text-slate-200">{b.served_by}</span></p>}
+                          </div>
+                        ))}
+                        {selectedOrder.completed_by && (
+                          <p className="border-t border-slate-100 dark:border-slate-800/50 pt-1.5">• Completed by: <span className="text-slate-850 dark:text-slate-200">{selectedOrder.completed_by}</span></p>
+                        )}
+                        {selectedOrder.cancelled_by && (
+                          <div className="border-t border-slate-100 dark:border-slate-800/50 pt-1.5 space-y-0.5">
+                            <p>• Cancelled by: <span className="text-rose-600 dark:text-rose-400">{selectedOrder.cancelled_by}</span></p>
+                            {selectedOrder.cancellation_reason && (
+                              <p className="text-[10px] text-slate-400 font-medium pl-2">Reason: "{selectedOrder.cancellation_reason}"</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {selectedOrder.special_instructions && (
                     <div className="space-y-2">
                       <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Chef Special Instructions</h4>
@@ -1092,16 +1048,31 @@ export default function OrdersPage() {
                       <span>Subtotal</span>
                       <span>{formatPrice(selectedOrder.subtotal, restaurant.settings.currency)}</span>
                     </div>
-                    <div className="flex justify-between text-sm text-slate-500 font-semibold">
-                      <span>GST ({restaurant.settings.gst_percentage}%)</span>
-                      <span>{formatPrice(selectedOrder.gst, restaurant.settings.currency)}</span>
-                    </div>
+                    {selectedOrder.gst > 0 && (
+                      <div className="flex justify-between text-sm text-slate-500 font-semibold">
+                        <span>GST</span>
+                        <span>{formatPrice(selectedOrder.gst, restaurant.settings.currency)}</span>
+                      </div>
+                    )}
                     {selectedOrder.service_charge > 0 && (
                       <div className="flex justify-between text-sm text-slate-500 font-semibold">
-                        <span>Service Charge ({restaurant.settings.service_charge_percentage}%)</span>
+                        <span>Service Charge</span>
                         <span>{formatPrice(selectedOrder.service_charge, restaurant.settings.currency)}</span>
                       </div>
                     )}
+                    {selectedOrder.custom_charges && selectedOrder.custom_charges.map((charge: any) => (
+                      <div key={charge.id} className="flex justify-between text-sm text-slate-500 font-semibold">
+                        <span>{charge.name}</span>
+                        <span>
+                          {formatPrice(
+                            charge.type === 'percentage' 
+                              ? selectedOrder.subtotal * (charge.value / 100)
+                              : charge.value, 
+                            restaurant.settings.currency
+                          )}
+                        </span>
+                      </div>
+                    ))}
                     <div className="h-px bg-slate-200 dark:bg-slate-700 my-1" />
                     <div className="flex justify-between text-slate-900 dark:text-white font-black text-lg">
                       <span>Grand Total</span>

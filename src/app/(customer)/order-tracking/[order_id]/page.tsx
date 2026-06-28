@@ -330,7 +330,12 @@ export default function OrderTrackingPage({ params }: PageProps) {
                   className={`w-full gap-1.5 cursor-pointer flex items-center justify-center ${
                     order.status === 'served' ? 'bg-emerald-650 hover:bg-emerald-700 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
                   }`}
-                  onClick={() => router.push(`/menu/${restaurant.slug}/table/${order.table_id}`)}
+                  onClick={() => {
+                    if (restaurant) {
+                      sessionStorage.removeItem(`smartdine_cart_${restaurant.id}`);
+                    }
+                    router.push(`/menu/${restaurant.slug}/table/${order.table_id}`);
+                  }}
                 >
                   <Plus className="h-4 w-4" /> Add More Items
                 </Button>
