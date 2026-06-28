@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { db, Profile, Restaurant } from '@/lib/db';
 import MockBanner from '@/components/shared/MockBanner';
+import buildInfo from '@/lib/build-info.json';
 
 import { 
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
@@ -567,6 +568,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <LogOut className="h-4 w-4 shrink-0" />
                 Sign Out
               </button>
+              <div className="mt-4 pt-2 border-t border-slate-800/60 text-center">
+                <Link href="/debug/build-info" className="inline-flex flex-col items-center text-[10px] text-slate-500 hover:text-slate-300 cursor-pointer font-mono gap-0.5">
+                  <span>Build: {buildInfo.commit.slice(0, 7)}</span>
+                  <span>{new Date(buildInfo.buildTime).toLocaleDateString()} {new Date(buildInfo.buildTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </Link>
+              </div>
             </div>
           </aside>
 
