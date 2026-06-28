@@ -165,7 +165,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
     return null;
   };
 
-  const formatTimelineTime = (isoString: string | null) => {
+  const formatTimelineTime = (isoString: string | null | undefined) => {
     if (!isoString) return '';
     const date = new Date(isoString);
     const dateStr = date.toLocaleDateString('en-GB', {

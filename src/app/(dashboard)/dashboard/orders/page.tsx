@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { db, Order, Restaurant, CustomerRequest } from '@/lib/db';
+import { db, Order, Restaurant, CustomerRequest, OrderBatch } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
 import { formatPrice, formatDate } from '@/lib/utils';
