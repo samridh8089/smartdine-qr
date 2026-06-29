@@ -309,7 +309,7 @@ export default function TablesPage() {
                   type="text"
                   readOnly
                   value={`${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${restaurantSlug}/takeaway`}
-                  className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-950/20 border border-slate-105 dark:border-slate-800 rounded-xl text-xs font-mono font-semibold text-slate-600 dark:text-slate-400 select-all focus:outline-none"
+                  className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-mono font-semibold text-slate-600 dark:text-slate-400 select-all focus:outline-none"
                 />
                 <Button
                   size="sm"
@@ -334,7 +334,7 @@ export default function TablesPage() {
                   link.click();
                   document.body.removeChild(link);
                 }}
-                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-650 hover:text-slate-800 dark:text-slate-350 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
+                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
               >
                 <Download className="h-4 w-4 text-slate-400" />
                 <span>Download QR</span>
@@ -382,7 +382,7 @@ export default function TablesPage() {
                   `);
                   printWindow.document.close();
                 }}
-                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-650 hover:text-slate-800 dark:text-slate-355 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
+                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
               >
                 <Printer className="h-4 w-4 text-slate-400" />
                 <span>Print QR</span>
@@ -391,7 +391,7 @@ export default function TablesPage() {
               <a
                 href={`https://api.whatsapp.com/send?text=${encodeURIComponent('Order takeaway directly from our menu: ' + (typeof window !== 'undefined' ? window.location.origin : '') + '/menu/' + restaurantSlug + '/takeaway')}`}
                 target="_blank"
-                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-650 hover:text-slate-800 dark:text-slate-355 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
+                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
               >
                 <span>WhatsApp</span>
               </a>
@@ -402,14 +402,14 @@ export default function TablesPage() {
                   navigator.clipboard.writeText(url);
                   alert('Instagram sharing link copied! Paste it in your Instagram Bio or Stories.');
                 }}
-                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-655 hover:text-slate-800 dark:text-slate-355 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
+                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
               >
                 <span>Instagram</span>
               </button>
 
               <a
                 href={`sms:?&body=${encodeURIComponent('Order takeaway directly from our menu here: ' + (typeof window !== 'undefined' ? window.location.origin : '') + '/menu/' + restaurantSlug + '/takeaway')}`}
-                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-655 hover:text-slate-800 dark:text-slate-355 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
+                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
               >
                 <span>SMS Share</span>
               </a>

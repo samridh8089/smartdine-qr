@@ -884,7 +884,7 @@ export default function SettingsPage() {
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/40">
                           {staffList.map((st) => (
-                            <tr key={st.id} className="hover:bg-slate-55/50 transition-colors">
+                            <tr key={st.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
                               <td className="px-6 py-3 font-extrabold text-slate-900 dark:text-white">{st.full_name}</td>
                               <td className="px-6 py-3 font-mono text-xs">{st.email}</td>
                               <td className="px-6 py-3">
@@ -981,7 +981,7 @@ export default function SettingsPage() {
                       onChange={() => setPaymentEnabled(!paymentEnabled)}
                       className="sr-only peer"
                     />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-emerald-600"></div>
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
                   </label>
                 </div>
 
@@ -997,7 +997,7 @@ export default function SettingsPage() {
                       onChange={() => setTakeawayEnabled(!takeawayEnabled)}
                       className="sr-only peer"
                     />
-                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-650 peer-checked:bg-purple-650"></div>
+                    <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-purple-600"></div>
                   </label>
                 </div>
 
@@ -1025,7 +1025,7 @@ export default function SettingsPage() {
                       value={paymentQr}
                       onChange={(e) => setPaymentQr(e.target.value)}
                     />
-                    <div className="p-3 bg-amber-55/10 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 text-xs rounded-xl flex items-start gap-2.5 font-semibold">
+                    <div className="p-3 bg-amber-50/10 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 text-xs rounded-xl flex items-start gap-2.5 font-semibold">
                       <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                       <span>
                         Payments are processed via UPI deep links directly on the customer's phone using a standard UPI app. No commissions or gateway fees are applied. Staff must manually verify collections inside the Live Orders portal.
@@ -1068,7 +1068,7 @@ export default function SettingsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/40">
                       {logs.map((log) => (
-                        <tr key={log.id} className="hover:bg-slate-55/50 transition-colors">
+                        <tr key={log.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
                           <td className="px-6 py-3 font-extrabold text-slate-900 dark:text-white">
                             {log.user_email}
                           </td>

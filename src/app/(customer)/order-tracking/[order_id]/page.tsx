@@ -212,7 +212,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const currentStepIndex = getStatusIndex(order.status);
 
   return (
-    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-955/40 pb-12 transition-colors">
+    <div className="min-h-screen bg-slate-50/50 dark:bg-slate-900/40 pb-12 transition-colors">
       {/* Mini Header */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm sticky top-0 z-30 shrink-0">
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -234,7 +234,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
           <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-none">{restaurant.name}</h1>
           <p className="text-xs text-slate-450 dark:text-slate-500 font-semibold uppercase flex items-center justify-center gap-1.5">
             {order.order_type === 'takeaway' ? (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-750 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
                 🟣 Takeaway
               </span>
             ) : (
@@ -280,7 +280,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
                     Pay <strong>{formatPrice(order.total, restaurant.settings.currency)}</strong> online using any UPI application.
                   </p>
                   
-                  <div className="bg-slate-55/60 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 font-semibold">
+                  <div className="bg-slate-50/65 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 font-semibold">
                     <div className="flex justify-between">
                       <span className="text-slate-400">Payee Name</span>
                       <span className="text-slate-700 dark:text-slate-300">{restaurant.settings.upi_name}</span>
@@ -326,7 +326,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
           <CardContent className="p-6 space-y-6">
             
             {order.status === 'cancelled' ? (
-              <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-455 rounded-xl p-4 flex items-center gap-3 text-sm">
+              <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-400 rounded-xl p-4 flex items-center gap-3 text-sm">
                 <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0" />
                 <div>
                   <strong>Order Cancelled:</strong> This order has been cancelled by the restaurant staff. Please contact the service desk.
@@ -400,7 +400,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
                 
                 <div>
                   <span className="text-slate-400 block">Estimated Arrival</span>
-                  <span className="text-slate-850 dark:text-slate-200 mt-1 block font-black">
+                  <span className="text-slate-800 dark:text-slate-200 mt-1 block font-black">
                     {order.customer_arrival_minutes} minutes
                   </span>
                 </div>
@@ -426,7 +426,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
               {order.items.map(item => (
                 <div key={item.id} className="py-3 flex justify-between gap-4 text-xs md:text-sm font-semibold">
                   <span className="text-slate-700 dark:text-slate-300">{item.quantity}x {item.menu_item_name}</span>
-                  <span className="text-slate-955 dark:text-white">{formatPrice(item.price * item.quantity, restaurant.settings.currency)}</span>
+                  <span className="text-slate-950 dark:text-white">{formatPrice(item.price * item.quantity, restaurant.settings.currency)}</span>
                 </div>
               ))}
             </div>
@@ -472,7 +472,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
               {order.status !== 'completed' && order.status !== 'cancelled' && (
                 <Button 
                   className={`w-full gap-1.5 cursor-pointer flex items-center justify-center ${
-                    order.status === 'served' ? 'bg-emerald-600 hover:bg-emerald-750 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    order.status === 'served' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
                   }`}
                   onClick={() => {
                     if (restaurant) {

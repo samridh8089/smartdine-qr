@@ -298,7 +298,7 @@ export default function ReportsPage() {
 
         <Card className="hover:shadow-md transition-shadow border-t-2 border-t-amber-500">
           <CardContent className="flex items-center gap-4 py-6">
-            <div className="h-12 w-12 rounded-xl bg-amber-55/60 dark:bg-amber-905/20 text-amber-600 flex items-center justify-center">
+            <div className="h-12 w-12 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 flex items-center justify-center">
               <Clock className="h-6 w-6" />
             </div>
             <div>
@@ -354,7 +354,7 @@ export default function ReportsPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-bold">Takeaway Avg Ticket</p>
-              <h3 className="text-2xl font-extrabold text-slate-955 mt-1">{formatPrice(analytics.takeawayAvgValue)}</h3>
+              <h3 className="text-2xl font-extrabold text-slate-950 mt-1">{formatPrice(analytics.takeawayAvgValue)}</h3>
             </div>
           </CardContent>
         </Card>
@@ -369,7 +369,7 @@ export default function ReportsPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-purple-600 font-bold">Takeaway:</span>
-                <span className="text-purple-850 font-black">{analytics.takeawayCount} orders ({formatPrice(analytics.takeawayRevenue)})</span>
+                <span className="text-purple-800 font-black">{analytics.takeawayCount} orders ({formatPrice(analytics.takeawayRevenue)})</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden flex mt-2">
                 <div 

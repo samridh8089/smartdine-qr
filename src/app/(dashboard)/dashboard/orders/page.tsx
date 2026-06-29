@@ -893,7 +893,7 @@ export default function OrdersPage() {
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-extrabold text-slate-955 dark:text-white text-lg">Order #{selectedOrder.id.slice(-5).toUpperCase()}</h3>
+                      <h3 className="font-extrabold text-slate-950 dark:text-white text-lg">Order #{selectedOrder.id.slice(-5).toUpperCase()}</h3>
                       {selectedOrder.order_type === 'takeaway' && (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase animate-pulse">
                           🟣 Takeaway
@@ -1083,14 +1083,14 @@ export default function OrdersPage() {
                         {selectedOrder.batches?.map((b) => (
                           <div key={b.id} className="space-y-1">
                             {selectedOrder.batches!.length > 1 && <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Batch #{b.batch_number}</p>}
-                            {b.accepted_by && <p>• Accepted by: <span className="text-slate-850 dark:text-slate-200">{b.accepted_by}</span></p>}
-                            {b.preparing_by && <p>• Cooking by: <span className="text-slate-850 dark:text-slate-200">{b.preparing_by}</span></p>}
-                            {b.ready_by && <p>• Ready by: <span className="text-slate-850 dark:text-slate-200">{b.ready_by}</span></p>}
-                            {b.served_by && <p>• Served by: <span className="text-slate-850 dark:text-slate-200">{b.served_by}</span></p>}
+                            {b.accepted_by && <p>• Accepted by: <span className="text-slate-800 dark:text-slate-200">{b.accepted_by}</span></p>}
+                            {b.preparing_by && <p>• Cooking by: <span className="text-slate-800 dark:text-slate-200">{b.preparing_by}</span></p>}
+                            {b.ready_by && <p>• Ready by: <span className="text-slate-800 dark:text-slate-200">{b.ready_by}</span></p>}
+                            {b.served_by && <p>• Served by: <span className="text-slate-800 dark:text-slate-200">{b.served_by}</span></p>}
                           </div>
                         ))}
                         {selectedOrder.completed_by && (
-                          <p className="border-t border-slate-100 dark:border-slate-800/50 pt-1.5">• Completed by: <span className="text-slate-850 dark:text-slate-200">{selectedOrder.completed_by}</span></p>
+                          <p className="border-t border-slate-100 dark:border-slate-800/50 pt-1.5">• Completed by: <span className="text-slate-800 dark:text-slate-200">{selectedOrder.completed_by}</span></p>
                         )}
                         {selectedOrder.cancelled_by && (
                           <div className="border-t border-slate-100 dark:border-slate-800/50 pt-1.5 space-y-0.5">

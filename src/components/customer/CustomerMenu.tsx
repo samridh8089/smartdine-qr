@@ -458,7 +458,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
                   {table.name}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-855 text-slate-500 mt-1 uppercase">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 mt-1 uppercase">
                   View-Only Menu
                 </span>
               )}
@@ -836,7 +836,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
               placeholder="e.g. Please bring all food together. Keep drinks cold."
               value={specialInstructions}
               onChange={(e) => setSpecialInstructions(e.target.value)}
-              className="w-full px-3.5 py-2 text-xs md:text-sm bg-white dark:bg-slate-955 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 min-h-[60px]"
+              className="w-full px-3.5 py-2 text-xs md:text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 min-h-[60px]"
             />
           </div>
 
@@ -900,7 +900,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
                   <a
                     href={`upi://pay?pa=${restaurant.settings.upi_id}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${cartTotal}&cu=INR`}
                     onClick={() => setTakeawayPaymentCompleted(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-purple-650 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer"
                   >
                     <CreditCard className="h-4 w-4" />
                     Pay {formatPrice(cartTotal, restaurant.settings.currency)} Now
