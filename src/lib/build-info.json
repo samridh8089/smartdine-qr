@@ -1,0 +1,6 @@
+{
+  "commit": "a34ecee96d6b58c62bd220200cf2ef6b158894f4",
+  "buildTime": "2026-07-01T10:33:30.000Z",
+  "env": "production",
+  "schemaVersion": "20260701000002_fix_storage_rls"
+}
