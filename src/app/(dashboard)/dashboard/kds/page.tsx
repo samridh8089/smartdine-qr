@@ -133,6 +133,12 @@ export default function KitchenDisplayPage() {
   useEffect(() => {
     if (!restaurantId) return;
 
+    const handleResync = () => {
+      console.log('Force resync event received. Reloading KDS data...');
+      reloadFnRef.current(restaurantId);
+    };
+    window.addEventListener('force-resync', handleResync);
+
     console.log(`Subscribing to realtime updates (orders & batches) for restaurant: ${restaurantId}`);
     const channel = supabase
       .channel('kds_orders_live')
@@ -243,6 +249,7 @@ export default function KitchenDisplayPage() {
     return () => {
       console.log('Cleaning up KDS realtime channel subscription...');
       supabase.removeChannel(channel);
+      window.removeEventListener('force-resync', handleResync);
     };
   }, [restaurantId]);
 

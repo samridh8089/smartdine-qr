@@ -438,9 +438,20 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
             {/* List */}
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {order.items.map(item => (
-                <div key={item.id} className="py-3 flex justify-between gap-4 text-xs md:text-sm font-semibold">
-                  <span className="text-slate-700 dark:text-slate-300">{item.quantity}x {item.menu_item_name}</span>
+              {Object.values(order.items.reduce((acc: any, item) => {
+                const key = `${item.menu_item_id}_${item.notes || ''}`;
+                if (!acc[key]) {
+                  acc[key] = { ...item };
+                } else {
+                  acc[key].quantity += item.quantity;
+                }
+                return acc;
+              }, {})).map((item: any, idx) => (
+                <div key={item.id || idx} className="py-3 flex justify-between gap-4 text-xs md:text-sm font-semibold">
+                  <div className="flex flex-col">
+                    <span className="text-slate-700 dark:text-slate-300">{item.quantity}x {item.menu_item_name}</span>
+                    {item.notes && <span className="text-[10px] text-rose-500 font-medium">({item.notes})</span>}
+                  </div>
                   <span className="text-slate-950 dark:text-white">{formatPrice(item.price * item.quantity, restaurant.settings.currency)}</span>
                 </div>
               ))}

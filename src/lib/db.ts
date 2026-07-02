@@ -636,10 +636,14 @@ export const db = {
         ...item
       }));
 
+      console.log('BATCH ITEMS CREATED (New Order):', JSON.stringify(finalItemsPayload));
+
       const { data: itemsData, error: itemsError } = await supabase
         .from('order_items')
         .insert(finalItemsPayload)
         .select();
+        
+      console.log('ORDER_ITEMS INSERTED (New Order):', JSON.stringify(itemsData));
 
       if (itemsError) {
         await supabase.from('orders').delete().eq('id', newOrder.id);
@@ -698,10 +702,14 @@ export const db = {
         ...item
       }));
 
+      console.log('BATCH ITEMS CREATED (Active Order Append):', JSON.stringify(finalItemsPayload));
+
       const { data: itemsData, error: itemsError } = await supabase
         .from('order_items')
         .insert(finalItemsPayload)
         .select();
+        
+      console.log('ORDER_ITEMS INSERTED (Active Order Append):', JSON.stringify(itemsData));
 
       if (itemsError) {
         await supabase.from('order_batches').delete().eq('id', newBatch.id);

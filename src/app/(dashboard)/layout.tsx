@@ -248,6 +248,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, []);
 
+  // Background state recovery
+  useEffect(() => {
+    const handleActive = () => {
+      if (document.visibilityState === 'visible') {
+        if (activeAudioRef.current && activeAudioRef.current.paused) {
+          activeAudioRef.current.play().catch(console.warn);
+        }
+        window.dispatchEvent(new Event('force-resync'));
+        if (restaurant?.id) {
+          checkActiveAlarmsGlobal(restaurant.id, activeRole);
+        }
+      }
+    };
+    
+    window.addEventListener('visibilitychange', handleActive);
+    window.addEventListener('focus', handleActive);
+    window.addEventListener('online', handleActive);
+    
+    return () => {
+      window.removeEventListener('visibilitychange', handleActive);
+      window.removeEventListener('focus', handleActive);
+      window.removeEventListener('online', handleActive);
+    };
+  }, [restaurant?.id, activeRole]);
+
+
   // Global Audio stop listeners triggered by actions
   useEffect(() => {
     const handleStopSound = () => stopGlobalAlarm();

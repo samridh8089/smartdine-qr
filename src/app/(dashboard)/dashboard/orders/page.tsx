@@ -150,6 +150,12 @@ export default function OrdersPage() {
     if (!restaurant) return;
     const restId = restaurant.id;
 
+    const handleResync = () => {
+      console.log('Force resync event received. Reloading Orders data...');
+      reloadFnRef.current(restId);
+    };
+    window.addEventListener('force-resync', handleResync);
+
     console.log(`Subscribing to live orders, requests & batches updates for restaurant: ${restId}`);
     const channel = supabase
       .channel('live_orders_requests')
@@ -237,6 +243,7 @@ export default function OrdersPage() {
     return () => {
       console.log('Cleaning up Live Orders realtime channel subscription...');
       supabase.removeChannel(channel);
+      window.removeEventListener('force-resync', handleResync);
     };
   }, [restaurant]);
 

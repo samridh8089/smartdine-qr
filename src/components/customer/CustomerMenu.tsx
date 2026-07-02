@@ -110,12 +110,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
   // Cart animation trigger
   const [cartBouncing, setCartBouncing] = useState(false);
 
-  // Sync cart to sessionStorage whenever it changes
-  useEffect(() => {
-    if (!loading && restaurant) {
-      sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(cart));
-    }
-  }, [cart, restaurant, loading]);
+  // Removed useEffect-based cart syncing to prevent race conditions
 
   // Item Detail Modal
   const [detailedItem, setDetailedItem] = useState<MenuItem | null>(null);
@@ -231,7 +226,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
 
       const savedCart = sessionStorage.getItem(`smartdine_cart_${rest.id}`);
       if (savedCart) {
-        setCart(JSON.parse(savedCart));
+        const parsedCart = JSON.parse(savedCart).map((c: any) => ({
+          ...c,
+          notes: c.notes || '' // Fix the undefined === '' bug
+        }));
+        setCart(parsedCart);
       }
     }
     loadData();
@@ -239,6 +238,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
+    if (typeof window !== 'undefined' && restaurant) {
+      sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
+    }
     // Trigger bounce animation
     setCartBouncing(true);
     setTimeout(() => setCartBouncing(false), 300);
@@ -254,6 +256,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
         );
       } else {
         newCart.push({ menuItem: item, quantity: qty, notes });
+      }
+      if (typeof window !== 'undefined' && restaurant) {
+        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
       }
       return newCart;
     });
@@ -272,6 +277,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
       );
       if (newCart[index] && newCart[index].quantity <= 0) {
         newCart = newCart.filter((_, idx) => idx !== index);
+      }
+      if (typeof window !== 'undefined' && restaurant) {
+        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
       }
       return newCart;
     });
@@ -300,8 +308,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
       const orderPayload = cart.map(item => ({
         menuItemId: item.menuItem.id,
         quantity: item.quantity,
-        notes: item.notes
+        notes: item.notes || ''
       }));
+
+      console.log('CART BEFORE UPDATE (Order Placing):', JSON.stringify(cart));
+      console.log('ORDER PAYLOAD:', JSON.stringify(orderPayload));
 
       const newOrder = await db.createOrder(
         restaurant.id,
@@ -319,6 +330,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
       setSpecialInstructions('');
       setCartOpen(false);
 
+      console.log('CART AFTER UPDATE (Order Placed - Cleared): []');
       // Redirect to Order Tracking screen
       router.push(`/order-tracking/${newOrder.id}`);
     } catch (e: any) {
