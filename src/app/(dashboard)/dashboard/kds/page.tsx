@@ -14,82 +14,6 @@ import {
   X, AlertCircle, Volume2, Sparkles, Bell
 } from 'lucide-react';
 
-// Helper to generate a 2-second WAV file (0.5s A5 880Hz square wave beep followed by 1.5s of silence)
-const createBeepWavDataUri = () => {
-  const sampleRate = 8000;
-  const duration = 2.0;
-  const numSamples = sampleRate * duration;
-  const buffer = new Uint8Array(44 + numSamples);
-  
-  // RIFF header
-  buffer[0] = 0x52; // 'R'
-  buffer[1] = 0x49; // 'I'
-  buffer[2] = 0x46; // 'F'
-  buffer[3] = 0x46; // 'F'
-  
-  const fileSize = 36 + numSamples;
-  buffer[4] = fileSize & 0xff;
-  buffer[5] = (fileSize >> 8) & 0xff;
-  buffer[6] = (fileSize >> 16) & 0xff;
-  buffer[7] = (fileSize >> 24) & 0xff;
-  
-  buffer[8] = 0x57; // 'W'
-  buffer[9] = 0x41; // 'A'
-  buffer[10] = 0x56; // 'V'
-  buffer[11] = 0x45; // 'E'
-  
-  // fmt chunk
-  buffer[12] = 0x66; // 'f'
-  buffer[13] = 0x6d; // 'm'
-  buffer[14] = 0x74; // 't'
-  buffer[15] = 0x20; // ' '
-  
-  buffer[16] = 16; buffer[17] = 0; buffer[18] = 0; buffer[19] = 0;
-  buffer[20] = 1; buffer[21] = 0;
-  buffer[22] = 1; buffer[23] = 0;
-  
-  buffer[24] = sampleRate & 0xff;
-  buffer[25] = (sampleRate >> 8) & 0xff;
-  buffer[26] = (sampleRate >> 16) & 0xff;
-  buffer[27] = (sampleRate >> 24) & 0xff;
-  
-  buffer[28] = sampleRate & 0xff;
-  buffer[29] = (sampleRate >> 8) & 0xff;
-  buffer[30] = (sampleRate >> 16) & 0xff;
-  buffer[31] = (sampleRate >> 24) & 0xff;
-  
-  buffer[32] = 1; buffer[33] = 0;
-  buffer[34] = 8; buffer[35] = 0;
-  
-  // data chunk
-  buffer[36] = 0x64; // 'd'
-  buffer[37] = 0x61; // 'a'
-  buffer[38] = 0x74; // 't'
-  buffer[39] = 0x61; // 'a'
-  
-  buffer[40] = numSamples & 0xff;
-  buffer[41] = (numSamples >> 8) & 0xff;
-  buffer[42] = (numSamples >> 16) & 0xff;
-  buffer[43] = (numSamples >> 24) & 0xff;
-  
-  // Generate square wave for 0.5s, then 1.5s silence
-  const frequency = 880;
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    if (t < 0.5) {
-      const sample = Math.sin(2 * Math.PI * frequency * t) >= 0 ? 225 : 30;
-      buffer[44 + i] = sample;
-    } else {
-      buffer[44 + i] = 128;
-    }
-  }
-  
-  let binary = '';
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]);
-  }
-  return 'data:audio/wav;base64,' + btoa(binary);
-};
 
 export default function KitchenDisplayPage() {
   const { restaurant, profile, alarmMuted, setAlarmMuted } = useRestaurant();
@@ -118,27 +42,7 @@ export default function KitchenDisplayPage() {
   const [orderToCancel, setOrderToCancel] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
 
-  // Refs and Audio Elements for continuous alarms
-  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
-  const isAlarmPlayingRef = useRef<boolean>(false);
-  const [alarmActive, setAlarmActive] = useState(false);
 
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const alarmOscRef = useRef<OscillatorNode | null>(null);
-  const alarmLfoRef = useRef<OscillatorNode | null>(null);
-  const alarmGainRef = useRef<GainNode | null>(null);
-  const soundEnabledRef = useRef<boolean>(soundEnabled);
-  const isReloadingRef = useRef(false);
-  const pendingReloadRef = useRef(false);
-
-  useEffect(() => {
-    soundEnabledRef.current = soundEnabled;
-    if (!soundEnabled) {
-      stopAlarm();
-    } else if (orders.some(o => o.batches?.some(b => b.status === 'new'))) {
-      startAlarm();
-    }
-  }, [soundEnabled, orders]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -146,39 +50,11 @@ export default function KitchenDisplayPage() {
     }, 15000);
     return () => {
       clearInterval(timer);
-      stopAlarm();
     };
   }, []);
 
-  // Prevent duplicate chimes/alerts for the same order
-  const alertedOrderIds = useRef<Set<string>>(new Set());
-  const alertedBatchIds = useRef<Set<string>>(new Set());
-
-  // Unlock and setup AudioContext on user interaction
-  useEffect(() => {
-    const initAudio = () => {
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass && !audioCtxRef.current) {
-          const ctx = new AudioContextClass();
-          if (ctx.state === 'suspended') {
-            ctx.resume();
-          }
-          audioCtxRef.current = ctx;
-        }
-      } catch (e) {
-        console.warn('Failed to initialize AudioContext:', e);
-      }
-      window.removeEventListener('click', initAudio);
-      window.removeEventListener('touchstart', initAudio);
-    };
-    window.addEventListener('click', initAudio);
-    window.addEventListener('touchstart', initAudio);
-    return () => {
-      window.removeEventListener('click', initAudio);
-      window.removeEventListener('touchstart', initAudio);
-    };
-  }, []);
+  const isReloadingRef = useRef(false);
+  const pendingReloadRef = useRef(false);
 
   // Request browser notifications permission
   useEffect(() => {
@@ -202,26 +78,9 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  const startAlarm = () => {
-    if (isAlarmPlayingRef.current) return;
-    isAlarmPlayingRef.current = true;
-    setAlarmActive(true);
-  };
-
-  const stopAlarm = () => {
-    if (!isAlarmPlayingRef.current) return;
-    isAlarmPlayingRef.current = false;
-    setAlarmActive(false);
-  };
-
-  const syncAlarmState = (activeOrdersList: Order[]) => {
-    const hasNew = activeOrdersList.some(o => o.batches?.some(b => b.status === 'new'));
-    if (hasNew) {
-      startAlarm();
-    } else {
-      stopAlarm();
-    }
-  };
+  // Prevent duplicate chimes/alerts for the same order
+  const alertedOrderIds = useRef<Set<string>>(new Set());
+  const alertedBatchIds = useRef<Set<string>>(new Set());
 
   const loadKdsData = async (restId: string) => {
     const allOrders = await db.getOrders(restId);
@@ -235,7 +94,6 @@ export default function KitchenDisplayPage() {
     });
     
     setLoading(false);
-    syncAlarmState(activeOrders);
   };
 
   const safeReloadKdsData = async (restId: string) => {
@@ -248,7 +106,6 @@ export default function KitchenDisplayPage() {
       const allOrders = await db.getOrders(restId);
       const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
       setOrders(activeOrders);
-      syncAlarmState(activeOrders);
     } catch (e) {
       console.error('Failed to reload KDS data:', e);
     } finally {
@@ -386,7 +243,6 @@ export default function KitchenDisplayPage() {
     return () => {
       console.log('Cleaning up KDS realtime channel subscription...');
       supabase.removeChannel(channel);
-      stopAlarm();
     };
   }, [restaurantId]);
 

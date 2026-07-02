@@ -713,11 +713,38 @@ export const db = {
         ? `${activeOrder.special_instructions}\n[Batch #${nextBatchNum}]: ${specialInstructions || ''}`
         : specialInstructions;
 
+      const gstEnabled = restaurant.settings.gst_enabled !== false;
+      const gstPercentage = gstEnabled ? (restaurant.settings.gst_percentage || 0) : 0;
+      const serviceChargeEnabled = restaurant.settings.service_charge_enabled !== false;
+      const serviceChargePercentage = serviceChargeEnabled ? (restaurant.settings.service_charge_percentage || 0) : 0;
+
+      const newSubtotal = Number(activeOrder.subtotal) + batchSubtotal;
+      const gst = parseFloat(((newSubtotal * gstPercentage) / 100).toFixed(2));
+      const serviceCharge = parseFloat(((newSubtotal * serviceChargePercentage) / 100).toFixed(2));
+
+      let customChargesTotal = 0;
+      const customChargesSnapshot = (restaurant.settings.custom_charges || [])
+        .filter(c => c.enabled === true)
+        .map(c => {
+          const val = c.type === 'percentage' 
+            ? parseFloat(((newSubtotal * c.value) / 100).toFixed(2))
+            : c.value;
+          customChargesTotal += val;
+          return c;
+        });
+
+      const newTotal = parseFloat((newSubtotal + gst + serviceCharge + customChargesTotal).toFixed(2));
+
       const { error: updateOrderErr } = await supabase
         .from('orders')
         .update({
           status: 'new',
-          special_instructions: updatedInstructions
+          special_instructions: updatedInstructions,
+          subtotal: newSubtotal,
+          gst,
+          service_charge: serviceCharge,
+          total: newTotal,
+          custom_charges: customChargesSnapshot
         })
         .eq('id', activeOrder.id);
 

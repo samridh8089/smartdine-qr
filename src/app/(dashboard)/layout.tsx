@@ -94,7 +94,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Helper to generate a small looping beep WAV file
   const createBeepWavDataUri = () => {
     const sampleRate = 8000;
-    const duration = 0.5;
+    const duration = 1.0; // 1 second loop
     const numSamples = sampleRate * duration;
     const buffer = new Uint8Array(44 + numSamples);
     
@@ -117,12 +117,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     buffer[36] = 0x64; buffer[37] = 0x61; buffer[38] = 0x74; buffer[39] = 0x61; // data
     buffer[40] = numSamples & 0xff; buffer[41] = (numSamples >> 8) & 0xff; buffer[42] = (numSamples >> 16) & 0xff; buffer[43] = (numSamples >> 24) & 0xff;
     
-    const beepSamples = sampleRate * 0.2;
-    const frequency = 880;
+    // Generate loud two-tone fire alarm style square wave
     for (let i = 0; i < numSamples; i++) {
-      if (i < beepSamples) {
-        const sampleVal = Math.sin(2 * Math.PI * frequency * (i / sampleRate));
-        buffer[44 + i] = sampleVal >= 0 ? 200 : 56;
+      const t = i / sampleRate;
+      if (t < 0.25) {
+        const sampleVal = Math.sin(2 * Math.PI * 880 * t);
+        buffer[44 + i] = sampleVal >= 0 ? 255 : 0;
+      } else if (t < 0.5) {
+        const sampleVal = Math.sin(2 * Math.PI * 1046 * t);
+        buffer[44 + i] = sampleVal >= 0 ? 255 : 0;
       } else {
         buffer[44 + i] = 128;
       }
@@ -147,19 +150,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const playContinuousBell = (role: string) => {
     if (alarmMuted) return;
-    if (activeAudioRef.current) return; // Already playing
-
-    const customUrl = role === 'kitchen'
-      ? (restaurant?.settings?.kitchen_bell_url || '')
-      : (restaurant?.settings?.waiter_bell_url || '');
-
-    const audioUrl = customUrl || createBeepWavDataUri();
+    
+    // Stop old, destroy instance, create new instance, play
+    stopGlobalAlarm();
+    
+    const audioUrl = createBeepWavDataUri();
     
     try {
       const audio = new Audio(audioUrl);
       audio.loop = true;
-      audio.play().catch(err => console.warn('HTML5 Audio play blocked:', err));
       activeAudioRef.current = audio;
+      
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(err => console.warn('HTML5 Audio play blocked:', err));
+      }
     } catch (e) {
       console.warn('Failed to play audio:', e);
     }

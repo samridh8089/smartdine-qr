@@ -110,6 +110,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
   // Cart animation trigger
   const [cartBouncing, setCartBouncing] = useState(false);
 
+  // Sync cart to sessionStorage whenever it changes
+  useEffect(() => {
+    if (!loading && restaurant) {
+      sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(cart));
+    }
+  }, [cart, restaurant, loading]);
+
   // Item Detail Modal
   const [detailedItem, setDetailedItem] = useState<MenuItem | null>(null);
   const [detailNotes, setDetailNotes] = useState('');
@@ -232,9 +239,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
 
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
-    if (restaurant) {
-      sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
-    }
     // Trigger bounce animation
     setCartBouncing(true);
     setTimeout(() => setCartBouncing(false), 300);
@@ -250,9 +254,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
         );
       } else {
         newCart.push({ menuItem: item, quantity: qty, notes });
-      }
-      if (restaurant) {
-        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
       }
       return newCart;
     });
@@ -271,9 +272,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway = fal
       );
       if (newCart[index] && newCart[index].quantity <= 0) {
         newCart = newCart.filter((_, idx) => idx !== index);
-      }
-      if (restaurant) {
-        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
       }
       return newCart;
     });

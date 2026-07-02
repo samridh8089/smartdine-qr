@@ -11,82 +11,6 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat } from 'lucide-react';
 
-// Helper to generate a 2-second WAV file (0.5s A5 880Hz square wave beep followed by 1.5s of silence)
-const createBeepWavDataUri = () => {
-  const sampleRate = 8000;
-  const duration = 2.0;
-  const numSamples = sampleRate * duration;
-  const buffer = new Uint8Array(44 + numSamples);
-  
-  // RIFF header
-  buffer[0] = 0x52; // 'R'
-  buffer[1] = 0x49; // 'I'
-  buffer[2] = 0x46; // 'F'
-  buffer[3] = 0x46; // 'F'
-  
-  const fileSize = 36 + numSamples;
-  buffer[4] = fileSize & 0xff;
-  buffer[5] = (fileSize >> 8) & 0xff;
-  buffer[6] = (fileSize >> 16) & 0xff;
-  buffer[7] = (fileSize >> 24) & 0xff;
-  
-  buffer[8] = 0x57; // 'W'
-  buffer[9] = 0x41; // 'A'
-  buffer[10] = 0x56; // 'V'
-  buffer[11] = 0x45; // 'E'
-  
-  // fmt chunk
-  buffer[12] = 0x66; // 'f'
-  buffer[13] = 0x6d; // 'm'
-  buffer[14] = 0x74; // 't'
-  buffer[15] = 0x20; // ' '
-  
-  buffer[16] = 16; buffer[17] = 0; buffer[18] = 0; buffer[19] = 0;
-  buffer[20] = 1; buffer[21] = 0;
-  buffer[22] = 1; buffer[23] = 0;
-  
-  buffer[24] = sampleRate & 0xff;
-  buffer[25] = (sampleRate >> 8) & 0xff;
-  buffer[26] = (sampleRate >> 16) & 0xff;
-  buffer[27] = (sampleRate >> 24) & 0xff;
-  
-  buffer[28] = sampleRate & 0xff;
-  buffer[29] = (sampleRate >> 8) & 0xff;
-  buffer[30] = (sampleRate >> 16) & 0xff;
-  buffer[31] = (sampleRate >> 24) & 0xff;
-  
-  buffer[32] = 1; buffer[33] = 0;
-  buffer[34] = 8; buffer[35] = 0;
-  
-  // data chunk
-  buffer[36] = 0x64; // 'd'
-  buffer[37] = 0x61; // 'a'
-  buffer[38] = 0x74; // 't'
-  buffer[39] = 0x61; // 'a'
-  
-  buffer[40] = numSamples & 0xff;
-  buffer[41] = (numSamples >> 8) & 0xff;
-  buffer[42] = (numSamples >> 16) & 0xff;
-  buffer[43] = (numSamples >> 24) & 0xff;
-  
-  // Generate square wave for 0.5s, then 1.5s silence
-  const frequency = 880;
-  for (let i = 0; i < numSamples; i++) {
-    const t = i / sampleRate;
-    if (t < 0.5) {
-      const sample = Math.sin(2 * Math.PI * frequency * t) >= 0 ? 225 : 30;
-      buffer[44 + i] = sample;
-    } else {
-      buffer[44 + i] = 128;
-    }
-  }
-  
-  let binary = '';
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]);
-  }
-  return 'data:audio/wav;base64,' + btoa(binary);
-};
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -115,54 +39,11 @@ export default function OrdersPage() {
   const selectedOrderRef = useRef<Order | null>(selectedOrder);
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
-
-  // Refs and Audio Elements for continuous alarms
-  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
-  const isAlarmPlayingRef = useRef<boolean>(false);
-  const [alarmActive, setAlarmActive] = useState(false);
-
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const alarmOscRef = useRef<OscillatorNode | null>(null);
-  const alarmLfoRef = useRef<OscillatorNode | null>(null);
-  const alarmGainRef = useRef<GainNode | null>(null);
-  const activeRoleRef = useRef<string>('');
-
-  // Sync ref with state changes
   useEffect(() => {
     selectedOrderRef.current = selectedOrder;
   }, [selectedOrder]);
 
-  useEffect(() => {
-    activeRoleRef.current = activeRole;
-    syncAlarmState(orders, customerRequests);
-  }, [activeRole, orders, customerRequests]);
 
-  // Unlock and setup AudioContext on user interaction
-  useEffect(() => {
-    const initAudio = () => {
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass && !audioCtxRef.current) {
-          const ctx = new AudioContextClass();
-          if (ctx.state === 'suspended') {
-            ctx.resume();
-          }
-          audioCtxRef.current = ctx;
-        }
-      } catch (e) {
-        console.warn('Failed to initialize AudioContext:', e);
-      }
-      window.removeEventListener('click', initAudio);
-      window.removeEventListener('touchstart', initAudio);
-    };
-    window.addEventListener('click', initAudio);
-    window.addEventListener('touchstart', initAudio);
-    return () => {
-      window.removeEventListener('click', initAudio);
-      window.removeEventListener('touchstart', initAudio);
-      stopAlarm();
-    };
-  }, []);
 
   // Request browser notifications permission
   useEffect(() => {
@@ -173,32 +54,7 @@ export default function OrdersPage() {
     }
   }, []);
 
-  const startAlarm = () => {
-    if (activeRoleRef.current !== 'waiter' && activeRoleRef.current !== 'owner' && activeRoleRef.current !== 'manager') return;
-    if (isAlarmPlayingRef.current) return;
-    isAlarmPlayingRef.current = true;
-    setAlarmActive(true);
-  };
 
-  const stopAlarm = () => {
-    if (!isAlarmPlayingRef.current) return;
-    isAlarmPlayingRef.current = false;
-    setAlarmActive(false);
-  };
-
-  const syncAlarmState = (activeOrdersList: Order[], requestsList: CustomerRequest[]) => {
-    if (activeRoleRef.current !== 'waiter' && activeRoleRef.current !== 'owner' && activeRoleRef.current !== 'manager') {
-      stopAlarm();
-      return;
-    }
-    const hasReady = activeOrdersList.some(o => o.status === 'ready');
-    const hasPendingCall = requestsList.some(r => r.status === 'pending');
-    if (hasReady || hasPendingCall) {
-      startAlarm();
-    } else {
-      stopAlarm();
-    }
-  };
 
   const showDesktopNotification = (order: Order) => {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -236,7 +92,6 @@ export default function OrdersPage() {
     }
 
     setLoading(false);
-    syncAlarmState(filteredForRole, activeReqs);
   };
 
   useEffect(() => {
@@ -266,9 +121,8 @@ export default function OrdersPage() {
 
       const reqs = await db.getCustomerRequests(restId);
       const activeReqs = reqs.filter(r => r.status === 'pending');
+      setOrders(filteredOrders);
       setCustomerRequests(activeReqs);
-      
-      syncAlarmState(filteredOrders, activeReqs);
     } catch (e) {
       console.error('Failed to reload orders:', e);
     } finally {
@@ -383,7 +237,6 @@ export default function OrdersPage() {
     return () => {
       console.log('Cleaning up Live Orders realtime channel subscription...');
       supabase.removeChannel(channel);
-      stopAlarm();
     };
   }, [restaurant]);
 
@@ -439,7 +292,6 @@ export default function OrdersPage() {
       window.dispatchEvent(new Event('stop-waiter-sound'));
       await db.acceptCustomerRequest(requestId);
       const updatedReqs = originalRequests.filter(r => r.id !== requestId);
-      syncAlarmState(orders, updatedReqs);
     } catch (err: any) {
       setCustomerRequests(originalRequests);
       alert(`Failed to accept request: ${err.message}`);
@@ -459,7 +311,6 @@ export default function OrdersPage() {
       window.dispatchEvent(new Event('stop-waiter-sound'));
       await db.resolveCustomerRequest(requestId);
       const updatedReqs = originalRequests.filter(r => r.id !== requestId);
-      syncAlarmState(orders, updatedReqs);
       alert('Request marked resolved.');
     } catch (err: any) {
       setCustomerRequests(originalRequests);
@@ -869,7 +720,6 @@ export default function OrdersPage() {
                                     ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
                                     : allOrders;
                                   setOrders(filteredOrders);
-                                  syncAlarmState(filteredOrders, customerRequests);
                                   window.dispatchEvent(new Event('storage'));
                                 } catch (err: any) {
                                   alert(`Failed to serve order: ${err.message}`);
