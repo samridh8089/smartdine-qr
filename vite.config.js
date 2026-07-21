@@ -2,6 +2,9 @@ import { resolve } from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  css: {
+    postcss: false,
+  },
   build: {
     rollupOptions: {
       input: {
