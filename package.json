@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "node generate-build-info.js",
+    "prebuild": "node generate-build-info.cjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
