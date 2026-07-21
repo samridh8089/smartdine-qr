@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Kitchen Display | SmartDine Lite</title>
+  <link rel="manifest" href="/manifest-kitchen.json">
+  <meta name="theme-color" content="#020617">
+  <style>
+    :root {
+      --bg-color: #020617; /* Extra dark theme */
+      --card-bg: rgba(15, 23, 42, 0.9);
+    }
+    body {
+      background-color: var(--bg-color);
+      overflow-x: hidden;
+    }
+    .kds-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      padding: 1rem 1.5rem;
+      background: rgba(2, 6, 23, 0.9);
+      border-bottom: 1px solid var(--border-color);
+      scrollbar-width: none;
+    }
+    .filter-bar::-webkit-scrollbar { display: none; }
+    
+    .filter-btn {
+      padding: 0.5rem 1rem;
+      border-radius: 2rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .filter-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      border-color: var(--accent-primary);
+    }
+    .filter-btn .count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.3);
+      border-radius: 1rem;
+      padding: 0.1rem 0.5rem;
+      margin-left: 0.5rem;
+      font-size: 0.8rem;
+    }
+
+    .search-container {
+      display: flex;
+      padding: 0 1.5rem;
+      margin-top: 1rem;
+    }
+    .search-input {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border-color);
+      color: white;
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+    }
+
+    .kds-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.5rem;
+      padding: 1.5rem;
+    }
+    
+    .kds-card {
+      background: var(--card-bg);
+      border-radius: 1rem;
+      border: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: transform 0.2s;
+    }
+    .kds-card.urgent-flash {
+      animation: urgent-flash 1s infinite alternate;
+      border-color: var(--warning);
+    }
+    @keyframes urgent-flash {
+      0% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
+      100% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.8); }
+    }
+
+    .card-header {
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .card-body {
+      padding: 1rem;
+      flex: 1;
+    }
+    .card-footer {
+      padding: 1rem;
+      background: rgba(0,0,0,0.2);
+    }
+    .kds-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      font-size: 1.1rem;
+      border-bottom: 1px dashed rgba(255,255,255,0.1);
+      padding-bottom: 0.5rem;
+    }
+    .kds-item:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+    
+    .timer {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-top: 0.5rem;
+    }
+
+    /* Offline Banner */
+    #offlineBanner {
+      background: var(--danger);
+      color: white;
+      text-align: center;
+      padding: 0.5rem;
+      font-weight: 600;
+      display: none;
+    }
+    
+    /* Loading Skeleton */
+    .skeleton {
+      background: rgba(255,255,255,0.05);
+      border-radius: 1rem;
+      height: 250px;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/kitchen-Ca1jJYZ2.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/gas-Czq9IFUy.js">
+  <link rel="stylesheet" crossorigin href="/assets/gas-B0ceuBRz.css">
+</head>
+<body>
+
+  <!-- Offline Banner -->
+  <div id="offlineBanner">
+    ⚠️ You are offline. Check your connection. <button onclick="window.location.reload()" style="background:rgba(0,0,0,0.3); border:none; color:white; padding:0.25rem 0.5rem; border-radius:0.25rem; cursor:pointer; margin-left:0.5rem;">Retry</button>
+  </div>
+
+  <!-- Login Form -->
+  <div id="loginForm" class="app-layout" style="align-items:center; justify-content:center; min-height: 100vh;">
+    <div class="glass-card" style="width: 100%; max-width: 420px; text-align:center;">
+      <h2 class="mb-1" style="font-size:1.8rem; font-weight:700;">Kitchen KDS</h2>
+      <p class="text-secondary mb-4">Dedicated Kitchen PWA</p>
+      <input type="text" id="kRid" placeholder="Restaurant ID" class="mb-3" style="width:100%; padding:1rem; border-radius:0.5rem; border:1px solid var(--border-color); background:rgba(255,255,255,0.05); color:white;"/>
+      <input type="password" id="kPass" placeholder="Password" class="mb-3" style="width:100%; padding:1rem; border-radius:0.5rem; border:1px solid var(--border-color); background:rgba(255,255,255,0.05); color:white;"/>
+      <button class="btn-primary mt-2" style="width: 100%; padding: 1rem; font-size:1.1rem;" onclick="login()">Authenticate</button>
+      <p id="loginMsg" class="mt-2" style="color:var(--danger); font-size:0.9rem;"></p>
+    </div>
+  </div>
+
+  <!-- Audio Unlock Overlay -->
+  <div id="startOverlay" class="hidden" style="position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(2,6,23,0.95); z-index:2000; display:flex; align-items:center; justify-content:center; flex-direction:column; padding:2rem; text-align:center;">
+    <h2 class="mb-2" style="font-size:2rem;">Kitchen Display Ready</h2>
+    <p class="text-secondary mb-4" style="font-size:1.1rem;">Tap below to enable continuous audio notifications for new orders.</p>
+    <button class="btn-primary" style="padding: 1.5rem 3rem; font-size:1.2rem; border-radius:3rem;" onclick="startDisplay()">Launch KDS</button>
+  </div>
+
+  <!-- Main App -->
+  <div id="mainDisplay" class="hidden" style="display:flex; flex-direction:column; height:100vh;">
+    <header class="kds-header">
+      <div>
+        <h1 style="margin:0; font-size:1.5rem;">Kitchen</h1>
+      </div>
+      <div style="display:flex; align-items:center; gap:1rem;">
+        <div id="loading" class="loader hidden"></div>
+        <span class="badge badge-cooking blink" id="syncBadge">Syncing</span>
+        <button class="btn-danger" onclick="logout()" style="padding:0.5rem 1rem;">Exit</button>
+      </div>
+    </header>
+
+    <div class="filter-bar" id="filters">
+      <button class="filter-btn active" data-filter="All">All Active <span class="count" id="cAll">0</span></button>
+      <button class="filter-btn" data-filter="Pending">Pending <span class="count" id="cPending">0</span></button>
+      <button class="filter-btn" data-filter="Preparing">Preparing <span class="count" id="cPreparing">0</span></button>
+      <button class="filter-btn" data-filter="Ready">Ready <span class="count" id="cReady">0</span></button>
+      <button class="filter-btn" data-filter="Completed">Completed <span class="count" id="cCompleted">0</span></button>
+    </div>
+
+    <div class="search-container">
+      <input type="text" id="searchInput" class="search-input" placeholder="Search by Table or Order ID..." oninput="renderGrid()">
+    </div>
+
+    <div class="kds-grid" id="orderGrid">
+      <!-- Skeletons shown initially -->
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+    </div>
+  </div>
+
+  <audio id="bellSound" src="https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3" preload="auto" loop></audio>
+
+</body>
+</html>

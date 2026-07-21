@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Menu | SmartDine Lite</title>
+  <style>
+    body { padding-bottom: 90px; background-color: var(--bg-color); }
+    
+    .hero-banner {
+      height: 220px;
+      background: linear-gradient(rgba(11, 17, 32, 0.4), rgba(11, 17, 32, 0.9)), url('https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&q=80&w=1000') center/cover;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 2rem 1.5rem;
+      position: relative;
+    }
+    
+    .hero-logo {
+      width: 70px;
+      height: 70px;
+      border-radius: 1rem;
+      background: var(--bg-card);
+      border: 2px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+
+    .top-actions {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+    }
+
+    .category-scroll {
+      display: flex;
+      overflow-x: auto;
+      gap: 0.75rem;
+      padding: 1rem 1.5rem;
+      background: rgba(11,17,32,0.95);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      border-bottom: 1px solid var(--border-color);
+      scrollbar-width: none; /* Firefox */
+    }
+    .category-scroll::-webkit-scrollbar { display: none; }
+    
+    .cat-btn {
+      white-space: nowrap;
+      padding: 0.6rem 1.25rem;
+      border-radius: 99px;
+      background: rgba(255,255,255,0.05);
+      color: var(--text-secondary);
+      font-weight: 500;
+      border: 1px solid rgba(255,255,255,0.05);
+      transition: all 0.3s ease;
+    }
+    .cat-btn.active {
+      background: var(--accent-primary);
+      color: white;
+      border-color: var(--accent-primary);
+      box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+    }
+    
+    .menu-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+    }
+
+    .menu-item {
+      display: flex;
+      gap: 1rem;
+      padding: 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 1rem;
+      transition: transform 0.2s ease;
+    }
+    .menu-item:active { transform: scale(0.98); }
+    
+    .menu-item img {
+      width: 90px;
+      height: 90px;
+      border-radius: 0.75rem;
+      object-fit: cover;
+      background: rgba(255,255,255,0.02);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
+    .menu-item-info { flex: 1; display:flex; flex-direction:column; justify-content:space-between; }
+    
+    .bottom-bar {
+      position: fixed; bottom: 1.5rem; left: 1.5rem; right: 1.5rem;
+      background: rgba(30, 41, 59, 0.95);
+      backdrop-filter: blur(16px);
+      padding: 0.75rem 1rem;
+      border-radius: 99px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      z-index: 100;
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .bottom-bar.hidden { transform: translateY(150%); display:flex !important; }
+    
+    .cart-modal {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: var(--bg-color);
+      z-index: 200;
+      padding: 1.5rem;
+      display: flex; flex-direction: column;
+    }
+    
+    .cart-item {
+      display: flex; justify-content: space-between; align-items:center;
+      padding: 1.25rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .qty-control {
+      display: flex; align-items: center; gap: 0.75rem;
+      background: rgba(255,255,255,0.05);
+      padding: 0.25rem;
+      border-radius: 99px;
+    }
+    .qty-btn {
+      background: var(--bg-card);
+      border-radius: 50%;
+      width: 32px; height: 32px;
+      color: white;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: 500;
+    }
+    
+    .toast { position: fixed; top: 2rem; left: 50%; transform: translateX(-50%) translateY(-150%); background: var(--success); color: white; padding: 1rem 2rem; border-radius: 99px; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.5); z-index: 9999; transition: transform 0.3s ease; }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.error { background: var(--danger); }
+  </style>
+  <script type="module" crossorigin src="/assets/customer-c52HCo4u.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/gas-Czq9IFUy.js">
+  <link rel="stylesheet" crossorigin href="/assets/gas-B0ceuBRz.css">
+</head>
+<body>
+  <div class="hero-banner">
+    <div class="top-actions">
+      <button class="btn-primary" style="background:rgba(0,0,0,0.5); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,0.1); padding:0.5rem 1rem; border-radius:99px;" onclick="callWaiter()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="margin-right:4px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+        Call Waiter
+      </button>
+    </div>
+    <div class="hero-logo">🍽️</div>
+    <h1 style="margin:0; font-size:1.8rem; font-weight:700;">SmartDine</h1>
+    <p style="color:var(--text-secondary); display:flex; align-items:center; gap:0.5rem; margin-top:0.25rem;">
+      <span class="badge badge-ready" style="padding:0.1rem 0.5rem; font-size:0.75rem;">Table <span id="tableDisplay"></span></span>
+      Premium Dining
+    </p>
+  </div>
+
+  <div id="categoryContainer" class="category-scroll hidden"></div>
+
+  <div id="loading" class="text-center mt-4">
+    <div class="loader"></div>
+    <p class="mt-2 text-secondary">Preparing menu...</p>
+  </div>
+
+  <div id="menuContainer" class="menu-grid"></div>
+
+  <div id="cartPill" class="bottom-bar hidden">
+    <div style="display:flex; align-items:center; gap:1rem;">
+      <div style="background:var(--accent-primary); width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:600;">
+        <span id="cartCount">0</span>
+      </div>
+      <div>
+        <p style="font-size:0.75rem; color:var(--text-secondary); margin:0;">Total Value</p>
+        <h3 style="margin:0; font-size:1.1rem;">₹<span id="cartTotal">0.00</span></h3>
+      </div>
+    </div>
+    <button class="btn-primary" style="padding: 0.75rem 1.5rem; border-radius:99px;" onclick="showCart()">View Order</button>
+  </div>
+
+  <!-- Cart Modal -->
+  <div id="cartModal" class="cart-modal hidden slide-in-right">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+      <h2 style="margin:0; font-size:1.5rem;">Your Cart</h2>
+      <button onclick="hideCart()" style="background:rgba(255,255,255,0.05); color:var(--text-primary); border-radius:50%; width:40px; height:40px; display:flex; align-items:center; justify-content:center;">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    
+    <div id="cartItems" style="flex: 1; overflow-y: auto; padding-top: 1rem;"></div>
+    
+    <div style="padding-top: 1rem; border-top: 1px solid var(--border-color);">
+      <textarea id="specialInstructions" placeholder="Add special instructions for the chef..." rows="2" style="resize:none; background:rgba(255,255,255,0.02);"></textarea>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; margin-top:0.5rem;">
+        <h3 style="color:var(--text-secondary); font-weight:500;">Grand Total</h3>
+        <h3 style="font-size:1.5rem; color:var(--accent-primary);">₹<span id="cartModalTotal">0.00</span></h3>
+      </div>
+      <button class="btn-primary" id="confirmOrderBtn" style="width: 100%; padding: 1.25rem; font-size: 1.1rem; border-radius:1rem; display:flex; justify-content:space-between; align-items:center;" onclick="placeOrder()">
+        <span>Confirm Order</span>
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Order Status Modal -->
+  <div id="statusModal" class="cart-modal hidden slide-in-right">
+    <div class="text-center" style="margin-top: 10vh;">
+      <div class="loader" style="width: 60px; height: 60px; border-width: 4px; border-top-color:var(--warning);"></div>
+      <h2 class="mt-4" id="orderStatusText" style="font-size:2rem; color:var(--warning);">Pending...</h2>
+      <p class="text-secondary mt-2">The kitchen has received your order.</p>
+      
+      <div class="mt-4 glass-card text-left" style="background:var(--bg-card);">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:1rem; margin-bottom:1rem;">
+          <h3 style="margin:0;">Order #<span id="displayOrderId"></span></h3>
+          <span class="badge badge-pending">Active</span>
+        </div>
+        <div id="orderedItemsList"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.05); padding-top:1rem; margin-top:1rem;">
+          <h3 style="color:var(--text-secondary); font-weight:500; margin:0;">Total Paid</h3>
+          <h3 style="margin:0;">₹<span id="displayOrderTotal"></span></h3>
+        </div>
+      </div>
+      
+      <button class="btn-primary mt-4" style="width: 100%; padding: 1.25rem; font-size:1.1rem; border-radius:1rem; background:rgba(255,255,255,0.05); color:var(--text-primary); border:1px solid rgba(255,255,255,0.1);" onclick="requestBill()">
+        Request Bill
+      </button>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Success</div>
+
+</body>
+</html>

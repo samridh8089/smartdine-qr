@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Waiter App | SmartDine Lite</title>
+  <link rel="manifest" href="/manifest-waiter.json">
+  <meta name="theme-color" content="#0f172a">
+  <style>
+    .list-item {
+      background: var(--card-bg);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid var(--border-color);
+    }
+    .list-item.urgent { border-color: var(--danger); box-shadow: 0 0 10px rgba(239,68,68,0.2); }
+    .list-item.ready { border-color: var(--success); box-shadow: 0 0 10px rgba(16,185,129,0.2); }
+  </style>
+  <script type="module" crossorigin src="/assets/waiter-CSGBb3X1.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/gas-Czq9IFUy.js">
+  <link rel="stylesheet" crossorigin href="/assets/gas-B0ceuBRz.css">
+</head>
+<body>
+  <div class="glass-nav" style="padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+    <h2 style="margin:0;">Waiter Station</h2>
+    <button class="btn-danger hidden" id="logoutBtn" onclick="logout()" style="padding: 0.5rem 1rem;">Logout</button>
+  </div>
+
+  <div id="loginForm" class="app-layout" style="align-items:center; justify-content:center; min-height: 100vh; padding:1rem;">
+    <div class="glass-card" style="width: 100%; max-width: 400px; text-align:center;">
+      <h2 class="mb-1" style="font-size:1.8rem; font-weight:700;">Waiter Station</h2>
+      <p class="text-secondary mb-4">Log in to receive table alerts</p>
+      <input type="text" id="wRid" placeholder="Restaurant ID" />
+      <input type="password" id="wPass" placeholder="Password (waiter123)" />
+      <button class="btn-primary mt-2" style="width: 100%; padding: 1rem;" onclick="login()">Access Station</button>
+      <p id="loginMsg" class="mt-2" style="color:var(--danger); font-size:0.9rem;"></p>
+    </div>
+  </div>
+
+  <div id="startOverlay" class="modal-overlay hidden" style="z-index: 2000; flex-direction: column; background: rgba(11,17,32,0.9); display:flex; align-items:center; justify-content:center; position:fixed; top:0; left:0; right:0; bottom:0;">
+    <div class="glass-card text-center slide-in-right" style="margin:1rem;">
+      <h2 class="mb-2">System Ready</h2>
+      <p class="mb-4 text-secondary">Tap below to enable audio alerts for new requests.</p>
+      <button class="btn-primary" style="padding: 1rem 2rem; font-size:1.1rem; width:100%;" onclick="startDisplay()">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+        Enable Audio & Start
+      </button>
+    </div>
+  </div>
+
+  <div id="mainDisplay" class="hidden" style="flex:1; display:flex; flex-direction:column; min-height:100vh;">
+    <header class="topbar" style="background: var(--bg-card); border-bottom: 1px solid var(--border-color); padding: 0 1rem; position:sticky; top:0; z-index:50;">
+      <div class="flex items-center gap-2">
+        <h2 style="margin:0; font-size:1.2rem;">Waiter App</h2>
+        <div id="loading" class="loader hidden" style="width:16px; height:16px; border-width:2px;"></div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div style="background:rgba(255,255,255,0.1); padding:0.25rem 0.75rem; border-radius:99px; font-size:0.85rem; font-weight:600; display:flex; align-items:center; gap:0.5rem;">
+          Alerts: <span id="alertCount" style="color:var(--accent-primary);">0</span>
+        </div>
+        <button id="logoutBtn" onclick="logout()" style="background:none; color:var(--text-secondary); padding:0.5rem;">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <div style="padding: 1rem; flex:1; max-width: 600px; margin: 0 auto; width: 100%;">
+      <div id="alertsContainer" style="display:flex; flex-direction:column; gap:1rem;"></div>
+    </div>
+  </div>
+
+  <audio id="bellSound" src="https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3" preload="auto"></audio>
+
+</body>
+</html>
