@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "smartdine_app_version",
+          "value": "2026-08-01-v3"
+        },
+        {
+          "name": "sb-tiuwfhkrjvtkshebdwlp-auth-token",
+          "value": "{\"access_token\":\"eyJhbGciOiJFUzI1NiIsImtpZCI6IjM3YjYzYjQzLTY0ZDItNGIzMS05MWEzLWFiMWE3N2JiYmVhNSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RpdXdmaGtyanZ0a3NoZWJkd2xwLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI2NjQxMWMyOC0wODgwLTQ2MzItYmYzNy02ZTg3ZjM4NDU4YjEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzg2MTA2NTIzLCJpYXQiOjE3ODYxMDI5MjMsImVtYWlsIjoib3duZXJAdGVzdC5jb20iLCJwaG9uZSI6IiIsImFwcF9tZXRhZGF0YSI6eyJwcm92aWRlciI6ImVtYWlsIiwicHJvdmlkZXJzIjpbImVtYWlsIl19LCJ1c2VyX21ldGFkYXRhIjp7ImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJmdWxsX25hbWUiOiJRQSBPd25lciIsInJvbGUiOiJvd25lciJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzg2MTAyOTIzfV0sInNlc3Npb25faWQiOiJlMzNhNzVmYi0yY2VjLTRhMWUtYWQxNC1iNDhjZGY2MmNmMmEiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.wsN8HAHy3ihp2NbPImPPA9lXwiytwuEbmRUsc63nJS6tUhp9K6OTWXgYVldei708yw4c7UhkmaIYT7-o3KWpNg\",\"token_type\":\"bearer\",\"expires_in\":3600,\"expires_at\":1786106523,\"refresh_token\":\"japv2bdpmwhu\",\"user\":{\"id\":\"66411c28-0880-4632-bf37-6e87f38458b1\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"owner@test.com\",\"email_confirmed_at\":\"2026-08-07T04:08:27.777884Z\",\"phone\":\"\",\"confirmed_at\":\"2026-08-07T04:08:27.777884Z\",\"last_sign_in_at\":\"2026-08-07T11:42:03.609919683Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email_verified\":true,\"full_name\":\"QA Owner\",\"role\":\"owner\"},\"identities\":[{\"identity_id\":\"109e8ec5-e0ee-42bc-829e-b3ae412ef8be\",\"id\":\"66411c28-0880-4632-bf37-6e87f38458b1\",\"user_id\":\"66411c28-0880-4632-bf37-6e87f38458b1\",\"identity_data\":{\"email\":\"owner@test.com\",\"email_verified\":false,\"phone_verified\":false,\"sub\":\"66411c28-0880-4632-bf37-6e87f38458b1\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-08-07T04:08:27.769734Z\",\"created_at\":\"2026-08-07T04:08:27.76979Z\",\"updated_at\":\"2026-08-07T04:08:27.76979Z\",\"email\":\"owner@test.com\"}],\"created_at\":\"2026-08-07T04:08:27.738139Z\",\"updated_at\":\"2026-08-07T11:42:03.653765Z\",\"is_anonymous\":false},\"weak_password\":null}"
+        }
+      ]
+    }
+  ]
+}

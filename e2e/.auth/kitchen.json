@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "smartdine_app_version",
+          "value": "2026-08-01-v3"
+        },
+        {
+          "name": "sb-tiuwfhkrjvtkshebdwlp-auth-token",
+          "value": "{\"access_token\":\"eyJhbGciOiJFUzI1NiIsImtpZCI6IjM3YjYzYjQzLTY0ZDItNGIzMS05MWEzLWFiMWE3N2JiYmVhNSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RpdXdmaGtyanZ0a3NoZWJkd2xwLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI5OGY0NzU5MS1hNjBhLTQyNGUtODdiMi1mZmMzOTY0MTQ5NzgiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzg2MTA2NTQxLCJpYXQiOjE3ODYxMDI5NDEsImVtYWlsIjoia2l0Y2hlbkB0ZXN0LmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IlFBIEtpdGNoZW4iLCJyb2xlIjoia2l0Y2hlbiJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzg2MTAyOTQxfV0sInNlc3Npb25faWQiOiI5MTBiZDRlMy1mYjEzLTQ1MTMtYWMxZS0zMDViNmE2ZjAwZmYiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.z8FjySKlg5aZfjYA6Q2xv2NU0hIbcFr6bkcNLFOw8H_YMGMN_NglgtrL41676y-9urgmLDabqPFLyl8FT8dwEw\",\"token_type\":\"bearer\",\"expires_in\":3600,\"expires_at\":1786106541,\"refresh_token\":\"oikkxilfm6zf\",\"user\":{\"id\":\"98f47591-a60a-424e-87b2-ffc396414978\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"kitchen@test.com\",\"email_confirmed_at\":\"2026-08-07T04:08:30.528183Z\",\"phone\":\"\",\"confirmed_at\":\"2026-08-07T04:08:30.528183Z\",\"last_sign_in_at\":\"2026-08-07T11:42:21.067960178Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email_verified\":true,\"full_name\":\"QA Kitchen\",\"role\":\"kitchen\"},\"identities\":[{\"identity_id\":\"6b532da5-bc8c-4e50-8a93-2bed3324571b\",\"id\":\"98f47591-a60a-424e-87b2-ffc396414978\",\"user_id\":\"98f47591-a60a-424e-87b2-ffc396414978\",\"identity_data\":{\"email\":\"kitchen@test.com\",\"email_verified\":false,\"phone_verified\":false,\"sub\":\"98f47591-a60a-424e-87b2-ffc396414978\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-08-07T04:08:30.52664Z\",\"created_at\":\"2026-08-07T04:08:30.526685Z\",\"updated_at\":\"2026-08-07T04:08:30.526685Z\",\"email\":\"kitchen@test.com\"}],\"created_at\":\"2026-08-07T04:08:30.524514Z\",\"updated_at\":\"2026-08-07T11:42:21.072161Z\",\"is_anonymous\":false},\"weak_password\":null}"
+        }
+      ]
+    }
+  ]
+}

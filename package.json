@@ -1,0 +1,41 @@
+{
+  "name": "smartdine-qr-and-lite",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test:e2e": "playwright test",
+    "test:e2e:p0": "playwright test --grep @p0 --project=chromium",
+    "test:e2e:headed": "playwright test --headed --project=chromium",
+    "test:e2e:report": "playwright show-report playwright-report",
+    "test:e2e:codegen": "playwright codegen http://localhost:3000"
+  },
+  "dependencies": {
+    "@google/genai": "^2.17.1",
+    "@supabase/supabase-js": "^2.108.2",
+    "lucide-react": "^1.21.0",
+    "next": "16.2.9",
+    "pg": "^8.22.0",
+    "puppeteer": "^25.3.0",
+    "qrcode": "^1.5.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^26.3.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
