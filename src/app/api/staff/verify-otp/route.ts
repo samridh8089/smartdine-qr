@@ -1,0 +1,91 @@
+import { NextResponse } from 'next/server';
+import { verifyOtp } from '@/lib/otpEngine';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+    const { email, otp, staffId, restaurantId } = body;
+
+    if (!email || !otp) {
+      return NextResponse.json({ error: 'Email and 8-digit OTP code are required.' }, { status: 400 });
+    }
+
+    // 1. Verify OTP
+    const verifyResult = await verifyOtp({
+      target: email,
+      type: 'staff_email',
+      otp: otp.trim(),
+      userId: staffId
+    });
+
+    if (!verifyResult.success) {
+      return NextResponse.json({ error: verifyResult.message }, { status: 400 });
+    }
+
+    // 2. Mark staff profile as Active & Verified in Database + Auth
+    if (staffId) {
+      try {
+        // Confirm email on Supabase Auth user
+        await supabaseAdmin.auth.admin.updateUserById(staffId, {
+          email_confirm: true,
+          user_metadata: {
+            is_active: true,
+            is_verified: true,
+            verification_status: 'active'
+          }
+        }).catch(() => {});
+
+        // Update profiles table
+        await supabaseAdmin.from('profiles').update({
+          is_active: true,
+          is_verified: true,
+          verification_status: 'active'
+        }).eq('id', staffId);
+
+        const { data: prof } = await supabaseAdmin.from('profiles').select('metadata').eq('id', staffId).maybeSingle();
+        const meta = (prof as any)?.metadata || {};
+        meta.is_verified = true;
+        meta.verification_status = 'active';
+        meta.verified_at = new Date().toISOString();
+
+        await supabaseAdmin.from('profiles').update({ metadata: meta }).eq('id', staffId);
+      } catch (e) {
+        console.warn('[Staff Verify-OTP] Profile status update notice:', e);
+      }
+    }
+
+    // 3. Update staff metadata in restaurant settings if restaurantId provided
+    if (restaurantId && staffId) {
+      try {
+        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
+        if (rest) {
+          const staffMeta = rest.settings?.staff_metadata || {};
+          if (staffMeta[staffId]) {
+            staffMeta[staffId].is_verified = true;
+            staffMeta[staffId].verification_status = 'active';
+            staffMeta[staffId].is_active = true;
+            await supabaseAdmin.from('restaurants').update({
+              settings: {
+                ...rest.settings,
+                staff_metadata: staffMeta
+              }
+            }).eq('id', restaurantId);
+          }
+        }
+      } catch (e) {}
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Staff account successfully verified and activated!'
+    });
+  } catch (err: any) {
+    console.error('[API Staff-Verify-OTP] Error:', err);
+    return NextResponse.json({ error: err?.message || 'Server error verifying staff OTP' }, { status: 500 });
+  }
+}
