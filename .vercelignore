@@ -1,0 +1,8 @@
+smartdine-mobile/
+public/cleverops-mobile.apk
+e2e/
+test-results/
+playwright-report/
+.next/
+node_modules/
+.git/

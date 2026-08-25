@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "smartdine_app_version",
+          "value": "2026-08-01-v3"
+        },
+        {
+          "name": "sb-tiuwfhkrjvtkshebdwlp-auth-token",
+          "value": "{\"access_token\":\"eyJhbGciOiJFUzI1NiIsImtpZCI6IjM3YjYzYjQzLTY0ZDItNGIzMS05MWEzLWFiMWE3N2JiYmVhNSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RpdXdmaGtyanZ0a3NoZWJkd2xwLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIyNzg1OTFhOS1jM2NjLTRkNmQtODM0ZS04MDI2ODhiY2Y3ZDEiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzg2MTA2NTcyLCJpYXQiOjE3ODYxMDI5NzIsImVtYWlsIjoic3VwZXJhZG1pbkB0ZXN0LmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IlFBIFN1cGVyQWRtaW4iLCJyb2xlIjoic3VwZXJfYWRtaW4ifSwicm9sZSI6ImF1dGhlbnRpY2F0ZWQiLCJhYWwiOiJhYWwxIiwiYW1yIjpbeyJtZXRob2QiOiJwYXNzd29yZCIsInRpbWVzdGFtcCI6MTc4NjEwMjk3Mn1dLCJzZXNzaW9uX2lkIjoiMTNhNjAwNDgtNDZmYi00ZmFlLWExZDctNjNiNGYzOTczNmVjIiwiaXNfYW5vbnltb3VzIjpmYWxzZX0.Wow6J63zb90ettb392dBbqm1t-KWkrQKs4X45ZXgJ00qMhiP4ZQkEuAjObK-nEDvLjYoO5M1IxfQ8LrSHZTuBg\",\"token_type\":\"bearer\",\"expires_in\":3600,\"expires_at\":1786106572,\"refresh_token\":\"7afrlpz6cq42\",\"user\":{\"id\":\"278591a9-c3cc-4d6d-834e-802688bcf7d1\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"superadmin@test.com\",\"email_confirmed_at\":\"2026-08-07T04:08:33.46915Z\",\"phone\":\"\",\"confirmed_at\":\"2026-08-07T04:08:33.46915Z\",\"last_sign_in_at\":\"2026-08-07T11:42:52.161550228Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email_verified\":true,\"full_name\":\"QA SuperAdmin\",\"role\":\"super_admin\"},\"identities\":[{\"identity_id\":\"9b7500ae-3771-4ff6-b794-cbfbbb27f1ba\",\"id\":\"278591a9-c3cc-4d6d-834e-802688bcf7d1\",\"user_id\":\"278591a9-c3cc-4d6d-834e-802688bcf7d1\",\"identity_data\":{\"email\":\"superadmin@test.com\",\"email_verified\":false,\"phone_verified\":false,\"sub\":\"278591a9-c3cc-4d6d-834e-802688bcf7d1\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-08-07T04:08:33.466826Z\",\"created_at\":\"2026-08-07T04:08:33.466896Z\",\"updated_at\":\"2026-08-07T04:08:33.466896Z\",\"email\":\"superadmin@test.com\"}],\"created_at\":\"2026-08-07T04:08:33.465489Z\",\"updated_at\":\"2026-08-07T11:42:52.175268Z\",\"is_anonymous\":false},\"weak_password\":null}"
+        }
+      ]
+    }
+  ]
+}
