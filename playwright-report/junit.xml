@@ -1,0 +1,74 @@
+<testsuites id="" name="" tests="7" failures="0" skipped="6" errors="1" time="67.435283">
+<testsuite name="auth.setup.ts" timestamp="2026-08-09T09:50:37.075Z" hostname="setup" tests="6" failures="0" skipped="5" time="37.611" errors="1">
+<testcase name="authenticate as owner" classname="auth.setup.ts" time="37.611">
+<system-out>
+<![CDATA[
+[[ATTACHMENT|..\test-results\auth.setup.ts-authenticate-as-owner-setup\test-failed-1.png]]
+
+[[ATTACHMENT|..\test-results\auth.setup.ts-authenticate-as-owner-setup\video.webm]]
+
+[[ATTACHMENT|..\test-results\auth.setup.ts-authenticate-as-owner-setup\error-context.md]]
+]]>
+</system-out>
+<error message="Test timeout of 30000ms exceeded." type="Error">
+<![CDATA[  [setup] › auth.setup.ts:68:1 › authenticate as owner ─────────────────────────────────────────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.fill: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('input[type="password"]')
+        - waiting for "http://localhost:3000/login" navigation to finish...
+        - navigated to "http://localhost:3000/login"
+
+
+      48 |   // Fill credentials
+      49 |   await page.getByLabel(/email/i).fill(credentials.email);
+    > 50 |   await page.locator('input[type="password"]').fill(credentials.password);
+         |                                                ^
+      51 |   await page.getByRole('button', { name: /sign in|log in|login/i }).click();
+      52 |
+      53 |   // Wait for redirect away from /login — confirms successful auth
+        at loginAndSave (C:\smartdine\smartdine-qr-main first\smartdine-qr-main\e2e\tests\auth.setup.ts:50:48)
+        at C:\smartdine\smartdine-qr-main first\smartdine-qr-main\e2e\tests\auth.setup.ts:69:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ..\..\test-results\auth.setup.ts-authenticate-as-owner-setup\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    ..\..\test-results\auth.setup.ts-authenticate-as-owner-setup\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ..\..\test-results\auth.setup.ts-authenticate-as-owner-setup\error-context.md
+]]>
+</error>
+</testcase>
+<testcase name="authenticate as waiter" classname="auth.setup.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="authenticate as kitchen" classname="auth.setup.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="authenticate as cashier" classname="auth.setup.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="authenticate as manager" classname="auth.setup.ts">
+<skipped>
+</skipped>
+</testcase>
+<testcase name="authenticate as super admin" classname="auth.setup.ts">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+<testsuite name="customer\customer-p0.spec.ts" timestamp="2026-08-09T09:50:37.075Z" hostname="chromium" tests="1" failures="0" skipped="1" time="0" errors="0">
+<testcase name="Customer P0 Business Test Suite › TC-C-003: Customer can complete checkout and place order" classname="customer\customer-p0.spec.ts">
+<skipped>
+</skipped>
+</testcase>
+</testsuite>
+</testsuites>

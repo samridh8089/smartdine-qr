@@ -1,0 +1,3 @@
+name,category,unit,current_stock,minimum_stock,cost_per_unit
+TEST UI Flour,Grains,kg,10,2,50
+TEST UI Oil,Oils,litre,5,1,120
