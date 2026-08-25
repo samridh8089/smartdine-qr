@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "smartdine_app_version",
+          "value": "2026-08-01-v3"
+        },
+        {
+          "name": "sb-tiuwfhkrjvtkshebdwlp-auth-token",
+          "value": "{\"access_token\":\"eyJhbGciOiJFUzI1NiIsImtpZCI6IjM3YjYzYjQzLTY0ZDItNGIzMS05MWEzLWFiMWE3N2JiYmVhNSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RpdXdmaGtyanZ0a3NoZWJkd2xwLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJjZTkzOTkzYS0wMmY1LTQ1OGQtYThjOC1hNmZlOTM0MTMyYmMiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzg2MTA2NTUzLCJpYXQiOjE3ODYxMDI5NTMsImVtYWlsIjoiY2FzaGllckB0ZXN0LmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWxfdmVyaWZpZWQiOnRydWUsImZ1bGxfbmFtZSI6IlFBIENhc2hpZXIiLCJyb2xlIjoiY2FzaGllciJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzg2MTAyOTUzfV0sInNlc3Npb25faWQiOiJmNjViZjRlMi0xNDFmLTRjZWMtOWU4Mi02NWU0ODc2YjcwMGYiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.FmmztfChRjdnewbsWBpN3E56-eerYs2RVUddcW5PR-qmfSm4AYn0R-2h2qWL2K3hnSFJtAvB4o1rwifW9AdfvQ\",\"token_type\":\"bearer\",\"expires_in\":3600,\"expires_at\":1786106553,\"refresh_token\":\"c6w5fnbzkxvq\",\"user\":{\"id\":\"ce93993a-02f5-458d-a8c8-a6fe934132bc\",\"aud\":\"authenticated\",\"role\":\"authenticated\",\"email\":\"cashier@test.com\",\"email_confirmed_at\":\"2026-08-07T04:08:31.416472Z\",\"phone\":\"\",\"confirmed_at\":\"2026-08-07T04:08:31.416472Z\",\"last_sign_in_at\":\"2026-08-07T11:42:33.146538697Z\",\"app_metadata\":{\"provider\":\"email\",\"providers\":[\"email\"]},\"user_metadata\":{\"email_verified\":true,\"full_name\":\"QA Cashier\",\"role\":\"cashier\"},\"identities\":[{\"identity_id\":\"d0a81678-0e52-4581-9aff-6a93e4da3f03\",\"id\":\"ce93993a-02f5-458d-a8c8-a6fe934132bc\",\"user_id\":\"ce93993a-02f5-458d-a8c8-a6fe934132bc\",\"identity_data\":{\"email\":\"cashier@test.com\",\"email_verified\":false,\"phone_verified\":false,\"sub\":\"ce93993a-02f5-458d-a8c8-a6fe934132bc\"},\"provider\":\"email\",\"last_sign_in_at\":\"2026-08-07T04:08:31.415134Z\",\"created_at\":\"2026-08-07T04:08:31.415182Z\",\"updated_at\":\"2026-08-07T04:08:31.415182Z\",\"email\":\"cashier@test.com\"}],\"created_at\":\"2026-08-07T04:08:31.413759Z\",\"updated_at\":\"2026-08-07T11:42:33.148755Z\",\"is_anonymous\":false},\"weak_password\":null}"
+        }
+      ]
+    }
+  ]
+}
