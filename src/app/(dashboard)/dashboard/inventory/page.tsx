@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   convertUnit, 
   formatQuantityWithUnit, 
+  formatReservedStockDisplay,
   areUnitsCompatible, 
   STANDARD_UNIT_GROUPS, 
   normalizeUnit 
@@ -1216,7 +1217,7 @@ export default function InventoryDashboardPage() {
                             {formatQuantityWithUnit(physical, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-amber-600 dark:text-amber-400">
-                            {formatQuantityWithUnit(reserved, item.unit)}
+                            {formatReservedStockDisplay(reserved, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 font-black text-emerald-600 dark:text-emerald-400">
                             {formatQuantityWithUnit(availableToSell, item.unit)}
