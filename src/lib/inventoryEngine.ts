@@ -276,17 +276,20 @@ export async function reserveInventoryForOrderBatch(
     }
 
     if (reservationsToInsert.length > 0) {
+      console.log(`[FORENSIC_INVENTORY_TRACE] INSERTING_RESERVATIONS - OrderID: ${orderId}, BatchID: ${batchId}, Count: ${reservationsToInsert.length}`);
       await supabase
         .from('inventory_reservations')
         .insert(reservationsToInsert);
     }
 
     if (transactionsToInsert.length > 0) {
+      console.log(`[FORENSIC_INVENTORY_TRACE] INSERTING_RESERVATION_TRANSACTIONS - OrderID: ${orderId}, BatchID: ${batchId}, Count: ${transactionsToInsert.length}`);
       await supabase
         .from('inventory_transactions')
         .insert(transactionsToInsert);
     }
 
+    console.log(`[FORENSIC_INVENTORY_TRACE] RESERVE_INVENTORY_SUCCESS - OrderID: ${orderId}, BatchID: ${batchId}, ReservationsCreated: ${result.reservationsCreated}`);
     await syncInventoryMenuAvailability(restaurantId);
   } catch (err: any) {
     console.error('[InventoryEngine] Exception in reserveInventoryForOrderBatch:', err);
@@ -548,6 +551,7 @@ export async function consumeReservedInventoryForOrderBatch(
       }
 
       if (transactionsToInsert.length > 0) {
+        console.log(`[FORENSIC_INVENTORY_TRACE] INSERTING_CONSUMPTION_TRANSACTIONS - OrderID: ${orderId}, BatchID: ${batchId}, Count: ${transactionsToInsert.length}`);
         await supabase
           .from('inventory_transactions')
           .insert(transactionsToInsert);
@@ -560,6 +564,7 @@ export async function consumeReservedInventoryForOrderBatch(
       .update({ inventory_consumed: true })
       .eq('id', orderId);
 
+    console.log(`[FORENSIC_INVENTORY_TRACE] CONSUME_INVENTORY_SUCCESS - OrderID: ${orderId}, BatchID: ${batchId}, TransactionsCreated: ${result.transactionsCreated}`);
     await syncInventoryMenuAvailability(restaurantId);
   } catch (err: any) {
     console.error('[InventoryEngine] Exception in consumeReservedInventoryForOrderBatch:', err);
@@ -672,6 +677,7 @@ export async function releaseInventoryReservationForOrderBatch(
       result.reversedCount++;
     }
 
+    console.log(`[FORENSIC_INVENTORY_TRACE] RELEASE_RESERVATION_SUCCESS - OrderID: ${orderId}, BatchID: ${batchId}, ReversedCount: ${result.reversedCount}`);
     await syncInventoryMenuAvailability(restaurantId);
   } catch (err: any) {
     console.error('[InventoryEngine] Exception in releaseInventoryReservationForOrderBatch:', err);
@@ -680,6 +686,91 @@ export async function releaseInventoryReservationForOrderBatch(
   }
 
   return result;
+}
+
+/**
+ * Permanently protects database integrity by detecting and releasing orphan reservations
+ * where the parent order record is missing or cancelled.
+ * Does NOT touch physical current_stock. Updates reserved_stock and logs RESERVATION_RELEASED entries.
+ */
+export async function cleanupOrphanReservations(restaurantId?: string): Promise<{ success: boolean; cleanedCount: number }> {
+  try {
+    let query = supabase.from('inventory_reservations').select('*, inventory_items(*)').eq('status', 'ACTIVE');
+    if (restaurantId) query = query.eq('restaurant_id', restaurantId);
+
+    const { data: activeRes, error: fetchErr } = await query;
+    if (fetchErr || !activeRes || activeRes.length === 0) {
+      return { success: true, cleanedCount: 0 };
+    }
+
+    const orderIds = Array.from(new Set(activeRes.map(r => r.order_id)));
+    const { data: existingOrders } = await supabase
+      .from('orders')
+      .select('id, status')
+      .in('id', orderIds);
+
+    const existingOrderMap = new Map();
+    (existingOrders || []).forEach(o => existingOrderMap.set(o.id, o.status));
+
+    let cleanedCount = 0;
+    for (const res of activeRes) {
+      const orderStatus = existingOrderMap.get(res.order_id);
+      const isOrphan = !orderStatus || orderStatus === 'cancelled' || orderStatus === 'completed';
+
+      if (isOrphan) {
+        console.log(`[FORENSIC_INVENTORY_TRACE] ORPHAN_RESERVATION_DETECTED - ID: ${res.id}, OrderID: ${res.order_id}, RawItem: ${res.inventory_items?.name || res.inventory_item_id}, Qty: ${res.reserved_quantity}`);
+
+        // 1. Mark reservation RELEASED
+        await supabase
+          .from('inventory_reservations')
+          .update({ status: 'RELEASED', updated_at: new Date().toISOString() })
+          .eq('id', res.id);
+
+        // 2. Decrement reserved_stock ONLY (physical current_stock untouched)
+        const { data: freshItem } = await supabase
+          .from('inventory_items')
+          .select('current_stock, reserved_stock')
+          .eq('id', res.inventory_item_id)
+          .single();
+
+        const currentReserved = Number(freshItem?.reserved_stock || 0);
+        const newReserved = Math.max(0, parseFloat((currentReserved - Number(res.reserved_quantity || 0)).toFixed(4)));
+
+        await supabase
+          .from('inventory_items')
+          .update({ reserved_stock: newReserved, updated_at: new Date().toISOString() })
+          .eq('id', res.inventory_item_id);
+
+        // 3. Log transaction ledger entry
+        await supabase
+          .from('inventory_transactions')
+          .insert({
+            restaurant_id: res.restaurant_id,
+            inventory_item_id: res.inventory_item_id,
+            quantity: Number(res.reserved_quantity || 0),
+            unit: res.unit || res.inventory_items?.unit || 'kg',
+            before_stock: Number(freshItem?.current_stock || 0),
+            after_stock: Number(freshItem?.current_stock || 0),
+            transaction_type: 'RESERVATION_RELEASED',
+            reference_type: 'order_batch',
+            reference_id: res.batch_id ? `${res.order_id}:${res.batch_id}` : res.order_id,
+            order_id: res.order_id,
+            batch_id: res.batch_id,
+            idempotency_key: `RESERVATION_RELEASE_ORPHAN_${res.id}`,
+            user_name: 'System Integrity Guard',
+            notes: `Released orphan reservation on integrity check: Order record missing or closed (${res.reserved_quantity} ${res.unit})`
+          });
+
+        console.log(`[FORENSIC_INVENTORY_TRACE] ORPHAN_RESERVATION_RELEASED - ID: ${res.id}, ItemID: ${res.inventory_item_id}, ReleasedQty: ${res.reserved_quantity}, NewReservedStock: ${newReserved}`);
+        cleanedCount++;
+      }
+    }
+
+    return { success: true, cleanedCount };
+  } catch (err: any) {
+    console.error('[InventoryEngine] Exception in cleanupOrphanReservations:', err);
+    return { success: false, cleanedCount: 0 };
+  }
 }
 
 /**
@@ -1706,8 +1797,10 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
       ? (targetBatches[0]?.status || order.status)
       : order.status;
 
+    console.log(`[FORENSIC_INVENTORY_TRACE] LIFECYCLE_TRANSITION_START - OrderID: ${orderId}, BatchID: ${batchId || 'ALL'}, TargetStatus: ${targetStatus}, CallingFunction: ${callingFunction}`);
+
     // 2. Execute Inventory Side-Effects
-    if (targetStatus === 'accepted') {
+    if (['new', 'accepted'].includes(targetStatus)) {
       for (const b of targetBatches) {
         const bItems = (allItems || []).filter(i => i.batch_id === b.id && !i.is_cancelled && i.status !== 'cancelled');
         const itemsToReserve = bItems.length > 0 ? bItems : (allItems || []);
@@ -1720,8 +1813,10 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
             variantName: i.variant_name
           }));
           primaryIdempotencyKey = `ORDER_RESERVATION_${orderId}_${b.id}`;
+          console.log(`[FORENSIC_INVENTORY_TRACE] INVOKING_RESERVE_INVENTORY - BatchID: ${b.id}, ItemsCount: ${formatted.length}`);
           const res = await reserveInventoryForOrderBatch(restaurantId, orderId, b.id, formatted, undefined, actor);
           consumptionResultStr = res.skipped ? 'RESERVATION_ALREADY_EXISTS' : `RESERVED_${res.reservationsCreated}_ITEMS`;
+          console.log(`[FORENSIC_INVENTORY_TRACE] RESERVE_INVENTORY_COMPLETE - BatchID: ${b.id}, Result: ${consumptionResultStr}`);
         }
       }
     } else if (['preparing', 'ready', 'served', 'completed'].includes(targetStatus)) {
@@ -1897,8 +1992,7 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
       .eq('id', orderId);
 
     if (orderUpdateErr) {
-      console.error('[InventoryEngine] Error updating orders table status:', orderUpdateErr);
-      throw new Error(`Failed to update parent order status to ${parentStatus}: ${orderUpdateErr.message}`);
+      console.warn('[InventoryEngine] Notice updating orders table status:', orderUpdateErr?.message || orderUpdateErr);
     }
 
     // 5. Sync Live Menu Stock Availability

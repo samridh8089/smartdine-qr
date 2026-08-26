@@ -1811,11 +1811,20 @@ export const db = {
         table.id
       );
 
-      // Automatically set table state to occupied
-      if (orderType === 'dine_in' && table.id) {
-        this.setTableOccupied(restaurantId, table.id).catch(err => {
-          console.log('[TableOccupancy] Error marking table occupied:', err?.message);
+      // Reserve inventory immediately for new order
+      try {
+        console.log(`[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_BEFORE_RESERVATION - OrderID: ${newOrder.id}, BatchID: ${newBatch.id}`);
+        const traceRes = await transitionOrderBatchLifecycle({
+          restaurantId,
+          orderId: newOrder.id,
+          batchId: newBatch.id,
+          targetStatus: 'new',
+          callingFunction: 'db.createOrder',
+          actor: 'Order Placement'
         });
+        console.log(`[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_AFTER_RESERVATION - OrderID: ${newOrder.id}, Result: ${traceRes.consumptionResult}`);
+      } catch (invErr: any) {
+        console.error('[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_RESERVATION_ERROR:', invErr?.message || invErr);
       }
 
       return fullOrder;
@@ -1917,6 +1926,22 @@ export const db = {
     if (itemsError) {
       await supabase.from('order_batches').delete().eq('id', newBatch.id);
       throw new Error(itemsError.message || 'Failed to submit order items');
+    }
+
+    // Reserve inventory immediately for new order batch
+    try {
+      console.log(`[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_BEFORE_RESERVATION - OrderID: ${activeOrder.id}, BatchID: ${newBatch.id}`);
+      const traceRes = await transitionOrderBatchLifecycle({
+        restaurantId: activeOrder.restaurant_id,
+        orderId: activeOrder.id,
+        batchId: newBatch.id,
+        targetStatus: 'new',
+        callingFunction: 'db.addBatchToOrder',
+        actor: 'Order Placement (Add Batch)'
+      });
+      console.log(`[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_AFTER_RESERVATION - OrderID: ${activeOrder.id}, Result: ${traceRes.consumptionResult}`);
+    } catch (invErr: any) {
+      console.error('[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_RESERVATION_ERROR:', invErr?.message || invErr);
     }
 
     // Record in order_discounts table if offer present on reorder batch
@@ -2104,10 +2129,23 @@ export const db = {
     const fullOrder = await this.getOrderById(orderId);
     if (!fullOrder) throw new Error('Order not found');
 
-    if (paymentStatus === 'paid' && fullOrder.table_id) {
-      this.checkAndReleaseTableOccupancy(fullOrder.restaurant_id, fullOrder.table_id).catch(err => {
-        console.log('[TableOccupancy] Error releasing table occupancy on payment:', err?.message);
-      });
+    if (paymentStatus === 'paid') {
+      if (fullOrder.table_id) {
+        this.checkAndReleaseTableOccupancy(fullOrder.restaurant_id, fullOrder.table_id).catch(err => {
+          console.log('[TableOccupancy] Error releasing table occupancy on payment:', err?.message);
+        });
+      }
+      try {
+        await transitionOrderBatchLifecycle({
+          restaurantId: fullOrder.restaurant_id,
+          orderId: fullOrder.id,
+          targetStatus: 'completed',
+          callingFunction: 'db.updateOrderPaymentStatus',
+          actor: userName || 'Billing Payment'
+        });
+      } catch (invErr: any) {
+        console.error('[UpdateOrderPaymentStatus] Inventory consumption warning:', invErr?.message || invErr);
+      }
     }
 
     return fullOrder;

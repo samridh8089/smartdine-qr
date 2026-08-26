@@ -188,6 +188,52 @@ export function formatQuantityWithUnit(quantity: number, unit: string): string {
 }
 
 /**
+ * Formats reserved stock quantity for display according to user specifications:
+ * - If < 1 kg, display in grams (e.g., 0.01 kg -> 10 g, 0.15 kg -> 150 g)
+ * - If < 1 L, display in millilitres (e.g., 0.25 L -> 250 ml)
+ * - If >= 1 kg or >= 1 L, display in kg or L (e.g., 1.5 kg, 2 L)
+ * Display-only formatting; database values remain unchanged.
+ */
+export function formatReservedStockDisplay(quantity: number, unit: string): string {
+  const val = Number(quantity || 0);
+  if (val <= 0) return `0 ${unit || 'kg'}`;
+
+  const norm = (unit || '').toLowerCase().trim();
+
+  // Mass / Weight: kg, kilogram, g, gram
+  if (['kg', 'kilogram', 'kilograms', 'kgs'].includes(norm)) {
+    if (val < 1) {
+      const grams = Math.round(val * 1000);
+      return `${grams} g`;
+    }
+    return `${parseFloat(val.toFixed(3))} kg`;
+  }
+  if (['g', 'gram', 'grams', 'gm', 'gms'].includes(norm)) {
+    if (val >= 1000) {
+      return `${parseFloat((val / 1000).toFixed(3))} kg`;
+    }
+    return `${Math.round(val)} g`;
+  }
+
+  // Volume: l, litre, liter, ml
+  if (['l', 'litre', 'liter', 'ltr', 'litres', 'liters'].includes(norm)) {
+    if (val < 1) {
+      const ml = Math.round(val * 1000);
+      return `${ml} ml`;
+    }
+    return `${parseFloat(val.toFixed(3))} L`;
+  }
+  if (['ml', 'millilitre', 'milliliter', 'mls'].includes(norm)) {
+    if (val >= 1000) {
+      return `${parseFloat((val / 1000).toFixed(3))} L`;
+    }
+    return `${Math.round(val)} ml`;
+  }
+
+  return `${parseFloat(val.toFixed(3))} ${unit || ''}`;
+}
+
+/**
  * Calculates possible servings of a recipe from available stock of an ingredient.
  */
 export function getPossibleServings(
