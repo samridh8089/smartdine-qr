@@ -34,7 +34,7 @@ export async function verifySuperAdminRequest(req: Request) {
       .eq('id', user.id)
       .maybeSingle();
 
-    const isSuperAdmin = profile?.role === 'super_admin' || user.email === 'admin@cleverops.in' || user.email === 'superadmin@cleverops.in';
+    const isSuperAdmin = profile?.role === 'super_admin';
 
     if (!isSuperAdmin) {
       console.warn(`[FORBIDDEN 403]: Non-super-admin user ${user.email} (Role: ${profile?.role || 'owner'}) called admin API`);
