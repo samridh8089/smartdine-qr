@@ -36,25 +36,18 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get('origin') || '';
 
-  // Determine allowed origin for CORS
-  let corsOrigin = ALLOWED_ORIGINS[0];
-  if (ALLOWED_ORIGINS.includes(origin)) {
-    corsOrigin = origin;
-  } else if (process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'))) {
-    // Allow local development origins in non-production
-    corsOrigin = origin;
-  } else if (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL) {
-    // Allow Vercel preview deployments to access APIs from their preview URLs
-    const previewOrigin = `https://${process.env.VERCEL_URL}`;
-    if (origin === previewOrigin) {
-      corsOrigin = previewOrigin;
-    }
-  }
+  // Determine allowed origin for CORS. Only set Access-Control-Allow-Origin when origin is explicitly allowed.
+  const isLocalDev = process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'));
+  const isWhitelisted = ALLOWED_ORIGINS.includes(origin);
+  const isVercelPreview = process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL && origin === `https://${process.env.VERCEL_URL}`;
+  const corsOrigin = isWhitelisted || isLocalDev || isVercelPreview ? origin : null;
 
   // Handle preflight OPTIONS requests for APIs
   if (request.method === 'OPTIONS') {
     const preflightResponse = new NextResponse(null, { status: 204 });
-    preflightResponse.headers.set('Access-Control-Allow-Origin', corsOrigin);
+    if (corsOrigin) {
+      preflightResponse.headers.set('Access-Control-Allow-Origin', corsOrigin);
+    }
     preflightResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     preflightResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Idempotency-Key');
     preflightResponse.headers.set('Access-Control-Max-Age', '86400');
@@ -110,7 +103,9 @@ export function middleware(request: NextRequest) {
         }
       }
     );
-    rateLimitResponse.headers.set('Access-Control-Allow-Origin', corsOrigin);
+    if (corsOrigin) {
+      rateLimitResponse.headers.set('Access-Control-Allow-Origin', corsOrigin);
+    }
     return rateLimitResponse;
   }
 
@@ -119,7 +114,9 @@ export function middleware(request: NextRequest) {
 
   // CORS Headers
   if (pathname.startsWith('/api/')) {
-    response.headers.set('Access-Control-Allow-Origin', corsOrigin);
+    if (corsOrigin) {
+      response.headers.set('Access-Control-Allow-Origin', corsOrigin);
+    }
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Idempotency-Key');
   }
