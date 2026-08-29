@@ -581,6 +581,112 @@ export async function consumeReservedInventoryForOrderBatch(
 export const deductInventoryForOrderBatch = consumeReservedInventoryForOrderBatch;
 
 /**
+ * Self-Healing Inventory Engine Safeguard.
+ * Scans for any ACTIVE inventory reservations associated with completed/served orders or batches,
+ * and automatically consumes them to guarantee 100% stock deduction & consumption integrity.
+ */
+export async function healUnconsumedActiveReservations(restaurantId: string): Promise<number> {
+  let totalHealed = 0;
+  if (!restaurantId) return 0;
+
+  try {
+    const { data: activeRes } = await supabase
+      .from('inventory_reservations')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .eq('status', 'ACTIVE');
+
+    if (!activeRes || activeRes.length === 0) return 0;
+
+    const orderIds = Array.from(new Set(activeRes.map(r => r.order_id).filter(Boolean)));
+    const batchIds = Array.from(new Set(activeRes.map(r => r.batch_id).filter(Boolean)));
+
+    const [{ data: orders }, { data: batches }] = await Promise.all([
+      orderIds.length > 0 ? supabase.from('orders').select('id, status').in('id', orderIds) : Promise.resolve({ data: [] }),
+      batchIds.length > 0 ? supabase.from('order_batches').select('id, order_id, status').in('id', batchIds) : Promise.resolve({ data: [] })
+    ]);
+
+    const completedOrderIds = new Set((orders || []).filter(o => ['completed', 'served', 'delivered'].includes((o.status || '').toLowerCase())).map(o => o.id));
+    const completedBatchIds = new Set((batches || []).filter(b => ['completed', 'served', 'ready'].includes((b.status || '').toLowerCase())).map(b => b.id));
+
+    const reservationsToHeal = activeRes.filter(r => 
+      completedOrderIds.has(r.order_id) || (r.batch_id && completedBatchIds.has(r.batch_id))
+    );
+
+    if (reservationsToHeal.length === 0) return 0;
+
+    console.log(`[SELF_HEALING_INVENTORY] Found ${reservationsToHeal.length} unconsumed active reservations for completed/served orders in restaurant ${restaurantId}. Auto-consuming...`);
+
+    const itemIds = Array.from(new Set(reservationsToHeal.map(r => r.inventory_item_id)));
+    const { data: itemData } = await supabase.from('inventory_items').select('*').in('id', itemIds);
+    const itemMap = new Map<string, any>();
+    (itemData || []).forEach(i => itemMap.set(i.id, i));
+
+    const transactionsToInsert: any[] = [];
+    const resIdsToUpdate: string[] = [];
+
+    for (const res of reservationsToHeal) {
+      const item = itemMap.get(res.inventory_item_id);
+      if (!item) continue;
+
+      const qty = Number(res.reserved_quantity || 0);
+      const beforeStock = Number(item.current_stock || 0);
+      const afterStock = parseFloat((beforeStock - qty).toFixed(4));
+      const newReserved = Math.max(0, parseFloat((Number(item.reserved_stock || 0) - qty).toFixed(4)));
+
+      item.current_stock = afterStock;
+      item.reserved_stock = newReserved;
+      itemMap.set(item.id, item);
+
+      await supabase
+        .from('inventory_items')
+        .update({ current_stock: afterStock, reserved_stock: newReserved, updated_at: new Date().toISOString() })
+        .eq('id', item.id);
+
+      resIdsToUpdate.push(res.id);
+
+      transactionsToInsert.push({
+        restaurant_id: restaurantId,
+        inventory_item_id: item.id,
+        quantity: -qty,
+        unit: res.unit,
+        before_stock: beforeStock,
+        after_stock: afterStock,
+        transaction_type: 'ORDER_CONSUMPTION',
+        reference_type: 'order_batch',
+        reference_id: `${res.order_id}:${res.batch_id || 'AUTO_HEAL'}`,
+        order_id: res.order_id,
+        batch_id: res.batch_id,
+        idempotency_key: `SELF_HEAL_CONSUME_${res.id}`,
+        user_name: 'Self-Healing Engine',
+        notes: `Auto-consumed active reservation on completion (${qty} ${res.unit})`
+      });
+
+      totalHealed++;
+    }
+
+    if (resIdsToUpdate.length > 0) {
+      await supabase
+        .from('inventory_reservations')
+        .update({ status: 'CONSUMED', updated_at: new Date().toISOString() })
+        .in('id', resIdsToUpdate);
+    }
+
+    if (transactionsToInsert.length > 0) {
+      await supabase
+        .from('inventory_transactions')
+        .insert(transactionsToInsert);
+    }
+
+    await syncInventoryMenuAvailability(restaurantId).catch(() => {});
+  } catch (err: any) {
+    console.error('[InventoryEngine] healUnconsumedActiveReservations error:', err?.message);
+  }
+
+  return totalHealed;
+}
+
+/**
  * Releases reserved inventory stock when an ACCEPTED order batch is cancelled before PREPARING.
  * Physical stock remains untouched!
  * Idempotency Key: RESERVATION_RELEASE_<order_id>_<batch_id>

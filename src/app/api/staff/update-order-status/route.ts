@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { createClient } from '@supabase/supabase-js';
+import { healUnconsumedActiveReservations } from '@/lib/inventoryEngine';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -24,6 +25,11 @@ export async function POST(req: Request) {
       updatedBatch = bRes;
     } else if (orderId) {
       updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
+    }
+
+    const restId = updatedOrder?.restaurant_id || updatedBatch?.restaurant_id;
+    if (restId) {
+      await healUnconsumedActiveReservations(restId).catch(() => {});
     }
 
     return NextResponse.json({
