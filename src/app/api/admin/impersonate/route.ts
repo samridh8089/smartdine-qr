@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'targetRestaurantId is required' }, { status: 400 });
     }
 
-    const adminEmail = authCheck.user?.email || 'admin@cleverops.in';
+    const adminEmail = authCheck.user?.email || null;
 
     // 2. Fetch target restaurant
     const { data: rest, error: restErr } = await supabaseAdmin
@@ -45,9 +45,9 @@ export async function POST(req: Request) {
     try {
       await supabaseAdmin.from('audit_logs').insert({
         restaurant_id: targetRestaurantId,
-        user_email: adminEmail,
+        user_email: adminEmail || 'system',
         action: 'SUPER_ADMIN_IMPERSONATION',
-        details: `Super Admin (${adminEmail}) opened session for restaurant "${rest.name}" (ID: ${rest.id})`
+        details: `Super Admin (${adminEmail || 'system'}) opened session for restaurant "${rest.name}" (ID: ${rest.id})`
       });
     } catch (auditErr) {
       console.warn('[Impersonation Audit Notice]:', auditErr);

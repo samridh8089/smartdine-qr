@@ -22,38 +22,7 @@ export default function LoginPage() {
     setError('');
     clearActiveUserCache();
 
-    // Super Admin Master Login Bypass & Auto-Provisioning
-    if (email.toLowerCase() === 'admin@cleverops.in' && (password === 'admin123' || password === 'Admin@123456' || password === 'admin')) {
-      let { data, error: err } = await supabase.auth.signInWithPassword({
-        email: 'admin@cleverops.in',
-        password: password
-      });
-
-      if (err) {
-        const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
-          email: 'admin@cleverops.in',
-          password: password,
-          options: {
-            data: {
-              fullName: 'Super Admin',
-              role: 'super_admin'
-            }
-          }
-        });
-
-        if (!signUpErr && signUpData.user) {
-          await supabase.from('profiles').upsert({
-            id: signUpData.user.id,
-            email: 'admin@cleverops.in',
-            full_name: 'Super Admin',
-            role: 'super_admin'
-          });
-        }
-      }
-
-      router.push('/super-admin');
-      return;
-    }
+    // Authentication happens via Supabase Auth only.
 
     const { data, error: err } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
@@ -78,7 +47,7 @@ export default function LoginPage() {
     const userRole = profileData?.role || data.user.user_metadata?.role || 'owner';
 
     // Super Admin routing
-    if (userRole === 'super_admin' || email.toLowerCase() === 'admin@cleverops.in' || email.toLowerCase() === 'dsoni1281@gmail.com') {
+    if (userRole === 'super_admin') {
       router.push('/super-admin');
       return;
     }
