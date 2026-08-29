@@ -2453,7 +2453,7 @@ export const db = {
     await this.createAuditLog(
       id,
       null,
-      'superadmin@smartdine.com',
+      'system',
       'update_restaurant_plan',
       `Changed plan from ${oldRest?.subscription_plan || 'N/A'} to ${plan}, status from ${oldRest?.subscription_status || 'N/A'} to ${status}`
     );
@@ -2487,7 +2487,7 @@ export const db = {
     await this.createAuditLog(
       restaurantId,
       null,
-      'superadmin@smartdine.com',
+      'system',
       'send_renewal_reminder',
       `Sent subscription renewal warning email & push notification to ${rest.name} (Plan: ${rest.subscription_plan})`
     );
@@ -2609,7 +2609,7 @@ export const db = {
     await this.createAuditLog(
       restaurantId,
       null,
-      'superadmin@smartdine.com',
+      'system',
       'delete_restaurant',
       `Super Admin triggered restaurant deletion for ID: ${restaurantId}`
     );

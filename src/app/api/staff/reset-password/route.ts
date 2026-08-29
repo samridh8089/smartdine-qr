@@ -49,8 +49,8 @@ export async function POST(req: Request) {
 
     // If profile row doesn't exist in profiles table, construct profile object from Auth user metadata & restaurant lookup
     if (!requesterProfile) {
-      const isSuperAdmin = user.email === 'superadmin@smartdine.com' || user.email === 'admin@cleverops.in' || user.user_metadata?.role === 'super_admin';
-      const role = isSuperAdmin ? 'super_admin' : (user.user_metadata?.role || 'owner');
+      const isSuperAdmin = false; // require DB profile for super_admin
+      const role = (user.user_metadata?.role) || 'owner';
       let restId = user.user_metadata?.restaurant_id || null;
 
       if (!restId && role === 'owner') {

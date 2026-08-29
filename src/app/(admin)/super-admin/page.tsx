@@ -67,8 +67,8 @@ export default function SuperAdminPage() {
         return;
       }
 
-      // STRICT SUPER ADMIN CHECK: Allow ONLY role === 'super_admin' or verified superadmin system email
-      const isSuperAdmin = user.role === 'super_admin' || user.email === 'admin@cleverops.in' || user.email === 'superadmin@cleverops.in';
+      // STRICT SUPER ADMIN CHECK: Allow ONLY role === 'super_admin'
+      const isSuperAdmin = user.role === 'super_admin';
 
       if (!isSuperAdmin) {
         console.warn(`[SUPER ADMIN ACCESS DENIED]: User ${user.email} (Role: ${user.role}) attempted unauthorized access to /super-admin.`);
@@ -154,10 +154,7 @@ export default function SuperAdminPage() {
       const res = await fetch('/api/admin/impersonate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetRestaurantId: rest.id,
-          superAdminEmail: 'admin@cleverops.in'
-        })
+        body: JSON.stringify({ targetRestaurantId: rest.id })
       });
 
       const data = await res.json();
