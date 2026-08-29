@@ -41,7 +41,14 @@ export function middleware(request: NextRequest) {
   if (ALLOWED_ORIGINS.includes(origin)) {
     corsOrigin = origin;
   } else if (process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'))) {
+    // Allow local development origins in non-production
     corsOrigin = origin;
+  } else if (process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL) {
+    // Allow Vercel preview deployments to access APIs from their preview URLs
+    const previewOrigin = `https://${process.env.VERCEL_URL}`;
+    if (origin === previewOrigin) {
+      corsOrigin = previewOrigin;
+    }
   }
 
   // Handle preflight OPTIONS requests for APIs
@@ -120,7 +127,7 @@ export function middleware(request: NextRequest) {
   // Content Security Policy (CSP)
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://*.supabase.co https://*.expo.dev;
+    script-src 'self' https://checkout.razorpay.com https://*.supabase.co https://www.cleverops.in;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com data:;
     img-src 'self' data: blob: https:;
