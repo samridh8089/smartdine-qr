@@ -103,10 +103,13 @@ export default function LoginPage() {
               </div>
             )}
 
-            <form className="space-y-6" onSubmit={handleLogin}>
+            <form className="space-y-6" onSubmit={handleLogin} autoComplete="off">
               <Input
                 label="Email address"
                 type="email"
+                name="email"
+                id="email"
+                autoComplete="off"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -115,7 +118,7 @@ export default function LoginPage() {
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                     Password
                   </label>
                   <Link
@@ -127,6 +130,9 @@ export default function LoginPage() {
                 </div>
                 <Input
                   type="password"
+                  name="password"
+                  id="password"
+                  autoComplete="off"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
