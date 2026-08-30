@@ -1,13 +1,26 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { validateSchema, Validators } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+
 
 export async function POST(req: Request) {
   try {
-    const { name, email, phone, restaurantName, message } = await req.json();
+    const body = await req.json();
 
-    if (!name || !email || !message) {
-      return NextResponse.json({ error: 'Name, email and message are required' }, { status: 400 });
+    const validation = validateSchema(body, {
+      name: { rules: [Validators.string({ min: 2, max: 100 })], required: true },
+      email: { rules: [Validators.email()], required: true },
+      phone: { rules: [Validators.phone()], required: false },
+      restaurantName: { rules: [Validators.string({ max: 100 })], required: false },
+      message: { rules: [Validators.string({ min: 5, max: 2000 })], required: true }
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
+
+    const { name, email, phone, restaurantName, message } = body;
 
     // 1. Save in audit_logs so messages are NEVER lost and accessible in database
     try {
@@ -57,6 +70,8 @@ export async function POST(req: Request) {
       message: 'Inquiry received successfully! Saved in database and dispatched to dsoni1281@gmail.com.' 
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return handleApiError('Contact', err, 'Failed to process inquiry. Please try again later.', 500);
   }
 }
+
+

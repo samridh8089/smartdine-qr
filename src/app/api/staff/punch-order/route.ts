@@ -1,9 +1,28 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { validateSchema, Validators } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
+    const validation = validateSchema(body, {
+      restaurantId: { rules: [Validators.restaurantId()], required: true },
+      tableId: { rules: [Validators.string({ max: 100 })], required: false },
+      items: { rules: [Validators.array(undefined, { minLength: 1 })], required: true },
+      specialInstructions: { rules: [Validators.string({ max: 500 })], required: false },
+      orderType: { rules: [Validators.enum(['dine_in', 'takeaway', 'delivery', 'reservation'] as const)], required: false },
+      paymentStatus: { rules: [Validators.enum(['pending', 'paid', 'failed'] as const)], required: false },
+      staffName: { rules: [Validators.string({ max: 100 })], required: false },
+      idempotencyKey: { rules: [Validators.string({ max: 100 })], required: false }
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
+    }
+
     const {
       restaurantId,
       tableId = null,
@@ -16,14 +35,6 @@ export async function POST(req: Request) {
     } = body;
 
     console.log(`[FORENSIC_INVENTORY_TRACE] 1. PUNCH_ORDER_API_RECEIVED - Restaurant: ${restaurantId}, Table: ${tableId}, ItemsCount: ${items.length}, Type: ${orderType}, Staff: ${staffName}`);
-
-    if (!restaurantId) {
-      return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
-    }
-
-    if (!items || items.length === 0) {
-      return NextResponse.json({ error: 'At least one item is required' }, { status: 400 });
-    }
 
     console.log(`[FORENSIC_INVENTORY_TRACE] 2. CALLING_DB_CREATE_ORDER - Restaurant: ${restaurantId}`);
 
@@ -55,7 +66,8 @@ export async function POST(req: Request) {
       order
     });
   } catch (err: any) {
-    console.error('[FORENSIC_INVENTORY_TRACE] ERROR in punch-order API:', err?.message || err);
-    return NextResponse.json({ error: err.message || 'Failed to punch order' }, { status: 500 });
+    return handleApiError('Staff-Punch-Order', err, 'Failed to create order. Please try again.', 500);
   }
 }
+
+

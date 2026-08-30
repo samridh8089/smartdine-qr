@@ -418,7 +418,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Sidebar */}
           <aside className={`
-            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900 dark:bg-slate-950 text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800
+            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}>
             {/* Logo Section */}

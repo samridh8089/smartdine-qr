@@ -1,17 +1,26 @@
 import { NextResponse } from 'next/server';
 import { createAndDispatchOtp } from '@/lib/otpEngine';
+import { validateSchema, Validators } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, type = 'owner_email', recipientName } = body;
 
-    const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
+    const validation = validateSchema(body, {
+      email: { rules: [Validators.email()], required: true },
+      type: { rules: [Validators.enum(['owner_email', 'staff_email', 'password_reset'] as const)], required: false },
+      recipientName: { rules: [Validators.string({ max: 100 })], required: false }
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
 
-    // Normalize type to valid otpEngine type
+    const { email, type = 'owner_email', recipientName } = body;
+    const cleanEmail = email.trim().toLowerCase();
+
     const otpType: 'owner_email' | 'staff_email' | 'password_reset' =
       type === 'password_reset' ? 'password_reset' :
       type === 'staff_email' ? 'staff_email' :
@@ -19,7 +28,6 @@ export async function POST(req: Request) {
 
     console.log(`[API Send-OTP] Dispatching 8-digit OTP to: ${cleanEmail} (type=${otpType})`);
 
-    // Use otpEngine — generates 8-digit OTP, stores in memory, sends via Resend
     const result = await createAndDispatchOtp({
       target: cleanEmail,
       type: otpType,
@@ -41,7 +49,8 @@ export async function POST(req: Request) {
     });
 
   } catch (err: any) {
-    console.error('[API Send-OTP Exception]:', err);
-    return NextResponse.json({ error: err?.message || 'Failed to dispatch verification OTP' }, { status: 500 });
+    return handleApiError('Send-OTP', err, 'Failed to dispatch verification OTP. Please try again.', 500);
   }
 }
+
+
