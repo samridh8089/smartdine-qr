@@ -16,10 +16,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async (e?: React.FormEvent | React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-    }
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     console.log("handleLogin fired");
     setLoading(true);
     setError('');
@@ -143,7 +141,7 @@ export default function LoginPage() {
                 />
               </div>
 
-              <Button type="button" onClick={handleLogin} className="w-full cursor-pointer font-bold" isLoading={loading}>
+              <Button type="submit" className="w-full cursor-pointer font-bold" isLoading={loading}>
                 Sign In
               </Button>
             </form>
