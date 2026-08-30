@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { calculateOrderTax } from '@/lib/tax';
 import { ServerTimer } from '@/lib/serverTiming';
-import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 
 export async function POST(req: Request) {
@@ -13,39 +12,31 @@ export async function POST(req: Request) {
     // 1. AUTH & VALIDATION PHASE
     timer.start('auth');
     const body = await req.json();
-
-    const validation = validateSchema(body, {
-      restaurantId: { rules: [Validators.restaurantId()], required: true },
-      tableId: { rules: [Validators.string({ max: 100 })], required: false },
-      items: { rules: [Validators.array(undefined, { minLength: 1 })], required: true },
-      specialInstructions: { rules: [Validators.string({ max: 500 })], required: false },
-      orderType: { rules: [Validators.enum(['dine_in', 'takeaway', 'delivery', 'reservation'] as const)], required: false },
-      paymentStatus: { rules: [Validators.enum(['pending', 'paid', 'failed'] as const)], required: false },
-      staffName: { rules: [Validators.string({ max: 100 })], required: false },
-      idempotencyKey: { rules: [Validators.string({ max: 100 })], required: false }
-    });
-    timer.end('auth');
-
-    if (!validation.valid) {
-      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
-    }
-
     const {
       restaurantId,
       tableId = null,
       items = [],
       specialInstructions = '',
       orderType = 'dine_in',
+      customerArrivalMinutes,
+      takeawayNotes,
       paymentStatus = 'pending',
-      staffName = 'Staff',
-      idempotencyKey
+      idempotencyKey,
+      offerCode,
+      discountAmount = 0
     } = body;
+
+    if (!restaurantId || !Array.isArray(items) || items.length === 0) {
+      timer.end('auth');
+      return NextResponse.json({ error: 'restaurantId and items are required' }, { status: 400 });
+    }
+    timer.end('auth');
 
     // 2. INVENTORY & MENU ITEM PARALLEL VALIDATION PHASE
     timer.start('inventory');
     const [rRes, tRes, mRes, activeOrdersRes] = await Promise.all([
       supabase.from('restaurants').select('*').eq('id', restaurantId).maybeSingle(),
-      (tableId && tableId !== 'takeaway' && tableId !== 'reservation')
+      (tableId && tableId !== 'takeaway' && tableId !== 'reservation') 
         ? supabase.from('tables').select('*').eq('id', tableId).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       supabase.from('menu_items').select('*').eq('restaurant_id', restaurantId),
@@ -75,7 +66,7 @@ export async function POST(req: Request) {
       const menuItem = allMenuItems.find(i => i.id === itemId);
       if (!menuItem || menuItem.is_available === false) {
         timer.end('inventory');
-        return NextResponse.json({ error: `Item "${menuItem?.name || 'Selected'}" is out of stock.` }, { status: 400 });
+        return NextResponse.json({ error: `Item "${menuItem?.name || 'Selected'}" is currently out of stock.` }, { status: 400 });
       }
       const qty = Number(entry.quantity || 1);
       const price = Number(entry.price !== undefined ? entry.price : menuItem.price);
@@ -84,8 +75,8 @@ export async function POST(req: Request) {
       itemsPayload.push({
         menu_item_id: menuItem.id,
         menu_item_name: entry.variantName ? `${menuItem.name} (${entry.variantName})` : menuItem.name,
-        variant_id: entry.variantId || entry.variant_id || null,
-        variant_name: entry.variantName || entry.variant_name || null,
+        variant_id: entry.variantId || null,
+        variant_name: entry.variantName || null,
         quantity: qty,
         price,
         notes: entry.notes || null
@@ -93,21 +84,33 @@ export async function POST(req: Request) {
     }
     timer.end('inventory');
 
-    // 3. TAX COMPUTATION PHASE
+    // 3. TAX & BILLING COMPUTATION PHASE
     timer.start('tax');
-    const taxCalc = calculateOrderTax(subtotal, 0, restaurant.settings || {});
+    const discAmt = Number(discountAmount || 0);
+    const taxCalc = calculateOrderTax(subtotal, discAmt, restaurant.settings || {});
+
     const serviceChargeEnabled = restaurant.settings?.service_charge_enabled !== false;
     const serviceChargePercentage = serviceChargeEnabled ? (restaurant.settings?.service_charge_percentage || 0) : 0;
     const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
-    const grandTotal = parseFloat((taxCalc.grandTotal + serviceCharge).toFixed(2));
+
+    let customChargesTotal = 0;
+    (restaurant.settings?.custom_charges || []).forEach((c: any) => {
+      if (c.enabled) {
+        customChargesTotal += c.type === 'percentage' ? (taxCalc.taxableAmount * c.value) / 100 : c.value;
+      }
+    });
+
+    const grandTotal = parseFloat((taxCalc.grandTotal + serviceCharge + customChargesTotal).toFixed(2));
     timer.end('tax');
 
     // 4. ATOMIC ORDER INSERTION PHASE
     timer.start('order_insert');
     const activeOrder = activeOrdersRes.data && activeOrdersRes.data.length > 0 ? activeOrdersRes.data[0] : null;
+
     let createdOrder: any = null;
 
     if (activeOrder) {
+      // Append new batch to existing active order
       const newBatchIndex = (activeOrder.batches || []).length + 1;
       const batchPayload = {
         order_id: activeOrder.id,
@@ -129,6 +132,7 @@ export async function POST(req: Request) {
 
       createdOrder = orderUpdateRes.data || activeOrder;
     } else {
+      // Create new order
       const orderPayload = {
         restaurant_id: restaurantId,
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
@@ -162,6 +166,7 @@ export async function POST(req: Request) {
 
       createdOrder = newOrderData;
 
+      // Insert initial batch
       await supabase.from('order_batches').insert([{
         order_id: createdOrder.id,
         batch_number: 1,
@@ -181,6 +186,7 @@ export async function POST(req: Request) {
       timestamp: Date.now()
     };
 
+    // Broadcast on tenant-scoped channels instantly
     await Promise.all([
       supabase.channel(`kds_${restaurantId}`).send({
         type: 'broadcast',
@@ -195,14 +201,14 @@ export async function POST(req: Request) {
     ]);
     timer.end('realtime');
 
-    const response = NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       order: createdOrder
     });
 
-    response.headers.set('Server-Timing', timer.getHeaderString(totalStart));
-    return response;
+    res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+    return res;
   } catch (err: any) {
-    return handleApiError('Staff-Punch-Order', err, 'Failed to create order. Please try again.', 500);
+    return handleApiError('Customer-Order-Create', err, 'Failed to place order. Please try again.', 500);
   }
 }

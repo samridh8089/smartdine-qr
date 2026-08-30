@@ -15,7 +15,7 @@ export class ServerTimer {
   end(name: string) {
     const start = this.startTimes[name];
     if (start !== undefined) {
-      const elapsed = Math.round(performance.now() - start);
+      const elapsed = Math.max(1, Math.round((performance.now() - start) * 10) / 10);
       this.timings[name] = (this.timings[name] || 0) + elapsed;
     }
   }
@@ -26,9 +26,10 @@ export class ServerTimer {
       entries.push(`${key};dur=${val}`);
     }
     if (totalStart !== undefined) {
-      const totalElapsed = Math.round(performance.now() - totalStart);
+      const totalElapsed = Math.max(1, Math.round((performance.now() - totalStart) * 10) / 10);
       entries.push(`total;dur=${totalElapsed}`);
     }
     return entries.join(', ');
   }
 }
+

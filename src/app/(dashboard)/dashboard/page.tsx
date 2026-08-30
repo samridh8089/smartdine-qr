@@ -270,7 +270,16 @@ export default function DashboardPage() {
         await loadDataForRest(restId);
 
         channel = supabase
-          .channel(`overview_dashboard_${restId}_${Date.now()}`)
+          .channel(`overview_dashboard_${restId}`, {
+            config: {
+              broadcast: { self: true }
+            }
+          })
+          .on(
+            'broadcast',
+            { event: 'new-order' },
+            () => loadDataForRest(restId)
+          )
           .on(
             'postgres_changes',
             {
@@ -279,7 +288,7 @@ export default function DashboardPage() {
               table: 'orders',
               filter: `restaurant_id=eq.${restId}`
             },
-            () => debouncedReload(restId)
+            () => loadDataForRest(restId)
           )
           .on(
             'postgres_changes',
@@ -288,7 +297,7 @@ export default function DashboardPage() {
               schema: 'public',
               table: 'order_batches'
             },
-            () => debouncedReload(restId)
+            () => loadDataForRest(restId)
           )
           .on(
             'postgres_changes',
@@ -298,7 +307,7 @@ export default function DashboardPage() {
               table: 'inventory_items',
               filter: `restaurant_id=eq.${restId}`
             },
-            () => debouncedReload(restId)
+            () => loadDataForRest(restId)
           )
           .on(
             'postgres_changes',
@@ -308,7 +317,7 @@ export default function DashboardPage() {
               table: 'tables',
               filter: `restaurant_id=eq.${restId}`
             },
-            () => debouncedReload(restId)
+            () => loadDataForRest(restId)
           )
           .on(
             'postgres_changes',

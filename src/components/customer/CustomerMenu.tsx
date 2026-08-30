@@ -736,19 +736,47 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         ? `TABLE RESERVATION | Date: ${reservationDate} | Time: ${reservationTime} | Guests: ${reservationGuests}${reservationName ? ` | Name: ${reservationName}` : ''}${reservationPhone ? ` | Contact: ${reservationPhone}` : ''}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`
         : specialInstructions;
 
-      const newOrder = await db.createOrder(
-        restaurant.id,
-        table.id,
-        orderPayload,
-        finalInstructions,
-        isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
-        isTakeaway ? arrivalMinutes : undefined,
-        isTakeaway ? takeawayNotes : undefined,
-        (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
-        idempotencyKey,
-        appliedOffer?.code,
-        discountAmount
-      );
+      let newOrder: Order;
+      try {
+        const res = await fetch('/api/customer/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            restaurantId: restaurant.id,
+            tableId: table.id,
+            items: orderPayload,
+            specialInstructions: finalInstructions,
+            orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
+            customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
+            takeawayNotes: isTakeaway ? takeawayNotes : undefined,
+            paymentStatus: (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
+            idempotencyKey,
+            offerCode: appliedOffer?.code,
+            discountAmount
+          })
+        });
+
+        const apiResult = await res.json();
+        if (!res.ok || !apiResult.success || !apiResult.order) {
+          throw new Error(apiResult.error || 'API order placement returned error');
+        }
+        newOrder = apiResult.order;
+      } catch (apiErr) {
+        console.warn('Fast API order placement fallback to db.createOrder:', apiErr);
+        newOrder = await db.createOrder(
+          restaurant.id,
+          table.id,
+          orderPayload,
+          finalInstructions,
+          isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
+          isTakeaway ? arrivalMinutes : undefined,
+          isTakeaway ? takeawayNotes : undefined,
+          (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
+          idempotencyKey,
+          appliedOffer?.code,
+          discountAmount
+        );
+      }
 
       try {
         sessionStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
