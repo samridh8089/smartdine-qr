@@ -5,8 +5,8 @@ import { validateMagicBytes, MAX_FILE_SIZE_BYTES, sanitizeFilename } from './fil
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.supabase.co';
-const supabaseAnonKey = rawKey || 'placeholder-anon-key';
+const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : (process.env.NODE_ENV === 'production' ? '' : 'https://placeholder.supabase.co');
+const supabaseAnonKey = rawKey || (process.env.NODE_ENV === 'production' ? '' : 'placeholder-anon-key');
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -27,6 +27,20 @@ const CACHE_TTL_MS = 10000; // 10 seconds cache for rapid intra-page navigations
 export const clearActiveUserCache = () => {
   cachedProfile = null;
   cachedProfileTimestamp = 0;
+};
+
+export const signOutUser = async () => {
+  clearActiveUserCache();
+  try {
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      localStorage.removeItem('smartdine_auth_token_v2');
+      localStorage.removeItem('smartdine_impersonated_profile');
+    }
+    await supabase.auth.signOut();
+  } catch (e) {
+    console.error('Logout error:', e);
+  }
 };
 
 /**
