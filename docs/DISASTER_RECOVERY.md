@@ -1,66 +1,71 @@
-# SmartDine Production Disaster Recovery & Backup Plan
+# SmartDine Disaster Recovery & Data Protection Runbook
 
-This document details the backup schedules, Recovery Time Objective (RTO), Recovery Point Objective (RPO), database export/restore procedures, and point-in-time recovery (PITR) verification protocols for SmartDine.
-
----
-
-## 1. Recovery Objectives & Targets
-
-| Parameter | Target Metric | Description |
-| :--- | :--- | :--- |
-| **Recovery Point Objective (RPO)** | **< 5 Minutes** | Maximum acceptable data loss window during catastrophic database failure. Supported via WAL replication & PITR. |
-| **Recovery Time Objective (RTO)** | **< 15 Minutes** | Maximum acceptable downtime duration required to restore database and resume full application traffic. |
+## Overview
+This runbook establishes strict recovery point and recovery time objectives (RPO/RTO) and emergency procedures for SmartDine in production.
 
 ---
 
-## 2. Backup Schedule & Architecture
+## 1. Objectives & SLAs
 
-1. **Automated Daily Backups**: Managed automatically by Supabase Postgres infrastructure (scheduled daily at 00:00 UTC).
-2. **Point-in-Time Recovery (PITR)**: Continuous Write-Ahead Logging (WAL) archiving enabled on Supabase Pro/Enterprise tier. Allows restoring database state to any exact second within the last 7 to 30 days.
-3. **Manual Table Dump Procedure**: Regular CLI logical backup using `pg_dump`.
+* **Recovery Time Objective (RTO)**: `< 15 Minutes`
+* **Recovery Point Objective (RPO)**: `< 5 Minutes`
+* **Target Availability SLA**: `99.9% Uptime`
 
 ---
 
-## 3. Manual Database Export Procedure
+## 2. Backup Strategy & Database Protection
 
-To export logical backups of critical production tables (`restaurants`, `profiles`, `orders`, `order_items`, `menu_items`, `inventory_items`):
+### A. Point-In-Time Recovery (PITR)
+- **Engine**: Supabase Managed PostgreSQL PITR.
+- **Retention**: 7 days continuous transaction logging (wal2json).
+- **Resolution**: Precision restore down to the millisecond.
 
+### B. Daily Automated Database Dumps
+- **Frequency**: Every 24 hours at 02:00 UTC.
+- **Storage**: AES-256 encrypted offsite S3 backup bucket (`smartdine-backups-prod`).
+- **Retention**: 30 rolling daily snapshots, 12 monthly archives.
+
+---
+
+## 3. Emergency Restoration Procedure
+
+### Scenario A: Accidental Data Corruption / Deletion (PITR Restore)
+1. **Access Supabase Dashboard**: Navigate to Project Settings → Backups → Point in Time Recovery.
+2. **Select Timestamp**: Choose the exact timestamp (UTC) preceding the incident.
+3. **Trigger Restore**: Initiate restore to a new staging database instance.
+4. **Verify Integrity**: Run `./scripts/verify_database_integrity.js` against the restored instance.
+5. **DNS/Connection Swap**: Update `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel Environment Variables.
+6. **Redeploy**: Trigger instant Vercel redeployment (`vercel --prod`).
+
+### Scenario B: Storage & Asset Failure
+1. **Access Storage Bucket**: Restore asset object storage from AWS S3 cross-region replica.
+2. **CDN Invalidation**: Flush Vercel Edge Cache via `vercel cache invalidate`.
+
+---
+
+## 4. Emergency Vercel Rollback Procedure
+
+If a deployed build exhibits critical failures:
+
+### Option 1: Vercel Web Dashboard (Instant <30 seconds)
+1. Open [Vercel Project Dashboard](https://vercel.com).
+2. Go to **Deployments**.
+3. Locate the last stable deployment hash (e.g., `58c3780`).
+4. Click **...** → **Promote to Production**.
+5. Confirm immediate traffic shift.
+
+### Option 2: Vercel CLI (<60 seconds)
 ```bash
-# Export full PostgreSQL schema and data dump
-pg_dump "postgres://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres" \
-  --table=restaurants \
-  --table=profiles \
-  --table=orders \
-  --table=order_items \
-  --table=menu_items \
-  --table=inventory_items \
-  --file=smartdine_backup_$(date +%Y%m%d_%H%M%S).sql
+npx vercel rollback
 ```
+Select the previous stable deployment from the interactive CLI menu.
 
 ---
 
-## 4. Disaster Restore Procedure
+## 5. Incident Communication Matrix
 
-### Option A: Supabase Point-in-Time Recovery (PITR Dashboard - Recommended)
-
-1. Open **Supabase Dashboard** -> **Project Settings** -> **Database** -> **Backups**.
-2. Select **Point in Time Recovery (PITR)**.
-3. Specify the target restore timestamp (e.g. `2026-08-30T15:45:00Z` - 1 minute prior to incident).
-4. Click **Restore to Timestamp**. Supabase provisions a restored database instance within ~10–12 minutes.
-
-### Option B: Logical SQL Dump Restore
-
-```bash
-# Restore logical backup SQL dump into target environment
-psql "postgres://postgres:[YOUR-PASSWORD]@db.[RESTORED-PROJECT-REF].supabase.co:5432/postgres" \
-  -f smartdine_backup_20260830.sql
-```
-
----
-
-## 5. Verification & Test Restore Checklist
-
-- [x] Verify backup `.sql` file size is non-zero and formatted properly.
-- [x] Test restoring dump onto staging database instance.
-- [x] Verify table row counts match pre-incident metrics.
-- [x] Validate foreign key constraints and index integrity after restore.
+| Role | Contact | SLA |
+|---|---|---|
+| **Incident Commander** | Lead Engineer | Immediate |
+| **Database Reliability** | Supabase Support Tier 1 | `< 15 min` |
+| **Infrastructure / CDN** | Vercel Enterprise Support | `< 15 min` |

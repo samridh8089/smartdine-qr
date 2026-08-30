@@ -1,43 +1,66 @@
-# SmartDine Production Deployment & Instant Rollback Runbook
+# SmartDine Zero-Downtime Deployment & Migration Runbook
 
-This document details Vercel deployment verification, preview workflow, environment variable validation, and incident rollback procedures.
+## Overview
+Guidelines and step-by-step procedures for zero-downtime application deployments and backward-compatible database schema migrations.
 
 ---
 
-## 1. Instant Vercel Rollback Procedure
+## 1. Zero-Downtime Migration Pattern: Expand → Migrate → Contract
 
-If a production deployment causes unexpected errors or high latency:
+When modifying database tables in production, **NEVER** apply breaking schema changes directly. Always follow the 3-step lifecycle:
 
-### Option A: Vercel Dashboard Instant Rollback (Recommended - 10 Seconds)
-1. Open **Vercel Dashboard** -> **SmartDine Project** -> **Deployments**.
-2. Locate the last known healthy deployment (e.g. `smartdine-v1.4.2`).
-3. Click the three dots `...` next to the deployment -> Select **Instant Rollback**.
-4. Vercel instantly routes 100% of production traffic back to the previous build without rebuilding.
-
-### Option B: Vercel CLI Rollback
-```bash
-# Rollback production deployment to specific target build ID
-vercel rollback [DEPLOYMENT-ID] --prod
 ```
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│   1. EXPAND     │ ───►  │   2. MIGRATE    │ ───►  │   3. CONTRACT   │
+│ Add new columns │       │ Backfill data   │       │ Remove deprecated│
+│ or nullables    │       │ in background   │       │ columns safely   │
+└─────────────────┘       └─────────────────┘       └─────────────────┘
+```
+
+### Phase 1: EXPAND (Backward-Compatible Schema Change)
+- Add new columns as **NULLABLE** or with **DEFAULT** values.
+- Do NOT delete or rename existing columns yet.
+- Deploy updated API routes that write to **BOTH** old and new columns.
+
+### Phase 2: MIGRATE (Data Backfill & Feature Verification)
+- Run background migration script (`node scripts/backfill_data.js`) to sync old data into new columns.
+- Enable feature flag (`NEXT_PUBLIC_ENABLE_FEATURE_X=true`) to switch readers to new schema.
+- Validate zero errors across all active client portals.
+
+### Phase 3: CONTRACT (Deprecation & Cleanup)
+- Deprecate old column readers.
+- Remove old column references from codebase.
+- Safely drop old column in database during low-traffic maintenance window.
 
 ---
 
 ## 2. Pre-Deployment Verification Protocol
 
-Before merging PRs to `main`:
-1. **TypeScript Build**: `.\node_modules\.bin\tsc.cmd --noEmit` must pass with 0 errors.
-2. **Production Build**: `npm run build` must complete with 0 errors.
-3. **Environment Checks**: `/api/ready` endpoint must return `200 OK`.
-4. **k6 Smoke Test**: Automated GitHub Actions smoke test must pass.
+Before pushing any code to `origin main`:
+
+1. **TypeScript Type Safety**:
+   ```bash
+   npx tsc --noEmit
+   ```
+   *Must exit with 0 errors.*
+
+2. **Production Bundle Compilation**:
+   ```bash
+   npm run build
+   ```
+   *Must compile all static/dynamic routes cleanly.*
+
+3. **Readiness Probe Ping**:
+   ```bash
+   curl -i https://www.cleverops.in/api/ready
+   ```
+   *Must return HTTP 200 OK with `Server-Timing` headers.*
 
 ---
 
-## 3. Incident Decision Tree
+## 3. Rollback Protocol & Emergency Circuit Breakers
 
-```text
-[Incident Detected]
-       │
-       ├─► HTTP 5xx Error Rate > 2.0%? ────────► Trigger Vercel Instant Rollback
-       ├─► DB Connectivity Fail? ──────────────► Check Supabase Status / Restart Pooler
-       └─► High P95 Latency (> 800ms)? ────────► Inspect Server-Timing & Slow Queries
-```
+If errors exceed 0.1% post-deployment:
+1. Trigger Vercel Instant Rollback (`npx vercel rollback`).
+2. Verify DNS & edge cache invalidation (`curl -I https://www.cleverops.in`).
+3. Inspect runtime error logs via `vercel logs` or Supabase dashboard.
