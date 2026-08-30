@@ -200,7 +200,19 @@ export default function KitchenDisplayPage() {
 
     console.log(`Subscribing to realtime updates (orders & batches) for restaurant: ${restaurantId}`);
     const channel = supabase
-      .channel('kds_orders_live')
+      .channel(`kds_${restaurantId}`, {
+        config: {
+          broadcast: { self: true }
+        }
+      })
+      .on(
+        'broadcast',
+        { event: 'new-order' },
+        async (payload) => {
+          console.log('Realtime broadcast KDS order event received:', payload);
+          await reloadFnRef.current(restaurantId);
+        }
+      )
       .on(
         'postgres_changes',
         {
@@ -219,7 +231,6 @@ export default function KitchenDisplayPage() {
               alertedOrderIds.current.add(newOrderPayload.id);
               console.log(`New order detected! Playing alarm for order ID: ${newOrderPayload.id}`);
 
-              // Fetch full order with items and display popup alert
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
                 setNewOrderAlert(fullOrder);
@@ -245,7 +256,6 @@ export default function KitchenDisplayPage() {
           console.log('Realtime KDS batch insert payload received:', payload);
           const newBatch = payload.new as OrderBatch;
 
-          // Fast tenant check before executing DB queries for cross-tenant events
           const isLocalOrder = orders.some(o => o.id === newBatch.order_id);
           if (!isLocalOrder) {
             const { data: pOrder } = await supabase
@@ -253,9 +263,9 @@ export default function KitchenDisplayPage() {
               .select('restaurant_id')
               .eq('id', newBatch.order_id)
               .eq('restaurant_id', restaurantId)
-              .single();
+              .maybeSingle();
 
-            if (!pOrder) return; // Drop cross-tenant batch event instantly!
+            if (!pOrder) return;
           }
 
           const fullOrder = await db.getOrderById(newBatch.order_id);
@@ -288,7 +298,6 @@ export default function KitchenDisplayPage() {
           console.log('Realtime KDS batch update payload received:', payload);
           const updatedBatch = payload.new as OrderBatch;
           
-          // Verify this batch belongs to our restaurant using in-memory orders or scoped query
           const isLocalOrder = orders.some(o => o.id === updatedBatch.order_id);
           if (isLocalOrder) {
             await reloadFnRef.current(restaurantId);
@@ -298,7 +307,7 @@ export default function KitchenDisplayPage() {
               .select('restaurant_id')
               .eq('id', updatedBatch.order_id)
               .eq('restaurant_id', restaurantId)
-              .single();
+              .maybeSingle();
 
             if (parentOrder) {
               await reloadFnRef.current(restaurantId);
