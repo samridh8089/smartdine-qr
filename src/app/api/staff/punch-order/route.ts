@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
-
+import { ServerTimer } from '@/lib/serverTiming';
 
 export async function POST(req: Request) {
+  const totalStart = performance.now();
+  const timer = new ServerTimer();
+
   try {
+    timer.start('auth');
     const body = await req.json();
 
     const validation = validateSchema(body, {
@@ -18,6 +22,7 @@ export async function POST(req: Request) {
       staffName: { rules: [Validators.string({ max: 100 })], required: false },
       idempotencyKey: { rules: [Validators.string({ max: 100 })], required: false }
     });
+    timer.end('auth');
 
     if (!validation.valid) {
       return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
@@ -34,10 +39,6 @@ export async function POST(req: Request) {
       idempotencyKey
     } = body;
 
-    console.log(`[FORENSIC_INVENTORY_TRACE] 1. PUNCH_ORDER_API_RECEIVED - Restaurant: ${restaurantId}, Table: ${tableId}, ItemsCount: ${items.length}, Type: ${orderType}, Staff: ${staffName}`);
-
-    console.log(`[FORENSIC_INVENTORY_TRACE] 2. CALLING_DB_CREATE_ORDER - Restaurant: ${restaurantId}`);
-
     const formattedItems = items.map((i: any) => ({
       menuItemId: i.menuItemId || i.id || i.menu_item_id,
       quantity: Number(i.quantity || 1),
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
       price: i.price ? Number(i.price) : undefined
     }));
 
+    timer.start('db');
     const order = await db.createOrder(
       restaurantId,
       tableId,
@@ -58,16 +60,19 @@ export async function POST(req: Request) {
       paymentStatus,
       idempotencyKey
     );
+    timer.end('db');
 
-    console.log(`[FORENSIC_INVENTORY_TRACE] 3. PUNCH_ORDER_API_SUCCESS - OrderID: ${order.id}, Status: ${order.status}, PaymentStatus: ${order.payment_status}`);
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       order
     });
+
+    response.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+    return response;
   } catch (err: any) {
     return handleApiError('Staff-Punch-Order', err, 'Failed to create order. Please try again.', 500);
   }
 }
+
 
 

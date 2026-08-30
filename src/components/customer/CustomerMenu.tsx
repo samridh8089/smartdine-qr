@@ -772,21 +772,49 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     }
   };
 
-  // Call Staff Actions
+  // Call Staff Actions with 12s Timeout & Rollback
   const handleCallStaff = async (type: 'call_waiter' | 'request_bill') => {
-    if (!restaurant || !table) return;
+    if (!restaurant || !table || callLoading) return;
     setCallLoading(true);
+
+    const prevActiveReq = activeRequest;
+    const prevReqSent = requestSent;
+
+    // Immediate Optimistic UI feedback
+    setRequestSent(type);
+    const optimisticReq: any = {
+      id: `opt_${Date.now()}`,
+      restaurant_id: restaurant.id,
+      table_id: table.id,
+      type,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    };
+    setActiveRequest(optimisticReq);
+
     try {
-      const newRequest = await db.createCustomerRequest(restaurant.id, table.id, type);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timed out after 12 seconds. Please check your network connection and try again.')), 12000)
+      );
+
+      const newRequest: any = await Promise.race([
+        db.createCustomerRequest(restaurant.id, table.id, type),
+        timeoutPromise
+      ]);
+
       setActiveRequest(newRequest);
-      setRequestSent(type);
       setTimeout(() => setRequestSent(null), 4000);
     } catch (err: any) {
-      showToast('Failed to send request: ' + err.message);
+      // Rollback to previous state on timeout/failure
+      setActiveRequest(prevActiveReq);
+      setRequestSent(prevReqSent);
+      showToast(err.message || 'Failed to send request. Please try again.');
     } finally {
       setCallLoading(false);
     }
   };
+
+
 
   // Determine active brand styling properties (fallback to emerald)
   const theme = restaurant?.settings?.theme_color && THEME_MAP[restaurant.settings.theme_color as keyof typeof THEME_MAP] 

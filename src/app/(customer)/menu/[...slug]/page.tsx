@@ -1,6 +1,10 @@
 import CustomerMenu from '@/components/customer/CustomerMenu';
 
+// Incremental Static Regeneration (ISR): Revalidate public menu every 60s
+export const revalidate = 60;
+
 interface PageProps {
+
   params: Promise<{
     slug: string[];
   }>;

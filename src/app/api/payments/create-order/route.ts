@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
-
+import { ServerTimer } from '@/lib/serverTiming';
 
 export async function POST(req: Request) {
+  const totalStart = performance.now();
+  const timer = new ServerTimer();
+
   try {
+    timer.start('auth');
     const body = await req.json();
 
     const validation = validateSchema(body, {
@@ -16,12 +20,14 @@ export async function POST(req: Request) {
       userId: { rules: [Validators.string({ max: 100 })], required: false },
       billingInterval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false }
     });
+    timer.end('auth');
 
     if (!validation.valid) {
       return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
 
     const { amount, currency = 'INR', plan, restaurantId, email, userId, billingInterval = 'monthly' } = body;
+
 
     // Task 4: Payment Safety — Verify no existing duplicate restaurant BEFORE creating Razorpay order
     if (userId || email) {

@@ -24,7 +24,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  compress: true,
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion']
+  },
   async headers() {
     return [
       {
@@ -34,5 +38,6 @@ const nextConfig: NextConfig = {
     ];
   },
 };
+
 
 export default nextConfig;
