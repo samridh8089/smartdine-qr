@@ -330,153 +330,151 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       try {
         const rest = await db.getRestaurantBySlug(restaurantSlug);
         if (!rest) {
+          setLoading(false);
           return;
         }
         setRestaurant(rest);
 
         const planId = (rest.subscription_plan || 'starter').toLowerCase();
-        const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle();
-        const spec = parsePlanSpec(planRow || { id: planId });
+
+        // PHASE 1: Fast Parallel Fetch of Core Menu Data
+        const [cats, rawItems, tbls, fetchedOffers, planRes] = await Promise.all([
+          db.getCategories(rest.id).catch(() => [] as Category[]),
+          db.getMenuItems(rest.id).catch(() => [] as MenuItem[]),
+          db.getTables(rest.id).catch(() => [] as Table[]),
+          db.getOffers(rest.id).catch(() => [] as Offer[]),
+          Promise.resolve(supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle())
+        ]);
+
+        const spec = parsePlanSpec(planRes.data || { id: planId });
         setPlanSpec(spec);
 
+        // Table Resolution
         if (isReservation) {
-          const tbls = await db.getTables(rest.id);
-          let tbl = tbls.find(t => t.name === 'Reservation');
+          let tbl = tbls.find((t: Table) => t.name === 'Reservation');
           if (!tbl) {
-            try {
-              tbl = await db.createTable(rest.id, 'Reservation');
-            } catch (e) {
-              console.error('Failed to create virtual Reservation table:', e);
-            }
+            try { tbl = await db.createTable(rest.id, 'Reservation'); } catch (e) {}
           }
           if (tbl) setTable(tbl);
         } else if (isTakeaway) {
-          const tbls = await db.getTables(rest.id);
-          let tbl = tbls.find(t => t.name === 'Takeaway');
+          let tbl = tbls.find((t: Table) => t.name === 'Takeaway');
           if (!tbl) {
-            try {
-              tbl = await db.createTable(rest.id, 'Takeaway');
-            } catch (e) {
-              console.error('Failed to create virtual Takeaway table:', e);
-            }
+            try { tbl = await db.createTable(rest.id, 'Takeaway'); } catch (e) {}
           }
           if (tbl) setTable(tbl);
         } else if (tableId) {
-          const tbls = await db.getTables(rest.id);
           const targetId = tableId.trim();
           const targetLower = targetId.toLowerCase();
-          const matchedTbl = tbls.find(t => t.id === targetId) ||
-                             tbls.find(t => (t as any).slug === targetId) ||
-                             tbls.find(t => t.name?.toLowerCase() === targetLower) ||
-                             tbls.find(t => t.name?.toLowerCase().replace(/\s+/g, '-') === targetLower) ||
+          const matchedTbl = tbls.find((t: Table) => t.id === targetId) ||
+                             tbls.find((t: Table) => (t as any).slug === targetId) ||
+                             tbls.find((t: Table) => t.name?.toLowerCase() === targetLower) ||
+                             tbls.find((t: Table) => t.name?.toLowerCase().replace(/\s+/g, '-') === targetLower) ||
                              tbls[0];
-          if (matchedTbl) {
-            setTable(matchedTbl);
-            const activeMerge = await db.getActiveMergeGroupForTable(rest.id, matchedTbl.id);
-            if (activeMerge) {
-              setActiveMergeGroup(activeMerge.group);
-            }
-          }
-        } else {
-          const tbls = await db.getTables(rest.id);
-          if (tbls.length > 0) setTable(tbls[0]);
+          if (matchedTbl) setTable(matchedTbl);
+        } else if (tbls.length > 0) {
+          setTable(tbls[0]);
         }
 
-        const cats = await db.getCategories(rest.id);
         setCategories(cats);
-        // Requirement 14: Default category is always 'All Items'
         setSelectedCatId('all');
 
-        const items = (await db.getMenuItems(rest.id)).filter(i => i.is_available);
-        setMenuItems(items);
+        const availableItems = rawItems.filter((i: MenuItem) => i.is_available);
+        setMenuItems(availableItems);
+        setOffers(fetchedOffers.filter((o: Offer) => o.is_active));
 
-        // Load real-time stock availability map
-        try {
-          const { getRestaurantMenuStockMap } = await import('@/lib/inventoryEngine');
-          const sMap = await getRestaurantMenuStockMap(rest.id);
-          if (sMap?.menuStockMap) {
-            setStockMap(sMap.menuStockMap);
-          }
-        } catch (e) {
-          console.error('Failed to load stock map in CustomerMenu:', e);
-        }
+        // INSTANT RENDER: Unblock loading screen immediately for sub-300ms menu paint!
+        setLoading(false);
 
-        const topItems = await db.getTopSellingItems(rest.id);
-        setTopSellingItems(topItems);
-
-        const fetchedOffers = await db.getOffers(rest.id);
-        setOffers(fetchedOffers.filter(o => o.is_active));
-
+        // Cart Sync
         const savedCart = sessionStorage.getItem(`smartdine_cart_${rest.id}`);
         if (savedCart) {
-        try {
-          const parsedCart = JSON.parse(savedCart);
-          const validCart: CartItem[] = [];
-          let hasStaleItems = false;
+          try {
+            const parsedCart = JSON.parse(savedCart);
+            const validCart: CartItem[] = [];
+            let hasStaleItems = false;
 
-          for (const c of parsedCart) {
-            const mItem = items.find(i => i.id === (c.menuItem?.id || c.menuItemId));
-            if (!mItem) {
-              hasStaleItems = true;
-              continue;
-            }
-
-            let finalVariantId = c.variantId;
-            let finalVariantName = c.variantName;
-            let finalPrice = c.price !== undefined && c.price !== null ? c.price : mItem.price;
-
-            if (mItem.has_variants && mItem.variants && mItem.variants.length > 0) {
-              const vMatch = mItem.variants.find(v => 
-                (c.variantId && v.id === c.variantId) || 
-                (c.variantName && v.name.toLowerCase() === c.variantName.toLowerCase())
-              );
-              if (!vMatch || vMatch.is_available === false) {
+            for (const c of parsedCart) {
+              const mItem = availableItems.find((i: MenuItem) => i.id === (c.menuItem?.id || c.menuItemId));
+              if (!mItem) {
                 hasStaleItems = true;
                 continue;
               }
-              finalVariantId = vMatch.id;
-              finalVariantName = vMatch.name;
-              finalPrice = Number(vMatch.price);
-            } else if (c.variantName) {
-              hasStaleItems = true;
-              continue;
+
+              let finalVariantId = c.variantId;
+              let finalVariantName = c.variantName;
+              let finalPrice = c.price !== undefined && c.price !== null ? c.price : mItem.price;
+
+              if (mItem.has_variants && mItem.variants && mItem.variants.length > 0) {
+                const vMatch = mItem.variants.find((v: any) => 
+                  (c.variantId && v.id === c.variantId) || 
+                  (c.variantName && v.name.toLowerCase() === c.variantName.toLowerCase())
+                );
+                if (!vMatch || vMatch.is_available === false) {
+                  hasStaleItems = true;
+                  continue;
+                }
+                finalVariantId = vMatch.id;
+                finalVariantName = vMatch.name;
+                finalPrice = Number(vMatch.price);
+              } else if (c.variantName) {
+                hasStaleItems = true;
+                continue;
+              }
+
+              validCart.push({
+                menuItem: mItem,
+                variantId: finalVariantId,
+                variantName: finalVariantName,
+                price: finalPrice,
+                quantity: c.quantity || 1,
+                notes: (c.notes || '').includes('[CANCELLED]') ? '' : (c.notes || '').trim()
+              });
             }
 
-            validCart.push({
-              menuItem: mItem,
-              variantId: finalVariantId,
-              variantName: finalVariantName,
-              price: finalPrice,
-              quantity: c.quantity || 1,
-              notes: (c.notes || '').includes('[CANCELLED]') ? '' : (c.notes || '').trim()
-            });
-          }
-
-          setCart(validCart);
-          if (typeof window !== 'undefined') {
-            sessionStorage.setItem(`smartdine_cart_${rest.id}`, JSON.stringify(validCart));
-          }
-
-          if (hasStaleItems) {
-            if (validCart.length > 0) {
-              setStaleCartNotice("Some items in your cart are no longer available and were removed.");
-            } else {
-              setStaleCartNotice("Your cart items are no longer available. Please add items from the current menu.");
+            setCart(validCart);
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem(`smartdine_cart_${rest.id}`, JSON.stringify(validCart));
             }
-          }
-        } catch (e) {
-          if (typeof window !== 'undefined') {
-            sessionStorage.removeItem(`smartdine_cart_${rest.id}`);
+
+            if (hasStaleItems) {
+              setStaleCartNotice(validCart.length > 0 
+                ? "Some items in your cart are no longer available and were removed."
+                : "Your cart items are no longer available. Please add items from the current menu.");
+            }
+          } catch (e) {
+            if (typeof window !== 'undefined') {
+              sessionStorage.removeItem(`smartdine_cart_${rest.id}`);
+            }
           }
         }
+
+        // PHASE 2: Deferred Background Hydration (Stock Map & Top Selling Items)
+        setTimeout(async () => {
+          try {
+            const { getRestaurantMenuStockMap } = await import('@/lib/inventoryEngine');
+            const sMap = await getRestaurantMenuStockMap(rest.id);
+            if (sMap?.menuStockMap) setStockMap(sMap.menuStockMap);
+          } catch (e) {}
+
+          try {
+            const topItems = await db.getTopSellingItems(rest.id);
+            setTopSellingItems(topItems);
+          } catch (e) {}
+
+          if (tableId && !isReservation && !isTakeaway) {
+            try {
+              const activeMerge = await db.getActiveMergeGroupForTable(rest.id, tableId);
+              if (activeMerge) setActiveMergeGroup(activeMerge.group);
+            } catch (e) {}
+          }
+        }, 50);
+
+      } catch (err) {
+        console.error('[CustomerMenu] loadData error:', err);
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('[CustomerMenu] loadData error:', err);
-    } finally {
-      setLoading(false);
     }
-  }
-  loadData();
+    loadData();
 
     // Subscribe to real-time inventory, table states, and restaurant setting changes
     let invChannel: any = null;
