@@ -336,20 +336,23 @@ export async function consumeReservedInventoryForOrderBatch(
 
     const existingTxItemIds = new Set((existingTx || []).map(t => t.inventory_item_id));
 
-    // 2. Fetch active reservations for this batch
-    const { data: activeReservations } = await supabase
+    // 2. Fetch reservations for this batch or order
+    const { data: batchReservations } = await supabase
       .from('inventory_reservations')
       .select('*')
       .eq('restaurant_id', restaurantId)
-      .eq('batch_id', batchId)
-      .eq('status', 'ACTIVE');
+      .or(`batch_id.eq.${batchId},order_id.eq.${orderId}`);
 
-    if (activeReservations && activeReservations.length > 0) {
-      // Filter out reservations that have already been consumed
-      const unconsumedReservations = activeReservations.filter(r => !existingTxItemIds.has(r.inventory_item_id));
+    if (batchReservations && batchReservations.length > 0) {
+      // Filter out reservations that have already been consumed (by checking existingTxItemIds)
+      const unconsumedReservations = batchReservations.filter(r => !existingTxItemIds.has(r.inventory_item_id));
 
       if (unconsumedReservations.length === 0) {
         result.skipped = true;
+        await supabase
+          .from('orders')
+          .update({ inventory_consumed: true })
+          .eq('id', orderId);
         return result;
       }
 
@@ -1643,19 +1646,41 @@ export async function syncInventoryMenuAvailability(restaurantId: string): Promi
   try {
     const stockMapData = await getRestaurantMenuStockMap(restaurantId);
 
-    for (const [itemId, stockInfo] of Object.entries(stockMapData.menuStockMap)) {
+    // Track parent menu item availability
+    const parentMenuItemAvailabilityMap = new Map<string, boolean>();
+
+    for (const [key, stockInfo] of Object.entries(stockMapData.menuStockMap)) {
       if (!stockInfo.hasRecipe && !stockInfo.limitingIngredient) continue;
 
       const shouldBeAvailable = stockInfo.maxServings > 0;
-      await supabase
-        .from('menu_items')
-        .update({ is_available: shouldBeAvailable })
-        .eq('id', itemId)
-        .eq('restaurant_id', restaurantId);
+      const mItemId = stockInfo.menuItemId;
+
+      if (stockInfo.variantId) {
+        await supabase
+          .from('menu_item_variants')
+          .update({ is_available: shouldBeAvailable })
+          .eq('id', stockInfo.variantId);
+        summary.updatedVariantsCount++;
+
+        // Parent dish is available if at least one variant is available
+        const currentParent = parentMenuItemAvailabilityMap.get(mItemId);
+        parentMenuItemAvailabilityMap.set(mItemId, currentParent === true || shouldBeAvailable);
+      } else {
+        parentMenuItemAvailabilityMap.set(mItemId, shouldBeAvailable);
+      }
 
       if (!shouldBeAvailable) {
         summary.outOfStockItems.push(`${stockInfo.menuItemName} (${stockInfo.outOfStockReasons.join(', ')})`);
       }
+    }
+
+    // Update parent menu_items table
+    for (const [menuItemId, isAvailable] of parentMenuItemAvailabilityMap.entries()) {
+      await supabase
+        .from('menu_items')
+        .update({ is_available: isAvailable })
+        .eq('id', menuItemId)
+        .eq('restaurant_id', restaurantId);
       summary.updatedMenuItemsCount++;
     }
   } catch (err) {
@@ -1895,13 +1920,22 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
       .select('*')
       .eq('order_id', orderId);
 
-    const targetBatches = batchId 
-      ? (allBatches || []).filter(b => b.id === batchId)
-      : (allBatches || []).filter(b => b.status !== 'cancelled');
+    let targetBatches: any[] = [];
+    if (batchId) {
+      const match = (allBatches || []).find(b => b.id === batchId);
+      targetBatches = match ? [match] : [{ id: batchId, status: order.status }];
+    } else if (allBatches && allBatches.length > 0) {
+      targetBatches = allBatches.filter(b => b.status !== 'cancelled');
+    } else {
+      const uniqueBatchIds = Array.from(new Set((allItems || []).map(i => i.batch_id).filter(Boolean)));
+      if (uniqueBatchIds.length > 0) {
+        targetBatches = uniqueBatchIds.map(bId => ({ id: bId, status: order.status }));
+      } else {
+        targetBatches = [{ id: orderId, status: order.status }];
+      }
+    }
 
-    oldStatus = batchId 
-      ? (targetBatches[0]?.status || order.status)
-      : order.status;
+    oldStatus = targetBatches[0]?.status || order.status;
 
     console.log(`[FORENSIC_INVENTORY_TRACE] LIFECYCLE_TRANSITION_START - OrderID: ${orderId}, BatchID: ${batchId || 'ALL'}, TargetStatus: ${targetStatus}, CallingFunction: ${callingFunction}`);
 
@@ -2057,20 +2091,23 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
     const nonCancelled = (updatedBatches || []).filter(b => b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'));
     let parentStatus: OrderLifecycleStatus = targetStatus;
 
-    if (nonCancelled.length === 0) {
-      parentStatus = 'cancelled';
-    } else if (order.status === 'completed' || targetStatus === 'completed') {
-      parentStatus = 'completed';
-    } else if (nonCancelled.every(b => b.status === 'served')) {
-      parentStatus = 'served';
-    } else if (nonCancelled.some(b => b.status === 'ready')) {
-      parentStatus = 'ready';
-    } else if (nonCancelled.some(b => b.status === 'preparing')) {
-      parentStatus = 'preparing';
-    } else if (nonCancelled.some(b => b.status === 'accepted')) {
-      parentStatus = 'accepted';
-    } else if (nonCancelled.every(b => b.status === 'new')) {
-      parentStatus = 'new';
+    if (updatedBatches && updatedBatches.length > 0) {
+      const nonCancelled = updatedBatches.filter(b => b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'));
+      if (nonCancelled.length === 0) {
+        parentStatus = 'cancelled';
+      } else if (order.status === 'completed' || targetStatus === 'completed') {
+        parentStatus = 'completed';
+      } else if (nonCancelled.every(b => b.status === 'served')) {
+        parentStatus = 'served';
+      } else if (nonCancelled.some(b => b.status === 'ready')) {
+        parentStatus = 'ready';
+      } else if (nonCancelled.some(b => b.status === 'preparing')) {
+        parentStatus = 'preparing';
+      } else if (nonCancelled.some(b => b.status === 'accepted')) {
+        parentStatus = 'accepted';
+      } else if (nonCancelled.every(b => b.status === 'new')) {
+        parentStatus = 'new';
+      }
     }
 
     const orderPayload: any = {

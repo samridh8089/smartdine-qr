@@ -2,14 +2,31 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { createClient } from '@supabase/supabase-js';
 import { healUnconsumedActiveReservations } from '@/lib/inventoryEngine';
+import { validateSchema, Validators } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
+    const validation = validateSchema(body, {
+      batchId: { rules: [Validators.string({ max: 100 })], required: false },
+      orderId: { rules: [Validators.string({ max: 100 })], required: false },
+      newStatus: { rules: [Validators.enum(['received', 'preparing', 'ready', 'served', 'completed', 'cancelled'] as const)], required: true },
+      staffName: { rules: [Validators.string({ max: 100 })], required: false },
+      cancellationReason: { rules: [Validators.string({ max: 500 })], required: false }
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
+    }
+
     const { batchId, orderId, newStatus, staffName = 'Staff', cancellationReason } = body;
 
     if (!batchId && !orderId) {
@@ -38,6 +55,8 @@ export async function POST(req: Request) {
       order: updatedOrder
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to update order status' }, { status: 500 });
+    return handleApiError('Staff-Update-Order-Status', err, 'Failed to update order status. Please try again.', 500);
   }
 }
+
+

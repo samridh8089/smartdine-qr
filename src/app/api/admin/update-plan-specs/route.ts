@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
+import { handleApiError } from '@/lib/errors';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
@@ -53,16 +54,13 @@ export async function POST(req: Request) {
 
     let textFeatures: string[] = [];
 
-    // If explicit non-empty features array supplied in body, use it
     if (Array.isArray(features) && features.length > 0) {
       textFeatures = features.filter((f: string) => typeof f === 'string' && !f.startsWith('__SPECS__:'));
     }
-    // Otherwise, preserve text features from existing DB row
     else if (existingRow && Array.isArray(existingRow.features)) {
       textFeatures = existingRow.features.filter((f: string) => typeof f === 'string' && !f.startsWith('__SPECS__:'));
     }
 
-    // If textFeatures is still empty, construct default feature list from specs
     if (textFeatures.length === 0) {
       textFeatures = [
         kdsVal === 'premium' ? 'Premium KDS with Sound Alerts' : 'Standard KDS',
@@ -73,7 +71,6 @@ export async function POST(req: Request) {
         'Real-Time Order Push Alerts'
       ];
     } else {
-      // Dynamic update of individual feature bullet strings if toggles change
       if (kdsVal === 'premium' && !textFeatures.includes('Premium KDS with Sound Alerts')) {
         textFeatures = textFeatures.map(f => f === 'Standard KDS' ? 'Premium KDS with Sound Alerts' : f);
         if (!textFeatures.includes('Premium KDS with Sound Alerts')) textFeatures.unshift('Premium KDS with Sound Alerts');
@@ -102,7 +99,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Reconstruct final features array: text features + fresh __SPECS__ tag
     const finalFeatures = [...textFeatures, `__SPECS__:${JSON.stringify(specsObj)}`];
 
     // 2. UPSERT DB
@@ -119,8 +115,8 @@ export async function POST(req: Request) {
       .select();
 
     if (upsertErr) {
-      console.error('API Error updating pricing_plans:', upsertErr);
-      return NextResponse.json({ error: `Database update failed: ${upsertErr.message}` }, { status: 500 });
+      console.error('[API Update-Plan-Specs DB Error]:', upsertErr);
+      return handleApiError('Update-Plan-Specs DB', upsertErr, 'Failed to update plan specifications in database', 500);
     }
 
     // 3. Fresh SELECT to verify persistence
@@ -131,7 +127,7 @@ export async function POST(req: Request) {
       .single();
 
     if (readErr || !verified) {
-      return NextResponse.json({ error: 'Failed to verify saved plan specifications from database' }, { status: 500 });
+      return handleApiError('Update-Plan-Specs Read', readErr, 'Failed to verify saved plan specifications', 500);
     }
 
     // 4. Compare saved values against requested values
@@ -171,6 +167,7 @@ export async function POST(req: Request) {
       }
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Server error updating plan specs' }, { status: 500 });
+    return handleApiError('Update-Plan-Specs', err, 'Failed to update plan specifications', 500);
   }
 }
+

@@ -1,12 +1,11 @@
-// Production Supabase client configuration
 import { createClient } from '@supabase/supabase-js';
+import { validateMagicBytes, MAX_FILE_SIZE_BYTES, sanitizeFilename } from './fileValidation';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = (typeof window === 'undefined' && process.env.SUPABASE_SERVICE_ROLE_KEY)
-  ? process.env.SUPABASE_SERVICE_ROLE_KEY
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-');
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -15,6 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     storageKey: 'smartdine_auth_token_v2'
   }
 });
+
 
 // High-speed in-memory user cache with short TTL to eliminate redundant queries across layouts/pages
 let cachedProfile: any = null;
@@ -157,7 +157,7 @@ export const IS_MOCK_MODE = false;
 
 export const storage = {
   async uploadImage(file: File, restaurantId: string, path: string): Promise<string> {
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       throw new Error('File size exceeds the 5 MB limit.');
     }
 
@@ -166,12 +166,30 @@ export const storage = {
       throw new Error('Unsupported file format. Please upload jpg, jpeg, png, or webp.');
     }
 
-    const fileName = `${path}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-    const filePath = `${restaurantId}/${fileName}`;
+    if (file.type && !['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type.toLowerCase())) {
+      throw new Error('Invalid image MIME type.');
+    }
+
+    // Binary Magic-Bytes inspection
+    try {
+      const arrayBuf = await file.slice(0, 32).arrayBuffer();
+      const magicCheck = validateMagicBytes(new Uint8Array(arrayBuf));
+      if (!magicCheck.valid) {
+        throw new Error('Invalid image binary content. File rejected for security reasons.');
+      }
+    } catch (e: any) {
+      if (e.message?.includes('security reasons')) throw e;
+    }
+
+    const safeRestId = restaurantId.replace(/[^a-zA-Z0-9_\-]/g, '');
+    const safePath = path.replace(/[^a-zA-Z0-9_\-]/g, '');
+    const fileName = sanitizeFilename(`${safePath}.${fileExt}`);
+    const filePath = `${safeRestId}/${fileName}`;
 
     const { error } = await supabase.storage
       .from('smartdine-images')
       .upload(filePath, file, {
+        contentType: file.type || `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
         upsert: true
       });
 
@@ -187,7 +205,7 @@ export const storage = {
   },
 
   async uploadAudio(file: File, restaurantId: string, path: string): Promise<string> {
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > MAX_FILE_SIZE_BYTES) {
       throw new Error('File size exceeds the 5 MB limit.');
     }
 
@@ -196,12 +214,30 @@ export const storage = {
       throw new Error('Unsupported file format. Please upload mp3, wav, or m4a.');
     }
 
-    const fileName = `${path}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-    const filePath = `${restaurantId}/${fileName}`;
+    if (file.type && !['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/m4a', 'audio/x-m4a'].includes(file.type.toLowerCase())) {
+      throw new Error('Invalid audio MIME type.');
+    }
+
+    // Binary Magic-Bytes inspection
+    try {
+      const arrayBuf = await file.slice(0, 32).arrayBuffer();
+      const magicCheck = validateMagicBytes(new Uint8Array(arrayBuf));
+      if (!magicCheck.valid) {
+        throw new Error('Invalid audio binary content. File rejected for security reasons.');
+      }
+    } catch (e: any) {
+      if (e.message?.includes('security reasons')) throw e;
+    }
+
+    const safeRestId = restaurantId.replace(/[^a-zA-Z0-9_\-]/g, '');
+    const safePath = path.replace(/[^a-zA-Z0-9_\-]/g, '');
+    const fileName = sanitizeFilename(`${safePath}.${fileExt}`);
+    const filePath = `${safeRestId}/${fileName}`;
 
     const { error } = await supabase.storage
       .from('smartdine-images')
       .upload(filePath, file, {
+        contentType: file.type || `audio/${fileExt}`,
         upsert: true
       });
 
@@ -220,7 +256,7 @@ export const storage = {
     try {
       const parts = publicUrl.split('/smartdine-images/');
       if (parts.length < 2) return;
-      const filePath = decodeURIComponent(parts[1]);
+      const filePath = decodeURIComponent(parts[1]).replace(/\.\./g, '');
       
       const { error } = await supabase.storage
         .from('smartdine-images')
@@ -234,3 +270,4 @@ export const storage = {
     }
   }
 };
+
