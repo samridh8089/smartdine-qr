@@ -47,6 +47,8 @@ export default function KitchenDisplayPage() {
   const [recipesMap, setRecipesMap] = useState<Record<string, any>>({});
   const [inventoryItemsMap, setInventoryItemsMap] = useState<Record<string, any>>({});
   const [transactionsMap, setTransactionsMap] = useState<Record<string, any>>({});
+  const [errorMessage, setErrorMessage] = useState('');
+
 
 
 
@@ -321,6 +323,23 @@ export default function KitchenDisplayPage() {
   const updateBatchStatus = async (batchId: string, nextStatus: OrderBatch['status']) => {
     if (processingBatchIds.includes(batchId)) return;
     setProcessingBatchIds(prev => [...prev, batchId]);
+
+    // Find original status for ID-based patch rollback
+    const origStatus = orders
+      .flatMap(o => o.batches || [])
+      .find((b: any) => b.id === batchId)?.status || 'new';
+
+    // Optimistic UI state update
+    setOrders(prev => prev.map(order => {
+      if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
+      return {
+        ...order,
+        batches: order.batches.map((b: any) => 
+          b.id === batchId ? { ...b, status: nextStatus } : b
+        )
+      };
+    }));
+
     try {
       if (nextStatus === 'accepted') {
         window.dispatchEvent(new Event('stop-kitchen-sound'));
@@ -331,11 +350,24 @@ export default function KitchenDisplayPage() {
         window.dispatchEvent(new Event('storage'));
       }
     } catch (err: any) {
-      alert(`Failed to update status: ${err.message}`);
+      // Functional ID-based patch rollback (preserves concurrent realtime updates on other orders)
+      setOrders(prev => prev.map(order => {
+        if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
+        return {
+          ...order,
+          batches: order.batches.map((b: any) => 
+            b.id === batchId ? { ...b, status: origStatus } : b
+          )
+        };
+      }));
+      setErrorMessage(`Failed to update status: ${err.message || 'Network error'}`);
+      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
     }
   };
+
+
 
   const cancelBatch = (batchId: string) => {
     setOrderToCancel(batchId);

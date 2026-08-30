@@ -1,0 +1,71 @@
+name: SmartDine Load Testing CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *' # Nightly 500-VU test at 2:00 AM UTC
+  workflow_dispatch:
+
+jobs:
+  smoke-test-pr:
+    name: Run 20-VU Smoke Load Test (PR)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run k6 Smoke Test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: scratch/k6_e2e_load_test.js
+          flags: --vus 20 --duration 1m --out json=summary-pr.json
+
+      - name: Upload PR Performance Metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-smoke-summary
+          path: summary-pr.json
+
+  merge-test-main:
+    name: Run 100-VU Load Test (Main Merge)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run k6 100-VU Merge Test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: scratch/k6_e2e_load_test.js
+          flags: --vus 100 --duration 3m --out json=summary-main.json
+
+      - name: Upload Main Merge Performance Metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-main-summary
+          path: summary-main.json
+
+  nightly-test-schedule:
+    name: Run 500-VU Nightly Stress Test
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run k6 500-VU Nightly Stress Test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: scratch/k6_e2e_load_test.js
+          flags: --vus 500 --duration 5m --out json=summary-nightly.json
+
+      - name: Upload Nightly Performance Metrics
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-nightly-summary
+          path: summary-nightly.json
