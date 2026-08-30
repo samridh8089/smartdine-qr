@@ -18,6 +18,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("handleLogin fired");
     setLoading(true);
     setError('');
     clearActiveUserCache();
@@ -103,7 +104,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <form className="space-y-6" onSubmit={handleLogin} autoComplete="off">
+            <form className="space-y-6" onSubmit={handleLogin} method="POST" autoComplete="off">
               <Input
                 label="Email address"
                 type="email"
