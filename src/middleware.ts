@@ -125,10 +125,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get('origin') || '';
 
-  const isLocalDev = process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'));
-  const isWhitelisted = ALLOWED_ORIGINS.includes(origin);
-  const isVercelPreview = process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL && origin === `https://${process.env.VERCEL_URL}`;
-  const corsOrigin = isWhitelisted || isLocalDev || isVercelPreview ? origin : null;
+  // Strict CORS Origin Resolution: NEVER return '*'
+  const isWhitelisted = origin === 'https://www.cleverops.in' || origin === 'https://cleverops.in';
+  const isLocalDev = process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'));
+  const isVercelPreview = process.env.VERCEL_ENV === 'preview' && Boolean(process.env.VERCEL_URL) && origin === `https://${process.env.VERCEL_URL}`;
+
+  // Only set corsOrigin if origin is explicitly allowed and non-wildcard
+  const corsOrigin = (isWhitelisted || isLocalDev || isVercelPreview) && origin && origin !== '*' ? origin : null;
 
   if (request.method === 'OPTIONS') {
     const preflightResponse = new NextResponse(null, { status: 204 });
@@ -140,6 +143,7 @@ export async function middleware(request: NextRequest) {
     preflightResponse.headers.set('Access-Control-Max-Age', '86400');
     return preflightResponse;
   }
+
 
   // ─── 1. RATE LIMITING CONFIGURATION & ENFORCEMENT ──────────────────────────
   const forwarded = request.headers.get('x-forwarded-for');
