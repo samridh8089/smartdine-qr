@@ -2,8 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import { validateMagicBytes, MAX_FILE_SIZE_BYTES, sanitizeFilename } from './fileValidation';
 
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.supabase.co';
+const supabaseAnonKey = rawKey || 'placeholder-anon-key';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
