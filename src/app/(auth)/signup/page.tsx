@@ -227,7 +227,7 @@ function SignupForm() {
   };
 
   return (
-    <form className="space-y-5" onSubmit={handleSignup}>
+    <form className="space-y-5" onSubmit={handleSignup} method="POST" autoComplete="off">
       {error && (
         <div className="mb-4 bg-rose-50 border border-rose-100 text-rose-700 px-4 py-3 rounded-lg text-sm font-medium">
           {error}
