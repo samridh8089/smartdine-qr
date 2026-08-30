@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
+import { handleApiError } from '@/lib/errors';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
@@ -66,7 +67,7 @@ export async function POST(req: Request) {
       }
     });
   } catch (err: any) {
-    console.error('[API Impersonate] Error:', err);
-    return NextResponse.json({ error: err?.message || 'Failed to initialize impersonation' }, { status: 500 });
+    return handleApiError('Admin-Impersonate', err, 'Failed to initialize impersonation session', 500);
   }
 }
+

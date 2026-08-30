@@ -1,20 +1,36 @@
 import { NextResponse } from 'next/server';
+import { validateSchema, Validators } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
+
 
 export async function POST(req: Request) {
   try {
-    const { amount, currency = 'INR', plan, restaurantId, email, userId, billingInterval = 'monthly' } = await req.json();
+    const body = await req.json();
 
-    if (!amount || Number(amount) <= 0) {
-      return NextResponse.json({ error: 'Valid payment amount is required' }, { status: 400 });
+    const validation = validateSchema(body, {
+      amount: { rules: [Validators.number({ min: 1 })], required: true },
+      currency: { rules: [Validators.enum(['INR', 'USD'] as const)], required: false },
+      plan: { rules: [Validators.string({ max: 50 })], required: false },
+      restaurantId: { rules: [Validators.restaurantId()], required: false },
+      email: { rules: [Validators.email()], required: false },
+      userId: { rules: [Validators.string({ max: 100 })], required: false },
+      billingInterval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false }
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
+
+    const { amount, currency = 'INR', plan, restaurantId, email, userId, billingInterval = 'monthly' } = body;
 
     // Task 4: Payment Safety — Verify no existing duplicate restaurant BEFORE creating Razorpay order
     if (userId || email) {
       const { createClient } = require('@supabase/supabase-js');
       const supabaseAdmin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co',
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
         process.env.SUPABASE_SERVICE_ROLE_KEY || ''
       );
+
 
       const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -73,8 +89,9 @@ export async function POST(req: Request) {
       }
     }
 
-    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TK1Nbl3mJiENjR';
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
+    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
+
 
     const amountInPaise = Math.round(Number(amount) * 100);
 
@@ -131,7 +148,8 @@ export async function POST(req: Request) {
       keyId,
     });
   } catch (err: any) {
-    console.error('[Razorpay create-order exception]:', err);
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+    return handleApiError('Payments-Create-Order', err, 'Failed to create payment order. Please try again later.', 500);
   }
 }
+
+

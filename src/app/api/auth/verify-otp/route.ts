@@ -1,23 +1,36 @@
 import { NextResponse } from 'next/server';
 import { verifyOtp } from '@/lib/otpEngine';
 import { createClient } from '@supabase/supabase-js';
+import { validateSchema, Validators } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+
+    const validation = validateSchema(body, {
+      email: { rules: [Validators.email()], required: true },
+      emailOtp: { rules: [Validators.string({ min: 4, max: 10 })], required: true },
+      userId: { rules: [Validators.string({ max: 100 })], required: false },
+      sessionId: { rules: [Validators.string({ max: 100 })], required: false },
+      verificationId: { rules: [Validators.string({ max: 100 })], required: false }
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
+    }
+
     const { email, emailOtp, userId, sessionId, verificationId } = body;
 
-    const cleanEmail = (email || '').trim().toLowerCase();
-    const cleanOtp = (emailOtp || '').trim();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanOtp = emailOtp.trim();
     const activeSessionId = sessionId || verificationId;
-
-    if (!cleanEmail || !cleanOtp) {
-      return NextResponse.json({ error: 'Email and Email OTP are required.' }, { status: 400 });
-    }
 
     // 1. Verify Email OTP via Engine
     const emailVerifyResult = await verifyOtp({
@@ -55,7 +68,8 @@ export async function POST(req: Request) {
       message: 'Email OTP verified successfully.'
     });
   } catch (err: any) {
-    console.error('[API Verify-OTP] Error:', err);
-    return NextResponse.json({ error: err?.message || 'Server error verifying OTP' }, { status: 500 });
+    return handleApiError('Verify-OTP', err, 'An error occurred while verifying OTP. Please try again.', 500);
   }
 }
+
+

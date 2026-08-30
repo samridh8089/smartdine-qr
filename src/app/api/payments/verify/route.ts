@@ -1,13 +1,35 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { validateSchema, Validators } from '@/lib/validation';
+import { handleApiError } from '@/lib/errors';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+
 
 export async function POST(req: Request) {
   try {
+    const body = await req.json();
+
+    const validation = validateSchema(body, {
+      razorpay_order_id: { rules: [Validators.string({ max: 100 })], required: false },
+      razorpay_payment_id: { rules: [Validators.string({ max: 100 })], required: false },
+      razorpay_signature: { rules: [Validators.string({ max: 256 })], required: false },
+      restaurant_id: { rules: [Validators.restaurantId()], required: false },
+      plan_name: { rules: [Validators.enum(['free', 'lite', 'pro', 'enterprise'] as const)], required: false },
+      billing_interval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false },
+      amount: { rules: [Validators.number({ min: 0 })], required: false },
+      user_id: { rules: [Validators.string({ max: 100 })], required: false },
+      isDemo: { rules: [Validators.boolean()], required: false }
+    });
+
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
+    }
+
     const { 
       razorpay_order_id, 
       razorpay_payment_id, 
@@ -18,15 +40,16 @@ export async function POST(req: Request) {
       amount = 0,
       user_id,
       isDemo
-    } = await req.json();
+    } = body;
 
     if (!isDemo) {
-      const keySecret = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
+      const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
       if (keySecret && razorpay_order_id && razorpay_payment_id && razorpay_signature) {
-        const body = razorpay_order_id + '|' + razorpay_payment_id;
+
+        const bodyStr = razorpay_order_id + '|' + razorpay_payment_id;
         const expectedSignature = crypto
           .createHmac('sha256', keySecret)
-          .update(body.toString())
+          .update(bodyStr.toString())
           .digest('hex');
 
         if (expectedSignature !== razorpay_signature) {
@@ -122,7 +145,8 @@ export async function POST(req: Request) {
       message: 'Payment verified and plan activated successfully.'
     });
   } catch (err: any) {
-    console.error('[Verify Payment Exception]:', err);
-    return NextResponse.json({ error: err.message || 'Payment verification failed' }, { status: 500 });
+    return handleApiError('Payments-Verify', err, 'Payment verification failed. Please contact support.', 500);
   }
 }
+
+
