@@ -179,6 +179,60 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     return () => clearInterval(timer);
   }, [offers]);
 
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+  // Network Recovery & Offline Auto-Sync Effect
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOnline = async () => {
+      setIsOffline(false);
+      showToast("Network restored! Syncing offline orders...");
+
+      if (!restaurant?.id) return;
+      const queueKey = `smartdine_offline_orders_${restaurant.id}`;
+      try {
+        const queue = JSON.parse(localStorage.getItem(queueKey) || '[]');
+        if (queue.length === 0) return;
+
+        const remainingQueue: any[] = [];
+        for (const item of queue) {
+          try {
+            const res = await fetch('/api/customer/orders', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(item)
+            });
+            const data = await res.json();
+            if (data.success && data.order) {
+              sessionStorage.setItem(`smartdine_latest_order_${restaurant.id}`, data.order.id);
+              localStorage.setItem(`smartdine_latest_order_${restaurant.id}`, data.order.id);
+              setActiveOrderId(data.order.id);
+            } else {
+              remainingQueue.push(item);
+            }
+          } catch (err) {
+            remainingQueue.push(item);
+          }
+        }
+        localStorage.setItem(queueKey, JSON.stringify(remainingQueue));
+        if (remainingQueue.length === 0) {
+          showToast("All offline orders successfully synced!");
+        }
+      } catch (e) {}
+    };
+
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [restaurant?.id]);
+
   // Fresh QR Session Isolation & History Boundary Setup
   useEffect(() => {
     if (typeof window === 'undefined' || !restaurantSlug) return;
@@ -738,6 +792,10 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
       let newOrder: any;
       try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          throw new Error('OFFLINE_NETWORK');
+        }
+
         const res = await fetch('/api/customer/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -761,7 +819,34 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           throw new Error(apiResult.error || 'API order placement returned error');
         }
         newOrder = apiResult.order;
-      } catch (apiErr) {
+      } catch (apiErr: any) {
+        if (apiErr.message === 'OFFLINE_NETWORK' || !navigator.onLine) {
+          // OFFLINE RESILIENCE: Save to IndexedDB/localStorage Queue with Idempotency Key
+          try {
+            const queueKey = `smartdine_offline_orders_${restaurant.id}`;
+            const existingQueue = JSON.parse(localStorage.getItem(queueKey) || '[]');
+            const duplicateIndex = existingQueue.findIndex((o: any) => o.idempotencyKey === idempotencyKey);
+            if (duplicateIndex === -1) {
+              existingQueue.push({
+                restaurantId: restaurant.id,
+                tableId: table.id,
+                items: orderPayload,
+                specialInstructions: finalInstructions,
+                orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
+                idempotencyKey,
+                queuedAt: Date.now()
+              });
+              localStorage.setItem(queueKey, JSON.stringify(existingQueue));
+            }
+          } catch (e) {}
+
+          showToast("Network Offline. Order saved safely & will auto-sync when connection restores!");
+          saveCart([]);
+          setSpecialInstructions('');
+          setIdempotencyKey(crypto.randomUUID());
+          return;
+        }
+
         console.warn('Fast API order placement fallback to db.createOrder:', apiErr);
         newOrder = await db.createOrder(
           restaurant.id,
@@ -1048,6 +1133,14 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/50 dark:bg-slate-950/40 pb-24 transition-colors">
+      {/* Offline Network Banner */}
+      {isOffline && (
+        <div className="bg-amber-500 text-white text-xs font-semibold py-1.5 px-4 text-center sticky top-0 z-50 flex items-center justify-center gap-2 shadow">
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+          <span>You are currently offline. Orders will be saved locally & auto-synced on reconnect.</span>
+        </div>
+      )}
+
       {/* Cover Banner Image if present */}
       {restaurant.cover_image_url && (
         <div className="w-full h-32 md:h-44 relative shrink-0">

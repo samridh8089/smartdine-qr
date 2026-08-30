@@ -73,8 +73,30 @@ export default function KitchenDisplayPage() {
     }
   }, []);
 
-  const showDesktopNotification = (order: Order) => {
-    // Desktop notifications disabled per product specification
+  const showDesktopNotification = (title: string, body: string, url = '/dashboard/kds') => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      try {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.ready.then((reg) => {
+            reg.showNotification(title, {
+              body,
+              icon: '/icon-192.png',
+              badge: '/favicon-32x32.png',
+              data: { url }
+            });
+          }).catch(() => {
+            new Notification(title, { body, icon: '/icon-192.png' });
+          });
+        } else {
+          new Notification(title, { body, icon: '/icon-192.png' });
+        }
+      } catch (e) {
+        new Notification(title, { body, icon: '/icon-192.png' });
+      }
+    } else if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
   };
 
   // Prevent duplicate chimes/alerts for the same order
@@ -256,13 +278,20 @@ export default function KitchenDisplayPage() {
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
                 setNewOrderAlert(fullOrder);
-                showDesktopNotification(fullOrder);
+                showDesktopNotification('🚨 NEW ORDER RECEIVED!', `New order on ${fullOrder.table_name || 'Table X'}`);
                 setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
                 
                 setTimeout(() => {
                   setToast(prev => prev && prev.message.includes(fullOrder.table_name || 'Table X') ? { ...prev, visible: false } : prev);
                 }, 5000);
               }
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as Order;
+            if (updated.status === 'preparing') {
+              showDesktopNotification('👨‍🍳 Order Preparing', `Order on ${updated.table_name || 'Table'} is now preparing in kitchen.`);
+            } else if (updated.status === 'ready') {
+              showDesktopNotification('🔔 Order Ready for Pickup!', `Order on ${updated.table_name || 'Table'} is cooked and ready!`);
             }
           }
         }
@@ -299,7 +328,7 @@ export default function KitchenDisplayPage() {
               console.log(`New batch detected! Playing alarm for batch ID: ${newBatch.id}`);
 
               setNewOrderAlert(fullOrder);
-              showDesktopNotification(fullOrder);
+              showDesktopNotification('🚨 NEW ITEMS ADDED!', `New items added for ${fullOrder.table_name || 'Table X'}`);
               setToast({ message: `New Items Added - ${fullOrder.table_name || 'Table X'}`, visible: true });
               
               setTimeout(() => {
