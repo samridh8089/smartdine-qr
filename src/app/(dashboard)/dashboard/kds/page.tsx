@@ -375,11 +375,19 @@ export default function KitchenDisplayPage() {
       if (nextStatus === 'accepted') {
         window.dispatchEvent(new Event('stop-kitchen-sound'));
       }
-      await db.updateBatchStatus(batchId, nextStatus, profile?.full_name || 'Kitchen Staff');
-      if (restaurantId) {
-        await loadKdsData(restaurantId);
-        window.dispatchEvent(new Event('storage'));
-      }
+      fetch('/api/staff/update-order-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId,
+          newStatus: nextStatus,
+          staffName: profile?.full_name || 'Kitchen Staff'
+        })
+      }).catch(err => {
+        console.warn('API status update fallback to db.updateBatchStatus:', err);
+        db.updateBatchStatus(batchId, nextStatus, profile?.full_name || 'Kitchen Staff');
+      });
+      window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
       // Functional ID-based patch rollback (preserves concurrent realtime updates on other orders)
       setOrders(prev => prev.map(order => {
