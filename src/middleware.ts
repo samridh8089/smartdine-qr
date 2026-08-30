@@ -252,13 +252,16 @@ export async function middleware(request: NextRequest) {
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Idempotency-Key');
   }
 
+  const isProd = process.env.NODE_ENV === 'production';
+  const scriptEval = isProd ? '' : "'unsafe-eval'";
+
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://*.supabase.co https://www.cleverops.in;
+    script-src 'self' 'unsafe-inline' ${scriptEval} https://checkout.razorpay.com https://*.supabase.co https://www.cleverops.in https://cleverops.in;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com data:;
     img-src 'self' data: blob: https:;
-    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://checkout.razorpay.com https://api.razorpay.com https://lumberjack-cx.razorpay.com https://www.cleverops.in;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://checkout.razorpay.com https://api.razorpay.com https://lumberjack-cx.razorpay.com https://www.cleverops.in https://cleverops.in;
     frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com;
     object-src 'none';
     base-uri 'self';
@@ -271,6 +274,8 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-Frame-Options', 'SAMEORIGIN');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self "https://checkout.razorpay.com")');
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
 
   if (pathname.startsWith('/api/')) {
