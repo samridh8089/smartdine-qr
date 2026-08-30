@@ -61,43 +61,44 @@ export default function OrderTrackingPage({ params }: PageProps) {
       return;
     }
     setOrder(o);
-
-    const rest = await db.getRestaurantById(o.restaurant_id);
-    if (rest) {
-      setRestaurant(rest);
-      try {
-        sessionStorage.setItem('smartdine_active_restaurant_slug', rest.slug);
-        if (o.status === 'completed' || o.status === 'cancelled') {
-          sessionStorage.removeItem(`smartdine_latest_order_${rest.id}`);
-          localStorage.removeItem(`smartdine_latest_order_${rest.id}`);
-        }
-      } catch (e) {}
-      const planId = (rest.subscription_plan || 'starter').toLowerCase();
-      const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle();
-      const spec = parsePlanSpec(planRow || { id: planId });
-      setPlanSpec(spec);
-    }
-
-    // Resolve merged group details if order belongs to a merged group or table has active merge
-    let mGroupId = o.merge_group_id;
-    let mSessionId = (o as any).merge_session_id;
-    if (!mGroupId && o.table_id && o.restaurant_id) {
-      const activeMerge = await db.getActiveMergeGroupForTable(o.restaurant_id, o.table_id);
-      if (activeMerge) {
-        mGroupId = activeMerge.group.id;
-        mSessionId = activeMerge.session?.id;
-      }
-    }
-
-    if (mGroupId && o.restaurant_id) {
-      // Pass mSessionId directly so historical receipts load THEIR EXACT SESSION!
-      const details = await db.getMergedGroupDetails(o.restaurant_id, mGroupId, mSessionId || undefined);
-      setMergedGroupDetails(details);
-    } else {
-      setMergedGroupDetails(null);
-    }
-
+    // Instant paint unblock
     setLoading(false);
+
+    // Parallel background resolution of restaurant and merge details
+    Promise.all([
+      db.getRestaurantById(o.restaurant_id).then(async (rest) => {
+        if (rest) {
+          setRestaurant(rest);
+          try {
+            sessionStorage.setItem('smartdine_active_restaurant_slug', rest.slug);
+            if (o.status === 'completed' || o.status === 'cancelled') {
+              sessionStorage.removeItem(`smartdine_latest_order_${rest.id}`);
+              localStorage.removeItem(`smartdine_latest_order_${rest.id}`);
+            }
+          } catch (e) {}
+          const planId = (rest.subscription_plan || 'starter').toLowerCase();
+          const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle();
+          setPlanSpec(parsePlanSpec(planRow || { id: planId }));
+        }
+      }),
+      (async () => {
+        let mGroupId = o.merge_group_id;
+        let mSessionId = (o as any).merge_session_id;
+        if (!mGroupId && o.table_id && o.restaurant_id) {
+          const activeMerge = await db.getActiveMergeGroupForTable(o.restaurant_id, o.table_id);
+          if (activeMerge) {
+            mGroupId = activeMerge.group.id;
+            mSessionId = activeMerge.session?.id;
+          }
+        }
+        if (mGroupId && o.restaurant_id) {
+          const details = await db.getMergedGroupDetails(o.restaurant_id, mGroupId, mSessionId || undefined);
+          setMergedGroupDetails(details);
+        } else {
+          setMergedGroupDetails(null);
+        }
+      })()
+    ]).catch(e => console.error('Background order tracking load error:', e));
   };
 
   useEffect(() => {

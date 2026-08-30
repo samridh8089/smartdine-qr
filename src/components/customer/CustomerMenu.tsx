@@ -718,7 +718,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       }
     }
 
+    // OPTIMISTIC UI: Instantly disable button & close cart drawer (<5ms Visual Feedback)
     setOrderPlacing(true);
+    setCartOpen(false);
 
     try {
       const orderPayload = cart.map(item => ({
@@ -776,25 +778,24 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         );
       }
 
-      // Instant Redirect to Order Tracking screen
+      // Immediate Route Navigation
       router.push(`/order-tracking/${newOrder.id}`);
 
-      // Background Session Storage Cleanup (non-blocking)
-      setTimeout(() => {
-        try {
-          sessionStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
-          localStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
-          sessionStorage.removeItem('smartdine_latest_order_id');
-          localStorage.removeItem('smartdine_latest_order_id');
-          setActiveOrderId(newOrder.id);
-        } catch (e) {}
-        saveCart([]);
-        setSpecialInstructions('');
-        setCartOpen(false);
-        setIdempotencyKey(crypto.randomUUID());
-      }, 20);
+      // Background Session Cleanup (non-blocking)
+      try {
+        sessionStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
+        localStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
+        sessionStorage.removeItem('smartdine_latest_order_id');
+        localStorage.removeItem('smartdine_latest_order_id');
+        setActiveOrderId(newOrder.id);
+      } catch (e) {}
+      saveCart([]);
+      setSpecialInstructions('');
+      setIdempotencyKey(crypto.randomUUID());
 
     } catch (e: any) {
+      // ROLLBACK ONLY ON API FAILURE
+      setCartOpen(true);
       showToast(e.message || 'Failed to place order. Please try again.');
     } finally {
       setOrderPlacing(false);
