@@ -155,75 +155,90 @@ export async function middleware(request: NextRequest) {
   const backoffBase = getEnvNumber('RATE_LIMIT_BACKOFF_BASE', 2);
   const backoffMax = getEnvNumber('RATE_LIMIT_BACKOFF_MAX', 3600);
 
-  const isStrictLoginRoute = 
-    pathname.startsWith('/api/auth/send-otp') ||
-    pathname.startsWith('/api/auth/verify-otp') ||
-    pathname.startsWith('/api/auth/change-owner-password') ||
-    pathname.startsWith('/api/auth/onboarding-provision') ||
-    pathname === '/login' ||
-    pathname === '/signup' ||
-    pathname === '/forgot-password' ||
-    pathname === '/reset-password';
-
-  const isAuthRoute = isStrictLoginRoute || pathname.startsWith('/api/auth') || pathname.startsWith('/auth');
-
-  const isAuthUser = 
-    request.headers.has('authorization') ||
-    request.cookies.has('sb-access-token') ||
-    request.cookies.has('supabase-auth-token') ||
-    request.cookies.has('next-auth.session-token');
-
   let ipThreshold = getEnvNumber('RATE_LIMIT_PUBLIC_PER_IP', 60);
-  let accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 5);
+  let remaining = 999;
 
-  if (isStrictLoginRoute) {
-    ipThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_IP', 5);
-    accountThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_ACCOUNT', 3);
-  } else if (isAuthRoute) {
-    ipThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_IP', 10);
-    accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 5);
-  } else if (isAuthUser) {
-    ipThreshold = getEnvNumber('RATE_LIMIT_AUTHENTICATED_PER_IP', 120);
-  }
+  // Rate limiting ONLY applies to API routes (/api/*).
+  // Page renders (/login, /signup, /forgot-password, /, /menu/*, etc.) MUST NEVER be rate limited.
+  if (pathname.startsWith('/api/')) {
+    const isStrictAuthApi = 
+      pathname.startsWith('/api/auth/send-otp') ||
+      pathname.startsWith('/api/auth/verify-otp') ||
+      pathname.startsWith('/api/auth/check-email-availability') ||
+      pathname.startsWith('/api/auth/change-owner-password') ||
+      pathname.startsWith('/api/auth/onboarding-provision') ||
+      pathname.startsWith('/api/staff/verify-otp') ||
+      pathname.startsWith('/api/staff/reset-password') ||
+      pathname.startsWith('/api/staff/create-invite') ||
+      pathname.startsWith('/api/staff/resend-verification');
 
-  // Rate check by IP
-  const ipKey = `ip:${ip}:${isStrictLoginRoute ? 'login' : isAuthRoute ? 'auth' : isAuthUser ? 'authed' : 'pub'}`;
-  const ipRes = checkRateLimit(ipKey, ipThreshold, windowMs, backoffBase, backoffMax);
+    const isPaymentApi = 
+      pathname.startsWith('/api/payments/') ||
+      pathname.startsWith('/api/razorpay/') ||
+      pathname.startsWith('/api/webhooks/');
 
-  // Rate check by Account/Email if applicable
-  let accountRes = { limited: false, retryAfterSeconds: 0, remaining: 999 };
-  if (isAuthRoute) {
-    const accountId = await extractAccountIdentifier(request);
-    if (accountId) {
-      const accountKey = `acc:${accountId}:${pathname}`;
-      accountRes = checkRateLimit(accountKey, accountThreshold, windowMs, backoffBase, backoffMax);
+    const isAuthApi = isStrictAuthApi || pathname.startsWith('/api/auth/') || pathname.startsWith('/api/staff/');
+
+    const isAuthUser = 
+      request.headers.has('authorization') ||
+      request.cookies.has('sb-access-token') ||
+      request.cookies.has('supabase-auth-token') ||
+      request.cookies.has('next-auth.session-token');
+
+    let accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 5);
+
+    if (isStrictAuthApi) {
+      ipThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_IP', 5);
+      accountThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_ACCOUNT', 3);
+    } else if (isPaymentApi) {
+      ipThreshold = getEnvNumber('RATE_LIMIT_PAYMENT_PER_IP', 10);
+      accountThreshold = getEnvNumber('RATE_LIMIT_PAYMENT_PER_ACCOUNT', 5);
+    } else if (isAuthApi) {
+      ipThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_IP', 10);
+      accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 5);
+    } else if (isAuthUser) {
+      ipThreshold = getEnvNumber('RATE_LIMIT_AUTHENTICATED_PER_IP', 120);
     }
-  }
 
-  const isRateLimited = ipRes.limited || accountRes.limited;
-  const retryAfterSeconds = Math.max(ipRes.retryAfterSeconds, accountRes.retryAfterSeconds);
-  const remaining = Math.min(ipRes.remaining, accountRes.remaining);
+    // Rate check by IP
+    const ipKey = `ip:${ip}:${isStrictAuthApi ? 'strict_api' : isPaymentApi ? 'payment_api' : isAuthApi ? 'auth_api' : isAuthUser ? 'authed_api' : 'pub_api'}`;
+    const ipRes = checkRateLimit(ipKey, ipThreshold, windowMs, backoffBase, backoffMax);
 
-  if (isRateLimited) {
-    const rateLimitResponse = NextResponse.json(
-      {
-        error: 'Too many requests. Please slow down and try again later.',
-        retryAfterSeconds
-      },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': retryAfterSeconds.toString(),
-          'X-RateLimit-Limit': ipThreshold.toString(),
-          'X-RateLimit-Remaining': '0',
-          'Content-Type': 'application/json'
-        }
+    // Rate check by Account/Email if applicable
+    let accountRes = { limited: false, retryAfterSeconds: 0, remaining: 999 };
+    if (isAuthApi) {
+      const accountId = await extractAccountIdentifier(request);
+      if (accountId) {
+        const accountKey = `acc:${accountId}:${pathname}`;
+        accountRes = checkRateLimit(accountKey, accountThreshold, windowMs, backoffBase, backoffMax);
       }
-    );
-    if (corsOrigin) {
-      rateLimitResponse.headers.set('Access-Control-Allow-Origin', corsOrigin);
     }
-    return rateLimitResponse;
+
+    const isRateLimited = ipRes.limited || accountRes.limited;
+    const retryAfterSeconds = Math.max(ipRes.retryAfterSeconds, accountRes.retryAfterSeconds);
+    remaining = Math.min(ipRes.remaining, accountRes.remaining);
+
+    if (isRateLimited) {
+      const rateLimitResponse = NextResponse.json(
+        {
+          error: 'Too many requests. Please slow down and try again later.',
+          retryAfterSeconds
+        },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': retryAfterSeconds.toString(),
+            'X-RateLimit-Limit': ipThreshold.toString(),
+            'X-RateLimit-Remaining': '0',
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      if (corsOrigin) {
+        rateLimitResponse.headers.set('Access-Control-Allow-Origin', corsOrigin);
+      }
+      return rateLimitResponse;
+    }
   }
 
   // ─── 2. ATTACH PRODUCTION SECURITY & CORS HEADERS ─────────────────────────
@@ -258,8 +273,10 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self "https://checkout.razorpay.com")');
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
 
-  response.headers.set('X-RateLimit-Limit', ipThreshold.toString());
-  response.headers.set('X-RateLimit-Remaining', remaining.toString());
+  if (pathname.startsWith('/api/')) {
+    response.headers.set('X-RateLimit-Limit', ipThreshold.toString());
+    response.headers.set('X-RateLimit-Remaining', remaining.toString());
+  }
 
   return response;
 }
