@@ -736,7 +736,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         ? `TABLE RESERVATION | Date: ${reservationDate} | Time: ${reservationTime} | Guests: ${reservationGuests}${reservationName ? ` | Name: ${reservationName}` : ''}${reservationPhone ? ` | Contact: ${reservationPhone}` : ''}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`
         : specialInstructions;
 
-      let newOrder: Order;
+      let newOrder: any;
       try {
         const res = await fetch('/api/customer/orders', {
           method: 'POST',
