@@ -269,6 +269,11 @@ export default function DashboardPage() {
         activeRestId = restId;
         await loadDataForRest(restId);
 
+        // Request browser push notification permission
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+
         channel = supabase
           .channel(`overview_dashboard_${restId}`, {
             config: {
@@ -278,7 +283,17 @@ export default function DashboardPage() {
           .on(
             'broadcast',
             { event: 'new-order' },
-            () => loadDataForRest(restId)
+            (payload) => {
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                  new Notification('🚨 New Order Received!', {
+                    body: `New order received on your dashboard!`,
+                    icon: '/icon-192.png'
+                  });
+                } catch (e) {}
+              }
+              loadDataForRest(restId);
+            }
           )
           .on(
             'broadcast',
