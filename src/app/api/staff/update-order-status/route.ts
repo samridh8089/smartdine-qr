@@ -33,6 +33,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'batchId or orderId is required' }, { status: 400 });
     }
 
+    const t_start = performance.now();
     let updatedOrder: any = null;
     let updatedBatch: any = null;
 
@@ -43,17 +44,68 @@ export async function POST(req: Request) {
     } else if (orderId) {
       updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
     }
+    const t_db = performance.now();
 
     const restId = updatedOrder?.restaurant_id || updatedBatch?.restaurant_id;
+    const targetOrderId = orderId || updatedBatch?.order_id || updatedOrder?.id;
+
     if (restId) {
-      await healUnconsumedActiveReservations(restId).catch(() => {});
+      const kdsChannel = `kds_${restId}`;
+      const dashboardChannel = `overview_dashboard_${restId}`;
+      const trackingChannel = targetOrderId ? `order_tracking_${targetOrderId}` : null;
+      const custTrackingChannel = targetOrderId ? `customer_order_tracking_${targetOrderId}` : null;
+
+      // Instant Parallel Broadcast across KDS, Dashboard, & Customer Tracking UI
+      const broadcastPromises: Promise<any>[] = [
+        supabaseAdmin.channel(kdsChannel).send({
+          type: 'broadcast',
+          event: 'order-status-updated',
+          payload: { orderId: targetOrderId, batchId, newStatus, updatedOrder, updatedBatch }
+        }),
+        supabaseAdmin.channel(dashboardChannel).send({
+          type: 'broadcast',
+          event: 'order-status-updated',
+          payload: { orderId: targetOrderId, batchId, newStatus, updatedOrder }
+        })
+      ];
+
+      if (trackingChannel) {
+        broadcastPromises.push(
+          supabaseAdmin.channel(trackingChannel).send({
+            type: 'broadcast',
+            event: 'status-update',
+            payload: { orderId: targetOrderId, newStatus, updatedOrder }
+          })
+        );
+      }
+      if (custTrackingChannel) {
+        broadcastPromises.push(
+          supabaseAdmin.channel(custTrackingChannel).send({
+            type: 'broadcast',
+            event: 'order-status-updated',
+            payload: { orderId: targetOrderId, newStatus, updatedOrder }
+          })
+        );
+      }
+
+      await Promise.all(broadcastPromises).catch(e => console.error('WebSocket broadcast status update failed:', e));
+
+      // Background reservation healing (non-blocking)
+      healUnconsumedActiveReservations(restId).catch(() => {});
     }
 
-    return NextResponse.json({
+    const t_end = performance.now();
+    const dbDur = Math.round((t_db - t_start) * 10) / 10;
+    const totalDur = Math.round((t_end - t_start) * 10) / 10;
+
+    const res = NextResponse.json({
       success: true,
       batch: updatedBatch,
       order: updatedOrder
     });
+
+    res.headers.set('Server-Timing', `db;dur=${dbDur}, total;dur=${totalDur}`);
+    return res;
   } catch (err: any) {
     return handleApiError('Staff-Update-Order-Status', err, 'Failed to update order status. Please try again.', 500);
   }

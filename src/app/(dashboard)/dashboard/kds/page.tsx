@@ -214,6 +214,28 @@ export default function KitchenDisplayPage() {
         }
       )
       .on(
+        'broadcast',
+        { event: 'order-status-updated' },
+        async (payload) => {
+          console.log('Realtime broadcast KDS order-status-updated received:', payload);
+          if (payload.payload?.updatedOrder) {
+            const u = payload.payload.updatedOrder;
+            setOrders(prev => {
+              const exists = prev.some(o => o.id === u.id);
+              if (['completed', 'cancelled', 'served'].includes(u.status)) {
+                return prev.filter(o => o.id !== u.id);
+              }
+              if (exists) {
+                return prev.map(o => o.id === u.id ? { ...o, ...u } : o);
+              }
+              return [...prev, u];
+            });
+          } else {
+            await reloadFnRef.current(restaurantId);
+          }
+        }
+      )
+      .on(
         'postgres_changes',
         {
           event: '*',

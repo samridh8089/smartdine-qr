@@ -281,6 +281,11 @@ export default function DashboardPage() {
             () => loadDataForRest(restId)
           )
           .on(
+            'broadcast',
+            { event: 'order-status-updated' },
+            () => loadDataForRest(restId)
+          )
+          .on(
             'postgres_changes',
             {
               event: '*',

@@ -109,7 +109,33 @@ export default function OrderTrackingPage({ params }: PageProps) {
     if (!orderId) return;
 
     const channel = supabase
-      .channel(`customer_order_tracking_${orderId}`)
+      .channel(`customer_order_tracking_${orderId}`, {
+        config: { broadcast: { self: true } }
+      })
+      .on(
+        'broadcast',
+        { event: 'order-status-updated' },
+        (payload) => {
+          console.log('Realtime broadcast customer status updated:', payload);
+          if (payload.payload?.updatedOrder) {
+            setOrder(payload.payload.updatedOrder);
+          } else if (payload.payload?.newStatus) {
+            setOrder(prev => prev ? { ...prev, status: payload.payload.newStatus } : prev);
+          }
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'status-update' },
+        (payload) => {
+          console.log('Realtime broadcast customer status update:', payload);
+          if (payload.payload?.updatedOrder) {
+            setOrder(payload.payload.updatedOrder);
+          } else if (payload.payload?.newStatus) {
+            setOrder(prev => prev ? { ...prev, status: payload.payload.newStatus } : prev);
+          }
+        }
+      )
       .on(
         'postgres_changes',
         {
