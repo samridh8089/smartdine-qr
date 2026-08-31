@@ -28,10 +28,18 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const orderId = resolvedParams.order_id;
 
-  const [order, setOrder] = useState<Order | null>(null);
+  const [order, setOrder] = useState<Order | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem(`smartdine_order_cache_${orderId}`);
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return null;
+  });
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!order);
   const [callLoading, setCallLoading] = useState(false);
   const [callSent, setCallSent] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);

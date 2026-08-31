@@ -863,17 +863,18 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         );
       }
 
-      // Immediate Route Navigation
-      router.push(`/order-tracking/${newOrder.id}`);
-
-      // Background Session Cleanup (non-blocking)
+      // Immediate Route Navigation & Pre-seeded Order Cache (<5ms first paint)
       try {
+        sessionStorage.setItem(`smartdine_order_cache_${newOrder.id}`, JSON.stringify(newOrder));
         sessionStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
         localStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
         sessionStorage.removeItem('smartdine_latest_order_id');
         localStorage.removeItem('smartdine_latest_order_id');
         setActiveOrderId(newOrder.id);
       } catch (e) {}
+
+      router.push(`/order-tracking/${newOrder.id}`);
+
       saveCart([]);
       setSpecialInstructions('');
       setIdempotencyKey(crypto.randomUUID());
