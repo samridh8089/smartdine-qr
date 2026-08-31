@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
+import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
+import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 
 
 export default function OrdersPage() {
@@ -150,19 +152,51 @@ export default function OrdersPage() {
 
 
 
-  // Request browser notifications permission
+  const alertedReqIds = useRef<Set<string>>(new Set());
+
+  // Unlock audio on user click/tap & Register Web Push for Waiter
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+    const handleUnlock = () => {
+      unlockAudio();
+    };
+    window.addEventListener('click', handleUnlock, { once: true });
+    window.addEventListener('touchstart', handleUnlock, { once: true });
+
+    if (profile?.id && restaurant?.id) {
+      registerServiceWorkerAndPush(profile.id, restaurant.id, 'waiter');
     }
-  }, []);
 
-
+    return () => {
+      window.removeEventListener('click', handleUnlock);
+      window.removeEventListener('touchstart', handleUnlock);
+    };
+  }, [profile?.id, restaurant?.id]);
 
   const showDesktopNotification = (order: Order) => {
-    // Desktop notifications disabled per product specification
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      try {
+        const title = `🚨 NEW ORDER - ${order.table_name || 'Table X'}`;
+        const body = `Order #${order.id.slice(-4).toUpperCase()} received. Total: ₹${order.total || order.grand_total || 0}`;
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.ready.then((reg) => {
+            reg.showNotification(title, {
+              body,
+              icon: '/icon-192.png',
+              badge: '/favicon-32x32.png',
+              tag: `waiter-order-${order.id}`,
+              data: { url: '/dashboard/orders' }
+            });
+          }).catch(() => {
+            new Notification(title, { body, icon: '/icon-192.png' });
+          });
+        } else {
+          new Notification(title, { body, icon: '/icon-192.png' });
+        }
+      } catch (e) {
+        new Notification(order.table_name || 'New Order', { body: `New order received`, icon: '/icon-192.png' });
+      }
+    }
   };
 
   const loadInitialData = async (restId: string) => {
@@ -272,6 +306,7 @@ export default function OrdersPage() {
               // Fetch full order with items and display toast banner
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
+                playLoudBell('waiter');
                 showDesktopNotification(fullOrder);
                 setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
                 
@@ -294,6 +329,21 @@ export default function OrdersPage() {
         async (payload) => {
           console.log('Realtime Live Orders request change payload received:', payload);
           await reloadFnRef.current(restId);
+
+          if (payload.eventType === 'INSERT') {
+            const req = payload.new as CustomerRequest;
+            if (req && !alertedReqIds.current.has(req.id)) {
+              alertedReqIds.current.add(req.id);
+              playLoudBell('waiter');
+              setToast({
+                message: `🔔 ${req.table_name || 'Table'} requested ${req.type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
+                visible: true
+              });
+              setTimeout(() => {
+                setToast(prev => prev && prev.message.includes(req.table_name || 'Table') ? { ...prev, visible: false } : prev);
+              }, 6000);
+            }
+          }
         }
       )
       .on(

@@ -14,6 +14,8 @@ import {
   ChefHat, Clock, Check, ArrowRight, Play, CheckCircle2, 
   X, AlertCircle, Volume2, Sparkles, Bell
 } from 'lucide-react';
+import { playLoudBell, unlockAudio, stopLoudBell } from '@/lib/soundAlert';
+import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 
 
 export default function KitchenDisplayPage() {
@@ -64,14 +66,23 @@ export default function KitchenDisplayPage() {
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
 
-  // Request browser notifications permission
+  // Unlock audio on first user click/tap anywhere on page & Register Service Worker Web Push
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+    const handleUnlock = () => {
+      unlockAudio();
+    };
+    window.addEventListener('click', handleUnlock, { once: true });
+    window.addEventListener('touchstart', handleUnlock, { once: true });
+
+    if (profile?.id && restaurantId) {
+      registerServiceWorkerAndPush(profile.id, restaurantId, 'kitchen');
     }
-  }, []);
+
+    return () => {
+      window.removeEventListener('click', handleUnlock);
+      window.removeEventListener('touchstart', handleUnlock);
+    };
+  }, [profile?.id, restaurantId]);
 
   const showDesktopNotification = (title: string, body: string, url = '/dashboard/kds') => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -83,6 +94,7 @@ export default function KitchenDisplayPage() {
               body,
               icon: '/icon-192.png',
               badge: '/favicon-32x32.png',
+              tag: `kds-${Date.now()}`,
               data: { url }
             });
           }).catch(() => {
@@ -94,8 +106,6 @@ export default function KitchenDisplayPage() {
       } catch (e) {
         new Notification(title, { body, icon: '/icon-192.png' });
       }
-    } else if (Notification.permission === 'default') {
-      Notification.requestPermission();
     }
   };
 
@@ -278,6 +288,9 @@ export default function KitchenDisplayPage() {
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
                 setNewOrderAlert(fullOrder);
+                if (soundEnabled) {
+                  playLoudBell('kitchen');
+                }
                 showDesktopNotification('🚨 NEW ORDER RECEIVED!', `New order on ${fullOrder.table_name || 'Table X'}`);
                 setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
                 
@@ -328,6 +341,9 @@ export default function KitchenDisplayPage() {
               console.log(`New batch detected! Playing alarm for batch ID: ${newBatch.id}`);
 
               setNewOrderAlert(fullOrder);
+              if (soundEnabled) {
+                playLoudBell('kitchen');
+              }
               showDesktopNotification('🚨 NEW ITEMS ADDED!', `New items added for ${fullOrder.table_name || 'Table X'}`);
               setToast({ message: `New Items Added - ${fullOrder.table_name || 'Table X'}`, visible: true });
               
