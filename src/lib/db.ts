@@ -19,6 +19,27 @@ async function dispatchFCMNotification(
   tableId?: string
 ) {
   try {
+    const targetRoles = roles || ['kitchen', 'waiter', 'owner', 'manager'];
+
+    // 1. Dispatch Web Push for backgrounded Web Browser tabs via API endpoint
+    try {
+      fetch('/api/push/dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId,
+          roles: targetRoles,
+          title,
+          body,
+          url: targetRoles.includes('kitchen') ? '/dashboard/kds' : '/dashboard/orders',
+          eventId: extraData?.orderId || extraData?.requestId || extraData?.batchId || `evt-${Date.now()}`,
+          extraData,
+          tableId
+        })
+      }).catch(() => {});
+    } catch (e) {}
+
+    // 2. Dispatch Expo FCM Push for Android Native Devices
     let query = supabase
       .from('profiles')
       .select('id, push_token, role, department')
@@ -74,6 +95,9 @@ async function dispatchFCMNotification(
     }
 
     const messages = targetProfiles.map(p => {
+      // Skip Web Push JSON objects in FCM mobile dispatcher loop
+      if (p.push_token?.startsWith('{')) return null;
+
       const normRole = (p.role || '').toLowerCase().trim();
       const roleChannel = normRole === 'kitchen' || normRole === 'kds' || normRole === 'kitchen_staff'
         ? 'smartdine_kitchen'
@@ -102,10 +126,10 @@ async function dispatchFCMNotification(
         _displayInForeground: true,
         ttl: 0,
       };
-    }).filter(m => Boolean(m.to));
+    }).filter(m => Boolean(m && m.to));
 
     if (messages.length === 0) {
-      console.log('[NotificationDiagnostics] Backend token lookup: NOT FOUND (0 valid push tokens)');
+      console.log('[NotificationDiagnostics] Backend token lookup: NOT FOUND (0 valid Expo FCM push tokens)');
       return;
     }
 
@@ -2037,6 +2061,16 @@ export const db = {
         })
         .eq('id', activeOrder.id);
     }
+
+      // Dispatch notification for new batch items added
+      dispatchFCMNotification(
+        activeOrder.restaurant_id,
+        '🚨 NEW ITEMS ADDED!',
+        `Additional items added for Table ${activeOrder.table_name || 'X'}`,
+        ['kitchen', 'waiter', 'owner', 'manager'],
+        { orderId: activeOrder.id, batchId: newBatch.id, tableId: activeOrder.table_id },
+        activeOrder.table_id || undefined
+      );
 
       const fullOrder = await this.getOrderById(activeOrder.id);
       if (!fullOrder) throw new Error('Failed to retrieve updated order');
