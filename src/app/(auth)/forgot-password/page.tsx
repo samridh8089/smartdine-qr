@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import MockBanner from '@/components/shared/MockBanner';
-import { UtensilsCrossed, CheckCircle2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -43,9 +43,7 @@ export default function ForgotPasswordPage() {
       <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="sm:mx-auto w-full sm:max-w-md">
           <div className="flex justify-center">
-            <div className="h-12 w-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-600/20">
-              <UtensilsCrossed className="h-6 w-6" />
-            </div>
+            <img src="/logo.png" alt="CleverOps Logo" className="h-12 w-auto object-contain drop-shadow-md" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 tracking-tight">
             Reset your password

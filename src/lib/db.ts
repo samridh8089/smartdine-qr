@@ -95,17 +95,16 @@ async function dispatchFCMNotification(
     }
 
     const messages = targetProfiles.map(p => {
-      // Skip Web Push JSON objects in FCM mobile dispatcher loop
-      if (p.push_token?.startsWith('{')) return null;
+      if (!p.push_token || p.push_token.startsWith('{')) return null;
 
       const normRole = (p.role || '').toLowerCase().trim();
       const roleChannel = normRole === 'kitchen' || normRole === 'kds' || normRole === 'kitchen_staff'
-        ? 'smartdine_kitchen'
+        ? 'smartdine_kitchen_v2'
         : normRole === 'waiter'
-        ? 'smartdine_waiter'
+        ? 'smartdine_waiter_v2'
         : normRole === 'owner' || normRole === 'manager'
-        ? 'smartdine_owner'
-        : 'smartdine-urgent-v3';
+        ? 'smartdine_owner_v2'
+        : 'smartdine_waiter_v2';
 
       return {
         to: p.push_token,
@@ -128,21 +127,18 @@ async function dispatchFCMNotification(
       };
     }).filter(m => Boolean(m && m.to));
 
-    if (messages.length === 0) {
-      console.log('[NotificationDiagnostics] Backend token lookup: NOT FOUND (0 valid Expo FCM push tokens)');
-      return;
+    if (messages.length > 0) {
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages),
+      }).catch(e => console.warn('Expo push dispatch notice:', e));
+      console.log(`[FCM PUSH] Dispatched "${title}" to ${messages.length} staff device(s).`);
     }
-
-    await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(messages),
-    });
-    console.log(`[FCM PUSH] Dispatched "${title}" to ${messages.length} staff device(s).`);
   } catch (err) {
     console.error('Error dispatching FCM push notification:', err);
   }
@@ -187,6 +183,7 @@ export interface Restaurant {
       occupancy_status?: 'available' | 'occupied' | 'inactive';
       occupied_at?: string | null;
       current_session_id?: string | null;
+      manual_occupied?: boolean;
     }>;
     staff_metadata?: Record<string, { 
       department?: string; 
@@ -549,6 +546,8 @@ export interface Offer {
   banner_url?: string;
   bg_gradient?: string;
   is_active: boolean;
+  start_date?: string;
+  end_date?: string;
   created_at: string;
 }
 
@@ -609,6 +608,8 @@ export const db = {
       banner_url: offerData.banner_url || '',
       bg_gradient: offerData.bg_gradient || 'from-slate-950 via-purple-950 to-slate-900',
       is_active: offerData.is_active !== false,
+      start_date: offerData.start_date || undefined,
+      end_date: offerData.end_date || undefined,
       created_at: new Date().toISOString(),
     };
 
@@ -1141,7 +1142,7 @@ export const db = {
       let status: 'available' | 'occupied' | 'inactive' = 'available';
       if (!qrEnabled) {
         status = 'inactive';
-      } else if (activeCount > 0) {
+      } else if (activeCount > 0 || state.manual_occupied === true || state.occupancy_status === 'occupied') {
         status = 'occupied';
       } else {
         status = 'available';
@@ -1155,7 +1156,7 @@ export const db = {
         ...t,
         qr_enabled: qrEnabled,
         occupancy_status: status,
-        occupied_at: activeCount > 0 ? (state.occupied_at || tblOrders[0]?.created_at) : null,
+        occupied_at: status === 'occupied' ? (state.occupied_at || tblOrders[0]?.created_at || new Date().toISOString()) : null,
         current_session_id: state.current_session_id || null,
         active_order_count: activeCount,
         payment_pending: paymentPending,
@@ -1173,6 +1174,28 @@ export const db = {
       tables: enrichedTables,
       stats: { total, available, occupied, inactive, occupancyRate }
     };
+  },
+
+  async toggleTableOccupancy(restaurantId: string, tableId: string, isOccupied: boolean): Promise<boolean> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    tableStates[tableId] = {
+      ...(tableStates[tableId] || {}),
+      manual_occupied: isOccupied,
+      occupancy_status: isOccupied ? 'occupied' : 'available',
+      occupied_at: isOccupied ? new Date().toISOString() : null
+    };
+
+    await this.updateRestaurant(restaurantId, {
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    });
+
+    return isOccupied;
   },
 
   async toggleTableQR(restaurantId: string, tableId: string, enabled: boolean): Promise<boolean> {
@@ -2249,7 +2272,7 @@ export const db = {
     const servedBatches = allBatches.filter(b => b.status === 'served' || b.status === 'completed');
     const servedItems = (allItems || []).filter(i => i.is_served || i.status === 'served');
 
-    let nextOrderStatus: Order['status'] = 'cancelled';
+    let nextOrderStatus: Order['status'] = status || currentOrder?.status || 'new';
 
     if (activeBatches.length > 0) {
       // Order has active batches! Priority order for active status: ready > preparing > accepted > new
@@ -2265,9 +2288,12 @@ export const db = {
     } else if (servedBatches.length > 0 || servedItems.length > 0) {
       // All active batches resolved, and at least 1 batch or item served! Order status is served!
       nextOrderStatus = 'served';
-    } else {
-      // All batches are cancelled!
+    } else if (allBatches.length > 0) {
+      // All existing batches were explicitly cancelled!
       nextOrderStatus = 'cancelled';
+    } else {
+      // No batches exist; maintain explicitly requested status or current order status
+      nextOrderStatus = status || currentOrder?.status || 'new';
     }
 
     // FIX — ORDER STATUS REGRESSION:
