@@ -31,6 +31,10 @@ function SignupForm() {
   useEffect(() => {
     const plan = searchParams.get('plan');
     const interval = searchParams.get('interval');
+    const lang = searchParams.get('lang');
+    if (lang === 'en' || lang === 'hi') {
+      localStorage.setItem('language', lang);
+    }
     if (plan && ['starter', 'pro', 'premium', 'trial'].includes(plan)) {
       setSelectedPlan(plan as any);
     }
@@ -320,6 +324,19 @@ function SignupForm() {
   );
 }
 
+function SignInLink() {
+  const searchParams = useSearchParams();
+  const lang = searchParams.get('lang');
+  return (
+    <Link 
+      href={lang ? `/login?lang=${lang}` : '/login'} 
+      className="font-semibold text-emerald-600 hover:text-emerald-500 transition-colors"
+    >
+      sign in to your existing account
+    </Link>
+  );
+}
+
 export default function SignupPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -335,9 +352,13 @@ export default function SignupPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
             Or{' '}
-            <Link href="/login" className="font-semibold text-emerald-600 hover:text-emerald-500 transition-colors">
-              sign in to your existing account
-            </Link>
+            <Suspense fallback={
+              <Link href="/login" className="font-semibold text-emerald-600 hover:text-emerald-500 transition-colors">
+                sign in to your existing account
+              </Link>
+            }>
+              <SignInLink />
+            </Suspense>
           </p>
         </div>
 
