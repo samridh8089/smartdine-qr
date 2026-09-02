@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase, clearActiveUserCache } from '@/lib/supabase';
@@ -15,6 +15,23 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [activeLang, setActiveLang] = useState<string>('hi');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlLang = params.get('lang');
+      if (urlLang === 'en' || urlLang === 'hi') {
+        setActiveLang(urlLang);
+        localStorage.setItem('language', urlLang);
+      } else {
+        const stored = localStorage.getItem('language');
+        if (stored === 'en' || stored === 'hi') {
+          setActiveLang(stored);
+        }
+      }
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,7 +107,7 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
             Or{' '}
-            <Link href="/signup" className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+            <Link href={`/signup?lang=${activeLang}`} className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
               create a new restaurant account
             </Link>
           </p>
