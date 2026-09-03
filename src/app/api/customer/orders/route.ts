@@ -112,27 +112,53 @@ export async function POST(req: Request) {
     if (activeOrder) {
       // Append new batch to existing active order
       const newBatchIndex = (activeOrder.batches || []).length + 1;
-      const batchPayload = {
+      const { data: newBatchData, error: batchErr } = await supabase.from('order_batches').insert([{
         order_id: activeOrder.id,
         batch_number: newBatchIndex,
-        items: itemsPayload,
         status: 'new',
-        special_instructions: specialInstructions || null,
-        subtotal
-      };
+        special_instructions: specialInstructions || null
+      }]).select().single();
 
-      const [batchRes, orderUpdateRes] = await Promise.all([
-        supabase.from('order_batches').insert([batchPayload]).select().single(),
-        supabase.from('orders').update({
-          subtotal: (activeOrder.subtotal || 0) + subtotal,
-          total_amount: (activeOrder.total_amount || 0) + grandTotal,
-          updated_at: new Date().toISOString()
-        }).eq('id', activeOrder.id).select().single()
-      ]);
+      if (batchErr) {
+        console.error('Batch append error:', batchErr);
+      }
 
-      createdOrder = orderUpdateRes.data || activeOrder;
+      // Insert items into relational order_items table
+      const addOnItemsPayload = itemsPayload.map((item: any) => ({
+        order_id: activeOrder.id,
+        batch_id: newBatchData?.id || null,
+        menu_item_id: item.menu_item_id,
+        menu_item_name: item.menu_item_name,
+        quantity: item.quantity,
+        price: item.price,
+        variant_id: item.variant_id || null,
+        variant_name: item.variant_name || null,
+        notes: item.notes || null,
+        created_at: new Date().toISOString()
+      }));
+
+      if (addOnItemsPayload.length > 0) {
+        await supabase.from('order_items').insert(addOnItemsPayload);
+      }
+
+      const newSubtotal = (activeOrder.subtotal || 0) + subtotal;
+      const newGst = (activeOrder.gst || 0) + taxCalc.taxTotal;
+      const newTotal = (activeOrder.total || activeOrder.grand_total || 0) + grandTotal;
+
+      const { data: updatedOrderData } = await supabase.from('orders').update({
+        subtotal: newSubtotal,
+        gst: newGst,
+        tax_total: newGst,
+        cgst_amount: (activeOrder.cgst_amount || 0) + taxCalc.cgstAmount,
+        sgst_amount: (activeOrder.sgst_amount || 0) + taxCalc.sgstAmount,
+        total: newTotal,
+        grand_total: newTotal,
+        updated_at: new Date().toISOString()
+      }).eq('id', activeOrder.id).select().single();
+
+      createdOrder = updatedOrderData || activeOrder;
     } else {
-      // Create new order
+      // Create new order matching PostgreSQL relational schema
       const orderPayload = {
         restaurant_id: restaurantId,
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
@@ -146,9 +172,10 @@ export async function POST(req: Request) {
         cgst_amount: taxCalc.cgstAmount,
         sgst_amount: taxCalc.sgstAmount,
         igst_amount: taxCalc.igstAmount,
-        total_tax: taxCalc.taxTotal,
-        total_amount: grandTotal,
-        items: itemsPayload,
+        gst: taxCalc.taxTotal,
+        tax_total: taxCalc.taxTotal,
+        total: grandTotal,
+        grand_total: grandTotal,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -167,14 +194,30 @@ export async function POST(req: Request) {
       createdOrder = newOrderData;
 
       // Insert initial batch
-      await supabase.from('order_batches').insert([{
+      const { data: initialBatchData } = await supabase.from('order_batches').insert([{
         order_id: createdOrder.id,
         batch_number: 1,
-        items: itemsPayload,
         status: 'new',
-        special_instructions: specialInstructions || null,
-        subtotal
-      }]);
+        special_instructions: specialInstructions || null
+      }]).select().single();
+
+      // Insert items into relational order_items table
+      const orderItemsPayload = itemsPayload.map((item: any) => ({
+        order_id: createdOrder.id,
+        batch_id: initialBatchData?.id || null,
+        menu_item_id: item.menu_item_id,
+        menu_item_name: item.menu_item_name,
+        quantity: item.quantity,
+        price: item.price,
+        variant_id: item.variant_id || null,
+        variant_name: item.variant_name || null,
+        notes: item.notes || null,
+        created_at: new Date().toISOString()
+      }));
+
+      if (orderItemsPayload.length > 0) {
+        await supabase.from('order_items').insert(orderItemsPayload);
+      }
     }
     timer.end('order_insert');
 
