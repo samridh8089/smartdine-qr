@@ -470,16 +470,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link
                     key={item.name}
                     href={item.href}
+                    onClick={() => setSidebarOpen(false)}
                     className={`
-                      flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all group
+                      flex items-center justify-between px-3.5 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer select-none
                       ${isActive 
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10 font-bold' 
+                        ? 'bg-emerald-600 text-white shadow-xs font-semibold' 
                         : isLocked
                         ? 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300'
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'}
+                        : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}
                     `}
                   >
                     <div className="flex items-center min-w-0">
+                      <item.icon className={`h-4 w-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
                       <span className="truncate">{item.name}</span>
                     </div>
                     {isLocked && (

@@ -18,12 +18,24 @@ import {
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
 
-function formatElapsed(ms: number) {
-  if (!ms || ms < 0) return '0m 00s';
-  const totalSec = Math.floor(ms / 1000);
-  const mins = Math.floor(totalSec / 60);
-  const secs = totalSec % 60;
-  return `${mins}m ${String(secs).padStart(2, '0')}s`;
+// Priority 22: Human-readable waiting time formatting
+function formatHumanDuration(seconds: number): string {
+  if (isNaN(seconds) || seconds <= 0) return '0s';
+  const sec = Math.round(seconds);
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m ${String(s).padStart(2, '0')}s`;
+  }
+  const h = Math.floor(sec / 3600);
+  const remM = Math.floor((sec % 3600) / 60);
+  return `${h}h ${String(remM).padStart(2, '0')}m`;
+}
+
+function formatElapsedMs(ms: number): string {
+  if (!ms || ms < 0) return '0s';
+  return formatHumanDuration(Math.floor(ms / 1000));
 }
 
 export default function DashboardPage() {
@@ -32,11 +44,16 @@ export default function DashboardPage() {
   const [rawAllOrders, setRawAllOrders] = useState<Order[]>([]);
   const [restaurant, setRestaurant] = useState<any>(contextRestaurant);
   
-  // Priority 5: Shift / Time Filter
+  // Priority 7: Shift / Time Filter
   const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('today');
 
-  // Priority 4: Revenue & Settlement Breakdown
+  // Priority 17 & 23: Server-Time Synchronization (Zero Client Clock Drift)
+  const [serverClockOffset, setServerClockOffset] = useState<number>(0);
+  const [nowTime, setNowTime] = useState<number>(Date.now());
+
+  // Priority 3 & 21: Revenue & Settlement Breakdown
   const [revenueMetrics, setRevenueMetrics] = useState({
+    totalVolume: 0,
     settled: 0,
     pending: 0,
     cancelled: 0,
@@ -77,32 +94,29 @@ export default function DashboardPage() {
     queueLength: 0
   });
 
-  // Second-by-second live ticker
-  const [nowTime, setNowTime] = useState(Date.now());
-
-  // Priority 1 & 4: Operations Metrics with Business Vocabulary
+  // Priority 1 & 2: Operations Metrics with Business Vocabulary
   const [commandCenterMetrics, setCommandCenterMetrics] = useState({
     avgPickupTimeStr: '34s',
     avgServeTimeStr: '1m 08s',
     ordersAtRiskCount: 0,
     longestWaitingOrder: null as any,
-    kitchenAvgPrepMin: '8.5 min',
+    kitchenAvgPrepStr: '8m 30s',
     slaSuccessRate: '95%'
   });
 
-  // Priority 2 & 3: Delayed Orders
+  // Priority 4 & 5: Delayed Orders
   const [delayedOrdersList, setDelayedOrdersList] = useState<any[]>([]);
   const [delayedOrdersModalOpen, setDelayedOrdersModalOpen] = useState(false);
 
-  // Priority 8: Waiter Performance
+  // Priority 10: Waiter Performance
   const [waiterSlaList, setWaiterSlaList] = useState<any[]>([]);
   const [selectedWaiterModal, setSelectedWaiterModal] = useState<any | null>(null);
 
-  // Priority 9: Kitchen Performance
+  // Priority 11: Kitchen Performance
   const [kitchenIntelligence, setKitchenIntelligence] = useState({
-    slowestDish: { name: 'Paneer Butter Masala', avgPrep: '14.5m' },
-    fastestDish: { name: 'Crispy Corn', avgPrep: '4.2m' },
-    longestTicket: { id: 'T-101', table: 'Table 1', elapsed: '14m' },
+    slowestDish: { name: 'Paneer Butter Masala', avgPrep: '14m 30s' },
+    fastestDish: { name: 'Crispy Corn', avgPrep: '4m 12s' },
+    longestTicket: { id: 'T-101', table: 'Table 1', elapsed: '14m 00s' },
     queueDepth: 0,
     mostCancelledDish: { name: 'None', count: 0 }
   });
@@ -110,15 +124,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Real-time second ticker (0 page reloads)
+  // Priority 17 & 23: Second-by-second Server-Synchronized Ticker
   useEffect(() => {
     const timer = setInterval(() => {
-      setNowTime(Date.now());
+      setNowTime(Date.now() + serverClockOffset);
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [serverClockOffset]);
 
-  const computeMetricsForOrders = useCallback((allOrders: Order[], liveTableData: any, activeRest: any, filter: 'today' | '7d' | '30d') => {
+  const computeMetricsForOrders = useCallback((
+    allOrders: Order[], 
+    liveTableData: any, 
+    activeRest: any, 
+    filter: 'today' | '7d' | '30d',
+    currentNow: number
+  ) => {
     if (!allOrders) return;
 
     const getValidOrderTotal = (o: Order) => {
@@ -140,7 +160,7 @@ export default function DashboardPage() {
       return calcResult.grandTotal || Number(o.subtotal || 0);
     };
 
-    const now = new Date();
+    const now = new Date(currentNow);
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
 
@@ -152,14 +172,14 @@ export default function DashboardPage() {
         return t >= startOfDay && t <= endOfDay;
       });
     } else if (filter === '7d') {
-      const t7 = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const t7 = currentNow - 7 * 24 * 60 * 60 * 1000;
       timeFilteredOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= t7);
     } else if (filter === '30d') {
-      const t30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      const t30 = currentNow - 30 * 24 * 60 * 60 * 1000;
       timeFilteredOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= t30);
     }
 
-    // Priority 4: Revenue Bug Fix (Settled vs Pending vs Cancelled)
+    // Priority 3 & 21: Revenue Settlement Hierarchy
     const settledOrders = timeFilteredOrders.filter(o => o.status === 'completed' || o.payment_status === 'paid');
     const settledRev = settledOrders.reduce((sum, o) => sum + getValidOrderTotal(o), 0);
 
@@ -169,7 +189,10 @@ export default function DashboardPage() {
     const cancelledOrders = timeFilteredOrders.filter(o => o.status === 'cancelled');
     const cancelledRev = cancelledOrders.reduce((sum, o) => sum + getValidOrderTotal(o), 0);
 
+    const totalBusinessVolume = settledRev + pendingRev;
+
     setRevenueMetrics({
+      totalVolume: totalBusinessVolume,
       settled: settledRev,
       pending: pendingRev,
       cancelled: cancelledRev,
@@ -178,11 +201,11 @@ export default function DashboardPage() {
       cancelledCount: cancelledOrders.length
     });
 
-    // Priority 6 & 8: Orders Waiting Fix (Count only active non-closed orders: new, accepted, preparing, ready)
+    // Priority 6: Orders Waiting (Count only active non-closed orders: new, accepted, preparing, ready)
     const activeQueueOrders = allOrders.filter(o => 
       ['new', 'accepted', 'preparing', 'ready'].includes(o.status) &&
       o.status !== 'completed' && o.status !== 'cancelled' &&
-      (Date.now() - new Date(o.created_at).getTime()) < 24 * 60 * 60 * 1000
+      (currentNow - new Date(o.created_at).getTime()) < 24 * 60 * 60 * 1000
     );
     const ordersWaitingCount = activeQueueOrders.length;
 
@@ -223,13 +246,12 @@ export default function DashboardPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // Priority 2 & 3: Delayed Orders (> 10 mins active)
-    const currentNow = Date.now();
+    // Priority 4, 5 & 22: Delayed Orders (> 10 mins active) with Human-Readable Timers
     const delayed = activeQueueOrders
       .filter(o => (currentNow - new Date(o.created_at).getTime()) > 10 * 60 * 1000)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .map(o => {
-        const waitMs = currentNow - new Date(o.created_at).getTime();
+        const waitSec = Math.max(1, Math.floor((currentNow - new Date(o.created_at).getTime()) / 1000));
         const dishName = (o.items && o.items[0]?.menu_item_name) || 'Order Item';
         const waiterName = (o.batches && o.batches[0]?.served_by) || (o.table_name?.includes('2') || o.table_name?.includes('4') ? 'Pooja' : 'Samridh');
         return {
@@ -239,14 +261,14 @@ export default function DashboardPage() {
           status: o.status,
           dish: dishName,
           created_at: o.created_at,
-          waitingMin: Math.max(1, Math.floor(waitMs / 60000)),
-          elapsedStr: formatElapsed(waitMs)
+          waitingSec: waitSec,
+          elapsedStr: formatHumanDuration(waitSec)
         };
       });
 
     setDelayedOrdersList(delayed);
 
-    // Service Speed & Waiter Attribution
+    // Service Speed & Waiter Calculations
     let overallPickupSum = 0, overallPickupCount = 0;
     let overallServeSum = 0, overallServeCount = 0;
     let totalPrepSec = 0, prepCount = 0;
@@ -349,7 +371,7 @@ export default function DashboardPage() {
                 tableName: o.table_name || 'Table',
                 dish: firstItemName,
                 timestamp: new Date(b.served_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                duration: sDur
+                durationStr: formatHumanDuration(sDur)
               });
             }
           }
@@ -357,11 +379,9 @@ export default function DashboardPage() {
       });
     });
 
-    const computedPrep = prepCount > 0 ? Number((totalPrepSec / prepCount / 60).toFixed(1)) : 8.5;
+    const computedPrepSec = prepCount > 0 ? Math.round(totalPrepSec / prepCount) : 510;
     const avgPickSec = overallPickupCount > 0 ? Math.round(overallPickupSum / overallPickupCount) : 34;
     const avgSrvSec = overallServeCount > 0 ? Math.round(overallServeSum / overallServeCount) : 68;
-    const avgServeStr = avgSrvSec >= 60 ? `${Math.floor(avgSrvSec / 60)}m ${String(avgSrvSec % 60).padStart(2, '0')}s` : `${avgSrvSec}s`;
-    const avgPickupStr = `${avgPickSec}s`;
     const slaSuccessPct = totalFulfillEvaluated > 0 ? `${Math.round((totalFulfillWithin15 / totalFulfillEvaluated) * 100)}%` : '95%';
 
     const oldestActive = activeQueueOrders.length > 0 ? activeQueueOrders[0] : null;
@@ -377,33 +397,33 @@ export default function DashboardPage() {
     }
 
     setCommandCenterMetrics({
-      avgPickupTimeStr: avgPickupStr,
-      avgServeTimeStr: avgServeStr,
+      avgPickupTimeStr: formatHumanDuration(avgPickSec),
+      avgServeTimeStr: formatHumanDuration(avgSrvSec),
       ordersAtRiskCount: delayed.length,
       longestWaitingOrder: longestWaitingPayload,
-      kitchenAvgPrepMin: `${computedPrep} min`,
+      kitchenAvgPrepStr: formatHumanDuration(computedPrepSec),
       slaSuccessRate: slaSuccessPct
     });
 
     setKitchenSla({
       avgAcceptSec: 42,
-      avgPrepMin: computedPrep,
+      avgPrepMin: Number((computedPrepSec / 60).toFixed(1)),
       readyToServedSec: avgPickSec,
-      totalFulfillmentMin: Number((computedPrep + (avgPickSec / 60)).toFixed(1))
+      totalFulfillmentMin: Number(((computedPrepSec + avgPickSec) / 60).toFixed(1))
     });
 
-    // Waiter Performance Table (Priority 8)
+    // Waiter Performance Table (Priority 10 & 22)
     const finalizedWaiters = Object.values(waiterMap).map((w, idx) => {
       const avgS = w.serveCount > 0 ? Math.round(w.serveSumSec / w.serveCount) : (idx === 0 ? 72 : 58);
       const avgP = w.pickupCount > 0 ? Math.round(w.pickupSumSec / w.pickupCount) : (idx === 0 ? 35 : 28);
-      const fastest = w.fastestSec < 999999 ? `${w.fastestSec}s` : (idx === 0 ? '45s' : '38s');
-      const slowest = w.slowestSec > 0 ? `${w.slowestSec}s` : (idx === 0 ? '2m 30s' : '1m 55s');
+      const fastest = w.fastestSec < 999999 ? formatHumanDuration(w.fastestSec) : (idx === 0 ? '45s' : '38s');
+      const slowest = w.slowestSec > 0 ? formatHumanDuration(w.slowestSec) : (idx === 0 ? '2m 30s' : '1m 55s');
       const activeTblsCount = Math.max(1, (idx === 0 ? 2 : 1));
 
       return {
         name: w.name,
-        pickupAvg: `${avgP}s`,
-        serveAvg: avgS >= 60 ? `${Math.floor(avgS / 60)}m ${String(avgS % 60).padStart(2, '0')}s` : `${avgS}s`,
+        pickupAvg: formatHumanDuration(avgP),
+        serveAvg: formatHumanDuration(avgS),
         ordersServed: Math.max(w.ordersServed, (idx === 0 ? 4 : 2)),
         activeTables: activeTblsCount,
         slaBreach: w.slaBreach,
@@ -414,7 +434,7 @@ export default function DashboardPage() {
     });
     setWaiterSlaList(finalizedWaiters);
 
-    // Kitchen Performance (Priority 9)
+    // Kitchen Performance (Priority 11 & 22)
     const prepEntries = Object.entries(dishPrepTimes).map(([dish, data]) => ({
       dish,
       avgSec: Math.round(data.sum / data.count)
@@ -423,21 +443,21 @@ export default function DashboardPage() {
 
     const slowestDish = prepEntries.length > 0 ? {
       name: prepEntries[0].dish,
-      avgPrep: `${(prepEntries[0].avgSec / 60).toFixed(1)}m`
-    } : { name: 'Paneer Butter Masala', avgPrep: '14.5m' };
+      avgPrep: formatHumanDuration(prepEntries[0].avgSec)
+    } : { name: 'Paneer Butter Masala', avgPrep: '14m 30s' };
 
     const fastestDish = prepEntries.length > 0 ? {
       name: prepEntries[prepEntries.length - 1].dish,
-      avgPrep: `${(prepEntries[prepEntries.length - 1].avgSec / 60).toFixed(1)}m`
-    } : { name: 'Crispy Corn', avgPrep: '4.2m' };
+      avgPrep: formatHumanDuration(prepEntries[prepEntries.length - 1].avgSec)
+    } : { name: 'Crispy Corn', avgPrep: '4m 12s' };
 
-    let longestTicketPayload = { id: 'T-101', table: 'Table 1', elapsed: '14m' };
+    let longestTicketPayload = { id: 'T-101', table: 'Table 1', elapsed: '14m 00s' };
     if (oldestActive) {
-      const waitMin = Math.max(1, Math.round((currentNow - new Date(oldestActive.created_at).getTime()) / 60000));
+      const waitSec = Math.max(1, Math.round((currentNow - new Date(oldestActive.created_at).getTime()) / 1000));
       longestTicketPayload = {
         id: oldestActive.id.slice(0, 5),
         table: oldestActive.table_name || 'Table 1',
-        elapsed: `${waitMin}m`
+        elapsed: formatHumanDuration(waitSec)
       };
     }
 
@@ -471,7 +491,7 @@ export default function DashboardPage() {
       occupied: occCount,
       free: freeCount,
       reserved: pendingBillCount,
-      avgWaitTimeMin: computedPrep,
+      avgWaitTimeMin: Number((computedPrepSec / 60).toFixed(1)),
       queueLength: ordersWaitingCount
     });
 
@@ -489,28 +509,39 @@ export default function DashboardPage() {
       const activeRest = restaurant || contextRestaurant || (await db.getRestaurantById(restId));
       if (!restaurant && activeRest) setRestaurant(activeRest);
 
+      const tBefore = Date.now();
       const [allOrders, liveTableData] = await Promise.all([
         db.getOrders(restId),
         db.getTablesWithLiveStatus(restId)
       ]);
 
+      // Priority 17 & 23: Compute server timestamp delta to eliminate clock drift
+      if (allOrders.length > 0) {
+        const newestOrderTime = new Date(allOrders[0].created_at).getTime();
+        if (newestOrderTime > tBefore) {
+          setServerClockOffset(newestOrderTime - tBefore);
+        }
+      }
+
       setRawAllOrders(allOrders);
       setOrders(allOrders);
 
-      computeMetricsForOrders(allOrders, liveTableData, activeRest, currentFilter);
+      const effectiveNow = Date.now() + serverClockOffset;
+      computeMetricsForOrders(allOrders, liveTableData, activeRest, currentFilter, effectiveNow);
       setLoading(false);
     } catch (err) {
       console.error('[Dashboard] loadDataForRest error:', err);
       setLoading(false);
     }
-  }, [restaurant, contextRestaurant, timeFilter, computeMetricsForOrders]);
+  }, [restaurant, contextRestaurant, timeFilter, computeMetricsForOrders, serverClockOffset]);
 
   // Re-run computation when timeFilter changes
   useEffect(() => {
     if (rawAllOrders.length > 0 && restaurant) {
-      computeMetricsForOrders(rawAllOrders, { stats: tableOccupancy }, restaurant, timeFilter);
+      const effectiveNow = Date.now() + serverClockOffset;
+      computeMetricsForOrders(rawAllOrders, { stats: tableOccupancy }, restaurant, timeFilter, effectiveNow);
     }
-  }, [timeFilter, rawAllOrders, restaurant, computeMetricsForOrders, tableOccupancy]);
+  }, [timeFilter, rawAllOrders, restaurant, computeMetricsForOrders, tableOccupancy, serverClockOffset]);
 
   const debouncedReload = useCallback((restId: string) => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -519,7 +550,7 @@ export default function DashboardPage() {
     }, 400);
   }, [loadDataForRest, timeFilter]);
 
-  // Initial load & real-time listeners
+  // Initial load & real-time subscriptions
   useEffect(() => {
     let channel: any = null;
     let activeRestId = '';
@@ -603,9 +634,9 @@ export default function DashboardPage() {
       {/* ======================================================== */}
       {/* TOP HEADER & SHIFT FILTERS                               */}
       {/* ======================================================== */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800/80 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
             {restaurant?.name || 'The Foody Hub'}
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -614,8 +645,8 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Priority 5: Shift Filter Segmented Controls */}
-          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-0.5 bg-slate-50 dark:bg-slate-900">
+          {/* Priority 7: Shift Filter Segmented Controls */}
+          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-0.5 bg-slate-100/60 dark:bg-slate-900">
             <button
               type="button"
               onClick={() => setTimeFilter('today')}
@@ -651,7 +682,7 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Live Clock / Updates */}
+          {/* Live Updates Ticker */}
           <div className="text-xs font-mono font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Live Updates: {new Date(nowTime).toLocaleTimeString()}</span>
@@ -660,10 +691,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* PRIORITY 2: EMERGENCY BANNER (DELAYED ORDERS)            */}
+      {/* PRIORITY 4: EMERGENCY BANNER (DELAYED ORDERS)            */}
       {/* ======================================================== */}
       {delayedOrdersList.length > 0 && (
-        <div className="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-900/60 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0">
               <AlertCircle className="h-5 w-5" />
@@ -678,7 +709,7 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
-                {delayedOrdersList.length} order(s) waiting longer than 10 minutes. Oldest: {delayedOrdersList[0]?.table_name} ({delayedOrdersList[0]?.waitingMin}m waiting).
+                {delayedOrdersList.length} order(s) waiting longer than 10 minutes. Oldest: {delayedOrdersList[0]?.table_name} ({delayedOrdersList[0]?.elapsedStr} waiting).
               </p>
             </div>
           </div>
@@ -686,7 +717,7 @@ export default function DashboardPage() {
             <Button
               size="sm"
               onClick={() => setDelayedOrdersModalOpen(true)}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-lg shadow-xs cursor-pointer"
+              className="bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-lg shadow-xs cursor-pointer h-8 px-3"
             >
               View Delayed Orders ({delayedOrdersList.length})
             </Button>
@@ -695,26 +726,33 @@ export default function DashboardPage() {
       )}
 
       {/* ======================================================== */}
-      {/* PRIORITY 11: TOP 6 SUMMARY CARDS (IN EXACT PRIORITY ORDER)*/}
+      {/* PRIORITY 2 & 21: TOP 6 CORE SUMMARY CARDS                */}
       {/* ======================================================== */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-        {/* 1. Revenue */}
-        <Card className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
+        {/* 1. Revenue Today */}
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Revenue</p>
-            <h3 className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
-              {formatPrice(revenueMetrics.settled)}
-            </h3>
-            <p className="text-[11px] text-slate-400 mt-1 truncate">
-              {revenueMetrics.pending > 0 ? `Pending: ${formatPrice(revenueMetrics.pending)}` : `${revenueMetrics.settledCount} settled`}
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              {timeFilter === 'today' ? 'Revenue Today' : timeFilter === '7d' ? 'Revenue (7 Days)' : 'Revenue (30 Days)'}
             </p>
+            <h3 className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
+              {formatPrice(revenueMetrics.settled > 0 ? revenueMetrics.settled : revenueMetrics.totalVolume)}
+            </h3>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 space-y-0.5">
+              <p className="truncate">Settled: <strong className="text-slate-800 dark:text-slate-200 font-mono">{formatPrice(revenueMetrics.settled)}</strong></p>
+              {revenueMetrics.pending > 0 && (
+                <p className="truncate text-amber-600 dark:text-amber-400 font-medium">
+                  Pending: <span className="font-mono">{formatPrice(revenueMetrics.pending)}</span>
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
         {/* 2. Delayed Orders */}
-        <Card className={`border rounded-xl bg-white dark:bg-slate-900 shadow-xs ${delayedOrdersList.length > 0 ? 'border-rose-200 dark:border-rose-900/60' : 'border-slate-200 dark:border-slate-800'}`}>
+        <Card className={`border rounded-xl bg-white dark:bg-slate-900 shadow-xs ${delayedOrdersList.length > 0 ? 'border-rose-200 dark:border-rose-900/60' : 'border-slate-200/80 dark:border-slate-800/80'}`}>
           <CardContent className="p-4">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Delayed Orders</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Delayed Orders</p>
             <h3 className={`text-2xl font-bold font-mono mt-1 ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
               {delayedOrdersList.length}
             </h3>
@@ -723,20 +761,20 @@ export default function DashboardPage() {
         </Card>
 
         {/* 3. Tables Occupied */}
-        <Card className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tables Occupied</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tables Occupied</p>
             <h3 className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
-              {tableOccupancy.occupied} / {tableOccupancy.total}
+              {tableOccupancy.occupied} of {tableOccupancy.total}
             </h3>
-            <p className="text-[11px] text-slate-400 mt-1">{tableOccupancy.occupancyRate}% seated</p>
+            <p className="text-[11px] text-slate-400 mt-1">{tableOccupancy.occupancyRate}% dining room occupied</p>
           </CardContent>
         </Card>
 
         {/* 4. Orders Waiting */}
-        <Card className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Orders Waiting</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Orders Waiting</p>
             <h3 className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
               {kitchenIntelligence.queueDepth}
             </h3>
@@ -745,20 +783,20 @@ export default function DashboardPage() {
         </Card>
 
         {/* 5. Average Cooking Time */}
-        <Card className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Average Cooking Time</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Average Cooking Time</p>
             <h3 className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
-              {commandCenterMetrics.kitchenAvgPrepMin}
+              {commandCenterMetrics.kitchenAvgPrepStr}
             </h3>
             <p className="text-[11px] text-slate-400 mt-1">Accepted → Ready</p>
           </CardContent>
         </Card>
 
         {/* 6. Average Pickup Time */}
-        <Card className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-4">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Average Pickup Time</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Average Pickup Time</p>
             <h3 className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
               {commandCenterMetrics.avgPickupTimeStr}
             </h3>
@@ -768,14 +806,14 @@ export default function DashboardPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* PRIORITY 3: TOP-5 DELAYED ORDERS PANEL                   */}
+      {/* PRIORITY 5 & 22: TOP-5 DELAYED ORDERS PANEL              */}
       {/* ======================================================== */}
       {delayedOrdersList.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-3">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-3">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-white">Top Delayed Orders</h3>
-              <p className="text-xs text-slate-500">Orders requiring immediate staff and kitchen attention.</p>
+              <p className="text-xs text-slate-500">Orders exceeding the 10-minute threshold sorted by oldest.</p>
             </div>
             <Button
               size="sm"
@@ -803,7 +841,7 @@ export default function DashboardPage() {
                   <tr key={o.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">{o.table_name}</td>
                     <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400">
-                      {o.waitingMin}m
+                      {o.elapsedStr}
                     </td>
                     <td className="py-2.5 px-3 font-medium">{o.waiter}</td>
                     <td className="py-2.5 px-3">
@@ -813,7 +851,7 @@ export default function DashboardPage() {
                     </td>
                     <td className="py-2.5 px-3 text-right">
                       <Link href={`/dashboard/orders?id=${o.id}`}>
-                        <Button size="sm" variant="outline" className="h-7 text-xs font-semibold px-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <Button size="sm" variant="outline" className="h-7 text-xs font-semibold px-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                           Open Order
                         </Button>
                       </Link>
@@ -827,9 +865,9 @@ export default function DashboardPage() {
       )}
 
       {/* ======================================================== */}
-      {/* PRIORITY 1 & 4: LIVE OPERATIONS COMMAND CENTER (NEUTRAL) */}
+      {/* LIVE OPERATIONS COMMAND CENTER (NEUTRAL SAAS)            */}
       {/* ======================================================== */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center">
@@ -840,49 +878,49 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-500">Service speed and fulfillment velocity updated every second.</p>
             </div>
           </div>
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
             Target Service Window: &lt; 15 mins
           </span>
         </div>
 
         {/* 6 Clean Neutral Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Avg Pickup Time</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Avg Pickup Time</p>
             <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{commandCenterMetrics.avgPickupTimeStr}</p>
             <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">Target: &lt; 45s</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Avg Serve Time</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Avg Serve Time</p>
             <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{commandCenterMetrics.avgServeTimeStr}</p>
             <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">Target: &lt; 90s</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Delayed Orders</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Delayed Orders</p>
             <p className={`text-2xl font-bold font-mono ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
               {delayedOrdersList.length}
             </p>
             <p className="text-[11px] text-slate-500 mt-1">&gt; 10 min threshold</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Oldest Pending Order</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Oldest Pending Order</p>
             <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-              {commandCenterMetrics.longestWaitingOrder ? formatElapsed(nowTime - new Date(commandCenterMetrics.longestWaitingOrder.created_at).getTime()) : '0m 00s'}
+              {commandCenterMetrics.longestWaitingOrder ? formatElapsedMs(nowTime - new Date(commandCenterMetrics.longestWaitingOrder.created_at).getTime()) : '0s'}
             </p>
             <p className="text-[11px] text-slate-500 mt-1">{commandCenterMetrics.longestWaitingOrder?.table_name || 'All On Time'}</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Average Cooking Time</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{commandCenterMetrics.kitchenAvgPrepMin}</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Average Cooking Time</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{commandCenterMetrics.kitchenAvgPrepStr}</p>
             <p className="text-[11px] text-slate-500 mt-1">Accepted → Ready</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Service Speed %</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Service Speed %</p>
             <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{commandCenterMetrics.slaSuccessRate}</p>
             <p className="text-[11px] text-slate-500 mt-1">Within 15 min Goal</p>
           </div>
@@ -890,9 +928,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* PRIORITY 10: LIVE TABLE OCCUPANCY (CLEAN PROGRESS BAR)   */}
+      {/* PRIORITY 12: LIVE TABLE OCCUPANCY (NEUTRAL PROGRESS BAR) */}
       {/* ======================================================== */}
-      <Card className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
+      <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
         <CardContent className="p-5 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -901,10 +939,10 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                Occupied: {tableOccupancy.occupied} / {tableOccupancy.total} tables ({tableOccupancy.occupancyRate}%)
+                Occupied: {tableOccupancy.occupied} of {tableOccupancy.total} tables ({tableOccupancy.occupancyRate}%)
               </span>
               <Link href="/dashboard/tables">
-                <Button variant="outline" size="sm" className="text-xs font-semibold h-8 rounded-lg">
+                <Button variant="outline" size="sm" className="text-xs font-semibold h-8 rounded-lg cursor-pointer">
                   Manage Tables <ArrowRight className="h-3.5 w-3.5 ml-1" />
                 </Button>
               </Link>
@@ -928,9 +966,9 @@ export default function DashboardPage() {
       </Card>
 
       {/* ======================================================== */}
-      {/* PRIORITY 8: WAITER PERFORMANCE TABLE (CLEAN COLUMNS)     */}
+      {/* PRIORITY 10 & 22: WAITER PERFORMANCE TABLE               */}
       {/* ======================================================== */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Waiter Performance</h3>
@@ -994,9 +1032,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* PRIORITY 9: KITCHEN PERFORMANCE CARDS (UNIFORM DESIGN)    */}
+      {/* PRIORITY 11 & 22: KITCHEN PERFORMANCE CARDS              */}
       {/* ======================================================== */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Kitchen Performance</h3>
@@ -1006,40 +1044,40 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Slowest Dish</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Slowest Dish</p>
             <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.slowestDish.name}>
               {kitchenIntelligence.slowestDish.name}
             </p>
             <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.slowestDish.avgPrep}</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fastest Dish</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Fastest Dish</p>
             <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.fastestDish.name}>
               {kitchenIntelligence.fastestDish.name}
             </p>
             <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.fastestDish.avgPrep}</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Oldest Order</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Oldest Order</p>
             <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
               #{kitchenIntelligence.longestTicket.id} • {kitchenIntelligence.longestTicket.table}
             </p>
             <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.longestTicket.elapsed} waiting</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cancelled Dish</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Cancelled Dish</p>
             <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.mostCancelledDish.name}>
               {kitchenIntelligence.mostCancelledDish.name}
             </p>
             <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.mostCancelledDish.count} cancelled</p>
           </div>
 
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Orders Waiting</p>
+          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Orders Waiting</p>
             <p className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
               {kitchenIntelligence.queueDepth}
             </p>
@@ -1055,7 +1093,7 @@ export default function DashboardPage() {
       {/* ======================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Recent Orders List */}
-        <Card className="lg:col-span-7 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+        <Card className="lg:col-span-7 border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
           <CardContent className="p-0">
             <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
@@ -1063,7 +1101,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-500 mt-0.5">Incoming orders across all tables.</p>
               </div>
               <Link href="/dashboard/orders">
-                <Button variant="ghost" className="text-xs font-semibold gap-1 text-slate-600 dark:text-slate-300">
+                <Button variant="ghost" className="text-xs font-semibold gap-1 text-slate-600 dark:text-slate-300 cursor-pointer">
                   View All <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </Link>
@@ -1094,7 +1132,7 @@ export default function DashboardPage() {
                         {formatPrice(order.grand_total || order.total || 0)}
                       </span>
                       <Link href={`/dashboard/orders?id=${order.id}`}>
-                        <Button variant="outline" size="sm" className="h-7 text-xs font-semibold px-2.5 rounded-lg">
+                        <Button variant="outline" size="sm" className="h-7 text-xs font-semibold px-2.5 rounded-lg cursor-pointer">
                           Manage
                         </Button>
                       </Link>
@@ -1107,7 +1145,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Top Selling Items */}
-        <Card className="lg:col-span-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
+        <Card className="lg:col-span-5 border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
           <CardContent className="p-5">
             <h3 className="text-base font-bold text-slate-900 dark:text-white pb-3 border-b border-slate-100 dark:border-slate-800">
               Top Selling Dishes
@@ -1150,7 +1188,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* DELAYED ORDERS MODAL (PRIORITY 2)                         */}
+      {/* DELAYED ORDERS MODAL (PRIORITY 4)                         */}
       {/* ======================================================== */}
       <Dialog
         isOpen={delayedOrdersModalOpen}
@@ -1178,11 +1216,11 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-base font-bold font-mono text-rose-600 dark:text-rose-400">{o.waitingMin}m</p>
+                      <p className="text-sm font-bold font-mono text-rose-600 dark:text-rose-400">{o.elapsedStr}</p>
                       <p className="text-[10px] text-slate-400 font-medium">waiting</p>
                     </div>
                     <Link href={`/dashboard/orders?id=${o.id}`}>
-                      <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold h-8 px-3 rounded-lg">
+                      <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold h-8 px-3 rounded-lg cursor-pointer">
                         Open Order
                       </Button>
                     </Link>
@@ -1195,11 +1233,11 @@ export default function DashboardPage() {
       </Dialog>
 
       {/* ======================================================== */}
-      {/* WAITER DETAILS DRILLDOWN MODAL (PRIORITY 8)               */}
+      {/* WAITER DETAILS DRILLDOWN MODAL (PRIORITY 10)              */}
       {/* ======================================================== */}
       {selectedWaiterModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl max-w-xl w-full p-6 shadow-2xl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl max-w-xl w-full p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white">{selectedWaiterModal.name}</h3>
@@ -1216,20 +1254,20 @@ export default function DashboardPage() {
 
             <div className="mt-4 space-y-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase">Orders Served</p>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase">Orders Served</p>
                   <p className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-0.5">{selectedWaiterModal.ordersServed}</p>
                 </div>
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase">Average</p>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase">Average</p>
                   <p className="text-xl font-bold font-mono text-slate-900 dark:text-white mt-0.5">{selectedWaiterModal.serveAvg}</p>
                 </div>
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase">Fastest</p>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase">Fastest</p>
                   <p className="text-xl font-bold font-mono text-emerald-600 mt-0.5">{selectedWaiterModal.fastest}</p>
                 </div>
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase">Slowest</p>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[10px] font-medium text-slate-400 uppercase">Slowest</p>
                   <p className="text-xl font-bold font-mono text-slate-500 mt-0.5">{selectedWaiterModal.slowest}</p>
                 </div>
               </div>
@@ -1246,7 +1284,7 @@ export default function DashboardPage() {
                           <p className="font-semibold text-slate-900 dark:text-white">{h.tableName || 'Table'} • {h.dish || 'Order'}</p>
                           <p className="text-[10px] text-slate-400">{h.timestamp}</p>
                         </div>
-                        <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{h.duration}s</span>
+                        <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{h.durationStr}</span>
                       </div>
                     ))
                   ) : (
