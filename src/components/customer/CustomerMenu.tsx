@@ -1514,13 +1514,18 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                   >
                     <div>
                       <div className="w-full h-28 relative overflow-hidden bg-slate-100 dark:bg-slate-800">
-                        {item.image_url ? (
-                          <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-3xl">
-                            <UtensilsCrossed className="h-6 w-6 text-slate-400" />
-                          </div>
-                        )}
+                        <img 
+                          src={item.image_url || '/dish-placeholder.svg'} 
+                          alt={item.name} 
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (!target.src.endsWith('/dish-placeholder.svg')) {
+                              target.onerror = null;
+                              target.src = '/dish-placeholder.svg';
+                            }
+                          }}
+                        />
                         <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-black uppercase text-white shadow-md ${item.is_veg ? 'bg-emerald-600' : 'bg-rose-600'}`}>
                           {item.is_veg ? 'VEG' : 'NON-VEG'}
                         </span>
@@ -1784,10 +1789,25 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 </div>
 
                 {/* Thumbnail Image */}
-                {item.image_url && (
-                  <div className="w-28 sm:w-36 shrink-0 relative border-l border-slate-100 dark:border-slate-800">
+                {item.image_url ? (
+                  <div className="w-28 sm:w-36 shrink-0 relative border-l border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 overflow-hidden">
                     <img 
                       src={item.image_url} 
+                      alt={item.name} 
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.endsWith('/dish-placeholder.svg')) {
+                          target.onerror = null;
+                          target.src = '/dish-placeholder.svg';
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-28 sm:w-36 shrink-0 relative border-l border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <img 
+                      src="/dish-placeholder.svg" 
                       alt={item.name} 
                       className="w-full h-full object-cover"
                     />
@@ -1908,12 +1928,21 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         }
       >
         <div className="space-y-4">
-          {detailedItem?.image_url && (
-            <img 
-              src={detailedItem.image_url} 
-              alt={detailedItem.name} 
-              className="w-full h-48 object-cover rounded-xl border border-slate-100 dark:border-slate-800"
-            />
+          {detailedItem && (
+            <div className="w-full h-48 relative overflow-hidden rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800">
+              <img 
+                src={detailedItem.image_url || '/dish-placeholder.svg'} 
+                alt={detailedItem.name} 
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.endsWith('/dish-placeholder.svg')) {
+                    target.onerror = null;
+                    target.src = '/dish-placeholder.svg';
+                  }
+                }}
+              />
+            </div>
           )}
 
           <div className="space-y-2">

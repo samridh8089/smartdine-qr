@@ -2104,6 +2104,35 @@ export const db = {
     const currentOrder = await this.getOrderById(id);
     if (!currentOrder) throw new Error('Order not found');
 
+    if (status === 'served') {
+      // 1. Fast path: check current order status
+      if (currentOrder.status === 'served' || currentOrder.status === 'completed') {
+        const conflictErr: any = new Error("Order already served by another team member.");
+        conflictErr.code = 'ORDER_ALREADY_SERVED';
+        conflictErr.status = 409;
+        throw conflictErr;
+      }
+
+      // 2. Concurrency-safe atomic conditional row lock in database
+      const { data: lockResult, error: lockErr } = await supabase
+        .from('orders')
+        .update({ status: 'served', updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .in('status', ['ready', 'accepted', 'preparing', 'new'])
+        .select('id, status');
+
+      if (lockErr || !lockResult || lockResult.length === 0) {
+        // Zero rows affected indicates another waiter won the race
+        const { data: freshOrder } = await supabase.from('orders').select('status').eq('id', id).single();
+        if (freshOrder?.status === 'served' || freshOrder?.status === 'completed') {
+          const conflictErr: any = new Error("Order already served by another team member.");
+          conflictErr.code = 'ORDER_ALREADY_SERVED';
+          conflictErr.status = 409;
+          throw conflictErr;
+        }
+      }
+    }
+
     // Authoritative Server-Side Order-Level Lifecycle Transition & Defensive Inventory Consumption
     await transitionOrderBatchLifecycle({
       restaurantId: currentOrder.restaurant_id,
