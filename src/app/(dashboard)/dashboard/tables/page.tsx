@@ -51,6 +51,15 @@ export default function TablesPage() {
     occupancyRate: 0
   });
 
+  const [nowTime, setNowTime] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchTablesData = async (restId: string) => {
@@ -529,6 +538,30 @@ export default function TablesPage() {
         </div>
       </div>
 
+      {/* Table SLA Overlay Legend Banner */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300">
+          <span>Table SLA Overlay:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 font-semibold">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" /> 🟢 On Time (&lt; 10m)
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200">
+            <span className="h-2 w-2 rounded-full bg-amber-500" /> 🟡 Near SLA (10–15m)
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200">
+            <span className="h-2 w-2 rounded-full bg-rose-500" /> 🔴 Breached (&gt; 15m)
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
+            <span className="h-2 w-2 rounded-full bg-slate-400" /> ⚪ Free
+          </span>
+        </div>
+        <div className="text-[11px] font-mono text-slate-400">
+          Live Clock: {new Date(nowTime).toLocaleTimeString()}
+        </div>
+      </div>
+
       {/* Resource Usage Counter */}
       <div className="max-w-md">
         <ResourceUsageCard
@@ -807,8 +840,62 @@ export default function TablesPage() {
             const qrData = qrCodes[table.id];
             const activeGroupForTable = activeMergeGroups.find(g => (g.members || []).some((m: any) => m.table_id === table.id || m.table_name === table.name));
             const assignedWaiters = tableAssignments.filter(a => a.table_id === table.id);
+
+            // Phase-20 Table SLA Overlay Calculation
+            const isOccupied = table.occupancy_status === 'occupied';
+            const occupiedTime = new Date(table.occupied_at || Date.now()).getTime();
+            const elapsedMs = Math.max(0, nowTime - occupiedTime);
+            const elapsedMin = Math.floor(elapsedMs / 60000);
+            const elapsedSec = Math.floor((elapsedMs % 60000) / 1000);
+            const elapsedStr = `${elapsedMin}m ${String(elapsedSec).padStart(2, '0')}s`;
+
+            let slaBadge = null;
+            let borderClass = 'border-slate-200 dark:border-slate-800';
+
+            if (table.payment_pending) {
+              borderClass = 'border-2 border-rose-500 shadow-md shadow-rose-100 dark:shadow-none';
+              slaBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
+                  <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
+                  🔴 Breached ({elapsedStr})
+                </span>
+              );
+            } else if (!isOccupied) {
+              borderClass = 'border-slate-200 dark:border-slate-800';
+              slaBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
+                  <span className="h-2 w-2 rounded-full bg-slate-400" />
+                  ⚪ Free
+                </span>
+              );
+            } else if (elapsedMin < 10) {
+              borderClass = 'border-2 border-emerald-500 shadow-md shadow-emerald-50 dark:shadow-none';
+              slaBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                  <span className="h-2 w-2 rounded-full bg-emerald-600" />
+                  🟢 On Time ({elapsedStr})
+                </span>
+              );
+            } else if (elapsedMin <= 15) {
+              borderClass = 'border-2 border-amber-500 shadow-md shadow-amber-50 dark:shadow-none';
+              slaBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
+                  🟡 Near SLA ({elapsedStr})
+                </span>
+              );
+            } else {
+              borderClass = 'border-2 border-rose-500 shadow-md shadow-rose-100 dark:shadow-none';
+              slaBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
+                  <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
+                  🔴 Breached ({elapsedStr})
+                </span>
+              );
+            }
+
             return (
-              <Card key={table.id} className={`hover:shadow-md transition-shadow duration-300 ${selectedTableIds.includes(table.id) ? 'ring-2 ring-emerald-500 bg-emerald-50/10' : ''}`}>
+              <Card key={table.id} className={`hover:shadow-md transition-all duration-300 ${borderClass} ${selectedTableIds.includes(table.id) ? 'ring-2 ring-emerald-500 bg-emerald-50/10' : ''}`}>
                 <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
                   {/* Table Header */}
                   <div className="w-full flex items-center justify-between">
@@ -861,27 +948,7 @@ export default function TablesPage() {
                   {/* Live Status & QR Controls Row */}
                   <div className="w-full flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                     <div className="flex items-center gap-1.5">
-                      {table.payment_pending ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
-                          <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
-                          🔴 Bill Pending
-                        </span>
-                      ) : table.occupancy_status === 'occupied' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                          <span className="h-2 w-2 rounded-full bg-amber-500" />
-                          🟡 Dining ({table.active_order_count || 1} orders)
-                        </span>
-                      ) : table.occupancy_status === 'inactive' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
-                          <span className="h-2 w-2 rounded-full bg-slate-400" />
-                          QR Disabled
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                          <span className="h-2 w-2 rounded-full bg-emerald-600" />
-                          🟢 Free / Available
-                        </span>
-                      )}
+                      {slaBadge}
                     </div>
 
                     <div className="flex items-center gap-1.5">
