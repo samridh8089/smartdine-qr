@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { calculateOrderTax } from '@/lib/tax';
 import { ServerTimer } from '@/lib/serverTiming';
 import { handleApiError } from '@/lib/errors';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
   const totalStart = performance.now();
@@ -141,16 +145,18 @@ export async function POST(req: Request) {
         await supabase.from('order_items').insert(addOnItemsPayload);
       }
 
-      const newSubtotal = (activeOrder.subtotal || 0) + subtotal;
-      const newGst = (activeOrder.gst || 0) + taxCalc.taxTotal;
-      const newTotal = (activeOrder.total || activeOrder.grand_total || 0) + grandTotal;
+      const newSubtotal = parseFloat(((activeOrder.subtotal || 0) + subtotal).toFixed(2));
+      const newGst = parseFloat(((activeOrder.gst || 0) + taxCalc.taxTotal).toFixed(2));
+      const newTotal = parseFloat(((activeOrder.total || activeOrder.grand_total || 0) + grandTotal).toFixed(2));
+      const newCgst = parseFloat((newGst / 2).toFixed(2));
+      const newSgst = parseFloat((newGst - newCgst).toFixed(2));
 
       const { data: updatedOrderData } = await supabase.from('orders').update({
         subtotal: newSubtotal,
         gst: newGst,
         tax_total: newGst,
-        cgst_amount: (activeOrder.cgst_amount || 0) + taxCalc.cgstAmount,
-        sgst_amount: (activeOrder.sgst_amount || 0) + taxCalc.sgstAmount,
+        cgst_amount: newCgst,
+        sgst_amount: newSgst,
         total: newTotal,
         grand_total: newTotal,
         updated_at: new Date().toISOString()
@@ -158,7 +164,11 @@ export async function POST(req: Request) {
 
       createdOrder = updatedOrderData || activeOrder;
     } else {
-      // Create new order matching PostgreSQL relational schema
+      // Create new order matching PostgreSQL relational schema with exact 50/50 GST split
+      const initialGst = parseFloat(taxCalc.taxTotal.toFixed(2));
+      const initialCgst = parseFloat((initialGst / 2).toFixed(2));
+      const initialSgst = parseFloat((initialGst - initialCgst).toFixed(2));
+
       const orderPayload = {
         restaurant_id: restaurantId,
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
@@ -167,13 +177,13 @@ export async function POST(req: Request) {
         order_type: orderType,
         payment_status: paymentStatus,
         special_instructions: specialInstructions || null,
-        subtotal,
+        subtotal: parseFloat(subtotal.toFixed(2)),
         discount_total: taxCalc.discountTotal,
-        cgst_amount: taxCalc.cgstAmount,
-        sgst_amount: taxCalc.sgstAmount,
+        cgst_amount: initialCgst,
+        sgst_amount: initialSgst,
         igst_amount: taxCalc.igstAmount,
-        gst: taxCalc.taxTotal,
-        tax_total: taxCalc.taxTotal,
+        gst: initialGst,
+        tax_total: initialGst,
         total: grandTotal,
         grand_total: grandTotal,
         created_at: new Date().toISOString(),

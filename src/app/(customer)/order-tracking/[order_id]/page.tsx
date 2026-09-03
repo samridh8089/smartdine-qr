@@ -39,7 +39,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
   });
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec | null>(null);
-  const [loading, setLoading] = useState(!order);
+  const [loading, setLoading] = useState(true);
   const [callLoading, setCallLoading] = useState(false);
   const [callSent, setCallSent] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -63,32 +63,32 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const [showTimeline, setShowTimeline] = useState<boolean>(false);
 
   const loadOrderData = async () => {
-    const o = await db.getOrderById(orderId);
-    if (!o) {
-      setLoading(false);
-      return;
-    }
-    setOrder(o);
-    // Instant paint unblock
-    setLoading(false);
+    try {
+      const o = await db.getOrderById(orderId);
+      if (!o) {
+        setOrder(null);
+        setLoading(false);
+        return;
+      }
+      setOrder(o);
 
-    // Parallel background resolution of restaurant and merge details
-    Promise.all([
-      db.getRestaurantById(o.restaurant_id).then(async (rest) => {
-        if (rest) {
-          setRestaurant(rest);
-          try {
-            sessionStorage.setItem('smartdine_active_restaurant_slug', rest.slug);
-            if (o.status === 'completed' || o.status === 'cancelled') {
-              sessionStorage.removeItem(`smartdine_latest_order_${rest.id}`);
-              localStorage.removeItem(`smartdine_latest_order_${rest.id}`);
-            }
-          } catch (e) {}
-          const planId = (rest.subscription_plan || 'starter').toLowerCase();
-          const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle();
-          setPlanSpec(parsePlanSpec(planRow || { id: planId }));
-        }
-      }),
+      // Resolve restaurant branding before ending loading state to prevent flash
+      const rest = await db.getRestaurantById(o.restaurant_id);
+      if (rest) {
+        setRestaurant(rest);
+        try {
+          sessionStorage.setItem('smartdine_active_restaurant_slug', rest.slug);
+          if (o.status === 'completed' || o.status === 'cancelled') {
+            sessionStorage.removeItem(`smartdine_latest_order_${rest.id}`);
+            localStorage.removeItem(`smartdine_latest_order_${rest.id}`);
+          }
+        } catch (e) {}
+        const planId = (rest.subscription_plan || 'starter').toLowerCase();
+        const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle();
+        setPlanSpec(parsePlanSpec(planRow || { id: planId }));
+      }
+
+      // Background resolution of merge details
       (async () => {
         let mGroupId = o.merge_group_id;
         let mSessionId = (o as any).merge_session_id;
@@ -105,8 +105,12 @@ export default function OrderTrackingPage({ params }: PageProps) {
         } else {
           setMergedGroupDetails(null);
         }
-      })()
-    ]).catch(e => console.error('Background order tracking load error:', e));
+      })().catch(e => console.error('Background order tracking load error:', e));
+    } catch (err) {
+      console.error('Order tracking load error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
