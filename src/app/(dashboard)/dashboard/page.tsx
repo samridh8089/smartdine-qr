@@ -18,19 +18,19 @@ import {
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
 
-// Priority 22: Human-readable waiting time formatting
+// Priority 2: Human-readable waiting time formatting
 function formatHumanDuration(seconds: number): string {
-  if (isNaN(seconds) || seconds <= 0) return '0s';
+  if (isNaN(seconds) || seconds <= 0) return '0 sec';
   const sec = Math.round(seconds);
-  if (sec < 60) return `${sec}s`;
+  if (sec < 60) return `${sec} sec`;
   if (sec < 3600) {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
-    return `${m}m ${String(s).padStart(2, '0')}s`;
+    return `${m} min ${String(s).padStart(2, '0')} sec`;
   }
   const h = Math.floor(sec / 3600);
   const remM = Math.floor((sec % 3600) / 60);
-  return `${h}h ${String(remM).padStart(2, '0')}m`;
+  return `${h} hr ${String(remM).padStart(2, '0')} min`;
 }
 
 function formatElapsedMs(ms: number): string {
@@ -739,12 +739,13 @@ export default function DashboardPage() {
               {formatPrice(revenueMetrics.settled > 0 ? revenueMetrics.settled : revenueMetrics.totalVolume)}
             </h3>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 space-y-0.5">
-              <p className="truncate">Settled: <strong className="text-slate-800 dark:text-slate-200 font-mono">{formatPrice(revenueMetrics.settled)}</strong></p>
-              {revenueMetrics.pending > 0 && (
-                <p className="truncate text-amber-600 dark:text-amber-400 font-medium">
-                  Pending: <span className="font-mono">{formatPrice(revenueMetrics.pending)}</span>
-                </p>
-              )}
+              <p className="truncate">Settled Revenue: <strong className="text-slate-800 dark:text-slate-200 font-mono">{formatPrice(revenueMetrics.settled)}</strong></p>
+              <p className="truncate text-amber-600 dark:text-amber-400 font-medium">
+                Pending Settlement: <span className="font-mono">{formatPrice(revenueMetrics.pending)}</span>
+              </p>
+              <p className="truncate text-slate-400">
+                Cancelled Impact: <span className="font-mono">{formatPrice(revenueMetrics.cancelled)}</span>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -765,7 +766,7 @@ export default function DashboardPage() {
           <CardContent className="p-4">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tables Occupied</p>
             <h3 className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
-              {tableOccupancy.occupied} of {tableOccupancy.total}
+              {tableOccupancy.occupied} of {tableOccupancy.total} Tables
             </h3>
             <p className="text-[11px] text-slate-400 mt-1">{tableOccupancy.occupancyRate}% dining room occupied</p>
           </CardContent>
@@ -939,7 +940,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                Occupied: {tableOccupancy.occupied} of {tableOccupancy.total} tables ({tableOccupancy.occupancyRate}%)
+                Occupied: {tableOccupancy.occupied} of {tableOccupancy.total} Tables ({tableOccupancy.occupancyRate}%)
               </span>
               <Link href="/dashboard/tables">
                 <Button variant="outline" size="sm" className="text-xs font-semibold h-8 rounded-lg cursor-pointer">
