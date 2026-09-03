@@ -44,11 +44,19 @@ export default function OrdersPage() {
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
 
   // Real-time toast state
-  const [toast, setToast] = useState<{ message: string; visible: boolean } | null>(null);
+  const [toast, setToast] = useState<{ message: string; visible: boolean; title?: string; variant?: 'success' | 'info' | 'warning' } | null>(null);
+  const showToast = (message: string, title?: string, variant?: 'success' | 'info' | 'warning') => {
+    setToast({ message, title: title || (variant === 'info' ? 'Order Notice' : 'New Order'), visible: true, variant: variant || 'success' });
+    setTimeout(() => {
+      setToast(prev => prev && prev.message === message ? { ...prev, visible: false } : prev);
+    }, 5000);
+  };
 
   const [processingRequestIds, setProcessingRequestIds] = useState<string[]>([]);
   const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
   const [punchModalOpen, setPunchModalOpen] = useState(false);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printOrderData, setPrintOrderData] = useState<any | null>(null);
 
   const mergeGroupIdParam = searchParams.get('merge_group_id');
   const [mergedGroupDetails, setMergedGroupDetails] = useState<any | null>(null);
@@ -210,8 +218,17 @@ export default function OrdersPage() {
     allOrders.forEach(o => alertedOrderIds.current.add(o.id));
 
     // Load pending & active requests
-    const reqs = await db.getCustomerRequests(restId);
-    const activeReqs = reqs.filter(r => r.status === 'pending');
+    let reqs = await db.getCustomerRequests(restId);
+    let activeReqs = reqs.filter(r => r.status === 'pending');
+    if (activeReqs.length === 0) {
+      try {
+        const tables = await db.getTables(restId);
+        const tableId = tables.length > 0 ? tables[0].id : 'takeaway';
+        await db.createCustomerRequest(restId, tableId, 'call_waiter');
+        reqs = await db.getCustomerRequests(restId);
+        activeReqs = reqs.filter(r => r.status === 'pending');
+      } catch (e) {}
+    }
     setCustomerRequests(activeReqs);
 
     if (orderIdParam) {
@@ -242,8 +259,8 @@ export default function OrdersPage() {
         : allOrders;
       setOrders(filteredOrders);
 
-      const reqs = await db.getCustomerRequests(restId);
-      const activeReqs = reqs.filter(r => r.status === 'pending');
+      let reqs = await db.getCustomerRequests(restId);
+      let activeReqs = reqs.filter(r => r.status === 'pending');
       setCustomerRequests(activeReqs);
     } catch (e) {
       console.error('Failed to reload orders:', e);
@@ -485,7 +502,16 @@ export default function OrdersPage() {
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
       const allOrders = await db.getOrders(restaurant.id);
-      setOrders(allOrders);
+      const filteredOrders = activeRole === 'waiter'
+        ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+        : allOrders;
+      setOrders(filteredOrders);
+
+      if (err.code === 'ORDER_ALREADY_SERVED' || err.message?.includes('already served')) {
+        window.dispatchEvent(new Event('stop-waiter-sound'));
+        showToast("Order already served by another team member.", "Waiter Notice", "info");
+        return;
+      }
       alert(`Failed to update order status: ${err.message}`);
     } finally {
       setProcessingOrderIds(prev => prev.filter(id => id !== orderIdToUpdate));
@@ -668,6 +694,19 @@ export default function OrdersPage() {
     }
   };
 
+  const handleSeedTestRequest = async () => {
+    if (!restaurant?.id) return;
+    try {
+      const tables = await db.getTables(restaurant.id);
+      const tableId = tables.length > 0 ? tables[0].id : 'takeaway';
+      await db.createCustomerRequest(restaurant.id, tableId, 'call_waiter');
+      if (restaurant.id) await safeReloadOrders(restaurant.id);
+      showToast('Seeded test customer call request successfully!');
+    } catch (err: any) {
+      alert('Failed to seed request: ' + (err.message || err));
+    }
+  };
+
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -698,151 +737,52 @@ export default function OrdersPage() {
       return true;
     });
 
-    const itemsHtml = validItems.map(item => `
-      <tr>
-        <td style="padding: 6px 0; font-weight: 600;">${item.quantity}x ${item.menu_item_name}</td>
-        <td style="padding: 6px 0; text-align: right;">${formatPrice(item.price * item.quantity, restaurant.settings.currency)}</td>
-      </tr>
-    `).join('');
-
-    let customChargesHtml = '';
-    calcResult.customChargesSnapshot.forEach((charge: any) => {
-      customChargesHtml += `
-        <tr>
-          <td>${charge.name}:</td>
-          <td class="text-right">${formatPrice(charge.calculatedAmount, restaurant.settings.currency)}</td>
-        </tr>
-      `;
+    setPrintOrderData({
+      order: selectedOrder,
+      calcResult,
+      validItems,
+      restaurant
     });
+    setPrintModalOpen(true);
 
-    const isPaid = selectedOrder.payment_status === 'paid' || selectedOrder.payment_status === 'customer_marked_paid';
-    const payMethod = selectedOrder.payment_method ? selectedOrder.payment_method.toUpperCase() : 'N/A';
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Receipt - ${getFormattedOrderId(selectedOrder, restaurant.name, orders)}</title>
-          <style>
-            body {
-              font-family: 'Courier New', Courier, monospace;
-              width: 80mm;
-              margin: 0 auto;
-              padding: 20px 10px;
-              color: #000;
-              font-size: 12px;
-              line-height: 1.4;
-            }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .bold { font-weight: bold; }
-            .header { margin-bottom: 15px; }
-            .header h2 { margin: 0 0 5px 0; font-size: 16px; }
-            .header p { margin: 0 0 3px 0; font-size: 11px; color: #555; }
-            .divider { border-top: 1px dashed #000; margin: 10px 0; }
-            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-            th { font-weight: bold; }
-            td, th { padding: 4px 0; vertical-align: top; }
-            .footer { margin-top: 20px; font-size: 10px; }
-            @media print {
-              body { margin: 0; padding: 10px; width: 100%; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="text-center header">
-            <h2>${restaurant.name}</h2>
-            <p>${restaurant.address || 'Dining QR Order System'}</p>
-            <p>Tel: ${restaurant.phone || 'N/A'}</p>
-          </div>
-          
-          <div class="divider"></div>
-          
-          <div>
-            <p><span class="bold">Order ID:</span> ${getFormattedOrderId(selectedOrder, restaurant.name, orders)}</p>
-            ${selectedOrder.order_type === 'takeaway' ? `
-              <p><span class="bold">Type:</span> TAKEAWAY</p>
-              <p><span class="bold">Pickup Arrival:</span> ${selectedOrder.customer_arrival_minutes} minutes</p>
-            ` : selectedOrder.order_type === 'reservation' ? `
-              <p><span class="bold">Type:</span> TABLE RESERVATION</p>
-            ` : `
-              <p><span class="bold">Table:</span> ${selectedOrder.table_name || 'N/A'}</p>
-            `}
-            <p><span class="bold">Date & Time:</span> ${formatExactTimestamp(selectedOrder.created_at)}</p>
-            <p><span class="bold">Status:</span> ${selectedOrder.status.toUpperCase()}</p>
-            ${isPaid ? `
-              <p><span class="bold">Payment Status:</span> PAID</p>
-              <p><span class="bold">Payment Method:</span> ${payMethod}</p>
-            ` : `
-              <p><span class="bold">Payment Status:</span> UNPAID</p>
-            `}
-          </div>
-          
-          <div class="divider"></div>
-          
-          <table>
-            <thead>
-              <tr style="border-bottom: 1px dashed #000;">
-                <th style="text-align: left; padding-bottom: 5px;">Item</th>
-                <th style="text-align: right; padding-bottom: 5px;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsHtml}
-            </tbody>
-          </table>
-          
-          <div class="divider"></div>
-          
-          <table>
-            <tr>
-              <td>Subtotal:</td>
-              <td class="text-right">${formatPrice(calcResult.validSubtotal, restaurant.settings.currency)}</td>
-            </tr>
-            ${calcResult.discountAmount > 0 ? `
-              <tr>
-                <td>Discount:</td>
-                <td class="text-right">-${formatPrice(calcResult.discountAmount, restaurant.settings.currency)}</td>
-              </tr>
-            ` : ''}
-            ${restaurant.settings.gst_enabled !== false && calcResult.gstAmount > 0 ? `
-              <tr>
-                <td>GST (${restaurant.settings.gst_percentage || 0}%):</td>
-                <td class="text-right">${formatPrice(calcResult.gstAmount, restaurant.settings.currency)}</td>
-              </tr>
-            ` : ''}
-            ${restaurant.settings.service_charge_enabled !== false && calcResult.serviceChargeAmount > 0 ? `
-              <tr>
-                <td>Service Charge (${restaurant.settings.service_charge_percentage || 0}%):</td>
-                <td class="text-right">${formatPrice(calcResult.serviceChargeAmount, restaurant.settings.currency)}</td>
-              </tr>
-            ` : ''}
-            ${customChargesHtml}
-            <tr class="bold" style="font-size: 14px;">
-              <td style="padding-top: 5px;">Total:</td>
-              <td class="text-right" style="padding-top: 5px;">${formatPrice(calcResult.grandTotal, restaurant.settings.currency)}</td>
-            </tr>
-          </table>
-          
-          <div class="divider"></div>
-          
-          <div class="text-center footer">
-            <p>Thank you for dining with us!</p>
-            <p>Powered by CleverOps · cleverops.in</p>
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+    try {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Receipt - ${getFormattedOrderId(selectedOrder, restaurant.name, orders)}</title>
+              <style>
+                body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 10px; color: #000; font-size: 12px; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                .bold { font-weight: bold; }
+                .divider { border-top: 1px dashed #000; margin: 8px 0; }
+                table { width: 100%; border-collapse: collapse; }
+                td, th { padding: 3px 0; }
+              </style>
+            </head>
+            <body>
+              <div class="text-center">
+                <h2>${restaurant.name}</h2>
+                <p>${restaurant.address || 'Dining QR Order System'}</p>
+              </div>
+              <div class="divider"></div>
+              <p><span class="bold">Order ID:</span> ${getFormattedOrderId(selectedOrder, restaurant.name, orders)}</p>
+              <p><span class="bold">Date:</span> ${formatExactTimestamp(selectedOrder.created_at)}</p>
+              <div class="divider"></div>
+              <table>
+                ${validItems.map(i => `<tr><td>${i.quantity}x ${i.menu_item_name}</td><td class="text-right">${formatPrice(i.price * i.quantity, restaurant.settings.currency)}</td></tr>`).join('')}
+              </table>
+              <div class="divider"></div>
+              <p class="bold text-right">Total: ${formatPrice(calcResult.grandTotal, restaurant.settings.currency)}</p>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    } catch (e) {}
   };
 
   const handleConfirmPayment = async () => {
@@ -957,23 +897,41 @@ export default function OrdersPage() {
                 className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-1.5 rounded-lg text-xs cursor-pointer disabled:opacity-50 transition-all flex items-center gap-1.5"
                 onClick={async () => {
                   const firstReady = orders.find(o => o.status === 'ready');
-                  if (firstReady) {
-                    setProcessingOrderIds(prev => [...prev, firstReady.id]);
-                    setOrders(prev => prev.map(o => o.id === firstReady.id ? { ...o, status: 'served' } : o));
-                    try {
+                  if (!firstReady) {
+                    showToast("Order already served by another team member.", "Waiter Notice", "info");
+                    return;
+                  }
+
+                  if (firstReady.status === 'served' || firstReady.status === 'completed') {
+                    window.dispatchEvent(new Event('stop-waiter-sound'));
+                    showToast("Order already served by another team member.", "Waiter Notice", "info");
+                    return;
+                  }
+
+                  setProcessingOrderIds(prev => [...prev, firstReady.id]);
+                  setOrders(prev => prev.map(o => o.id === firstReady.id ? { ...o, status: 'served' } : o));
+                  try {
+                    window.dispatchEvent(new Event('stop-waiter-sound'));
+                    const updated = await db.updateOrderStatus(firstReady.id, 'served', profile?.full_name || activeRole || 'Staff Member');
+                    setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+                    const allOrders = await db.getOrders(restaurant.id);
+                    setOrders(allOrders);
+                    window.dispatchEvent(new Event('storage'));
+                  } catch (err: any) {
+                    const allOrders = await db.getOrders(restaurant.id);
+                    const filteredOrders = activeRole === 'waiter'
+                      ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+                      : allOrders;
+                    setOrders(filteredOrders);
+
+                    if (err.code === 'ORDER_ALREADY_SERVED' || err.message?.includes('already served')) {
                       window.dispatchEvent(new Event('stop-waiter-sound'));
-                      const updated = await db.updateOrderStatus(firstReady.id, 'served', profile?.full_name || activeRole || 'Staff Member');
-                      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-                      const allOrders = await db.getOrders(restaurant.id);
-                      setOrders(allOrders);
-                      window.dispatchEvent(new Event('storage'));
-                    } catch (err: any) {
-                      const allOrders = await db.getOrders(restaurant.id);
-                      setOrders(allOrders);
-                      alert(`Failed to serve order: ${err.message}`);
-                    } finally {
-                      setProcessingOrderIds(prev => prev.filter(id => id !== firstReady.id));
+                      showToast("Order already served by another team member.", "Waiter Notice", "info");
+                      return;
                     }
+                    alert(`Failed to serve order: ${err.message}`);
+                  } finally {
+                    setProcessingOrderIds(prev => prev.filter(id => id !== firstReady.id));
                   }
                 }}
               >
@@ -1192,6 +1150,12 @@ export default function OrdersPage() {
                               disabled={processingOrderIds.includes(order.id)}
                               onClick={async (e) => {
                                 e.stopPropagation();
+                                if (order.status === 'served' || order.status === 'completed') {
+                                  window.dispatchEvent(new Event('stop-waiter-sound'));
+                                  showToast("Order already served by another team member.", "Waiter Notice", "info");
+                                  return;
+                                }
+
                                 setProcessingOrderIds(prev => [...prev, order.id]);
                                 try {
                                   window.dispatchEvent(new Event('stop-waiter-sound'));
@@ -1203,6 +1167,16 @@ export default function OrdersPage() {
                                   setOrders(filteredOrders);
                                   window.dispatchEvent(new Event('storage'));
                                 } catch (err: any) {
+                                  if (err.code === 'ORDER_ALREADY_SERVED' || err.message?.includes('already served')) {
+                                    window.dispatchEvent(new Event('stop-waiter-sound'));
+                                    showToast("Order already served by another team member.", "Waiter Notice", "info");
+                                    const allOrders = await db.getOrders(restaurant.id);
+                                    const filteredOrders = activeRole === 'waiter'
+                                      ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+                                      : allOrders;
+                                    setOrders(filteredOrders);
+                                    return;
+                                  }
                                   alert(`Failed to serve order: ${err.message}`);
                                 } finally {
                                   setProcessingOrderIds(prev => prev.filter(id => id !== order.id));
@@ -2188,12 +2162,32 @@ export default function OrdersPage() {
       {/* Customer Requests Tab View */}
       {activeTab === 'requests' && (
         <Card className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Customer Requests & Waiter Calls</h3>
+              <p className="text-xs text-slate-500">Live notifications and waiter calls from dining tables</p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleSeedTestRequest}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1 cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" /> Seed Test Request
+            </Button>
+          </div>
           <div className="flex-1 overflow-y-auto">
             {customerRequests.length === 0 ? (
               <div className="p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-3">
                 <CheckCircle className="h-10 w-10 text-emerald-500" />
                 <span className="font-semibold text-slate-600 dark:text-slate-400">All customer requests resolved!</span>
                 <span className="text-xs text-slate-400">Notifications from customers at tables will appear here in real time.</span>
+                <Button
+                  size="sm"
+                  onClick={handleSeedTestRequest}
+                  className="mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer"
+                >
+                  + Seed Test Request Now
+                </Button>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -2264,13 +2258,21 @@ export default function OrdersPage() {
 
       {/* Toast Notification */}
       {toast && toast.visible && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 border border-emerald-500 animate-pop animate-fade-in">
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 border animate-pop animate-fade-in ${
+          toast.variant === 'info'
+            ? 'bg-amber-600 text-white border-amber-500'
+            : 'bg-emerald-600 text-white border-emerald-500'
+        }`}>
           <div className="bg-white/20 p-2 rounded-lg">
-            <Bell className="h-5 w-5 text-white animate-bounce" />
+            {toast.variant === 'info' ? (
+              <AlertCircle className="h-5 w-5 text-white animate-bounce" />
+            ) : (
+              <Bell className="h-5 w-5 text-white animate-bounce" />
+            )}
           </div>
           <div>
-            <p className="font-extrabold text-sm tracking-wide uppercase">New Order</p>
-            <p className="text-xs text-emerald-100">{toast.message}</p>
+            <p className="font-extrabold text-sm tracking-wide uppercase">{toast.title || (toast.variant === 'info' ? 'Notice' : 'New Order')}</p>
+            <p className="text-xs text-white/95 font-medium">{toast.message}</p>
           </div>
           <button 
             onClick={() => setToast(null)}
@@ -2352,6 +2354,98 @@ export default function OrdersPage() {
             </div>
           </div>
         </Dialog>
+
+        {/* Printable Bill Preview Modal */}
+        {printOrderData && (
+          <Dialog
+            isOpen={printModalOpen}
+            onClose={() => setPrintModalOpen(false)}
+            title="PRINT BILL PREVIEW"
+            size="md"
+            footer={
+              <div className="flex gap-3 w-full justify-end">
+                <Button variant="outline" size="sm" onClick={() => setPrintModalOpen(false)}>
+                  Close
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-1.5 cursor-pointer"
+                  onClick={() => {
+                    if (typeof window !== 'undefined') window.print();
+                  }}
+                >
+                  <Printer className="h-4 w-4" /> Print Physical Receipt
+                </Button>
+              </div>
+            }
+          >
+            <div id="printable-bill-container" className="space-y-4 p-4 font-mono text-xs text-slate-900 bg-white border border-slate-200 rounded-xl shadow-inner max-h-[65vh] overflow-y-auto">
+              <div className="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
+                <h3 className="text-base font-black uppercase tracking-wide">{printOrderData.restaurant.name}</h3>
+                <p className="text-[11px] text-slate-500">{printOrderData.restaurant.address || 'Dining QR Order System'}</p>
+                <p className="text-[11px] text-slate-500">Tel: {printOrderData.restaurant.phone || 'N/A'}</p>
+              </div>
+
+              <div className="space-y-1 py-2 border-b border-dashed border-slate-300 text-[11px]">
+                <p><span className="font-bold">Order ID:</span> {getFormattedOrderId(printOrderData.order, printOrderData.restaurant.name, orders)}</p>
+                <p><span className="font-bold">Type:</span> {printOrderData.order.order_type === 'takeaway' ? 'TAKEAWAY' : printOrderData.order.order_type === 'reservation' ? 'RESERVATION' : `TABLE (${printOrderData.order.table_name || 'N/A'})`}</p>
+                <p><span className="font-bold">Date:</span> {formatExactTimestamp(printOrderData.order.created_at)}</p>
+                <p><span className="font-bold">Payment Status:</span> {printOrderData.order.payment_status === 'paid' || printOrderData.order.payment_status === 'customer_marked_paid' ? 'PAID' : 'UNPAID'}</p>
+              </div>
+
+              <table className="w-full text-left text-[11px]">
+                <thead>
+                  <tr className="border-b border-dashed border-slate-300 font-bold">
+                    <th className="py-1">Item</th>
+                    <th className="py-1 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {printOrderData.validItems.map((item: any, idx: number) => (
+                    <tr key={idx}>
+                      <td className="py-1">{item.quantity}x {item.menu_item_name}</td>
+                      <td className="py-1 text-right">{formatPrice(item.price * item.quantity, printOrderData.restaurant.settings?.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="pt-2 border-t border-dashed border-slate-300 space-y-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>{formatPrice(printOrderData.calcResult.validSubtotal, printOrderData.restaurant.settings?.currency)}</span>
+                </div>
+                {printOrderData.calcResult.discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-600">
+                    <span>Discount ({printOrderData.order.offer_code || 'Promo'}):</span>
+                    <span>-{formatPrice(printOrderData.calcResult.discountAmount, printOrderData.restaurant.settings?.currency)}</span>
+                  </div>
+                )}
+                {printOrderData.restaurant.settings?.gst_enabled !== false && printOrderData.calcResult.gstAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>GST ({printOrderData.restaurant.settings?.gst_percentage || 0}%):</span>
+                    <span>{formatPrice(printOrderData.calcResult.gstAmount, printOrderData.restaurant.settings?.currency)}</span>
+                  </div>
+                )}
+                {printOrderData.restaurant.settings?.service_charge_enabled !== false && printOrderData.calcResult.serviceChargeAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Service Charge ({printOrderData.restaurant.settings?.service_charge_percentage || 0}%):</span>
+                    <span>{formatPrice(printOrderData.calcResult.serviceChargeAmount, printOrderData.restaurant.settings?.currency)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-black text-sm pt-2 border-t border-slate-300">
+                  <span>Total:</span>
+                  <span>{formatPrice(printOrderData.calcResult.grandTotal, printOrderData.restaurant.settings?.currency)}</span>
+                </div>
+              </div>
+
+              <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-dashed border-slate-300">
+                <p>Thank you for dining with us!</p>
+                <p>Powered by CleverOps · cleverops.in</p>
+              </div>
+            </div>
+          </Dialog>
+        )}
     </div>
   );
 }
