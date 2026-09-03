@@ -1,0 +1,18 @@
+{
+  "KDS Stress & Bell": {
+    "pass": true,
+    "ticketCount": 45,
+    "bellActive": true
+  },
+  "Waiter Multi-Concurrency": {
+    "pass": true,
+    "detail": "Both waiters active concurrently with zero cross-session collision or race condition crash"
+  },
+  "Cashier Billing & Settlement": {
+    "pass": true,
+    "orderId": "dd61bc33-dce5-4d00-adeb-ce7849463bd4",
+    "paymentStatus": "paid",
+    "total": 1186.5,
+    "gst": 56.5
+  }
+}

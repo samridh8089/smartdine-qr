@@ -1,0 +1,30 @@
+{
+  "Test A: Zero Flash on Valid Order": {
+    "pass": true,
+    "flashedOnDesktop": false,
+    "flashedOnMobile": false
+  },
+  "Test B: Proper Not Found Page": {
+    "pass": true,
+    "renderedHeading": "Order Not Found"
+  },
+  "Test C: GST Parity on 3-Batch Order": {
+    "pass": true,
+    "orderId": "c5b46bb7-dbf3-4666-b7b6-511a5f6d2041",
+    "subtotal": 620,
+    "gst": 31,
+    "cgst": 15.5,
+    "sgst": 15.5,
+    "total": 651,
+    "gstParityDelta": "₹0.00",
+    "totalParityDelta": "₹0.00"
+  },
+  "Test D: Cashier Bill Sync": {
+    "pass": true,
+    "detail": "Live Cashier portal displays Table 9 3-batch order with ₹620 subtotal + ₹31 GST = ₹651 total"
+  },
+  "Test E: Owner Reports Sync": {
+    "pass": true,
+    "detail": "Owner reports update dynamically on live cleverops.in with 100% tax accuracy"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "Browser Re-open Session Recovery": {
+    "pass": false,
+    "cartPreserved": false
+  },
+  "Multi-Tab Concurrency": {
+    "pass": true,
+    "detail": "Both tabs opened and operated simultaneously without session lockout or collision"
+  },
+  "Network Disconnect & Reconnect": {
+    "pass": true,
+    "detail": "Client-side cart operations continue safely offline; reconnect succeeds without losing UI state"
+  }
+}

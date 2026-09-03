@@ -1,0 +1,36 @@
+{
+  "pipeline_steps": [
+    {
+      "step": "Customer -> API",
+      "latency_ms": 1059.4,
+      "description": "Network payload transit to edge route handler"
+    },
+    {
+      "step": "API -> DB",
+      "latency_ms": 1967.4,
+      "description": "PostgreSQL relational insert & GST calculation"
+    },
+    {
+      "step": "DB -> KDS",
+      "latency_ms": 12,
+      "description": "Supabase Realtime WebSocket broadcast to Kitchen"
+    },
+    {
+      "step": "KDS -> Waiter",
+      "latency_ms": 8,
+      "description": "Realtime order queue sync across floor team"
+    },
+    {
+      "step": "Waiter -> Cashier",
+      "latency_ms": 870,
+      "description": "Status transition served -> billing card update"
+    },
+    {
+      "step": "Cashier -> Reports",
+      "latency_ms": 994,
+      "description": "Payment settlement to executive analytics ledger"
+    }
+  ],
+  "total_end_to_end_latency_ms": 4910.8,
+  "verdict": "FAIL"
+}

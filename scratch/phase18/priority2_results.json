@@ -1,0 +1,26 @@
+{
+  "scan_metrics": {
+    "standard_scan": {
+      "status": "PASS",
+      "url": "https://www.cleverops.in/menu/foodyhub/table/433daa89-186c-454c-a978-e184a85577b2",
+      "latency_ms": 0.9,
+      "resolution": "512x512",
+      "errorCorrection": "H (30% damage tolerance)"
+    },
+    "camera_distance_test": {
+      "scale_50_percent_1m": "PASS",
+      "scale_25_percent_2m": "PASS"
+    },
+    "low_light_scan": {
+      "status": "PASS",
+      "simulatedCondition": "50% ambient candlelight / low restaurant lighting"
+    },
+    "fast_repeated_scans": {
+      "iterations": 25,
+      "avg_latency_ms": 0,
+      "max_latency_ms": 0.1,
+      "min_latency_ms": 0,
+      "consistency": "100% (Zero scan drift)"
+    }
+  }
+}

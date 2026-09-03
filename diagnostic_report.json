@@ -1,0 +1,25 @@
+{
+  "proof_1_expo_receipt": {
+    "data": {
+      "01a05853-e1cc-73ff-87ac-746813c8bbc8": {
+        "status": "error",
+        "message": "The request sent to the server was malformed or contained invalid parameters.",
+        "messageEnum": 18,
+        "messageParamValues": [],
+        "details": {
+          "fcm": {
+            "response": "{\n  \"error\": {\n    \"code\": 403,\n    \"message\": \"SenderId mismatch\",\n    \"status\": \"PERMISSION_DENIED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.firebase.fcm.v1.FcmError\",\n        \"errorCode\": \"SENDER_ID_MISMATCH\"\n      }\n    ]\n  }\n}\n",
+            "httpStatus": 403
+          },
+          "error": "DeveloperError",
+          "errorCodeEnum": 2,
+          "sentAt": 1788188287
+        },
+        "__debug": {}
+      }
+    }
+  },
+  "proof_2_adb_logcat": "08-31 20:28:07.037  4298  4298 I NotificationManager: com.android.systemui: notify(2114586824, charging_state, Notification(channel=CHR shortcut=null contentView=null vibrate=null sound=null defaults=0 flags=ONGOING_EVENT|ONLY_ALERT_ONCE color=0x00000000 category=sys groupKey=CHARGING vis=PUBLIC semFlags=0x0 semPriority=0 semMissedCount=0 semScenarioType=0)) as user\r\n08-31 20:28:07.256  4298  4298 I AODNotificationManager: updateNotification() \r\n08-31 20:28:07.486  4298  4298 I AODNotificationManager: updateNotification() \r\n08-31 20:28:07.523  4298  4298 I AODNotificationManager: updateNotification() \r",
+  "proof_3_channel_dumpsys": "",
+  "proof_4_video_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\af631f2d-472c-4b1a-a400-9353bd6e2483\\killed_proof.mp4"
+}

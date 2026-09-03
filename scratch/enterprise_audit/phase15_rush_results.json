@@ -1,0 +1,60 @@
+{
+  "wave1": {
+    "total": 20,
+    "success": 20,
+    "timeMs": 5087
+  },
+  "wave2": {
+    "total": 20,
+    "success": 20,
+    "timeMs": 2627
+  },
+  "totalOrdersHandled": 40,
+  "activeTicketsSimulated": 23,
+  "smartCosting": {
+    "dish": "Paneer Butter Masala",
+    "sellingPrice": 320,
+    "baseCost": 100.2,
+    "baseMargin": "68.7%",
+    "marketCost": 128.2,
+    "marketMargin": "59.9%",
+    "historicalOrdersFrozen": true
+  },
+  "cancellationRollback": {
+    "new": {
+      "orderId": "c1c50279-0ac6-4483-8485-26ce8472f7bd",
+      "cancelledFromStage": "new",
+      "finalStatus": "cancelled",
+      "stockRestored": "YES (Full inventory rollback)",
+      "status": "PASS"
+    },
+    "accepted": {
+      "orderId": "9b4e78f1-dd8e-40c2-a7a0-bf669258e938",
+      "cancelledFromStage": "accepted",
+      "finalStatus": "cancelled",
+      "stockRestored": "YES (Full inventory rollback)",
+      "status": "PASS"
+    },
+    "preparing": {
+      "orderId": "27e2a9b2-cd84-4dfa-90d9-625f07163223",
+      "cancelledFromStage": "preparing",
+      "finalStatus": "cancelled",
+      "stockRestored": "FOOD WASTE LOGGED",
+      "status": "PASS"
+    },
+    "ready": {
+      "orderId": "0fc22d4e-cd93-4ebb-844c-9ee6214e93d3",
+      "cancelledFromStage": "ready",
+      "finalStatus": "cancelled",
+      "stockRestored": "FOOD WASTE LOGGED",
+      "status": "PASS"
+    },
+    "served": {
+      "orderId": "89e74ea5-5573-48f1-b66d-abbc1611bc03",
+      "cancelledFromStage": "served",
+      "finalStatus": "cancelled",
+      "stockRestored": "FOOD WASTE LOGGED",
+      "status": "PASS"
+    }
+  }
+}

@@ -1,0 +1,372 @@
+{
+  "wave1Pass": 20,
+  "wave1Duration": "5.12",
+  "wave2Pass": 20,
+  "wave2Duration": "3.33",
+  "totalOrders": 40,
+  "activeOrdersInDb": 20,
+  "orderItemsCount": 69,
+  "batchesCount": 45,
+  "results": [
+    {
+      "wave": 1,
+      "table": "Table 1",
+      "status": 200,
+      "orderId": "63d78fb9-b150-447d-b510-395177bf0863",
+      "subtotal": 1210,
+      "total": 1270.5,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 10",
+      "status": 200,
+      "orderId": "cb8b4371-6fb5-42ac-847e-445132385c27",
+      "subtotal": 685,
+      "total": 719.25,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 11",
+      "status": 200,
+      "orderId": "4beb1bd7-6926-442e-b3b5-cec85e112b73",
+      "subtotal": 320,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 12",
+      "status": 200,
+      "orderId": "5d797d57-3757-43d6-bc6f-05dfe596b72f",
+      "subtotal": 350,
+      "total": 367.5,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 13",
+      "status": 200,
+      "orderId": "db78a39b-35de-4b99-809b-745168669ab7",
+      "subtotal": 260,
+      "total": 273,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 14",
+      "status": 200,
+      "orderId": "82df8e50-406d-418d-b69d-8e855e65081e",
+      "subtotal": 670,
+      "total": 703.5,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 15",
+      "status": 200,
+      "orderId": "36f3e1c0-c1c9-4480-a4ab-4f7b74cffcb5",
+      "subtotal": 320,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 16",
+      "status": 200,
+      "orderId": "80636a7a-3ce3-4bf5-acf6-aa61f9a8db33",
+      "subtotal": 620,
+      "total": 651,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 17",
+      "status": 200,
+      "orderId": "865ddfba-14da-42ae-a464-5451de142b38",
+      "subtotal": 380,
+      "total": 399,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 18",
+      "status": 200,
+      "orderId": "aaf6c55e-f780-4813-9653-f2ed821bbf87",
+      "subtotal": 685,
+      "total": 719.25,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 19",
+      "status": 200,
+      "orderId": "fad7cfc9-e35c-435c-8bce-f6eaf04d9013",
+      "subtotal": 320,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 2",
+      "status": 200,
+      "orderId": "dd61bc33-dce5-4d00-adeb-ce7849463bd4",
+      "subtotal": 500,
+      "total": 525,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 20",
+      "status": 200,
+      "orderId": "6560addc-51bc-454a-91b6-8cfe22fad464",
+      "subtotal": 260,
+      "total": 273,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 3",
+      "status": 200,
+      "orderId": "de62ddf5-8146-488e-bfa0-2e53381d46af",
+      "subtotal": 670,
+      "total": 703.5,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 4",
+      "status": 200,
+      "orderId": "8bad0337-430e-43f7-94fe-82460a475a1a",
+      "subtotal": 320,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 5",
+      "status": 200,
+      "orderId": "10f8029b-76eb-4378-a28f-015d026f9cff",
+      "subtotal": 620,
+      "total": 651,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 6",
+      "status": 200,
+      "orderId": "a8fc9e73-d271-44ff-b5a6-38b775cbcc34",
+      "subtotal": 380,
+      "total": 399,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 7",
+      "status": 200,
+      "orderId": "04b7d600-bec6-4bd4-b995-c9886ec6000b",
+      "subtotal": 685,
+      "total": 719.25,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 8",
+      "status": 200,
+      "orderId": "ce269076-6b90-48bd-8bbb-fa8ec12f3022",
+      "subtotal": 320,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 1,
+      "table": "Table 9",
+      "status": 200,
+      "orderId": "5f54f42b-b4ea-4fa1-8297-8ce82c5de29e",
+      "subtotal": 350,
+      "total": 367.5,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 1",
+      "status": 200,
+      "orderId": "63d78fb9-b150-447d-b510-395177bf0863",
+      "totalBatches": 2,
+      "total": 1669.5,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 10",
+      "status": 200,
+      "orderId": "cb8b4371-6fb5-42ac-847e-445132385c27",
+      "totalBatches": 2,
+      "total": 719.25,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 11",
+      "status": 200,
+      "orderId": "4beb1bd7-6926-442e-b3b5-cec85e112b73",
+      "totalBatches": 2,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 12",
+      "status": 200,
+      "orderId": "5d797d57-3757-43d6-bc6f-05dfe596b72f",
+      "totalBatches": 2,
+      "total": 367.5,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 13",
+      "status": 200,
+      "orderId": "db78a39b-35de-4b99-809b-745168669ab7",
+      "totalBatches": 2,
+      "total": 273,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 14",
+      "status": 200,
+      "orderId": "82df8e50-406d-418d-b69d-8e855e65081e",
+      "totalBatches": 2,
+      "total": 703.5,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 15",
+      "status": 200,
+      "orderId": "36f3e1c0-c1c9-4480-a4ab-4f7b74cffcb5",
+      "totalBatches": 2,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 16",
+      "status": 200,
+      "orderId": "80636a7a-3ce3-4bf5-acf6-aa61f9a8db33",
+      "totalBatches": 2,
+      "total": 651,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 17",
+      "status": 200,
+      "orderId": "865ddfba-14da-42ae-a464-5451de142b38",
+      "totalBatches": 2,
+      "total": 399,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 18",
+      "status": 200,
+      "orderId": "aaf6c55e-f780-4813-9653-f2ed821bbf87",
+      "totalBatches": 2,
+      "total": 719.25,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 19",
+      "status": 200,
+      "orderId": "fad7cfc9-e35c-435c-8bce-f6eaf04d9013",
+      "totalBatches": 2,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 2",
+      "status": 200,
+      "orderId": "dd61bc33-dce5-4d00-adeb-ce7849463bd4",
+      "totalBatches": 2,
+      "total": 892.5,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 20",
+      "status": 200,
+      "orderId": "6560addc-51bc-454a-91b6-8cfe22fad464",
+      "totalBatches": 2,
+      "total": 273,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 3",
+      "status": 200,
+      "orderId": "de62ddf5-8146-488e-bfa0-2e53381d46af",
+      "totalBatches": 2,
+      "total": 703.5,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 4",
+      "status": 200,
+      "orderId": "8bad0337-430e-43f7-94fe-82460a475a1a",
+      "totalBatches": 2,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 5",
+      "status": 200,
+      "orderId": "10f8029b-76eb-4378-a28f-015d026f9cff",
+      "totalBatches": 2,
+      "total": 651,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 6",
+      "status": 200,
+      "orderId": "a8fc9e73-d271-44ff-b5a6-38b775cbcc34",
+      "totalBatches": 2,
+      "total": 399,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 7",
+      "status": 200,
+      "orderId": "04b7d600-bec6-4bd4-b995-c9886ec6000b",
+      "totalBatches": 2,
+      "total": 719.25,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 8",
+      "status": 200,
+      "orderId": "ce269076-6b90-48bd-8bbb-fa8ec12f3022",
+      "totalBatches": 2,
+      "total": 336,
+      "success": true
+    },
+    {
+      "wave": 2,
+      "table": "Table 9",
+      "status": 200,
+      "orderId": "5f54f42b-b4ea-4fa1-8297-8ce82c5de29e",
+      "totalBatches": 2,
+      "total": 367.5,
+      "success": true
+    }
+  ]
+}

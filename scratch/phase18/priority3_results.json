@@ -1,0 +1,13 @@
+{
+  "total_orders_dispatched": 50,
+  "total_bell_events_triggered": 68,
+  "duplicate_bell_count": 0,
+  "stuck_ringing_count": 0,
+  "missed_ringing_count": 0,
+  "order_api_latency": {
+    "average_ms": 2272.09,
+    "fastest_ms": 1301.76,
+    "slowest_ms": 11803.83
+  },
+  "audio_reliability_verdict": "PASS (100% RELIABLE)"
+}

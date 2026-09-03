@@ -99,8 +99,50 @@ export default function AiMenuInput({ onAnalyze, isAnalyzing, errorMsg: external
     });
   };
 
+  const handleLoadSampleFixture = () => {
+    setErrorMsg(null);
+    const sampleBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    setSelectedFiles(prev => [
+      ...prev,
+      {
+        id: `sample_fixture_${Date.now()}`,
+        name: 'sample_menu_card.png',
+        base64: sampleBase64,
+        type: 'image/png',
+        previewUrl: sampleBase64
+      }
+    ]);
+    setTextContent(`Starters\nPaneer Tikka ₹240\nCrispy Corn ₹180\n\nMain Course\nButter Chicken ₹360\nDal Makhani ₹260`);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Testable Standard File Input & Fixture Loader */}
+      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h4 className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 tracking-wider">Select Menu File or Test Fixture</h4>
+            <p className="text-[11px] text-slate-500">Upload any JPG, PNG, PDF or TXT menu file directly</p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleLoadSampleFixture}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm shrink-0 cursor-pointer"
+          >
+            <Sparkles className="h-3.5 w-3.5 mr-1" /> Load Sample Menu Fixture
+          </Button>
+        </div>
+        <input
+          type="file"
+          data-testid="smart-menu-file-input"
+          id="smart-menu-standard-file-input"
+          accept="image/*,.pdf,.txt,.csv"
+          onChange={(e) => handleProcessFiles(e.target.files)}
+          className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 dark:file:bg-emerald-950 dark:file:text-emerald-300 cursor-pointer"
+        />
+      </div>
+
       {/* Hidden File & Camera Inputs */}
       <input
         ref={cameraInputRef}

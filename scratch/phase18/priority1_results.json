@@ -1,0 +1,8 @@
+{
+  "owner_onboarding_seconds": 8.61,
+  "menu_setup_seconds": 2.39,
+  "table_qr_generation_seconds": 3.07,
+  "first_order_seconds": 7.98,
+  "first_bill_seconds": 10.95,
+  "total_onboarding_to_bill_seconds": 33
+}

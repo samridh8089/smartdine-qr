@@ -1,0 +1,40 @@
+{
+  "Inventory Recipe Costing": {
+    "pass": true,
+    "dish": "Paneer Butter Masala (Full)",
+    "sellingPrice": 320,
+    "oldBOMCost": 81.5,
+    "newBOMCost": 109.5,
+    "oldMarginPct": 74.5,
+    "newMarginPct": 65.8
+  },
+  "4-Stage Cancellation Audit": {
+    "pass": true,
+    "stages": [
+      {
+        "stage": "new",
+        "orderId": "63d78fb9-b150-447d-b510-395177bf0863",
+        "cancelled": true,
+        "restored": false
+      },
+      {
+        "stage": "preparing",
+        "orderId": "6c622c5c-6229-4900-8d06-dd4f9994b111",
+        "cancelled": true,
+        "restored": true
+      },
+      {
+        "stage": "ready",
+        "orderId": "a09d855f-1a42-4527-b7cf-83c56d43c97d",
+        "cancelled": true,
+        "restored": true
+      },
+      {
+        "stage": "served",
+        "orderId": "5e5107fb-867e-4265-a0fc-6ba631dc63f2",
+        "cancelled": true,
+        "restored": true
+      }
+    ]
+  }
+}

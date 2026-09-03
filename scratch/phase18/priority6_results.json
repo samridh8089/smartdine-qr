@@ -1,0 +1,82 @@
+{
+  "hourly_breakdown": [
+    {
+      "hour": "Hour 1 (11:00 AM - Lunch Open)",
+      "orders_count": 25,
+      "batches_count": 0,
+      "cancels_count": 0,
+      "avg_latency_ms": 2550.4,
+      "heap_mb": 45.3,
+      "heap_delta_mb": 0.45
+    },
+    {
+      "hour": "Hour 2 (12:00 PM - Peak Lunch)",
+      "orders_count": 35,
+      "batches_count": 10,
+      "cancels_count": 0,
+      "avg_latency_ms": 1959.6,
+      "heap_mb": 47.5,
+      "heap_delta_mb": 2.19
+    },
+    {
+      "hour": "Hour 3 (01:00 PM - Post Lunch)",
+      "orders_count": 25,
+      "batches_count": 5,
+      "cancels_count": 3,
+      "avg_latency_ms": 2176.3,
+      "heap_mb": 48.7,
+      "heap_delta_mb": 1.21
+    },
+    {
+      "hour": "Hour 4 (02:00 PM - Afternoon)",
+      "orders_count": 15,
+      "batches_count": 0,
+      "cancels_count": 0,
+      "avg_latency_ms": 2552.2,
+      "heap_mb": 49.4,
+      "heap_delta_mb": 0.63
+    },
+    {
+      "hour": "Hour 5 (04:00 PM - Early Dinner)",
+      "orders_count": 30,
+      "batches_count": 8,
+      "cancels_count": 0,
+      "avg_latency_ms": 2066.1,
+      "heap_mb": 46.4,
+      "heap_delta_mb": -2.95
+    },
+    {
+      "hour": "Hour 6 (06:00 PM - Peak Dinner)",
+      "orders_count": 40,
+      "batches_count": 15,
+      "cancels_count": 0,
+      "avg_latency_ms": 1796.9,
+      "heap_mb": 48.4,
+      "heap_delta_mb": 1.93
+    },
+    {
+      "hour": "Hour 7 (08:00 PM - Late Dinner)",
+      "orders_count": 30,
+      "batches_count": 5,
+      "cancels_count": 2,
+      "avg_latency_ms": 3267.9,
+      "heap_mb": 49.9,
+      "heap_delta_mb": 1.54
+    },
+    {
+      "hour": "Hour 8 (09:00 PM - Shift Close)",
+      "orders_count": 5,
+      "batches_count": 0,
+      "cancels_count": 0,
+      "avg_latency_ms": 6046.1,
+      "heap_mb": 50.1,
+      "heap_delta_mb": 0.21
+    }
+  ],
+  "total_orders_simulated": 205,
+  "total_batches_simulated": 43,
+  "total_cancellations": 5,
+  "memory_leak_detected": false,
+  "ui_slowdown_detected": false,
+  "report_drift": "0.00% (Exact match)"
+}

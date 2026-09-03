@@ -1,0 +1,56 @@
+{
+  "financialAccuracy": {
+    "auditedOrders": 25,
+    "mismatches": 0,
+    "pass": true
+  },
+  "dataIntegrity": {
+    "totalOrders": 25,
+    "orphanItems": 0,
+    "orphanBatches": 0,
+    "orphanTx": 0,
+    "pass": true
+  },
+  "qrSecurity": [
+    {
+      "name": "Invalid Table UUID in URL",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "Malformed Table String",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "Non-existent Restaurant Slug",
+      "status": 200,
+      "pass": true
+    },
+    {
+      "name": "Direct POST with Foreign Restaurant ID",
+      "status": 404,
+      "pass": true,
+      "response": {
+        "error": "Restaurant not found for ID: 00000000-0000-0000-0000-000000000000"
+      }
+    }
+  ],
+  "performance": {
+    "Order API Latency": {
+      "value": "2200ms",
+      "target": "<500ms",
+      "pass": false
+    },
+    "QR Menu Load Time": {
+      "value": "311ms",
+      "target": "<2000ms",
+      "pass": true
+    },
+    "Core API Ping": {
+      "value": "400ms",
+      "target": "<300ms",
+      "pass": false
+    }
+  }
+}

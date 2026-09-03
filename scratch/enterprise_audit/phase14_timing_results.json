@@ -1,0 +1,12 @@
+{
+  "Customer Taps Place Order -> API Response": "5371 ms",
+  "Order DB Insert Verification": "1247 ms",
+  "API Response -> KDS Ticket Receipt": "1853 ms",
+  "Total Order -> KDS Realtime Latency": "7224 ms",
+  "Kitchen Bell Ring Latency": "Synchronous with Ticket Receipt (1853 ms)",
+  "Kitchen Accept Action": "0.70 sec (701 ms)",
+  "Kitchen Ready Transition": "0.53 sec (532 ms)",
+  "Waiter Serve Action": "0.33 sec (334 ms)",
+  "Cashier Billing & Payment Complete": "1.00 sec (1001 ms)",
+  "Owner Reports Sync": "3.19 sec (3189 ms)"
+}

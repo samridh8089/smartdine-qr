@@ -41,6 +41,8 @@ export default function OffersPage() {
   const [bannerUrl, setBannerUrl] = useState('');
   const [bgGradient, setBgGradient] = useState(GRADIENT_PRESETS[0].value);
   const [isActive, setIsActive] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -72,6 +74,8 @@ export default function OffersPage() {
     setBannerUrl('');
     setBgGradient(GRADIENT_PRESETS[0].value);
     setIsActive(true);
+    setStartDate('');
+    setEndDate('');
     setFormError('');
     setOfferModalOpen(true);
   };
@@ -87,6 +91,8 @@ export default function OffersPage() {
     setBannerUrl(off.banner_url || '');
     setBgGradient(off.bg_gradient || GRADIENT_PRESETS[0].value);
     setIsActive(off.is_active);
+    setStartDate(off.start_date || '');
+    setEndDate(off.end_date || '');
     setFormError('');
     setOfferModalOpen(true);
   };
@@ -113,6 +119,8 @@ export default function OffersPage() {
           banner_url: bannerUrl,
           bg_gradient: bgGradient,
           is_active: isActive,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
         });
       } else {
         await db.createOffer(restaurantId, {
@@ -125,6 +133,8 @@ export default function OffersPage() {
           banner_url: bannerUrl,
           bg_gradient: bgGradient,
           is_active: isActive,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
         });
       }
 
@@ -296,6 +306,13 @@ export default function OffersPage() {
                       Min Order: ₹{off.min_order_amount}
                     </div>
                   )}
+
+                  {(off.start_date || off.end_date) && (
+                    <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-xl border border-amber-400/40 text-[11px] font-bold text-amber-200 flex items-center gap-1">
+                      <span>Schedule:</span>
+                      <span>{off.start_date ? new Date(off.start_date).toLocaleDateString() : 'Now'} — {off.end_date ? new Date(off.end_date).toLocaleDateString() : 'Ongoing'}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -391,6 +408,22 @@ export default function OffersPage() {
               onChange={(e) => setMinOrderAmount(e.target.value)}
               placeholder="e.g. 200 (0 for no minimum)"
               type="number"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Offer Start Date & Time"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              type="datetime-local"
+            />
+
+            <Input
+              label="Offer Expiry / End Date & Time"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              type="datetime-local"
             />
           </div>
 

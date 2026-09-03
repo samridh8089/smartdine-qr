@@ -1,0 +1,100 @@
+[
+  {
+    "role": "Customer (Unauthenticated)",
+    "attempted_route": "/dashboard",
+    "final_url": "https://www.cleverops.in/login",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Customer (Unauthenticated)",
+    "attempted_route": "/dashboard/reports",
+    "final_url": "https://www.cleverops.in/login",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Customer (Unauthenticated)",
+    "attempted_route": "/dashboard/inventory",
+    "final_url": "https://www.cleverops.in/login",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Customer (Unauthenticated)",
+    "attempted_route": "/super-admin",
+    "final_url": "https://www.cleverops.in/login",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Waiter",
+    "attempted_route": "/super-admin",
+    "final_url": "https://www.cleverops.in/menu",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Waiter",
+    "attempted_route": "/dashboard/reports",
+    "final_url": "https://www.cleverops.in/dashboard/orders",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Waiter",
+    "attempted_route": "/dashboard/inventory",
+    "final_url": "https://www.cleverops.in/dashboard/orders",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Kitchen (KDS)",
+    "attempted_route": "/super-admin",
+    "final_url": "https://www.cleverops.in/dashboard/kds",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Kitchen (KDS)",
+    "attempted_route": "/dashboard/reports",
+    "final_url": "https://www.cleverops.in/dashboard/kds",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Kitchen (KDS)",
+    "attempted_route": "/dashboard/inventory",
+    "final_url": "https://www.cleverops.in/dashboard/inventory",
+    "access_blocked": false,
+    "status": "PASS (ALLOWED_BY_DESIGN: Kitchen chef has stock viewing permission)"
+  },
+  {
+    "role": "Cashier",
+    "attempted_route": "/super-admin",
+    "final_url": "https://www.cleverops.in/dashboard/orders",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Cashier",
+    "attempted_route": "/dashboard/inventory",
+    "final_url": "https://www.cleverops.in/dashboard/orders",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Owner",
+    "attempted_route": "/super-admin",
+    "final_url": "https://www.cleverops.in/dashboard",
+    "access_blocked": true,
+    "status": "PASS"
+  },
+  {
+    "role": "Super Admin",
+    "attempted_route": "/super-admin",
+    "final_url": "https://www.cleverops.in/super-admin",
+    "access_blocked": false,
+    "status": "PASS"
+  }
+]

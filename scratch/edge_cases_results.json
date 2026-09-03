@@ -1,0 +1,39 @@
+{
+  "Empty Cart": {
+    "status": 400,
+    "pass": true,
+    "response": {
+      "error": "restaurantId and items are required"
+    }
+  },
+  "Missing Restaurant ID": {
+    "status": 400,
+    "pass": true,
+    "response": {
+      "error": "restaurantId and items are required"
+    }
+  },
+  "Out of Stock / Invalid Item": {
+    "status": 400,
+    "pass": true,
+    "response": {
+      "error": "Item \"Selected\" is currently out of stock."
+    }
+  },
+  "Double Tap / Concurrent Order": {
+    "statusA": 200,
+    "statusB": 200,
+    "pass": true,
+    "orderIdA": "63d78fb9-b150-447d-b510-395177bf0863",
+    "orderIdB": "63d78fb9-b150-447d-b510-395177bf0863",
+    "note": "Both requests safely joined or appended to the same master table order without collision"
+  },
+  "Cart Persistence On Refresh": {
+    "pass": true,
+    "cartButtonVisible": true
+  },
+  "Invalid Table QR Handling": {
+    "pass": true,
+    "detail": "Page gracefully rendered without Next.js unhandled crash"
+  }
+}
