@@ -1,5 +1,7 @@
 node_modules/
 .next/
+node_modules/
+.next/
 dist/
 *.log
 .vscode/
@@ -7,7 +9,11 @@ dump_*.xml
 tsconfig.tsbuildinfo
 
 .env*
+.env.local
+firebase-service-account*.json
 
 *.apk
 *.zip
 .vercel/
+
+.env*

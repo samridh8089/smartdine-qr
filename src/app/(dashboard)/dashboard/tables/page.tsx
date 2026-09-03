@@ -257,6 +257,16 @@ export default function TablesPage() {
     }
   };
 
+  const handleToggleOccupancy = async (tableId: string, currentStatus: string) => {
+    try {
+      const isOccupied = currentStatus !== 'occupied';
+      await db.toggleTableOccupancy(restaurantId, tableId, isOccupied);
+      await fetchTablesData(restaurantId);
+    } catch (err: any) {
+      alert('Failed to update table occupancy: ' + (err.message || err));
+    }
+  };
+
   const downloadQR = (table: Table) => {
     const qrData = qrCodes[table.id];
     if (!qrData) return;
@@ -851,40 +861,54 @@ export default function TablesPage() {
                   {/* Live Status & QR Controls Row */}
                   <div className="w-full flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                     <div className="flex items-center gap-1.5">
-                      {table.occupancy_status === 'occupied' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200">
+                      {table.payment_pending ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
                           <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
-                          Occupied ({table.active_order_count || 1} orders)
+                          🔴 Bill Pending
+                        </span>
+                      ) : table.occupancy_status === 'occupied' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" />
+                          🟡 Dining ({table.active_order_count || 1} orders)
                         </span>
                       ) : table.occupancy_status === 'inactive' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
                           <span className="h-2 w-2 rounded-full bg-slate-400" />
                           QR Disabled
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                           <span className="h-2 w-2 rounded-full bg-emerald-600" />
-                          Available
-                        </span>
-                      )}
-
-                      {table.payment_pending && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                          Pay Pending
+                          🟢 Free / Available
                         </span>
                       )}
                     </div>
 
-                    <button
-                      onClick={() => handleToggleQR(table.id, table.qr_enabled !== false)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                        table.qr_enabled !== false
-                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      }`}
-                    >
-                      {table.qr_enabled !== false ? 'Disable QR' : 'Enable QR'}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleOccupancy(table.id, table.occupancy_status || 'available')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                          table.occupancy_status === 'occupied'
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            : 'bg-rose-600 hover:bg-rose-700 text-white'
+                        }`}
+                      >
+                        {table.occupancy_status === 'occupied' ? 'Mark Available' : 'Mark Occupied'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleQR(table.id, table.qr_enabled !== false)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          table.qr_enabled !== false
+                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        }`}
+                      >
+                        {table.qr_enabled !== false ? 'Disable QR' : 'Enable QR'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* QR Action Buttons */}

@@ -1920,6 +1920,38 @@ export default function InventoryDashboardPage() {
                   </div>
                 </div>
 
+                {/* Recipe Costing Summary Card */}
+                {(() => {
+                  const modalTotalCost = recipeIngredients.reduce((acc, ing) => {
+                    const selItem = items.find(i => i.id === ing.inventory_item_id);
+                    if (!selItem) return acc;
+                    let qtyInItemUnit = Number(ing.quantity || 0);
+                    if (normalizeUnit(ing.unit) !== normalizeUnit(selItem.unit) && areUnitsCompatible(ing.unit, selItem.unit)) {
+                      qtyInItemUnit = convertUnit(qtyInItemUnit, ing.unit, selItem.unit);
+                    }
+                    return acc + (qtyInItemUnit * Number(selItem.cost_per_unit || 0));
+                  }, 0);
+                  const modalSellingPrice = Number(selectedMenuItemForRecipe?.price || 0);
+                  const modalGrossMargin = modalSellingPrice - modalTotalCost;
+
+                  return (
+                    <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">Total Recipe Cost</span>
+                        <span className="text-base font-black text-slate-900 dark:text-white">₹{modalTotalCost.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Selling Price</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">₹{modalSellingPrice.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block">Gross Margin</span>
+                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">₹{modalGrossMargin.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Ingredients section */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -1935,8 +1967,17 @@ export default function InventoryDashboardPage() {
                   <div className="space-y-2">
                     {recipeIngredients.map((ing, idx) => {
                       const selItem = items.find(i => i.id === ing.inventory_item_id);
+                      let ingCost = 0;
+                      if (selItem) {
+                        let ingQtyInItemUnit = Number(ing.quantity || 0);
+                        if (normalizeUnit(ing.unit) !== normalizeUnit(selItem.unit) && areUnitsCompatible(ing.unit, selItem.unit)) {
+                          ingQtyInItemUnit = convertUnit(ingQtyInItemUnit, ing.unit, selItem.unit);
+                        }
+                        ingCost = ingQtyInItemUnit * Number(selItem.cost_per_unit || 0);
+                      }
+
                       return (
-                        <div key={idx} className="flex gap-2 items-center">
+                        <div key={idx} className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
                           <select
                             value={ing.inventory_item_id}
                             onChange={e => {
@@ -1998,6 +2039,10 @@ export default function InventoryDashboardPage() {
                               </>
                             )}
                           </select>
+
+                          <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 min-w-[70px] text-right px-1">
+                            ₹{ingCost.toFixed(2)}
+                          </span>
 
                           <button
                             onClick={() => {

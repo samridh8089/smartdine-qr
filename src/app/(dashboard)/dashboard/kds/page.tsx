@@ -54,10 +54,11 @@ export default function KitchenDisplayPage() {
 
 
 
+  // Update timer every second for real-time kitchen SLA countdown/stopwatch
   useEffect(() => {
     const timer = setInterval(() => {
       setNowTime(Date.now());
-    }, 15000);
+    }, 1000);
     return () => {
       clearInterval(timer);
     };
@@ -463,6 +464,44 @@ export default function KitchenDisplayPage() {
     return formatExactTimestamp(dateString);
   };
 
+  const getSlaTimerInfo = (dateString: string, currentNow: number) => {
+    const start = new Date(dateString).getTime();
+    const elapsedMs = Math.max(0, currentNow - start);
+    const totalSeconds = Math.floor(elapsedMs / 1000);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    if (mins < 10) {
+      return {
+        formatted,
+        mins,
+        status: 'green' as const,
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+        dotClass: 'bg-emerald-500',
+        label: 'Within SLA'
+      };
+    } else if (mins < 15) {
+      return {
+        formatted,
+        mins,
+        status: 'yellow' as const,
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+        dotClass: 'bg-amber-500 animate-ping',
+        label: 'Near SLA'
+      };
+    } else {
+      return {
+        formatted,
+        mins,
+        status: 'red' as const,
+        badgeClass: 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700 animate-pulse',
+        dotClass: 'bg-rose-600 animate-ping',
+        label: 'SLA Breached'
+      };
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -573,9 +612,16 @@ export default function KitchenDisplayPage() {
                         )}
                         <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">ORDER #{getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders)} • BATCH #{order.batch_number}</span>
                       </div>
-                      <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
-                      </span>
+                      {(() => {
+                        const sla = getSlaTimerInfo(order.created_at, nowTime);
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-black border shadow-2xs ${sla.badgeClass}`} title={sla.label}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${sla.dotClass}`} />
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{sla.formatted}</span>
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
@@ -733,9 +779,16 @@ export default function KitchenDisplayPage() {
                         )}
                         <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider">ORDER {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders)} • BATCH #{order.batch_number}</span>
                       </div>
-                      <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
-                      </span>
+                      {(() => {
+                        const sla = getSlaTimerInfo(order.created_at, nowTime);
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-black border shadow-2xs ${sla.badgeClass}`} title={sla.label}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${sla.dotClass}`} />
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{sla.formatted}</span>
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
@@ -848,9 +901,16 @@ export default function KitchenDisplayPage() {
                         )}
                         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tracking-wider">ORDER #{getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders)} • BATCH #{order.batch_number}</span>
                       </div>
-                      <span className="text-xs text-slate-400 font-semibold flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" /> {getTimeElapsed(order.created_at, nowTime)}
-                      </span>
+                      {(() => {
+                        const sla = getSlaTimerInfo(order.created_at, nowTime);
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-black border shadow-2xs ${sla.badgeClass}`} title={sla.label}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${sla.dotClass}`} />
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>{sla.formatted}</span>
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
