@@ -387,7 +387,7 @@ export default function MenuManagementPage() {
       name: itemName,
       description: itemDescription,
       price: parsedPrice,
-      image_url: itemImageUrl || undefined,
+      image_url: itemImageUrl && itemImageUrl.trim() ? itemImageUrl.trim() : null,
       is_available: itemIsAvailable,
       is_veg: itemIsVeg,
       has_variants: itemHasVariants,
@@ -670,7 +670,7 @@ export default function MenuManagementPage() {
               value={itemImageUrl}
               onChange={(url) => setItemImageUrl(url)}
               restaurantId={restaurantId}
-              pathPrefix={`menu_items/item`}
+              pathPrefix={editingItem?.id ? `menu_items/${editingItem.id}` : `menu_items/new_${Date.now()}`}
             />
           </div>
 

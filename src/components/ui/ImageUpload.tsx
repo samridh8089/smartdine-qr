@@ -49,12 +49,16 @@ export function ImageUpload({
 
     setUploading(true);
     try {
-      // Delete old uploaded image if replacing
-      if (value && value.includes('supabase.co/storage')) {
-        await storage.deleteImage(value);
-      }
+      const oldUrl = value;
       const publicUrl = await storage.uploadImage(file, restaurantId, pathPrefix);
       onChange(publicUrl);
+      if (oldUrl && oldUrl.includes('supabase.co/storage') && oldUrl !== publicUrl) {
+        try {
+          await storage.deleteImage(oldUrl);
+        } catch (cleanupErr) {
+          console.error('Failed to clean up previous image during replacement:', cleanupErr);
+        }
+      }
     } catch (err: any) {
       alert(err.message || 'Upload failed');
     } finally {
@@ -160,6 +164,17 @@ export function ImageUpload({
               <div className="flex flex-col gap-1">
                 <span className="font-bold text-slate-600 dark:text-slate-350">Image uploaded successfully</span>
                 <span className="truncate max-w-[200px] text-[10px] font-mono">{value}</span>
+                <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 cursor-pointer mt-1">
+                  <Upload className="h-3 w-3" />
+                  <span>Replace Image</span>
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    className="hidden"
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                  />
+                </label>
               </div>
             ) : (
               <span>Supports PNG, JPG, JPEG, WEBP. Max 5 MB.</span>

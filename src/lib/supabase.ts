@@ -198,10 +198,54 @@ export const storage = {
       if (e.message?.includes('security reasons')) throw e;
     }
 
+    // In browser environment, upload via server endpoint using service-role to avoid client RLS restrictions
+    if (typeof window !== 'undefined') {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read image file data'));
+        reader.readAsDataURL(file);
+      });
+
+      const cleanSubdir = path
+        .split('/')
+        .map(seg => seg.replace(/[^a-zA-Z0-9_\-]/g, ''))
+        .filter(Boolean)
+        .join('_');
+
+      const uniqueSubPath = cleanSubdir
+        ? `${cleanSubdir}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+        : `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+      const res = await fetch('/api/ai-menu/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId,
+          itemId: uniqueSubPath,
+          imageUrl: dataUrl
+        })
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success || !resData.storageUrl) {
+        throw new Error(resData.error || 'Image upload failed');
+      }
+
+      return resData.storageUrl;
+    }
+
     const safeRestId = restaurantId.replace(/[^a-zA-Z0-9_\-]/g, '');
-    const safePath = path.replace(/[^a-zA-Z0-9_\-]/g, '');
-    const fileName = sanitizeFilename(`${safePath}.${fileExt}`);
-    const filePath = `${safeRestId}/${fileName}`;
+    const cleanSubdir = path
+      .split('/')
+      .map(seg => seg.replace(/[^a-zA-Z0-9_\-]/g, ''))
+      .filter(Boolean)
+      .join('/');
+    const uniqueId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const fileName = `${uniqueId}.${fileExt}`;
+    const filePath = cleanSubdir ? `${safeRestId}/${cleanSubdir}/${fileName}` : `${safeRestId}/${fileName}`;
 
     const { error } = await supabase.storage
       .from('smartdine-images')
@@ -271,19 +315,37 @@ export const storage = {
 
   async deleteImage(publicUrl: string): Promise<void> {
     try {
-      const parts = publicUrl.split('/smartdine-images/');
-      if (parts.length < 2) return;
-      const filePath = decodeURIComponent(parts[1]).replace(/\.\./g, '');
-      
+      if (!publicUrl || !publicUrl.includes('supabase.co/storage')) return;
+
+      if (typeof window !== 'undefined') {
+        await fetch(`/api/ai-menu/upload-image?url=${encodeURIComponent(publicUrl)}`, {
+          method: 'DELETE'
+        });
+        return;
+      }
+
+      let bucket = 'smartdine-images';
+      let filePath = '';
+      if (publicUrl.includes('/menu-item-images/')) {
+        bucket = 'menu-item-images';
+        filePath = decodeURIComponent(publicUrl.split('/menu-item-images/')[1] || '').replace(/\.\./g, '');
+      } else if (publicUrl.includes('/smartdine-images/')) {
+        bucket = 'smartdine-images';
+        filePath = decodeURIComponent(publicUrl.split('/smartdine-images/')[1] || '').replace(/\.\./g, '');
+      } else {
+        return;
+      }
+      if (!filePath) return;
+
       const { error } = await supabase.storage
-        .from('smartdine-images')
+        .from(bucket)
         .remove([filePath]);
         
       if (error) {
         console.error('Failed to delete image from storage:', error.message);
       }
     } catch (e) {
-      console.error('Failed to parse public URL for deletion:', e);
+      console.error('Failed to parse or execute public URL deletion:', e);
     }
   }
 };
