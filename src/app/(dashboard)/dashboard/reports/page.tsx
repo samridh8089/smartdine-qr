@@ -931,13 +931,13 @@ export default function ReportsPage() {
           <BarChart3 className="h-8 w-8" />
         </div>
         <div className="max-w-md mx-auto space-y-2">
-          <h2 className="text-2xl font-black">Analytics & Reports Locked</h2>
+          <h2 className="text-2xl font-bold">Analytics & Reports Locked</h2>
           <p className="text-sm text-slate-400 leading-relaxed">
             Detailed sales reports, GST tax summaries, and portion item analytics are available on <strong className="text-white">PRO</strong> and <strong className="text-white">PREMIUM</strong> plans.
           </p>
         </div>
         <a href="/dashboard/billing">
-          <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-xl text-sm shadow-lg transition-all cursor-pointer">
+          <button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl text-sm shadow-lg transition-all cursor-pointer">
             Upgrade Plan to Unlock Reports
           </button>
         </a>
@@ -1015,7 +1015,7 @@ export default function ReportsPage() {
       {/* HEADER & DATE RANGE FILTER */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4 print:hidden">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Analytics & Reports</h1>
+          <h1 className="text-[36px] font-bold text-slate-900 dark:text-white tracking-tight leading-tight">Analytics & Reports</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
             Real-time sales performance, GST tax snapshots, portion analytics & accounting reports.
           </p>
@@ -1134,7 +1134,7 @@ export default function ReportsPage() {
 
       {/* PRINT REPORT HEADER (Only visible when printing/saving PDF) */}
       <div className="hidden print:block text-center border-b pb-4">
-        <h1 className="text-2xl font-black">{restaurant?.name}</h1>
+        <h1 className="text-2xl font-bold">{restaurant?.name}</h1>
         <p className="text-xs text-slate-600 font-bold">Sales & GST Tax Accounting Summary</p>
         <p className="text-xs text-slate-500 mt-1">Period: {salesSummary.periodLabel} | Generated on: {new Date().toLocaleString('en-IN')}</p>
       </div>
@@ -1168,7 +1168,7 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">GST Tax Summary</h3>
+            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">GST Tax Summary</h3>
             <p className="text-xs text-slate-400 font-medium">Tax calculated from stored order snapshots for {salesSummary.periodLabel}.</p>
           </div>
           <Badge variant="success" className="font-mono text-xs">
@@ -1179,7 +1179,7 @@ export default function ReportsPage() {
           <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
                   <th className="py-3 px-4">Tax Metric</th>
                   <th className="py-3 px-4 text-right">Taxable Sales</th>
                   <th className="py-3 px-4 text-right">CGST</th>
@@ -1188,14 +1188,14 @@ export default function ReportsPage() {
                   <th className="py-3 px-4 text-right">Total GST Collected</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs md:text-sm font-semibold">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[15px] font-medium">
                 <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Intrastate (CGST + SGST)</td>
                   <td className="py-3.5 px-4 text-right font-mono">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
                   <td className="py-3.5 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
                   <td className="py-3.5 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
                   <td className="py-3.5 px-4 text-right font-mono text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                     {formatPrice(salesSummary.cgstCollected + salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
@@ -1205,11 +1205,11 @@ export default function ReportsPage() {
                   <td className="py-3.5 px-4 text-right font-mono text-slate-400">₹0.00</td>
                   <td className="py-3.5 px-4 text-right font-mono text-slate-400">₹0.00</td>
                   <td className="py-3.5 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                  <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                     {formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
-                <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-extrabold text-sm border-t-2 border-slate-200 dark:border-slate-700">
+                <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-bold text-sm border-t-2 border-slate-200 dark:border-slate-700">
                   <td className="py-4 px-4 text-slate-900 dark:text-white">Total GST Collected</td>
                   <td className="py-4 px-4 text-right font-mono">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
                   <td className="py-4 px-4 text-right font-mono text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
@@ -1233,11 +1233,11 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-black">
+            <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
               ⚡
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Kitchen SLA Intelligence</h3>
+              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Kitchen SLA Intelligence</h3>
               <p className="text-xs text-slate-400 font-medium">Automatic lifecycle velocity from order placement to table delivery.</p>
             </div>
           </div>
@@ -1249,22 +1249,22 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Accept Time</p>
-              <p className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.avgAcceptTimeSec} sec</p>
+              <p className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white">{kitchenSlaStats.avgAcceptTimeSec} sec</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 60 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Prep Time</p>
-              <p className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.avgPrepTimeMin} min</p>
+              <p className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white">{kitchenSlaStats.avgPrepTimeMin} min</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 15 min</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ready → Served</p>
-              <p className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.readyToServedSec} sec</p>
+              <p className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white">{kitchenSlaStats.readyToServedSec} sec</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 90 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Fulfillment</p>
-              <p className="text-2xl lg:text-3xl font-black text-indigo-600 dark:text-indigo-400">{kitchenSlaStats.totalFulfillmentMin} min</p>
+              <p className="text-2xl lg:text-3xl font-bold text-indigo-600 dark:text-indigo-400">{kitchenSlaStats.totalFulfillmentMin} min</p>
               <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mt-1">End-to-End Delivery</p>
             </div>
           </div>
@@ -1275,11 +1275,11 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black">
+            <div className="h-8 w-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
               🏆
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Waiter Performance Intelligence</h3>
+              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Waiter Performance Intelligence</h3>
               <p className="text-xs text-slate-400 font-medium">Productivity leaderboard, delivery speeds, and table turnaround.</p>
             </div>
           </div>
@@ -1302,7 +1302,7 @@ export default function ReportsPage() {
                 {waiterLeaderboard.map((w, idx) => (
                   <tr key={w.waiterName} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                     <td className="py-3 px-4 font-bold flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-black">
+                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
                         {idx + 1}
                       </span>
                       <span>{w.waiterName}</span>
@@ -1333,11 +1333,11 @@ export default function ReportsPage() {
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
           <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center font-black">
+              <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
                 🪑
               </div>
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Table Turnover Intelligence</h3>
+                <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Table Turnover Intelligence</h3>
                 <p className="text-xs text-slate-400 font-medium">Turnover counts, stay durations, and revenue density.</p>
               </div>
             </div>
@@ -1376,11 +1376,11 @@ export default function ReportsPage() {
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
           <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black">
+              <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
                 🔥
               </div>
               <div>
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Peak Hour Heatmap</h3>
+                <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Peak Hour Heatmap</h3>
                 <p className="text-xs text-slate-400 font-medium">Hourly order rush and revenue distribution matrix.</p>
               </div>
             </div>
@@ -1398,27 +1398,27 @@ export default function ReportsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-4 text-center">
               <div className="p-2.5 bg-rose-50/70 dark:bg-rose-950/30 rounded-xl border border-rose-100 dark:border-rose-900/50">
                 <p className="text-[10px] font-bold text-rose-500 uppercase">Occupied Tables</p>
-                <p className="text-base font-black text-rose-600 dark:text-rose-400 mt-0.5">{liveOccupancyMerge.occupied}</p>
+                <p className="text-base font-bold text-rose-600 dark:text-rose-400 mt-0.5">{liveOccupancyMerge.occupied}</p>
               </div>
               <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
                 <p className="text-[10px] font-bold text-emerald-500 uppercase">Free Tables</p>
-                <p className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{liveOccupancyMerge.free}</p>
+                <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{liveOccupancyMerge.free}</p>
               </div>
               <div className="p-2.5 bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
                 <p className="text-[10px] font-bold text-indigo-500 uppercase">Avg Wait Time</p>
-                <p className="text-base font-black text-indigo-600 dark:text-indigo-400 mt-0.5">{liveOccupancyMerge.avgWaitTime}</p>
+                <p className="text-base font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{liveOccupancyMerge.avgWaitTime}</p>
               </div>
               <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/50">
                 <p className="text-[10px] font-bold text-purple-500 uppercase">Queue Length</p>
-                <p className="text-base font-black text-purple-600 dark:text-purple-400 mt-0.5">{liveOccupancyMerge.queueLength}</p>
+                <p className="text-base font-bold text-purple-600 dark:text-purple-400 mt-0.5">{liveOccupancyMerge.queueLength}</p>
               </div>
               <div className="p-2.5 bg-amber-50/70 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900/50">
                 <p className="text-[10px] font-bold text-amber-600 uppercase">Peak Orders/hr</p>
-                <p className="text-base font-black text-amber-700 dark:text-amber-300 mt-0.5">{peakHourSummary.peakOrders}</p>
+                <p className="text-base font-bold text-amber-700 dark:text-amber-300 mt-0.5">{peakHourSummary.peakOrders}</p>
               </div>
               <div className="p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Peak Rev/hr</p>
-                <p className="text-base font-black text-slate-900 dark:text-white mt-0.5 font-mono">
+                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5 font-mono">
                   {formatPrice(hourlyHeatmap.find(h => h.label === peakHourSummary.peakHour)?.revenue || 0)}
                 </p>
               </div>
@@ -1442,7 +1442,7 @@ export default function ReportsPage() {
                     title={`${slot.label}: ${slot.ordersCount} orders, ${formatPrice(slot.revenue)}`}
                   >
                     <p className="text-[10px] font-bold uppercase">{slot.label}</p>
-                    <p className="text-sm font-black mt-0.5">{slot.ordersCount}</p>
+                    <p className="text-sm font-bold mt-0.5">{slot.ordersCount}</p>
                     <p className="text-[9px] font-mono opacity-80">{slot.ordersCount > 0 ? `₹${Math.round(slot.revenue)}` : '-'}</p>
                   </div>
                 );
@@ -1456,15 +1456,15 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center font-black">
+            <div className="h-8 w-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
               ⚠️
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Kitchen Bottleneck Detection</h3>
+              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Kitchen Bottleneck Detection</h3>
               <p className="text-xs text-slate-400 font-medium">Automated identification of slow dishes, cancelled recipes, and stuck tickets.</p>
             </div>
           </div>
-          <span className="text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
             Real-time Anomaly Guard
           </span>
         </CardHeader>
@@ -1472,7 +1472,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-xl">
               <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">Slowest Prep Dish</p>
-              <p className="text-base font-black text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.slowestDish.name}>
+              <p className="text-base font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.slowestDish.name}>
                 {kitchenBottlenecks.slowestDish.name}
               </p>
               <p className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400 mt-1">
@@ -1482,7 +1482,7 @@ export default function ReportsPage() {
 
             <div className="p-4 bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/50 rounded-xl">
               <p className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">Most Cancelled Dish</p>
-              <p className="text-base font-black text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.mostCancelledDish.name}>
+              <p className="text-base font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.mostCancelledDish.name}>
                 {kitchenBottlenecks.mostCancelledDish.name}
               </p>
               <p className="text-xs font-mono font-bold text-rose-700 dark:text-rose-400 mt-1">
@@ -1492,7 +1492,7 @@ export default function ReportsPage() {
 
             <div className="p-4 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/50 rounded-xl">
               <p className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">Longest Pending Ticket</p>
-              <p className="text-base font-black text-slate-900 dark:text-white mt-1">
+              <p className="text-base font-bold text-slate-900 dark:text-white mt-1">
                 #{kitchenBottlenecks.longestPendingTicket.orderId} • {kitchenBottlenecks.longestPendingTicket.tableName}
               </p>
               <p className="text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 mt-1">
@@ -1502,7 +1502,7 @@ export default function ReportsPage() {
 
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Average Kitchen Queue</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                 {kitchenBottlenecks.averageKitchenQueue} active tickets
               </p>
               <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
@@ -1525,7 +1525,7 @@ export default function ReportsPage() {
         <Card className="lg:col-span-2 border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Item & Portion Performance</h3>
+              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Item & Portion Performance</h3>
               <p className="text-xs text-slate-400 font-medium">Distinct sales metrics for each dish and portion size.</p>
             </div>
             
@@ -1557,20 +1557,20 @@ export default function ReportsPage() {
               <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                    <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
                       <th className="py-3 px-4">Item</th>
                       <th className="py-3 px-4">Portion / Size</th>
                       <th className="py-3 px-4 text-center">Qty Sold</th>
                       <th className="py-3 px-4 text-right">Gross Sales</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs md:text-sm font-semibold">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[15px] font-medium">
                     {sortedPerformance.map((row) => (
                       <tr key={row.key} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                         <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{row.name}</td>
                         <td className="py-3 px-4">
                           {row.variantName !== '-' ? (
-                            <span className="inline-block text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 px-2 py-0.5 rounded-md">
+                            <span className="inline-block text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 px-2 py-0.5 rounded-md">
                               {row.variantName}
                             </span>
                           ) : (
@@ -1578,7 +1578,7 @@ export default function ReportsPage() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-center font-bold font-mono">{row.quantity}</td>
-                        <td className="py-3 px-4 text-right font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
+                        <td className="py-3 px-4 text-right font-bold font-mono text-emerald-600 dark:text-emerald-400">
                           {formatPrice(row.grossSales, restaurant?.settings?.currency || 'INR')}
                         </td>
                       </tr>
@@ -1593,7 +1593,7 @@ export default function ReportsPage() {
         {/* 4. CATEGORY PERFORMANCE */}
         <Card className="lg:col-span-1 border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3">
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Category Performance</h3>
+            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Category Performance</h3>
             <p className="text-xs text-slate-400 font-medium">Sales breakdown across menu categories.</p>
           </CardHeader>
           <CardContent>
@@ -1604,10 +1604,10 @@ export default function ReportsPage() {
                 {categoryPerformance.map((cat, idx) => (
                   <div key={idx} className="p-3.5 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-extrabold text-xs text-slate-900 dark:text-white">{cat.categoryName}</p>
+                      <p className="font-bold text-xs text-slate-900 dark:text-white">{cat.categoryName}</p>
                       <p className="text-[10px] text-slate-400 font-semibold">{cat.quantity} items sold</p>
                     </div>
-                    <span className="font-black text-xs font-mono text-emerald-600 dark:text-emerald-400">
+                    <span className="font-bold text-xs font-mono text-emerald-600 dark:text-emerald-400">
                       {formatPrice(cat.sales, restaurant?.settings?.currency || 'INR')}
                     </span>
                   </div>
@@ -1622,7 +1622,7 @@ export default function ReportsPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-black text-slate-900 dark:text-white">Customer Analytics & Retention</h3>
+            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Customer Analytics & Retention</h3>
             <p className="text-xs text-slate-400 font-medium">Customer order counts, lifetime spending, and frequency for {salesSummary.periodLabel}.</p>
           </div>
         </div>
@@ -1630,26 +1630,26 @@ export default function ReportsPage() {
         {/* Customer KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
-            <p className="text-[10px] font-black tracking-wider text-slate-400 uppercase">Total Guests</p>
-            <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{customerSummary.totalCustomers}</p>
+            <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Total Guests</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{customerSummary.totalCustomers}</p>
             <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1">Unique customer sessions</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
-            <p className="text-[10px] font-black tracking-wider text-slate-400 uppercase">New Customers</p>
-            <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{customerSummary.newCustomers}</p>
+            <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">New Customers</p>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{customerSummary.newCustomers}</p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">First-time visitors</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
-            <p className="text-[10px] font-black tracking-wider text-slate-400 uppercase">Returning Guests</p>
-            <p className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{customerSummary.returningCustomers}</p>
+            <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Returning Guests</p>
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">{customerSummary.returningCustomers}</p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Repeat diners</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
-            <p className="text-[10px] font-black tracking-wider text-slate-400 uppercase">Avg Order Value (AOV)</p>
-            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+            <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Avg Order Value (AOV)</p>
+            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
               {formatPrice(customerSummary.avgAOV, restaurant?.settings?.currency || 'INR')}
             </p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Spend per order</p>
@@ -1659,7 +1659,7 @@ export default function ReportsPage() {
         {/* Top Customers Table */}
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3">
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Top Spending Customers / Tables</h3>
+            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Top Spending Customers / Tables</h3>
             <p className="text-xs text-slate-400 font-medium">Ranked by total spending in the selected period.</p>
           </CardHeader>
           <CardContent>
@@ -1669,7 +1669,7 @@ export default function ReportsPage() {
               <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                    <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
                       <th className="py-3 px-4">Customer / Identifier</th>
                       <th className="py-3 px-4 text-center">Orders Placed</th>
                       <th className="py-3 px-4 text-right">Avg Order Value</th>
@@ -1677,11 +1677,11 @@ export default function ReportsPage() {
                       <th className="py-3 px-4 text-right">Last Visit</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs md:text-sm font-semibold">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[15px] font-medium">
                     {topCustomers.map((cust, idx) => (
                       <tr key={cust.key} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                         <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                          <span className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-extrabold text-[10px] flex items-center justify-center">
+                          <span className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold text-[10px] flex items-center justify-center">
                             #{idx + 1}
                           </span>
                           {cust.name}
@@ -1690,7 +1690,7 @@ export default function ReportsPage() {
                         <td className="py-3.5 px-4 text-right font-mono text-slate-600 dark:text-slate-300">
                           {formatPrice(cust.avgOrderValue, restaurant?.settings?.currency || 'INR')}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                           {formatPrice(cust.totalSpent, restaurant?.settings?.currency || 'INR')}
                         </td>
                         <td className="py-3.5 px-4 text-right text-xs text-slate-400">
@@ -1710,14 +1710,14 @@ export default function ReportsPage() {
       <Card className="border border-red-200/80 dark:border-red-950/60 bg-red-50/10 dark:bg-red-950/10 shadow-2xs rounded-xl">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
-            <h3 className="text-base font-extrabold text-red-900 dark:text-red-300">Order Cancellations & Loss Analysis</h3>
+            <h3 className="text-[28px] font-bold text-red-900 dark:text-red-300 tracking-tight">Order Cancellations & Loss Analysis</h3>
             <p className="text-xs text-red-600/80 dark:text-red-400/80 font-medium">Audit of cancelled orders and lost revenue during {salesSummary.periodLabel}.</p>
           </div>
           <div className="text-right">
-            <span className="text-xs font-extrabold text-red-700 dark:text-red-400">
+            <span className="text-xs font-bold text-red-700 dark:text-red-400">
               {cancellationStats.cancelledCount} Cancelled Orders
             </span>
-            <p className="text-sm font-black font-mono text-red-600 dark:text-red-400">
+            <p className="text-sm font-bold font-mono text-red-600 dark:text-red-400">
               - {formatPrice(cancellationStats.totalLost, restaurant?.settings?.currency || 'INR')}
             </p>
           </div>
@@ -1731,13 +1731,13 @@ export default function ReportsPage() {
             <div className="overflow-x-auto border border-red-100 dark:border-red-900/40 rounded-xl">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-red-100/40 dark:bg-red-950/40 text-[11px] font-extrabold text-red-700 dark:text-red-300 uppercase tracking-wider border-b border-red-200 dark:border-red-900/40">
+                  <tr className="bg-red-100/40 dark:bg-red-950/40 text-[11px] font-bold text-red-700 dark:text-red-300 uppercase tracking-wider border-b border-red-200 dark:border-red-900/40">
                     <th className="py-3 px-4">Cancellation Reason</th>
                     <th className="py-3 px-4 text-center">Orders Count</th>
                     <th className="py-3 px-4 text-right">Lost Value</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-red-100 dark:divide-red-900/30 text-xs md:text-sm font-semibold">
+                <tbody className="divide-y divide-red-100 dark:divide-red-900/30 text-[15px] font-medium">
                   {cancellationStats.reasons.map((cr, idx) => (
                     <tr key={idx} className="hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all">
                       <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
@@ -1766,7 +1766,7 @@ export default function ReportsPage() {
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
               <div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">{restaurant?.name || 'The Foody Hub'}</h2>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white">{restaurant?.name || 'The Foody Hub'}</h2>
                 <p className="text-xs text-slate-500 font-bold mt-0.5">
                   Daily Closing & Shift Settlement Ledger • {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
@@ -1788,26 +1788,26 @@ export default function ReportsPage() {
             {/* Financial Settlement */}
             <div className="mt-5 space-y-5">
               <div>
-                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2">1. Financial Settlement</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">1. Financial Settlement</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Gross Sales</p>
-                    <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.grossSales)}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.grossSales)}</p>
                     <p className="text-[10px] text-slate-400 font-mono">{salesSummary.totalOrders} total orders</p>
                   </div>
                   <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-800">
                     <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase">Net Revenue</p>
-                    <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{formatPrice(salesSummary.netRevenue)}</p>
+                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{formatPrice(salesSummary.netRevenue)}</p>
                     <p className="text-[10px] text-emerald-600 font-semibold">Post-discount net</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Total GST (5%)</p>
-                    <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.totalGstCollected)}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.totalGstCollected)}</p>
                     <p className="text-[10px] text-slate-400 font-mono">CGST: {formatPrice(salesSummary.cgstCollected)} | SGST: {formatPrice(salesSummary.sgstCollected)}</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Peak Hour Rush</p>
-                    <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">{peakHourSummary.peakHour}</p>
+                    <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{peakHourSummary.peakHour}</p>
                     <p className="text-[10px] text-slate-400 font-mono">{peakHourSummary.peakOrders} orders</p>
                   </div>
                 </div>
@@ -1815,26 +1815,26 @@ export default function ReportsPage() {
 
               {/* Service Velocity & SLA Intelligence */}
               <div>
-                <h4 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider mb-2">2. Service Velocity & SLA Intelligence</h4>
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">2. Service Velocity & SLA Intelligence</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Avg Pickup Time</p>
-                    <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">{kitchenSlaStats.avgAcceptTimeSec || 34} sec</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{kitchenSlaStats.avgAcceptTimeSec || 34} sec</p>
                     <p className="text-[10px] text-emerald-600 font-semibold">Ready → Dispatched</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Avg Waiter Serve</p>
-                    <p className="text-lg font-black text-slate-900 dark:text-white mt-0.5">{kitchenSlaStats.readyToServedSec || 58} sec</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{kitchenSlaStats.readyToServedSec || 58} sec</p>
                     <p className="text-[10px] text-emerald-600 font-semibold">Target: &lt; 90s</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Kitchen SLA %</p>
-                    <p className="text-lg font-black text-emerald-600 mt-0.5">{kitchenSlaSuccessPct}</p>
+                    <p className="text-lg font-bold text-emerald-600 mt-0.5">{kitchenSlaSuccessPct}</p>
                     <p className="text-[10px] text-emerald-600 font-semibold">Within 15m SLA</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Table Turns</p>
-                    <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">
+                    <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
                       {tableTurnoverList.reduce((sum, t) => sum + t.turnoverCount, 0)} turns
                     </p>
                     <p className="text-[10px] text-indigo-600 font-semibold">Total Dining Rotations</p>
@@ -1850,7 +1850,7 @@ export default function ReportsPage() {
                     {waiterLeaderboard.map((w, idx) => (
                       <div key={w.name} className="flex items-center justify-between py-1 border-b border-slate-200/60 dark:border-slate-700/60 last:border-0">
                         <div className="flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-black">
+                          <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
                             {idx + 1}
                           </span>
                           <span className="font-bold text-slate-800 dark:text-slate-200">{w.name}</span>

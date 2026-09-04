@@ -499,8 +499,8 @@ export default function TablesPage() {
       {/* Title Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Table Management</h2>
-          <p className="text-slate-500 text-sm mt-1">Generate QR codes for tables, merge dining groups, and monitor order flows by location.</p>
+          <h2 className="text-[36px] font-bold text-slate-900 dark:text-white tracking-tight leading-tight">Table Management</h2>
+          <p className="text-slate-500 text-[14px] font-normal mt-1">Generate QR codes for tables, merge dining groups, and monitor order flows by location.</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedTableIds.length >= 2 && (
@@ -515,26 +515,26 @@ export default function TablesPage() {
       </div>
 
       {/* Live Occupancy Header Widget */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm">
-        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Tables</p>
-          <p className="text-xl font-black text-slate-900 dark:text-white mt-0.5">{tableStats.total}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <p className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Tables</p>
+          <p className="text-[34px] font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.total}</p>
         </div>
-        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
-          <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">🟢 Available</p>
-          <p className="text-xl font-black text-emerald-700 dark:text-emerald-400 mt-0.5">{tableStats.available}</p>
+        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <p className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Available</p>
+          <p className="text-[34px] font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 leading-tight">{tableStats.available}</p>
         </div>
-        <div className="p-3 bg-rose-50 dark:bg-rose-950/20 rounded-xl border border-rose-100 dark:border-rose-900/30">
-          <p className="text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider">🔴 Occupied</p>
-          <p className="text-xl font-black text-rose-700 dark:text-rose-400 mt-0.5">{tableStats.occupied}</p>
+        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <p className="text-[12px] font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Occupied</p>
+          <p className="text-[34px] font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 leading-tight">{tableStats.occupied}</p>
         </div>
-        <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">⚪ Inactive / QR Off</p>
-          <p className="text-xl font-black text-slate-700 dark:text-slate-300 mt-0.5">{tableStats.inactive}</p>
+        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <p className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Inactive / QR Off</p>
+          <p className="text-[34px] font-bold font-mono text-slate-700 dark:text-slate-300 mt-1 leading-tight">{tableStats.inactive}</p>
         </div>
-        <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 rounded-xl border border-indigo-100 dark:border-indigo-900/30 col-span-2 sm:col-span-1">
-          <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Occupancy %</p>
-          <p className="text-xl font-black text-indigo-700 dark:text-indigo-400 mt-0.5">{tableStats.occupancyRate}%</p>
+        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs col-span-2 sm:col-span-1">
+          <p className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Occupancy %</p>
+          <p className="text-[34px] font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.occupancyRate}%</p>
         </div>
       </div>
 
@@ -576,7 +576,7 @@ export default function TablesPage() {
       {activeMergeGroups.length > 0 && (
         <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800 rounded-2xl p-5 space-y-3">
           <div className="flex justify-between items-center">
-            <h3 className="font-extrabold text-indigo-900 dark:text-indigo-300 text-sm flex items-center gap-2">
+            <h3 className="font-bold text-indigo-900 dark:text-indigo-300 text-sm flex items-center gap-2">
               Active Merged Dining Groups ({activeMergeGroups.length})
             </h3>
             <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">Unified QR Dining Sessions</span>
@@ -623,9 +623,9 @@ export default function TablesPage() {
               <QrCode className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
                 Takeaway ordering QR
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-black bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-400 uppercase border border-purple-200 dark:border-purple-900/30">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-400 uppercase border border-purple-200 dark:border-purple-900/30">
                   Takeaway
                 </span>
               </h3>
@@ -732,9 +732,9 @@ export default function TablesPage() {
               <Calendar className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+              <h3 className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
                 Table Reservation QR & Link
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-400 uppercase border border-indigo-200 dark:border-indigo-900/30">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-100 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-400 uppercase border border-indigo-200 dark:border-indigo-900/30">
                   Reservation
                 </span>
               </h3>
@@ -855,7 +855,7 @@ export default function TablesPage() {
             if (table.payment_pending) {
               borderClass = 'border-2 border-rose-500 shadow-md shadow-rose-100 dark:shadow-none';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
                   <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
                   🔴 Breached ({elapsedStr})
                 </span>
@@ -863,7 +863,7 @@ export default function TablesPage() {
             } else if (!isOccupied) {
               borderClass = 'border-slate-200 dark:border-slate-800';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
                   <span className="h-2 w-2 rounded-full bg-slate-400" />
                   ⚪ Free
                 </span>
@@ -871,7 +871,7 @@ export default function TablesPage() {
             } else if (elapsedMin < 10) {
               borderClass = 'border-2 border-emerald-500 shadow-md shadow-emerald-50 dark:shadow-none';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                   <span className="h-2 w-2 rounded-full bg-emerald-600" />
                   🟢 On Time ({elapsedStr})
                 </span>
@@ -879,7 +879,7 @@ export default function TablesPage() {
             } else if (elapsedMin <= 15) {
               borderClass = 'border-2 border-amber-500 shadow-md shadow-amber-50 dark:shadow-none';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                   <span className="h-2 w-2 rounded-full bg-amber-500" />
                   🟡 Near SLA ({elapsedStr})
                 </span>
@@ -887,7 +887,7 @@ export default function TablesPage() {
             } else {
               borderClass = 'border-2 border-rose-500 shadow-md shadow-rose-100 dark:shadow-none';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
                   <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
                   🔴 Breached ({elapsedStr})
                 </span>
@@ -906,9 +906,9 @@ export default function TablesPage() {
                         onChange={() => toggleTableSelection(table.id)}
                         className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                       />
-                      <span className="font-extrabold text-slate-900 dark:text-white text-lg">{table.name}</span>
+                      <span className="font-bold text-slate-900 dark:text-white text-lg">{table.name}</span>
                       {activeGroupForTable && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200">
                           {activeGroupForTable.name}
                         </span>
                       )}
@@ -1071,7 +1071,7 @@ export default function TablesPage() {
             </div>
           )}
           <div>
-            <label className="block text-xs font-extrabold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
               Merge Group Name
             </label>
             <Input

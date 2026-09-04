@@ -1002,8 +1002,8 @@ export default function OrdersPage() {
       {/* Header section: title + actions + tabs all in one row */}
       <div className="shrink-0 flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Live Orders &amp; Requests</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Manage statuses, print bills, and resolve customer requests in real time.</p>
+          <h2 className="text-[36px] font-bold text-slate-900 dark:text-white tracking-tight leading-tight">Live Orders &amp; Requests</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-[14px] font-normal mt-1">Manage statuses, print bills, and resolve customer requests in real time.</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1029,7 +1029,7 @@ export default function OrdersPage() {
             >
               <Bell className="h-3.5 w-3.5" /> Customer Calls
               {customerRequests.length > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-rose-500 text-white font-extrabold text-[9px] rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center">
                   {customerRequests.length}
                 </span>
               )}
@@ -1099,7 +1099,7 @@ export default function OrdersPage() {
                     >
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-sm text-slate-950 dark:text-white">{getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
+                          <span className="font-bold text-sm text-slate-950 dark:text-white">{getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
                           {getStatusBadge(order.status)}
                           {order.payment_status === 'paid' ? (
                             <Badge variant="success">Paid</Badge>
@@ -1160,14 +1160,14 @@ export default function OrdersPage() {
                             serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
                             customCharges: restaurant?.settings?.custom_charges || []
                           });
-                          return <p className="font-extrabold text-sm text-slate-900 dark:text-white">{formatPrice(cardCalc.grandTotal, restaurant.settings.currency)}</p>;
+                          return <p className="font-bold text-sm text-slate-900 dark:text-white">{formatPrice(cardCalc.grandTotal, restaurant.settings.currency)}</p>;
                         })()}
                         <p className="text-[10px] text-slate-400 font-medium">{formatExactTimestamp(order.created_at)}</p>
                         {order.status === 'ready' && (
                           <div className="pt-1">
                             <Button
                               size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
                               isLoading={processingOrderIds.includes(order.id)}
                               disabled={processingOrderIds.includes(order.id)}
                               onClick={async (e) => {
@@ -1225,10 +1225,10 @@ export default function OrdersPage() {
                 <div className="p-6 border-b border-indigo-100 dark:border-indigo-950/40 bg-indigo-50/50 dark:bg-indigo-950/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-black text-indigo-950 dark:text-indigo-200 text-xl tracking-tight">
+                      <h3 className="font-bold text-indigo-950 dark:text-indigo-200 text-xl tracking-tight">
                         {mergedGroupDetails.group.name}
                       </h3>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                         Active Merged Group
                       </span>
                     </div>
@@ -1251,7 +1251,7 @@ export default function OrdersPage() {
                 <div className="p-6 space-y-6">
                   {/* Compact Table Selector Buttons */}
                   <div className="space-y-2 border-b border-indigo-100 dark:border-indigo-950/50 pb-3">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Physical Tables in Group (Click to Filter)</p>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Physical Tables in Group (Click to Filter)</p>
                     <div className="flex flex-wrap gap-2.5">
                       {(mergedGroupDetails.tableBreakdown || []).map((tbl: any) => {
                         const activeTblId = selectedOwnerTableId || selectedOrder?.table_id || mergedGroupDetails.tableBreakdown[0]?.table_id;
@@ -1261,7 +1261,7 @@ export default function OrdersPage() {
                             key={tbl.table_id}
                             type="button"
                             onClick={() => setSelectedOwnerTableId(tbl.table_id)}
-                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                               isSelected
                                 ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                                 : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800 hover:bg-slate-50'
@@ -1291,17 +1291,17 @@ export default function OrdersPage() {
                           <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
                             <div className="flex items-center gap-2">
                               <span className="h-3 w-3 rounded-full bg-emerald-500" />
-                              <h4 className="font-extrabold text-slate-900 dark:text-white text-base">
+                              <h4 className="font-bold text-slate-900 dark:text-white text-base">
                                 {tbl.table_name} Orders
                               </h4>
                             </div>
                             <div className="text-xs font-bold text-slate-500 dark:text-slate-400 text-right space-y-0.5">
                               <div>{tbl.validOrderCount} Orders • {tbl.itemCount} Items</div>
-                              <div>Subtotal: <span className="font-extrabold text-slate-900 dark:text-white">{formatPrice(tbl.subtotal, restaurant?.settings?.currency)}</span></div>
+                              <div>Subtotal: <span className="font-bold text-slate-900 dark:text-white">{formatPrice(tbl.subtotal, restaurant?.settings?.currency)}</span></div>
                               {(tbl.discount || 0) > 0 && (
-                                <div className="text-rose-600 dark:text-rose-400">Promo: <span className="font-extrabold">-{formatPrice(tbl.discount, restaurant?.settings?.currency)}</span></div>
+                                <div className="text-rose-600 dark:text-rose-400">Promo: <span className="font-bold">-{formatPrice(tbl.discount, restaurant?.settings?.currency)}</span></div>
                               )}
-                              <div className="text-emerald-700 dark:text-emerald-400">Net: <span className="font-extrabold">{formatPrice(tbl.net ?? tbl.subtotal, restaurant?.settings?.currency)}</span></div>
+                              <div className="text-emerald-700 dark:text-emerald-400">Net: <span className="font-bold">{formatPrice(tbl.net ?? tbl.subtotal, restaurant?.settings?.currency)}</span></div>
                             </div>
                           </div>
 
@@ -1314,7 +1314,7 @@ export default function OrdersPage() {
                                 <div key={ord.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 space-y-3 shadow-xs">
                                   <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-2">
-                                      <span className="font-extrabold text-xs text-slate-900 dark:text-white">
+                                      <span className="font-bold text-xs text-slate-900 dark:text-white">
                                         Order {getFormattedOrderId(ord, restaurant?.name || '', orders)}
                                       </span>
                                       {getStatusBadge(ord.status)}
@@ -1369,7 +1369,7 @@ export default function OrdersPage() {
 
                   {/* Consolidated Group Bill Summary */}
                   <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 rounded-2xl p-6 space-y-4 shadow-sm">
-                    <h4 className="font-black text-emerald-950 dark:text-emerald-300 text-sm uppercase tracking-wider border-b border-emerald-200 dark:border-emerald-800 pb-2">
+                    <h4 className="font-bold text-emerald-950 dark:text-emerald-300 text-sm uppercase tracking-wider border-b border-emerald-200 dark:border-emerald-800 pb-2">
                       Consolidated Merged Group Bill ({mergedGroupDetails.group.name})
                     </h4>
 
@@ -1388,12 +1388,12 @@ export default function OrdersPage() {
                         <span>GST</span>
                         <span className="font-mono font-bold text-slate-900 dark:text-white">{formatPrice(mergedGroupDetails.groupTotals.gst, restaurant?.settings?.currency)}</span>
                       </div>
-                      <div className="flex justify-between text-base font-extrabold text-emerald-700 dark:text-emerald-400 pt-2 border-t border-emerald-200 dark:border-emerald-800">
+                      <div className="flex justify-between text-base font-bold text-emerald-700 dark:text-emerald-400 pt-2 border-t border-emerald-200 dark:border-emerald-800">
                         <span>Merged Grand Total</span>
                         <span className="font-mono">{formatPrice(mergedGroupDetails.groupTotals.total, restaurant?.settings?.currency)}</span>
                       </div>
                       {mergedGroupDetails.groupTotals.unpaidTotal !== undefined && mergedGroupDetails.groupTotals.unpaidTotal !== mergedGroupDetails.groupTotals.total && (
-                        <div className="flex justify-between text-xs font-extrabold text-indigo-700 dark:text-indigo-400 pt-1">
+                        <div className="flex justify-between text-xs font-bold text-indigo-700 dark:text-indigo-400 pt-1">
                           <span>Merged Outstanding</span>
                           <span className="font-mono">{formatPrice(mergedGroupDetails.groupTotals.unpaidTotal, restaurant?.settings?.currency)}</span>
                         </div>
@@ -1402,11 +1402,11 @@ export default function OrdersPage() {
 
                     <div className="flex gap-3 pt-3">
                       {mergedGroupDetails.groupTotals.isFullyPaid || mergedGroupDetails.groupTotals.unpaidTotal === 0 ? (
-                        <div className="flex-1 bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-black text-xs py-3 rounded-xl text-center uppercase tracking-wider">
+                        <div className="flex-1 bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-bold text-xs py-3 rounded-xl text-center uppercase tracking-wider">
                           PAID (Group Session Settled)
                         </div>
                       ) : (
-                        <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs py-3 rounded-xl shadow-md cursor-pointer uppercase tracking-wider" onClick={handlePayMergedGroup}>
+                        <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 rounded-xl shadow-md cursor-pointer uppercase tracking-wider" onClick={handlePayMergedGroup}>
                           COMPLETE BILL & PAY — {formatPrice(mergedGroupDetails.groupTotals.unpaidTotal ?? mergedGroupDetails.groupTotals.total, restaurant?.settings?.currency)}
                         </Button>
                       )}
@@ -1419,7 +1419,7 @@ export default function OrdersPage() {
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-extrabold text-slate-950 dark:text-white text-lg">Order {getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}</h3>
+                      <h3 className="font-bold text-slate-950 dark:text-white text-lg">Order {getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}</h3>
                       {selectedOrder.merge_group_id && (
                         <Button size="sm" variant="outline" className="text-xs font-bold text-indigo-600 border-indigo-200" onClick={() => setViewMode('merged')}>
                           View Merged Session ({mergedGroupDetails?.group?.name || 'Group'})
@@ -1441,7 +1441,7 @@ export default function OrdersPage() {
                     </div>
                     <p className="text-xs text-slate-400 font-semibold uppercase flex items-center gap-1.5 flex-wrap">
                       {selectedOrder.order_type === 'takeaway' ? (
-                        <span className="text-purple-600 dark:text-purple-400 font-black">Pickup Customer (Arrives in {selectedOrder.customer_arrival_minutes} mins)</span>
+                        <span className="text-purple-600 dark:text-purple-400 font-bold">Pickup Customer (Arrives in {selectedOrder.customer_arrival_minutes} mins)</span>
                       ) : (
                         <span>{selectedOrder.table_name || 'N/A'}</span>
                       )}
@@ -1459,12 +1459,12 @@ export default function OrdersPage() {
                 <div className="p-6 space-y-6">
                   {selectedOrder.status === 'cancelled' && (
                     <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl p-4 flex flex-col gap-1.5 text-rose-900 dark:text-rose-200 shadow-sm animate-fade-in">
-                      <div className="flex items-center gap-2 font-extrabold text-sm text-rose-700 dark:text-rose-400">
+                      <div className="flex items-center gap-2 font-bold text-sm text-rose-700 dark:text-rose-400">
                         <XCircle className="h-5 w-5 shrink-0" />
                         <span>Order Has Been Cancelled</span>
                       </div>
                       <div className="text-xs space-y-1 font-semibold pl-7">
-                        <p>• Cancelled By: <span className="font-extrabold text-slate-900 dark:text-white">{selectedOrder.cancelled_by || 'Staff Member'}</span></p>
+                        <p>• Cancelled By: <span className="font-bold text-slate-900 dark:text-white">{selectedOrder.cancelled_by || 'Staff Member'}</span></p>
                         <p>• Cancellation Reason: <span className="font-bold text-rose-700 dark:text-rose-300">"{selectedOrder.cancellation_reason || 'No reason specified'}"</span></p>
                       </div>
                     </div>
@@ -1477,8 +1477,8 @@ export default function OrdersPage() {
                       onClick={() => setShowOwnerTimeline(!showOwnerTimeline)}
                       className="w-full flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all text-left cursor-pointer shadow-xs"
                     >
-                      <span className="flex items-center gap-2 font-extrabold text-xs text-slate-800 dark:text-slate-200">
-                        <span className="text-indigo-600 dark:text-indigo-400 font-black">{showOwnerTimeline ? '▼' : '▶'}</span>
+                      <span className="flex items-center gap-2 font-bold text-xs text-slate-800 dark:text-slate-200">
+                        <span className="text-indigo-600 dark:text-indigo-400 font-bold">{showOwnerTimeline ? '▼' : '▶'}</span>
                         <span>{showOwnerTimeline ? 'Hide Order & Batch Lifecycle Timeline' : 'View Order & Batch Lifecycle Timeline'}</span>
                       </span>
                       <Badge variant="neutral" className="text-[10px] font-mono border-indigo-200 text-indigo-700 dark:text-indigo-300">
@@ -1519,7 +1519,7 @@ export default function OrdersPage() {
 
                           return (
                             <div key={batch.id || bIdx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-2 mt-2">
-                              <div className="font-extrabold text-[11px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wide flex justify-between items-center flex-wrap gap-1 min-w-0">
+                              <div className="font-bold text-[11px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wide flex justify-between items-center flex-wrap gap-1 min-w-0">
                                 <span className="min-w-0 truncate">Batch #{bIdx + 1} ({isCancelled ? 'CANCELLED' : batch.status.toUpperCase()})</span>
                                 <span className="font-mono text-[10px] text-slate-400 shrink-0 whitespace-nowrap">{formatExactTimestamp(batch.created_at)}</span>
                               </div>
@@ -1723,7 +1723,7 @@ export default function OrdersPage() {
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                       Net Payable Amount ({selectedOrder.order_type === 'takeaway' ? 'Takeaway' : selectedOrder.table_name || 'Dine-In'})
                     </p>
-                    <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
+                    <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                       {formatPrice(calcResult.grandTotal, restaurant.settings.currency)}
                     </p>
                     <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
@@ -1741,7 +1741,7 @@ export default function OrdersPage() {
                         onClick={() => setPaymentMethod('cash')}
                         className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
                           paymentMethod === 'cash'
-                            ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-black shadow-md'
+                            ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold shadow-md'
                             : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold hover:border-slate-300'
                         }`}
                       >
@@ -1754,7 +1754,7 @@ export default function OrdersPage() {
                         onClick={() => setPaymentMethod('online')}
                         className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
                           paymentMethod === 'online'
-                            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 font-black shadow-md'
+                            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 font-bold shadow-md'
                             : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold hover:border-slate-300'
                         }`}
                       >
@@ -1769,7 +1769,7 @@ export default function OrdersPage() {
                       Cancel
                     </Button>
                     <Button
-                      className={paymentMethod === 'cash' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6' : 'bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-6'}
+                      className={paymentMethod === 'cash' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6' : 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6'}
                       isLoading={submittingPayment}
                       disabled={submittingPayment}
                       onClick={handleConfirmPayment}
@@ -1807,7 +1807,7 @@ export default function OrdersPage() {
               return (
                 <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl p-3.5 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-rose-800 dark:text-rose-300 uppercase">
+                    <span className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase">
                       Cancellation Stage: {selectedOrder.status.toUpperCase()}
                     </span>
                     <span className="text-xs font-bold text-rose-700 dark:text-rose-400">
@@ -1883,7 +1883,7 @@ export default function OrdersPage() {
                           : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      <p className="text-xs font-extrabold">{disp.label}</p>
+                      <p className="text-xs font-bold">{disp.label}</p>
                       <p className="text-[10px] text-slate-500 leading-tight">{disp.desc}</p>
                     </button>
                   );
@@ -1948,7 +1948,7 @@ export default function OrdersPage() {
                   className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
                 />
                 <div>
-                  <p className="text-xs font-black text-amber-900 dark:text-amber-200">
+                  <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
                     Restore Raw Inventory Stock (Default: OFF)
                   </p>
                   <p className="text-[10px] text-amber-800 dark:text-amber-300">
@@ -1961,7 +1961,7 @@ export default function OrdersPage() {
             {/* Refund Status if Paid */}
             {selectedOrder.payment_status === 'paid' && (
               <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl p-3 space-y-1.5">
-                <label className="block text-xs font-black text-blue-900 dark:text-blue-200">
+                <label className="block text-xs font-bold text-blue-900 dark:text-blue-200">
                   Payment Refund Status
                 </label>
                 <select
@@ -1986,7 +1986,7 @@ export default function OrdersPage() {
                 isLoading={isSubmittingCancellation}
                 disabled={isSubmittingCancellation}
                 onClick={handleConfirmCancellationWithDisposition}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold px-5"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-5"
               >
                 Confirm Cancellation & Log Disposition
               </Button>
@@ -2060,7 +2060,7 @@ export default function OrdersPage() {
                                 </span>
                               )}
                             </div>
-                            <span className={`font-extrabold ${isCancelled ? 'text-rose-500 line-through' : 'text-slate-900 dark:text-white'}`}>
+                            <span className={`font-bold ${isCancelled ? 'text-rose-500 line-through' : 'text-slate-900 dark:text-white'}`}>
                               {formatPrice(isCancelled ? 0 : item.price * item.quantity, restaurant.settings.currency)}
                             </span>
                           </div>
@@ -2076,7 +2076,7 @@ export default function OrdersPage() {
                       <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
                         {selectedOrder.batches?.map((b: any) => (
                           <div key={b.id} className="space-y-1">
-                            {selectedOrder.batches!.length > 1 && <p className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Batch #{b.batch_number}</p>}
+                            {selectedOrder.batches!.length > 1 && <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Batch #{b.batch_number}</p>}
                             {b.accepted_by && <p>• Accepted by: <span className="text-slate-800 dark:text-slate-200">{b.accepted_by}</span></p>}
                             {b.preparing_by && <p>• Cooking by: <span className="text-slate-800 dark:text-slate-200">{b.preparing_by}</span></p>}
                             {b.ready_by && <p>• Ready by: <span className="text-slate-800 dark:text-slate-200">{b.ready_by}</span></p>}
@@ -2159,7 +2159,7 @@ export default function OrdersPage() {
                         <div className="h-px bg-slate-100 dark:bg-slate-800 my-2" />
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Grand Total</span>
-                          <span className="text-lg font-black text-slate-900 dark:text-white">{formatPrice(calcResult.grandTotal, restaurant.settings.currency)}</span>
+                          <span className="text-lg font-bold text-slate-900 dark:text-white">{formatPrice(calcResult.grandTotal, restaurant.settings.currency)}</span>
                         </div>
                       </div>
                     );
@@ -2186,7 +2186,7 @@ export default function OrdersPage() {
         <Card className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800">
           <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/20">
             <div>
-              <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Customer Requests & Waiter Calls</h3>
+              <h3 className="font-bold text-sm text-slate-900 dark:text-white">Customer Requests & Waiter Calls</h3>
               <p className="text-xs text-slate-500">Live notifications and waiter calls from dining tables</p>
             </div>
             <Button
@@ -2225,7 +2225,7 @@ export default function OrdersPage() {
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-300">
                     {customerRequests.map((req) => (
                       <tr key={req.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/25 transition-colors">
-                        <td className="px-6 py-4 font-extrabold text-slate-950 dark:text-white">
+                        <td className="px-6 py-4 font-bold text-slate-950 dark:text-white">
                           {req.table_name}
                         </td>
                         <td className="px-6 py-4">
@@ -2293,7 +2293,7 @@ export default function OrdersPage() {
             )}
           </div>
           <div>
-            <p className="font-extrabold text-sm tracking-wide uppercase">{toast.title || (toast.variant === 'info' ? 'Notice' : 'New Order')}</p>
+            <p className="font-bold text-sm tracking-wide uppercase">{toast.title || (toast.variant === 'info' ? 'Notice' : 'New Order')}</p>
             <p className="text-xs text-white/95 font-medium">{toast.message}</p>
           </div>
           <button 
@@ -2330,7 +2330,7 @@ export default function OrdersPage() {
                 Cancel
               </Button>
               <Button
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm cursor-pointer"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm cursor-pointer"
                 onClick={executePayMergedGroup}
               >
                 Confirm Payment
@@ -2343,7 +2343,7 @@ export default function OrdersPage() {
               <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{mergedGroupDetails?.group?.name}</p>
               <div className="flex justify-between items-center text-xs text-slate-500 pt-1">
                 <span>Merged Outstanding Amount:</span>
-                <span className="font-extrabold text-slate-900 dark:text-white text-base">
+                <span className="font-bold text-slate-900 dark:text-white text-base">
                   {formatPrice(mergedGroupDetails?.groupTotals?.unpaidTotal ?? mergedGroupDetails?.groupTotals?.total ?? 0, restaurant?.settings?.currency)}
                 </span>
               </div>
@@ -2391,7 +2391,7 @@ export default function OrdersPage() {
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-1.5 cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 cursor-pointer"
                   onClick={() => {
                     if (typeof window !== 'undefined') window.print();
                   }}
@@ -2403,7 +2403,7 @@ export default function OrdersPage() {
           >
             <div id="printable-bill-container" className="space-y-4 p-4 font-mono text-xs text-slate-900 bg-white border border-slate-200 rounded-xl shadow-inner max-h-[65vh] overflow-y-auto">
               <div className="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
-                <h3 className="text-base font-black uppercase tracking-wide">{printOrderData.restaurant.name}</h3>
+                <h3 className="text-base font-bold uppercase tracking-wide">{printOrderData.restaurant.name}</h3>
                 <p className="text-[11px] text-slate-500">{printOrderData.restaurant.address || 'Dining QR Order System'}</p>
                 <p className="text-[11px] text-slate-500">Tel: {printOrderData.restaurant.phone || 'N/A'}</p>
               </div>
@@ -2455,7 +2455,7 @@ export default function OrdersPage() {
                     <span>{formatPrice(printOrderData.calcResult.serviceChargeAmount, printOrderData.restaurant.settings?.currency)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-black text-sm pt-2 border-t border-slate-300">
+                <div className="flex justify-between font-bold text-sm pt-2 border-t border-slate-300">
                   <span>Total:</span>
                   <span>{formatPrice(printOrderData.calcResult.grandTotal, printOrderData.restaurant.settings?.currency)}</span>
                 </div>

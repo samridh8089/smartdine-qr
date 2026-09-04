@@ -8,12 +8,13 @@ export function cn(...inputs: any[]) {
  * Formats a number as Indian Rupee (INR) currency with standard en-IN numbering formats.
  * e.g., 150000 -> ₹1,50,000.00
  */
-export function formatPrice(price: number, currency = 'INR'): string {
+export function formatPrice(price: number, currency = 'INR', decimals?: number): string {
+  const fractionDigits = decimals !== undefined ? decimals : (Number.isInteger(price) ? 0 : 2);
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
   }).format(price);
 }
 
