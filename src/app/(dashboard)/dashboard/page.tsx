@@ -862,11 +862,11 @@ export default function DashboardPage() {
                       </span>
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      <Link href={`/dashboard/orders?id=${o.id}`}>
+                      <a href={`/dashboard/orders?id=${o.id}`}>
                         <Button size="sm" variant="outline" className="h-7 text-xs font-semibold px-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                           Open Order
                         </Button>
-                      </Link>
+                      </a>
                     </td>
                   </tr>
                 ))}
@@ -1112,11 +1112,11 @@ export default function DashboardPage() {
                 <h3 className="text-[20px] font-semibold text-slate-900 dark:text-white">Recent Orders</h3>
                 <p className="text-[13px] font-normal text-slate-500 mt-0.5">Incoming orders across all tables.</p>
               </div>
-              <Link href="/dashboard/orders">
+              <a href="/dashboard/orders">
                 <Button variant="ghost" className="text-xs font-semibold gap-1 text-slate-600 dark:text-slate-300 cursor-pointer">
                   View All <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
-              </Link>
+              </a>
             </div>
 
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1231,11 +1231,11 @@ export default function DashboardPage() {
                       <p className="text-sm font-bold font-mono text-rose-600 dark:text-rose-400">{o.elapsedStr}</p>
                       <p className="text-[10px] text-slate-400 font-medium">waiting</p>
                     </div>
-                    <Link href={`/dashboard/orders?id=${o.id}`}>
+                    <a href={`/dashboard/orders?id=${o.id}`}>
                       <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold h-8 px-3 rounded-lg cursor-pointer">
                         Open Order
                       </Button>
-                    </Link>
+                    </a>
                   </div>
                 </div>
               ))

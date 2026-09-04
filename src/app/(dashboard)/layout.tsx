@@ -297,13 +297,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!loading && profile) {
       const allowedPaths = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'] || [];
-      const isAllowed = pathname === '/dashboard' || allowedPaths.some(p => pathname === p || pathname.startsWith(`${p}/`));
+      const isAllowed = pathname === '/dashboard' || allowedPaths.some(p => pathname === p || pathname.startsWith(`${p}/`) || pathname.startsWith(`${p}?`));
       if (!isAllowed) {
         const defaultRoute = dbRole === 'kitchen' ? '/dashboard/kds' : (dbRole === 'waiter' || dbRole === 'cashier') ? '/dashboard/orders' : '/dashboard';
-        router.replace(defaultRoute);
+        window.location.assign(defaultRoute);
       }
     }
-  }, [loading, profile, dbRole, pathname, router]);
+  }, [loading, profile, dbRole, pathname]);
 
   const handleLogout = async () => {
     if (typeof window !== 'undefined') {
@@ -448,9 +448,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   onChange={(e) => {
                     const newRole = e.target.value as any;
                     setActiveRole(newRole);
-                    if (newRole === 'kitchen') router.push('/dashboard/kds');
-                    else if (newRole === 'waiter') router.push('/dashboard/orders');
-                    else router.push('/dashboard');
+                    const target = newRole === 'kitchen' ? '/dashboard/kds' : newRole === 'waiter' ? '/dashboard/orders' : '/dashboard';
+                    window.location.assign(target);
                   }}
                   className="block w-full px-2.5 py-1.5 text-xs text-slate-200 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer"
                 >
@@ -469,10 +468,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 const isLocked = Boolean(itemLockInfo && planSpec.features[itemLockInfo.key] === false);
 
                 return (
-                  <Link
+                  <a
                     key={item.name}
                     href={item.href}
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={(e) => {
+                      if (sidebarOpen) setSidebarOpen(false);
+                      if (pathname === item.href) {
+                        e.preventDefault();
+                      }
+                    }}
                     className={`
                       flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-colors group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
                       ${isActive 
@@ -489,7 +493,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {isLocked && (
                       <Lock className="h-3.5 w-3.5 text-amber-400/90 shrink-0 ml-1.5" />
                     )}
-                  </Link>
+                  </a>
                 );
               })}
             </nav>
