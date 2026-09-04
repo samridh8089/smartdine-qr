@@ -83,14 +83,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid image binary signature. Executable or dangerous files are strictly prohibited.' }, { status: 400 });
     }
 
-    // 5. Generate sanitized, isolated path
+    // 5. Generate sanitized, isolated path in the required structure: menu_items/<restaurant-id>/<uuid>.<ext>
     const safeRestaurantId = restaurantId.replace(/[^a-zA-Z0-9_\-]/g, '');
-    const safeItemId = (itemId || `item_${Math.random().toString(36).substring(2, 7)}`).replace(/[^a-zA-Z0-9_\-]/g, '');
-    const safeFileName = sanitizeFilename(`image.${ext}`);
-    const filePath = `restaurants/${safeRestaurantId}/menu-items/${safeItemId}/${safeFileName}`;
+    const uniqueId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const safeFileName = sanitizeFilename(`${uniqueId}.${ext}`);
+    const filePath = `menu_items/${safeRestaurantId}/${safeFileName}`;
 
     // 6. Upload file buffer to Supabase Storage bucket using service-role client
-    let bucketName = 'menu-item-images';
+    let bucketName = 'smartdine-images';
     let { error: uploadErr } = await supabaseAdmin.storage
       .from(bucketName)
       .upload(filePath, buffer, {
@@ -99,7 +101,7 @@ export async function POST(req: Request) {
       });
 
     if (uploadErr) {
-      bucketName = 'smartdine-images';
+      bucketName = 'menu-item-images';
       const { error: fallbackErr } = await supabaseAdmin.storage
         .from(bucketName)
         .upload(filePath, buffer, {
