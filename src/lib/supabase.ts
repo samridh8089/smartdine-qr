@@ -245,7 +245,7 @@ export const storage = {
       ? crypto.randomUUID()
       : `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const fileName = `${uniqueId}.${fileExt}`;
-    const filePath = cleanSubdir ? `${safeRestId}/${cleanSubdir}/${fileName}` : `${safeRestId}/${fileName}`;
+    const filePath = `menu_items/${safeRestId}/${fileName}`;
 
     const { error } = await supabase.storage
       .from('smartdine-images')
