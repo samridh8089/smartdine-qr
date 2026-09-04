@@ -112,8 +112,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const user = await getActiveUser();
     if (!user) {
-      const redirectUrl = pathname && pathname.startsWith('/dashboard') ? `/login?redirect=${encodeURIComponent(pathname)}` : '/login';
-      router.push(redirectUrl);
+      router.push('/login');
       return;
     }
     if (user.role === 'super_admin') {
@@ -297,14 +296,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Full RBAC navigation guard enforcing ALLOWED_PATHS[dbRole]
   useEffect(() => {
     if (!loading && profile) {
-      const allowedPaths = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'] || [];
-      const isAllowed = pathname === '/dashboard' || allowedPaths.some(p => pathname === p || pathname.startsWith(`${p}/`) || pathname.startsWith(`${p}?`));
-      if (!isAllowed) {
+      const allowed = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'];
+      if (!allowed.includes(pathname)) {
         const defaultRoute = dbRole === 'kitchen' ? '/dashboard/kds' : (dbRole === 'waiter' || dbRole === 'cashier') ? '/dashboard/orders' : '/dashboard';
-        window.location.assign(defaultRoute);
+        router.replace(defaultRoute);
       }
     }
-  }, [loading, profile, dbRole, pathname]);
+  }, [loading, profile, dbRole, pathname, router]);
 
   const handleLogout = async () => {
     if (typeof window !== 'undefined') {
@@ -420,7 +418,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Sidebar */}
           <aside className={`
-            fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
+            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}>
             {/* Logo Section */}
@@ -431,8 +429,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
               <button 
                 onClick={() => setSidebarOpen(false)} 
-                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
-                aria-label="Close sidebar"
+                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -449,10 +446,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   onChange={(e) => {
                     const newRole = e.target.value as any;
                     setActiveRole(newRole);
-                    const target = newRole === 'kitchen' ? '/dashboard/kds' : newRole === 'waiter' ? '/dashboard/orders' : '/dashboard';
-                    window.location.assign(target);
+                    if (newRole === 'kitchen') router.push('/dashboard/kds');
+                    else if (newRole === 'waiter') router.push('/dashboard/orders');
+                    else router.push('/dashboard');
                   }}
-                  className="block w-full px-2.5 py-1.5 text-xs text-slate-200 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer"
+                  className="block w-full px-2.5 py-1.5 text-xs text-slate-200 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 >
                   <option value="owner">Owner Portal</option>
                   <option value="waiter">Waiter Portal</option>
@@ -469,32 +467,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 const isLocked = Boolean(itemLockInfo && planSpec.features[itemLockInfo.key] === false);
 
                 return (
-                  <a
+                  <Link
                     key={item.name}
                     href={item.href}
-                    onClick={(e) => {
-                      if (sidebarOpen) setSidebarOpen(false);
-                      if (pathname === item.href) {
-                        e.preventDefault();
-                      }
-                    }}
                     className={`
-                      flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-colors group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
+                      flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all group
                       ${isActive 
-                        ? 'bg-emerald-600 text-white shadow-xs font-semibold' 
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10 font-bold' 
                         : isLocked
                         ? 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300'
-                        : 'text-slate-400 hover:bg-slate-800/80 hover:text-white'}
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'}
                     `}
                   >
                     <div className="flex items-center min-w-0">
-                      <item.icon className={`h-4 w-4 mr-2.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
                       <span className="truncate">{item.name}</span>
                     </div>
                     {isLocked && (
                       <Lock className="h-3.5 w-3.5 text-amber-400/90 shrink-0 ml-1.5" />
                     )}
-                  </a>
+                  </Link>
                 );
               })}
             </nav>

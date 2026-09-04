@@ -1,69 +1,26 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { db, Order } from '@/lib/db';
+import { useState, useEffect, useRef } from 'react';
+import { db, Order, MenuItem } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
-import { formatPrice, getFormattedOrderId } from '@/lib/utils';
+import { formatPrice, formatDate, getFormattedOrderId } from '@/lib/utils';
 import { formatExactTimestamp } from '@/lib/timestamp';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { 
-  ArrowRight, Clock, AlertCircle, ShoppingBag,
-  Activity, X, ChevronRight, CheckCircle2, ChevronDown, ChevronUp
+  DollarSign, ClipboardList, Users, TrendingUp, 
+  ArrowRight, Clock, CheckCircle2, AlertCircle, ShoppingBag
 } from 'lucide-react';
 
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
 
-// Priority 5 & 7: Human-readable waiting time formatting (e.g. 8 min 37 sec, 22 min 04 sec, 2 hr 14 min)
-function formatHumanDuration(seconds: number): string {
-  if (isNaN(seconds) || seconds <= 0) return '0 sec';
-  const sec = Math.round(seconds);
-  if (sec < 60) return `${sec} sec`;
-  if (sec < 3600) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m} min ${String(s).padStart(2, '0')} sec`;
-  }
-  const h = Math.floor(sec / 3600);
-  const remM = Math.floor((sec % 3600) / 60);
-  return `${h} hr ${String(remM).padStart(2, '0')} min`;
-}
-
-function formatElapsedMs(ms: number): string {
-  if (!ms || ms < 0) return '0 sec';
-  return formatHumanDuration(Math.floor(ms / 1000));
-}
-
 export default function DashboardPage() {
-  const router = useRouter();
   const { restaurant: contextRestaurant, profile: contextProfile } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [rawAllOrders, setRawAllOrders] = useState<Order[]>([]);
   const [restaurant, setRestaurant] = useState<any>(contextRestaurant);
-  
-  // Priority 7: Shift / Time Filter
-  const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d'>('today');
-
-  // Priority 17 & 23: Server-Time Synchronization (Zero Client Clock Drift)
-  const [serverClockOffset, setServerClockOffset] = useState<number>(0);
-  const [nowTime, setNowTime] = useState<number>(Date.now());
-
-  // Priority 3 & 21: Revenue & Settlement Breakdown
-  const [revenueMetrics, setRevenueMetrics] = useState({
-    totalVolume: 0,
-    settled: 0,
-    pending: 0,
-    cancelled: 0,
-    settledCount: 0,
-    pendingCount: 0,
-    cancelledCount: 0
-  });
-
   const [stats, setStats] = useState({
     totalOrders: 0,
     revenue: 0,
@@ -71,555 +28,348 @@ export default function DashboardPage() {
     activeTableNames: [] as string[],
     topItems: [] as { name: string; count: number; revenue: number }[]
   });
-
   const [tableOccupancy, setTableOccupancy] = useState({
-    total: 20,
-    available: 20,
+    total: 0,
+    available: 0,
     occupied: 0,
     inactive: 0,
-    occupancyRate: 0,
-    paymentPending: 0
+    occupancyRate: 0
   });
-
-  const [kitchenSla, setKitchenSla] = useState({
-    avgAcceptSec: 42,
-    avgPrepMin: 8.5,
-    readyToServedSec: 34,
-    totalFulfillmentMin: 11.2
-  });
-
-  const [liveOccupancy, setLiveOccupancy] = useState({
-    occupied: 0,
-    free: 20,
-    reserved: 0,
-    avgWaitTimeMin: 11.2,
-    queueLength: 0
-  });
-
-  // Priority 1 & 2: Operations Metrics with Business Vocabulary
-  const [commandCenterMetrics, setCommandCenterMetrics] = useState({
-    avgPickupTimeStr: '34 sec',
-    avgServeTimeStr: '1 min 08 sec',
-    ordersAtRiskCount: 0,
-    longestWaitingOrder: null as any,
-    kitchenAvgPrepStr: '8 min 30 sec',
-    slaSuccessRate: '95%'
-  });
-
-  // Priority 4: Collapsible Live Operations Command Center (Default: Collapsed)
-  const [liveOperationsOpen, setLiveOperationsOpen] = useState(false);
-
-  // Priority 4 & 5: Delayed Orders
-  const [delayedOrdersList, setDelayedOrdersList] = useState<any[]>([]);
-  const [delayedOrdersModalOpen, setDelayedOrdersModalOpen] = useState(false);
-
-  // Priority 10: Waiter Performance
-  const [waiterSlaList, setWaiterSlaList] = useState<any[]>([]);
-  const [selectedWaiterModal, setSelectedWaiterModal] = useState<any | null>(null);
-
-  // Priority 11: Kitchen Performance
-  const [kitchenIntelligence, setKitchenIntelligence] = useState({
-    slowestDish: { name: 'Paneer Butter Masala', avgPrep: '14 min 30 sec' },
-    fastestDish: { name: 'Crispy Corn', avgPrep: '4 min 12 sec' },
-    longestTicket: { id: 'T-101', table: 'Table 1', elapsed: '14 min 00 sec' },
-    queueDepth: 0,
-    mostCancelledDish: { name: 'None', count: 0 }
-  });
-
   const [loading, setLoading] = useState(true);
+
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Priority 17 & 23: Second-by-second Server-Synchronized Ticker
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNowTime(Date.now() + serverClockOffset);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [serverClockOffset]);
-
-  const computeMetricsForOrders = useCallback((
-    allOrders: Order[], 
-    liveTableData: any, 
-    activeRest: any, 
-    filter: 'today' | '7d' | '30d',
-    currentNow: number
-  ) => {
-    if (!allOrders) return;
-
-    const getValidOrderTotal = (o: Order) => {
-      if (o.grand_total && Number(o.grand_total) > 0) return Number(o.grand_total);
-      if (o.total && Number(o.total) > 0) return Number(o.total);
-      const calcResult = calculateBillingTotals({
-        items: o.items || [],
-        batches: o.batches || [],
-        discountAmount: Number(o.discount_amount || 0),
-        offerCode: o.offer_code,
-        specialInstructions: o.special_instructions,
-        offers: activeRest?.settings?.offers || [],
-        gstEnabled: activeRest?.settings?.gst_enabled !== false,
-        gstPercentage: activeRest?.settings?.gst_percentage || 0,
-        serviceChargeEnabled: activeRest?.settings?.service_charge_enabled !== false,
-        serviceChargePercentage: activeRest?.settings?.service_charge_percentage || 0,
-        customCharges: activeRest?.settings?.custom_charges || []
-      });
-      return calcResult.grandTotal || Number(o.subtotal || 0);
-    };
-
-    const now = new Date(currentNow);
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
-
-    // 1. Time-filtered orders
-    let timeFilteredOrders = allOrders;
-    if (filter === 'today') {
-      timeFilteredOrders = allOrders.filter(o => {
-        const t = new Date(o.created_at).getTime();
-        return t >= startOfDay && t <= endOfDay;
-      });
-    } else if (filter === '7d') {
-      const t7 = currentNow - 7 * 24 * 60 * 60 * 1000;
-      timeFilteredOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= t7);
-    } else if (filter === '30d') {
-      const t30 = currentNow - 30 * 24 * 60 * 60 * 1000;
-      timeFilteredOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= t30);
-    }
-
-    // Priority 3 & 21: Revenue Settlement Hierarchy
-    const settledOrders = timeFilteredOrders.filter(o => o.status === 'completed' || o.payment_status === 'paid');
-    const settledRev = settledOrders.reduce((sum, o) => sum + getValidOrderTotal(o), 0);
-
-    const pendingOrders = timeFilteredOrders.filter(o => o.status !== 'completed' && o.status !== 'cancelled' && o.payment_status !== 'paid');
-    const pendingRev = pendingOrders.reduce((sum, o) => sum + getValidOrderTotal(o), 0);
-
-    const cancelledOrders = timeFilteredOrders.filter(o => o.status === 'cancelled');
-    const cancelledRev = cancelledOrders.reduce((sum, o) => sum + getValidOrderTotal(o), 0);
-
-    const totalBusinessVolume = settledRev + pendingRev;
-
-    setRevenueMetrics({
-      totalVolume: totalBusinessVolume,
-      settled: settledRev,
-      pending: pendingRev,
-      cancelled: cancelledRev,
-      settledCount: settledOrders.length,
-      pendingCount: pendingOrders.length,
-      cancelledCount: cancelledOrders.length
-    });
-
-    // Priority 6: Orders Waiting (Count only active non-closed orders: new, accepted, preparing, ready)
-    const activeQueueOrders = allOrders.filter(o => 
-      ['new', 'accepted', 'preparing', 'ready'].includes(o.status) &&
-      o.status !== 'completed' && o.status !== 'cancelled' &&
-      (currentNow - new Date(o.created_at).getTime()) < 24 * 60 * 60 * 1000
-    );
-    const ordersWaitingCount = activeQueueOrders.length;
-
-    // Active Tables
-    const activeOrders = allOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
-    const activeTableMap = new Map<string, string>();
-    activeOrders.forEach(o => {
-      if (o.table_name && o.order_type !== 'takeaway' && o.order_type !== 'reservation') {
-        activeTableMap.set(o.table_id || o.table_name, o.table_name);
-      }
-    });
-
-    const activeTableNamesList = Array.from(activeTableMap.values())
-      .map(name => name.replace(/^Table\s*/i, ''))
-      .sort((a, b) => {
-        const numA = parseInt(a, 10);
-        const numB = parseInt(b, 10);
-        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-        return a.localeCompare(b);
-      });
-
-    // Top Selling Items
-    const itemCounts: Record<string, { name: string; count: number; revenue: number }> = {};
-    timeFilteredOrders
-      .filter(o => o.status === 'completed' || o.payment_status === 'paid' || o.status === 'served')
-      .forEach(o => {
-        (o.items || []).forEach(item => {
-          if (item.is_cancelled || item.status === 'cancelled') return;
-          if (!itemCounts[item.menu_item_id]) {
-            itemCounts[item.menu_item_id] = { name: item.menu_item_name, count: 0, revenue: 0 };
-          }
-          itemCounts[item.menu_item_id].count += item.quantity;
-          itemCounts[item.menu_item_id].revenue += item.price * item.quantity;
-        });
-      });
-
-    const topItems = Object.values(itemCounts)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Priority 4, 5 & 22: Delayed Orders (> 10 mins active) with Human-Readable Timers
-    const delayed = activeQueueOrders
-      .filter(o => (currentNow - new Date(o.created_at).getTime()) > 10 * 60 * 1000)
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-      .map(o => {
-        const waitSec = Math.max(1, Math.floor((currentNow - new Date(o.created_at).getTime()) / 1000));
-        const dishName = (o.items && o.items[0]?.menu_item_name) || 'Order Item';
-        const waiterName = (o.batches && o.batches[0]?.served_by) || (o.table_name?.includes('2') || o.table_name?.includes('4') ? 'Pooja' : 'Samridh');
-        return {
-          id: o.id,
-          table_name: o.table_name || 'Table',
-          waiter: waiterName,
-          status: o.status,
-          dish: dishName,
-          created_at: o.created_at,
-          waitingSec: waitSec,
-          elapsedStr: formatHumanDuration(waitSec)
-        };
-      });
-
-    setDelayedOrdersList(delayed);
-
-    // Service Speed & Waiter Calculations
-    let overallPickupSum = 0, overallPickupCount = 0;
-    let overallServeSum = 0, overallServeCount = 0;
-    let totalPrepSec = 0, prepCount = 0;
-    let totalFulfillEvaluated = 0, totalFulfillWithin15 = 0;
-
-    const dishPrepTimes: Record<string, { sum: number; count: number }> = {};
-    const itemCancelCounts: Record<string, number> = {};
-
-    const waiterMap: Record<string, {
-      name: string;
-      pickupSumSec: number;
-      pickupCount: number;
-      serveSumSec: number;
-      serveCount: number;
-      ordersServed: number;
-      activeTables: Set<string>;
-      slaBreach: number;
-      fastestSec: number;
-      slowestSec: number;
-      history: any[];
-    }> = {
-      'Samridh': {
-        name: 'Samridh (Waiter 1)',
-        pickupSumSec: 0,
-        pickupCount: 0,
-        serveSumSec: 0,
-        serveCount: 0,
-        ordersServed: 0,
-        activeTables: new Set(),
-        slaBreach: 0,
-        fastestSec: 999999,
-        slowestSec: 0,
-        history: []
-      },
-      'Pooja': {
-        name: 'Pooja (Waiter 2)',
-        pickupSumSec: 0,
-        pickupCount: 0,
-        serveSumSec: 0,
-        serveCount: 0,
-        ordersServed: 0,
-        activeTables: new Set(),
-        slaBreach: 0,
-        fastestSec: 999999,
-        slowestSec: 0,
-        history: []
-      }
-    };
-
-    allOrders.forEach(o => {
-      (o.items || []).forEach(item => {
-        if (item.is_cancelled || item.status === 'cancelled') {
-          itemCancelCounts[item.menu_item_name] = (itemCancelCounts[item.menu_item_name] || 0) + item.quantity;
-        }
-      });
-
-      const firstItemName = (o.items && o.items[0]?.menu_item_name) || 'Special Dish';
-
-      (o.batches || []).forEach(b => {
-        const batchCreated = new Date(b.created_at || o.created_at).getTime();
-
-        if (b.accepted_at && b.ready_at) {
-          const prepDur = Math.max(60, (new Date(b.ready_at).getTime() - new Date(b.accepted_at).getTime()) / 1000);
-          totalPrepSec += prepDur;
-          prepCount++;
-
-          if (!dishPrepTimes[firstItemName]) dishPrepTimes[firstItemName] = { sum: 0, count: 0 };
-          dishPrepTimes[firstItemName].sum += prepDur;
-          dishPrepTimes[firstItemName].count++;
-        }
-
-        if (b.ready_at && b.served_at) {
-          const pDur = Math.max(5, (new Date(b.served_at).getTime() - new Date(b.ready_at).getTime()) / 1000);
-          overallPickupSum += pDur;
-          overallPickupCount++;
-        }
-
-        if (b.served_at) {
-          const sDur = Math.max(10, (new Date(b.served_at).getTime() - batchCreated) / 1000);
-          overallServeSum += sDur;
-          overallServeCount++;
-          totalFulfillEvaluated++;
-          if (sDur <= 900) totalFulfillWithin15++;
-        }
-
-        if (b.served_by) {
-          const waiterKey = b.served_by.toLowerCase().includes('pooja') ? 'Pooja' : 'Samridh';
-          const wObj = waiterMap[waiterKey];
-          if (wObj) {
-            wObj.ordersServed++;
-            if (b.ready_at && b.served_at) {
-              const sDur = Math.max(10, Math.round((new Date(b.served_at).getTime() - new Date(b.ready_at).getTime()) / 1000));
-              wObj.serveSumSec += sDur;
-              wObj.serveCount++;
-              if (sDur < wObj.fastestSec) wObj.fastestSec = sDur;
-              if (sDur > wObj.slowestSec) wObj.slowestSec = sDur;
-              if (sDur > 180) wObj.slaBreach++;
-
-              wObj.history.unshift({
-                orderId: o.id,
-                tableName: o.table_name || 'Table',
-                dish: firstItemName,
-                timestamp: new Date(b.served_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                durationStr: formatHumanDuration(sDur)
-              });
-            }
-          }
-        }
-      });
-    });
-
-    const computedPrepSec = prepCount > 0 ? Math.round(totalPrepSec / prepCount) : 510;
-    const avgPickSec = overallPickupCount > 0 ? Math.round(overallPickupSum / overallPickupCount) : 34;
-    const avgSrvSec = overallServeCount > 0 ? Math.round(overallServeSum / overallServeCount) : 68;
-    const slaSuccessPct = totalFulfillEvaluated > 0 ? `${Math.round((totalFulfillWithin15 / totalFulfillEvaluated) * 100)}%` : '95%';
-
-    const oldestActive = activeQueueOrders.length > 0 ? activeQueueOrders[0] : null;
-    let longestWaitingPayload = null;
-    if (oldestActive) {
-      longestWaitingPayload = {
-        id: oldestActive.id,
-        table_name: oldestActive.table_name || 'Table 1',
-        waiter: (oldestActive.batches && oldestActive.batches[0]?.served_by) || 'Samridh',
-        dish: (oldestActive.items && oldestActive.items[0]?.menu_item_name) || 'Order Item',
-        created_at: oldestActive.created_at
-      };
-    }
-
-    setCommandCenterMetrics({
-      avgPickupTimeStr: formatHumanDuration(avgPickSec),
-      avgServeTimeStr: formatHumanDuration(avgSrvSec),
-      ordersAtRiskCount: delayed.length,
-      longestWaitingOrder: longestWaitingPayload,
-      kitchenAvgPrepStr: formatHumanDuration(computedPrepSec),
-      slaSuccessRate: slaSuccessPct
-    });
-
-    setKitchenSla({
-      avgAcceptSec: 42,
-      avgPrepMin: Number((computedPrepSec / 60).toFixed(1)),
-      readyToServedSec: avgPickSec,
-      totalFulfillmentMin: Number(((computedPrepSec + avgPickSec) / 60).toFixed(1))
-    });
-
-    // Waiter Performance Table (Priority 10 & 22)
-    const finalizedWaiters = Object.values(waiterMap).map((w, idx) => {
-      const avgS = w.serveCount > 0 ? Math.round(w.serveSumSec / w.serveCount) : (idx === 0 ? 72 : 58);
-      const avgP = w.pickupCount > 0 ? Math.round(w.pickupSumSec / w.pickupCount) : (idx === 0 ? 35 : 28);
-      const fastest = w.fastestSec < 999999 ? formatHumanDuration(w.fastestSec) : (idx === 0 ? '45s' : '38s');
-      const slowest = w.slowestSec > 0 ? formatHumanDuration(w.slowestSec) : (idx === 0 ? '2m 30s' : '1m 55s');
-      const activeTblsCount = Math.max(1, (idx === 0 ? 2 : 1));
-
-      let hist = w.history.slice(0, 10);
-      if (hist.length === 0 && allOrders.length > 0) {
-        hist = allOrders.slice(0, 4).map((ao, aIdx) => ({
-          orderId: ao.id,
-          tableName: ao.table_name || `Table ${aIdx + 1}`,
-          dish: (ao.items && ao.items[0]?.menu_item_name) || 'Chef Special',
-          timestamp: new Date(ao.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          durationStr: formatHumanDuration(aIdx === 0 ? 45 : 68)
-        }));
-      }
-
-      return {
-        name: w.name,
-        pickupAvg: formatHumanDuration(avgP),
-        serveAvg: formatHumanDuration(avgS),
-        ordersServed: Math.max(w.ordersServed, (idx === 0 ? 4 : 2)),
-        activeTables: activeTblsCount,
-        slaBreach: w.slaBreach,
-        fastest,
-        slowest,
-        history: hist
-      };
-    });
-    setWaiterSlaList(finalizedWaiters);
-
-    // Kitchen Performance (Priority 11 & 22)
-    const prepEntries = Object.entries(dishPrepTimes).map(([dish, data]) => ({
-      dish,
-      avgSec: Math.round(data.sum / data.count)
-    }));
-    prepEntries.sort((a, b) => b.avgSec - a.avgSec);
-
-    const slowestDish = prepEntries.length > 0 ? {
-      name: prepEntries[0].dish,
-      avgPrep: formatHumanDuration(prepEntries[0].avgSec)
-    } : { name: 'Paneer Butter Masala', avgPrep: '14 min 30 sec' };
-
-    const fastestDish = prepEntries.length > 0 ? {
-      name: prepEntries[prepEntries.length - 1].dish,
-      avgPrep: formatHumanDuration(prepEntries[prepEntries.length - 1].avgSec)
-    } : { name: 'Crispy Corn', avgPrep: '4 min 12 sec' };
-
-    let longestTicketPayload = { id: 'T-101', table: 'Table 1', elapsed: '14 min 00 sec' };
-    if (oldestActive) {
-      const waitSec = Math.max(1, Math.round((currentNow - new Date(oldestActive.created_at).getTime()) / 1000));
-      longestTicketPayload = {
-        id: oldestActive.id.slice(0, 5),
-        table: oldestActive.table_name || 'Table 1',
-        elapsed: formatHumanDuration(waitSec)
-      };
-    }
-
-    const sortedCancelled = Object.entries(itemCancelCounts).sort((a, b) => b[1] - a[1]);
-    const mostCancelledDish = sortedCancelled.length > 0 ? { name: sortedCancelled[0][0], count: sortedCancelled[0][1] } : { name: 'None', count: 0 };
-
-    setKitchenIntelligence({
-      slowestDish,
-      fastestDish,
-      longestTicket: longestTicketPayload,
-      queueDepth: ordersWaitingCount,
-      mostCancelledDish
-    });
-
-    const occCount = liveTableData?.stats?.occupied ?? activeTableMap.size;
-    const totalCount = liveTableData?.stats?.total ?? 20;
-    const freeCount = Math.max(0, totalCount - occCount);
-    const pendingBillCount = (liveTableData?.tables || []).filter((t: any) => t.payment_pending).length;
-    const occRate = totalCount > 0 ? Math.round((occCount / totalCount) * 100) : 0;
-
-    setTableOccupancy({
-      total: totalCount,
-      available: freeCount,
-      occupied: occCount,
-      inactive: 0,
-      occupancyRate: occRate,
-      paymentPending: pendingBillCount
-    });
-
-    setLiveOccupancy({
-      occupied: occCount,
-      free: freeCount,
-      reserved: pendingBillCount,
-      avgWaitTimeMin: Number((computedPrepSec / 60).toFixed(1)),
-      queueLength: ordersWaitingCount
-    });
-
-    setStats({
-      totalOrders: timeFilteredOrders.length,
-      revenue: settledRev,
-      activeTablesCount: activeTableMap.size,
-      activeTableNames: activeTableNamesList,
-      topItems
-    });
-  }, []);
-
-  const loadDataForRest = useCallback(async (restId: string, currentFilter = timeFilter) => {
+  const loadDataForRest = async (restId: string) => {
     try {
       const activeRest = restaurant || contextRestaurant || (await db.getRestaurantById(restId));
       if (!restaurant && activeRest) setRestaurant(activeRest);
 
-      const tBefore = Date.now();
+      // Phase 1: Fast Parallel Fetch of Core Orders & Table Live Status
       const [allOrders, liveTableData] = await Promise.all([
         db.getOrders(restId),
         db.getTablesWithLiveStatus(restId)
       ]);
 
-      // Priority 17 & 23: Compute server timestamp delta to eliminate clock drift
-      if (allOrders.length > 0) {
-        const newestOrderTime = new Date(allOrders[0].created_at).getTime();
-        if (newestOrderTime > tBefore) {
-          setServerClockOffset(newestOrderTime - tBefore);
-        }
+      setOrders(allOrders);
+      if (liveTableData?.stats) {
+        setTableOccupancy(liveTableData.stats);
       }
 
-      setRawAllOrders(allOrders);
-      setOrders(allOrders);
+      const getValidOrderTotal = (o: Order) => {
+        const calcResult = calculateBillingTotals({
+          items: o.items || [],
+          batches: o.batches || [],
+          discountAmount: Number(o.discount_amount || 0),
+          offerCode: o.offer_code,
+          specialInstructions: o.special_instructions,
+          offers: activeRest?.settings?.offers || [],
+          gstEnabled: activeRest?.settings?.gst_enabled !== false,
+          gstPercentage: activeRest?.settings?.gst_percentage || 0,
+          serviceChargeEnabled: activeRest?.settings?.service_charge_enabled !== false,
+          serviceChargePercentage: activeRest?.settings?.service_charge_percentage || 0,
+          customCharges: activeRest?.settings?.custom_charges || []
+        });
+        return calcResult.grandTotal;
+      };
 
-      const effectiveNow = Date.now() + serverClockOffset;
-      computeMetricsForOrders(allOrders, liveTableData, activeRest, currentFilter, effectiveNow);
+      // Compute statistics for "today"
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
+      const todayOrders = allOrders.filter(o => {
+        const t = new Date(o.created_at).getTime();
+        return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled';
+      });
+      
+      const revenue = todayOrders
+        .filter(o => o.status === 'completed' || (o.status === 'served' && o.payment_status === 'paid'))
+        .reduce((sum, o) => sum + getValidOrderTotal(o), 0);
+
+      // Compute Active Tables (orders with status !== 'completed' && status !== 'cancelled')
+      const activeOrders = allOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
+
+      const activeTableMap = new Map<string, string>();
+      activeOrders.forEach(o => {
+        if (o.table_name && o.order_type !== 'takeaway' && o.order_type !== 'reservation') {
+          activeTableMap.set(o.table_id || o.table_name, o.table_name);
+        }
+      });
+
+      const activeTableNamesList = Array.from(activeTableMap.values())
+        .map(name => name.replace(/^Table\s*/i, ''))
+        .sort((a, b) => {
+          const numA = parseInt(a, 10);
+          const numB = parseInt(b, 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return a.localeCompare(b);
+        });
+
+      // Calculate Top Selling Items
+      const itemCounts: Record<string, { name: string; count: number; revenue: number }> = {};
+      allOrders
+        .filter(o => o.status === 'completed' || (o.status === 'served' && o.payment_status === 'paid'))
+        .forEach(o => {
+          (o.items || []).forEach(item => {
+            if (item.is_cancelled || item.status === 'cancelled' || item.notes?.includes('[CANCELLED]')) return;
+            if (item.batch_id && (o.batches || []).length > 0) {
+              const b = (o.batches || []).find(batch => batch.id === item.batch_id);
+              if (b && (b.status === 'cancelled' || b.special_instructions?.includes('[CANCELLED]'))) return;
+            }
+            if (!itemCounts[item.menu_item_id]) {
+              itemCounts[item.menu_item_id] = { name: item.menu_item_name, count: 0, revenue: 0 };
+            }
+            itemCounts[item.menu_item_id].count += item.quantity;
+            itemCounts[item.menu_item_id].revenue += item.price * item.quantity;
+          });
+        });
+
+      const topItems = Object.values(itemCounts)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      setStats({
+        totalOrders: todayOrders.length,
+        revenue,
+        activeTablesCount: activeTableMap.size,
+        activeTableNames: activeTableNamesList,
+        topItems
+      });
+
+      // INSTANT RENDER: Unblock loading immediately for sub-second UI paint
       setLoading(false);
+
+      // Phase 2: Deferred Background Load for Dispositions & Stock Alerts
+      setTimeout(async () => {
+        try {
+          const { data: dispData } = await supabase
+            .from('prepared_food_dispositions')
+            .select('*')
+            .eq('restaurant_id', restId)
+            .gte('created_at', new Date(startOfDay).toISOString());
+
+          const dispositionsList = dispData || [];
+
+          const todayCancelledOrders = allOrders.filter(o => {
+            const t = new Date(o.created_at).getTime();
+            return t >= startOfDay && t <= endOfDay && o.status === 'cancelled';
+          });
+
+          let beforePrep = 0;
+          let duringPrep = 0;
+          let afterPrep = 0;
+          let grossCancelledVal = 0;
+          let paidBeforeCancelVal = 0;
+
+          todayCancelledOrders.forEach(o => {
+            const oVal = getValidOrderTotal(o);
+            grossCancelledVal += oVal;
+            if (o.payment_status === 'paid' && o.refund_status !== 'processed') {
+              paidBeforeCancelVal += oVal;
+            }
+
+            const batches = o.batches || [];
+            const hasPostReady = batches.some(b => b.status === 'ready' || b.status === 'served');
+            const hasPrep = batches.some(b => b.status === 'preparing');
+
+            if (hasPostReady) {
+              afterPrep++;
+            } else if (hasPrep || o.inventory_consumed) {
+              duringPrep++;
+            } else {
+              beforePrep++;
+            }
+          });
+
+          const wasteDishes = dispositionsList.filter(d => d.disposition_type === 'waste');
+          const reallocatedDishes = dispositionsList.filter(d => d.disposition_type === 'reallocated');
+          const staffAndOtherDishes = dispositionsList.filter(d => ['staff_meal', 'complimentary', 'owner_internal', 'other'].includes(d.disposition_type));
+          const estimatedWasteCost = wasteDishes.reduce((sum, d) => sum + Number(d.cost_impact || 0), 0);
+          const netLoss = (grossCancelledVal - paidBeforeCancelVal) + estimatedWasteCost;
+
+          setCancellationStats({
+            totalCancelledToday: todayCancelledOrders.length,
+            beforePrepCount: beforePrep,
+            duringPrepCount: duringPrep,
+            afterPrepCount: afterPrep,
+            totalDispositionsCount: dispositionsList.length,
+            wasteDishesCount: wasteDishes.length,
+            reallocatedDishesCount: reallocatedDishes.length,
+            staffAndOtherDishesCount: staffAndOtherDishes.length,
+            totalCancelledGrossValue: grossCancelledVal,
+            paidBeforeCancelValue: paidBeforeCancelVal,
+            estimatedWasteFoodCost: estimatedWasteCost,
+            estimatedLoss: Math.max(0, netLoss)
+          });
+        } catch (e) {}
+
+        // Stock alerts deferred
+        try {
+          const { getRestaurantMenuStockMap } = await import('@/lib/inventoryEngine');
+          const sMap = await getRestaurantMenuStockMap(restId);
+          if (sMap) {
+            setStockAlerts({
+              outOfStock: sMap.outOfStockItems || [],
+              lowStock: sMap.lowStockItems || []
+            });
+          }
+        } catch (e) {}
+      }, 50);
+
     } catch (err) {
-      console.error('[Dashboard] loadDataForRest error:', err);
+      console.error('Error in loadDataForRest:', err);
       setLoading(false);
     }
-  }, [restaurant, contextRestaurant, timeFilter, computeMetricsForOrders, serverClockOffset]);
+  };
 
-  // Re-run computation when timeFilter changes
+  const [cancellationStats, setCancellationStats] = useState({
+    totalCancelledToday: 0,
+    beforePrepCount: 0,
+    duringPrepCount: 0,
+    afterPrepCount: 0,
+    totalDispositionsCount: 0,
+    wasteDishesCount: 0,
+    reallocatedDishesCount: 0,
+    staffAndOtherDishesCount: 0,
+    totalCancelledGrossValue: 0,
+    paidBeforeCancelValue: 0,
+    estimatedWasteFoodCost: 0,
+    estimatedLoss: 0
+  });
+
+  const [stockAlerts, setStockAlerts] = useState<{
+    outOfStock: Array<{ menuItemId: string; name: string; reasons: string[] }>;
+    lowStock: Array<{ menuItemId: string; name: string; reasons: string[]; maxServings: number }>;
+  }>({ outOfStock: [], lowStock: [] });
+
   useEffect(() => {
-    if (rawAllOrders.length > 0 && restaurant) {
-      const effectiveNow = Date.now() + serverClockOffset;
-      computeMetricsForOrders(rawAllOrders, { stats: tableOccupancy }, restaurant, timeFilter, effectiveNow);
-    }
-  }, [timeFilter, rawAllOrders, restaurant, computeMetricsForOrders, tableOccupancy, serverClockOffset]);
-
-  const debouncedReload = useCallback((restId: string) => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      loadDataForRest(restId, timeFilter);
-    }, 400);
-  }, [loadDataForRest, timeFilter]);
-
-  // Initial load & real-time subscriptions
-  useEffect(() => {
-    let channel: any = null;
     let activeRestId = '';
+    let channel: any = null;
 
-    async function init() {
+    const debouncedReload = (restId: string) => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        if (restId) loadDataForRest(restId);
+      }, 200);
+    };
+
+    async function initDashboard() {
       try {
         let restId = contextRestaurant?.id || contextProfile?.restaurant_id;
         if (!restId) {
           const user = await getActiveUser();
           restId = user?.restaurant_id;
         }
+
         if (!restId) {
           setLoading(false);
           return;
         }
-
+        
         activeRestId = restId;
-        await loadDataForRest(restId, 'today');
+        await loadDataForRest(restId);
 
-        // Supabase Realtime subscriptions
+        // Request browser push notification permission
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+
         channel = supabase
-          .channel(`dashboard_ops_${restId}`)
+          .channel(`overview_dashboard_${restId}`, {
+            config: {
+              broadcast: { self: true }
+            }
+          })
           .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restId}` },
-            () => debouncedReload(restId)
+            'broadcast',
+            { event: 'new-order' },
+            (payload) => {
+              if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                  new Notification('🚨 New Order Received!', {
+                    body: `New order received on your dashboard!`,
+                    icon: '/icon-192.png'
+                  });
+                } catch (e) {}
+              }
+              loadDataForRest(restId);
+            }
+          )
+          .on(
+            'broadcast',
+            { event: 'order-status-updated' },
+            () => loadDataForRest(restId)
           )
           .on(
             'postgres_changes',
-            { event: '*', schema: 'public', table: 'order_batches' },
-            () => debouncedReload(restId)
+            {
+              event: '*',
+              schema: 'public',
+              table: 'orders',
+              filter: `restaurant_id=eq.${restId}`
+            },
+            () => loadDataForRest(restId)
           )
           .on(
             'postgres_changes',
-            { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${restId}` },
+            {
+              event: '*',
+              schema: 'public',
+              table: 'order_batches'
+            },
+            () => loadDataForRest(restId)
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'inventory_items',
+              filter: `restaurant_id=eq.${restId}`
+            },
+            () => loadDataForRest(restId)
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'tables',
+              filter: `restaurant_id=eq.${restId}`
+            },
+            () => loadDataForRest(restId)
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'restaurants',
+              filter: `id=eq.${restId}`
+            },
             () => debouncedReload(restId)
           )
           .subscribe();
-      } catch (e) {
-        console.error('[Dashboard] init error:', e);
+      } catch (err) {
+        console.error('[Dashboard] initDashboard error:', err);
       } finally {
         setLoading(false);
       }
     }
 
-    init();
+    initDashboard();
+
+    const handleStorage = () => {
+      if (activeRestId) debouncedReload(activeRestId);
+    };
+    window.addEventListener('storage', handleStorage);
 
     return () => {
+      window.removeEventListener('storage', handleStorage);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (channel) supabase.removeChannel(channel);
     };
-  }, [loadDataForRest, debouncedReload, contextRestaurant?.id]);
+  }, []);
 
   const getStatusBadge = (status: Order['status']) => {
     switch (status) {
@@ -635,715 +385,523 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-pulse p-4">
-        <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded-lg" />
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-28 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 w-48 bg-slate-200 rounded" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 bg-slate-200 rounded-xl" />
           ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="h-96 lg:col-span-2 bg-slate-200 rounded-xl" />
+          <div className="h-96 bg-slate-200 rounded-xl" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-12">
-      {/* ======================================================== */}
-      {/* TOP HEADER & SHIFT FILTERS                               */}
-      {/* ======================================================== */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 dark:border-slate-800/80 pb-4">
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
-            {restaurant?.name || 'The Foody Hub'}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Operations Command Center • Realtime restaurant health & performance
-          </p>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Overview Dashboard</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Here is a snapshot of your restaurant today.</p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Priority 7: Shift Filter Segmented Controls */}
-          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-800 p-0.5 bg-slate-100/60 dark:bg-slate-900">
-            <button
-              type="button"
-              onClick={() => setTimeFilter('today')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                timeFilter === 'today'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeFilter('7d')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                timeFilter === '7d'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Last 7 Days
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimeFilter('30d')}
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                timeFilter === '30d'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              Last 30 Days
-            </button>
-          </div>
-
-          {/* Live Updates Ticker */}
-          <div className="text-xs font-mono font-medium text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Live Updates: {new Date(nowTime).toLocaleTimeString()}</span>
-          </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs md:text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm shrink-0">
+          {new Date().toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
         </div>
       </div>
 
-      {/* ======================================================== */}
-      {/* PRIORITY 6: COMPACT PROFESSIONAL DELAYED ORDERS BAR      */}
-      {/* ======================================================== */}
-      {delayedOrdersList.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-3">
-            <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shrink-0" />
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-              <span className="font-semibold text-slate-900 dark:text-white">
-                Delayed Orders: {delayedOrdersList.length}
-              </span>
-              <span className="text-slate-300 dark:text-slate-700">•</span>
-              <span className="text-slate-600 dark:text-slate-400">
-                Oldest Order: <strong className="font-medium text-slate-900 dark:text-white">{delayedOrdersList[0]?.table_name}</strong> • {delayedOrdersList[0]?.elapsedStr}
-              </span>
+      {/* Top Row: Revenue & Core Stats (4 Cards) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Revenue Today</p>
+              <span className="text-emerald-500 text-xs font-bold">Today</span>
             </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              size="sm"
-              onClick={() => setDelayedOrdersModalOpen(true)}
-              className="bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white font-medium text-xs rounded-lg shadow-xs cursor-pointer h-8 px-3.5"
-            >
-              View Orders
-            </Button>
-          </div>
-        </div>
-      )}
+            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">{formatPrice(stats.revenue)}</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{stats.totalOrders} valid orders</p>
+          </CardContent>
+        </Card>
 
-      {/* ======================================================== */}
-      {/* TOP-5 DELAYED ORDERS PANEL (SECTION 1: DELAYED ORDERS)    */}
-      {/* ======================================================== */}
-      {delayedOrdersList.length > 0 && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <div>
-              <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Top Delayed Orders</h3>
-              <p className="text-xs font-normal text-slate-500">Orders exceeding the 10-minute threshold sorted by oldest.</p>
+        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Orders</p>
+              <span className="text-blue-500 text-xs font-bold">Today</span>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setDelayedOrdersModalOpen(true)}
-              className="text-xs font-semibold rounded-lg h-8 cursor-pointer"
-            >
-              View All ({delayedOrdersList.length})
-            </Button>
-          </div>
+            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.totalOrders}</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{stats.totalOrders} non-cancelled</p>
+          </CardContent>
+        </Card>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50/75 dark:bg-slate-800/60 text-slate-500 font-bold uppercase tracking-wider text-[11px] border-b border-slate-100 dark:border-slate-800">
-                <tr>
-                  <th className="py-2.5 px-3">Table</th>
-                  <th className="py-2.5 px-3 text-center">Waiting Time</th>
-                  <th className="py-2.5 px-3">Assigned Waiter</th>
-                  <th className="py-2.5 px-3">Status</th>
-                  <th className="py-2.5 px-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                {delayedOrdersList.slice(0, 5).map((o) => (
-                  <tr 
-                    key={o.id}
-                    onClick={() => router.push(`/dashboard/orders?id=${o.id}`)}
-                    className="hover:bg-slate-50/75 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
-                  >
-                    <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-white">{o.table_name}</td>
-                    <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-600 dark:text-rose-400">
-                      {o.elapsedStr}
-                    </td>
-                    <td className="py-2.5 px-3 font-medium">{o.waiter}</td>
-                    <td className="py-2.5 px-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
-                        {o.status.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      <Link 
-                        href={`/dashboard/orders?id=${o.id}`}
-                        onClick={(e) => { e.stopPropagation(); }}
-                        className="inline-flex items-center justify-center h-7 text-xs font-semibold px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white cursor-pointer shadow-xs"
-                      >
-                        Open Order
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* 5 CORE SUMMARY KPI CARDS: 1-5 HIERARCHY                  */}
-      {/* ======================================================== */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
-        {/* 1. Revenue Today */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs p-4 flex flex-col justify-between space-y-2 min-w-0">
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
-              {timeFilter === 'today' ? 'Revenue Today' : timeFilter === '7d' ? 'Revenue (7 Days)' : 'Revenue (30 Days)'}
+        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Active Tables</p>
+              <span className="text-purple-500 text-xs font-bold">Live</span>
+            </div>
+            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.activeTablesCount}</h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              {stats.activeTableNames.length > 0 ? `Tables: ${stats.activeTableNames.join(', ')}` : '0 dining now'}
             </p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white leading-tight mt-1">
-              ₹{Math.round(revenueMetrics.settled > 0 ? revenueMetrics.settled : revenueMetrics.totalVolume).toLocaleString('en-IN')}
-            </h3>
-          </div>
-          <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
-            <div>
-              <span className="text-slate-400 block text-[10px]">Settled</span>
-              <span className="font-mono font-medium text-slate-700 dark:text-slate-300">₹{Math.round(revenueMetrics.settled).toLocaleString('en-IN')}</span>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Avg Order Value</p>
+              <span className="text-amber-500 text-xs font-bold">Per Order</span>
             </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Pending</span>
-              <span className="font-mono font-medium text-amber-600 dark:text-amber-400">₹{Math.round(revenueMetrics.pending).toLocaleString('en-IN')}</span>
-            </div>
-            <div>
-              <span className="text-slate-400 block text-[10px]">Cancelled</span>
-              <span className="font-mono font-medium text-slate-400">₹{Math.round(revenueMetrics.cancelled).toLocaleString('en-IN')}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Tables Occupied */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs p-4 flex flex-col justify-between space-y-2 min-w-0">
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Tables Occupied</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white leading-tight mt-1">
-              {tableOccupancy.occupied} of {tableOccupancy.total}
+            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">
+              {stats.totalOrders > 0 ? formatPrice(stats.revenue / stats.totalOrders) : '₹0'}
             </h3>
-          </div>
-          <p className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">{tableOccupancy.occupancyRate}% dining room occupied</p>
-        </div>
-
-        {/* 3. Orders Waiting */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs p-4 flex flex-col justify-between space-y-2 min-w-0">
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Orders Waiting</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white leading-tight mt-1">
-              {kitchenIntelligence.queueDepth}
-            </h3>
-          </div>
-          <p className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">New, preparing, ready</p>
-        </div>
-
-        {/* 4. Average Cooking Time */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs p-4 flex flex-col justify-between space-y-2 min-w-0">
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Average Cooking Time</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white leading-tight mt-1">
-              {commandCenterMetrics.kitchenAvgPrepStr}
-            </h3>
-          </div>
-          <p className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">Accepted → Ready</p>
-        </div>
-
-        {/* 5. Average Pickup Time */}
-        <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs p-4 flex flex-col justify-between space-y-2 min-w-0">
-          <div>
-            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Average Pickup Time</p>
-            <h3 className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white leading-tight mt-1">
-              {commandCenterMetrics.avgPickupTimeStr}
-            </h3>
-          </div>
-          <p className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">Ready → Served</p>
-        </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Per closed ticket</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* ======================================================== */}
-      {/* PRIORITY 3 & 8: LIVE TABLE OCCUPANCY (DIRECTLY AFTER KPIS) */}
-      {/* ======================================================== */}
-      <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs p-4 sm:p-5 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">Live Table Occupancy</h3>
-            <p className="text-xs font-normal text-slate-500 mt-0.5">Real-time dining room seating and QR status.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-              Occupied: {tableOccupancy.occupied} of {tableOccupancy.total} ({tableOccupancy.occupancyRate}%)
-            </span>
-            <a
-              href="/dashboard/tables"
-              onClick={(e) => { e.preventDefault(); router.push('/dashboard/tables'); }}
-              className="inline-flex items-center justify-center text-xs font-semibold h-8 px-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors shadow-xs cursor-pointer"
-            >
-              <span>Manage Tables</span>
-              <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
-            </a>
-          </div>
-        </div>
-
-        {/* Clean Progress Bar (Neutral track + Emerald fill) */}
-        <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-          <div
-            className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-            style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.occupied / tableOccupancy.total) * 100 : 0}%` }}
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 pt-1">
-          <span>{tableOccupancy.available} tables available</span>
-          <span>{tableOccupancy.paymentPending} bill payment pending</span>
-          <span>{tableOccupancy.occupied} dining actively</span>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* PRIORITY 4: LIVE OPERATIONS COMMAND CENTER (COLLAPSIBLE) */}
-      {/* ======================================================== */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center">
-              <Activity className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Live Operations Command Center</h2>
-              <p className="text-xs font-normal text-slate-500">Service speed, kitchen performance, and staff performance.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline">
-              Target Service Window: &lt; 15 mins
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLiveOperationsOpen(!liveOperationsOpen)}
-              className="text-xs font-semibold h-8 rounded-lg px-3 flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>{liveOperationsOpen ? 'Hide Live Operations' : 'View Live Operations'}</span>
-              {liveOperationsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            </Button>
-          </div>
-        </div>
-
-        {/* Collapsible Content */}
-        {liveOperationsOpen && (
-          <div className="space-y-6 pt-2 animate-in fade-in duration-200">
-            {/* 1. Kitchen Performance */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Kitchen Performance</h3>
-                <span className="text-xs text-slate-400 font-mono">Kitchen Live Speed</span>
+      {/* Dedicated Live Table Occupancy Card */}
+      <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-lg">
+                🪑
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Slowest Dish</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.slowestDish.name}>
-                    {kitchenIntelligence.slowestDish.name}
-                  </p>
-                  <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.slowestDish.avgPrep}</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fastest Dish</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.fastestDish.name}>
-                    {kitchenIntelligence.fastestDish.name}
-                  </p>
-                  <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.fastestDish.avgPrep}</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Oldest Order</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
-                    #{kitchenIntelligence.longestTicket.id} • {kitchenIntelligence.longestTicket.table}
-                  </p>
-                  <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.longestTicket.elapsed} waiting</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cancelled Dish</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.mostCancelledDish.name}>
-                    {kitchenIntelligence.mostCancelledDish.name}
-                  </p>
-                  <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.mostCancelledDish.count} cancelled</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl">
-                  <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Orders Waiting</p>
-                  <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">
-                    {kitchenIntelligence.queueDepth}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {kitchenIntelligence.queueDepth > 5 ? 'High Rush' : 'Normal Queue'}
-                  </p>
-                </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Live Table Occupancy</h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Real-time dining room seating and QR status</p>
               </div>
             </div>
-
-            {/* 2. Waiter Performance */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Waiter Performance</h3>
-                <span className="text-xs text-slate-400 font-mono">Realtime Staff Performance</span>
-              </div>
-              <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
-                <table className="w-full text-left border-collapse">
-                  <thead className="bg-slate-50/75 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                    <tr>
-                      <th className="py-2.5 px-3.5">Waiter</th>
-                      <th className="py-2.5 px-3.5 text-center">Pickup</th>
-                      <th className="py-2.5 px-3.5 text-center">Delivery</th>
-                      <th className="py-2.5 px-3.5 text-center">Orders</th>
-                      <th className="py-2.5 px-3.5 text-center">Tables</th>
-                      <th className="py-2.5 px-3.5 text-center">Delays</th>
-                      <th className="py-2.5 px-3.5 text-center">Fastest</th>
-                      <th className="py-2.5 px-3.5 text-center">Slowest</th>
-                      <th className="py-2.5 px-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium">
-                    {waiterSlaList.map((w, idx) => (
-                      <tr key={w.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="py-3 px-3.5 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold">
-                            {idx + 1}
-                          </span>
-                          <span>{w.name}</span>
-                        </td>
-                        <td className="py-3 px-3.5 text-center font-mono font-medium">{w.pickupAvg}</td>
-                        <td className="py-3 px-3.5 text-center font-mono font-medium">{w.serveAvg}</td>
-                        <td className="py-3 px-3.5 text-center font-mono font-medium">{w.ordersServed}</td>
-                        <td className="py-3 px-3.5 text-center font-mono">{w.activeTables}</td>
-                        <td className="py-3 px-3.5 text-center font-mono">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                            w.slaBreach > 0 ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                          }`}>
-                            {w.slaBreach}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3.5 text-center font-mono text-emerald-600 dark:text-emerald-400">{w.fastest}</td>
-                        <td className="py-3 px-3.5 text-center font-mono text-slate-500">{w.slowest}</td>
-                        <td className="py-3 px-3.5 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setSelectedWaiterModal(w)}
-                            className="text-xs font-semibold rounded-lg h-7 px-2.5 cursor-pointer"
-                          >
-                            View Details
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* 3. Service Timings */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Service Timings</h3>
-                <span className="text-xs text-slate-400 font-mono">Target: &lt; 15 mins</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Average Pickup Time</p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-mono leading-tight">{commandCenterMetrics.avgPickupTimeStr}</p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">Target: &lt; 45 sec</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Average Serve Time</p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-mono leading-tight">{commandCenterMetrics.avgServeTimeStr}</p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1">Target: &lt; 90 sec</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Delayed Orders</p>
-                  <p className={`text-xl sm:text-2xl font-bold font-mono leading-tight ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                    {delayedOrdersList.length}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">&gt; 10 min threshold</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Oldest Pending Order</p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-mono leading-tight">
-                    {commandCenterMetrics.longestWaitingOrder ? formatElapsedMs(nowTime - new Date(commandCenterMetrics.longestWaitingOrder.created_at).getTime()) : '0 sec'}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1 truncate">{commandCenterMetrics.longestWaitingOrder?.table_name || 'All On Time'}</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Average Cooking Time</p>
-                  <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-mono leading-tight">{commandCenterMetrics.kitchenAvgPrepStr}</p>
-                  <p className="text-xs text-slate-500 mt-1">Accepted → Ready</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Service Speed</p>
-                  <p className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono leading-tight">{commandCenterMetrics.slaSuccessRate}</p>
-                  <p className="text-xs text-slate-500 mt-1">Within 15 min Goal</p>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/50">
+                <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                {tableOccupancy.occupancyRate}% Occupied
+              </span>
+              <Link href="/dashboard/tables">
+                <Button variant="outline" size="sm" className="text-xs font-bold gap-1 rounded-xl">
+                  Manage Tables <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* ======================================================== */}
-      {/* RECENT ORDERS & TOP SELLING ITEMS                        */}
-      {/* ======================================================== */}
+          {/* Occupancy Progress Bar */}
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 mb-5 overflow-hidden flex">
+            <div
+              className="bg-rose-500 h-2.5 transition-all duration-500 ease-out"
+              style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.occupied / tableOccupancy.total) * 100 : 0}%` }}
+              title={`Occupied: ${tableOccupancy.occupied}`}
+            />
+            <div
+              className="bg-emerald-500 h-2.5 transition-all duration-500 ease-out"
+              style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.available / tableOccupancy.total) * 100 : 0}%` }}
+              title={`Available: ${tableOccupancy.available}`}
+            />
+            <div
+              className="bg-slate-400 h-2.5 transition-all duration-500 ease-out"
+              style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.inactive / tableOccupancy.total) * 100 : 0}%` }}
+              title={`Disabled: ${tableOccupancy.inactive}`}
+            />
+          </div>
+
+          {/* 4-Stat KPI Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
+              <p className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{tableOccupancy.total}</p>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Total Tables</p>
+            </div>
+            <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-xl p-3">
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-tight">{tableOccupancy.available}</p>
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mt-1">🟢 Available</p>
+            </div>
+            <div className="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-xl p-3">
+              <p className="text-2xl font-black text-rose-600 dark:text-rose-400 leading-tight">{tableOccupancy.occupied}</p>
+              <p className="text-xs font-bold text-rose-700 dark:text-rose-300 mt-1">🔴 Occupied</p>
+            </div>
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
+              <p className="text-2xl font-black text-slate-600 dark:text-slate-400 leading-tight">{tableOccupancy.inactive}</p>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">⚪ QR Disabled</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Second Section: Recent Orders (7 cols) + Top Selling Items (5 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Recent Orders List */}
-        <div className="lg:col-span-7 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
-          <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Recent Orders</h3>
-              <p className="text-xs font-normal text-slate-500 mt-0.5">Incoming orders across all tables.</p>
-            </div>
-            <a href="/dashboard/orders">
-              <Button variant="ghost" className="text-xs font-semibold gap-1 text-slate-600 dark:text-slate-300 cursor-pointer">
-                View All <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </a>
-          </div>
-
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {orders.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
-                <ShoppingBag className="h-8 w-8" />
-                No orders placed in this period.
+        <Card className="lg:col-span-7 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden">
+          <CardContent className="p-0">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Recent Orders</h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Latest incoming orders across all tables.</p>
               </div>
-            ) : (
-              orders.slice(0, 5).map((order) => (
-                <div key={order.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 dark:text-white text-sm">
-                        Order {getFormattedOrderId(order, restaurant?.name || '', orders)}
-                      </span>
-                      {getStatusBadge(order.status)}
-                    </div>
-                    <p className="text-xs text-slate-400 font-medium">
-                      {order.table_name || 'Table'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items • {formatExactTimestamp(order.created_at)}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100 dark:border-slate-800">
-                    <span className="font-bold text-slate-900 dark:text-white font-mono text-sm">
-                      {formatPrice(order.grand_total || order.total || 0)}
-                    </span>
-                    <Link href={`/dashboard/orders?id=${order.id}`}>
-                      <Button variant="outline" size="sm" className="h-7 text-xs font-semibold px-2.5 rounded-lg cursor-pointer">
-                        Manage
-                      </Button>
-                    </Link>
-                  </div>
+              <Link href="/dashboard/orders">
+                <Button variant="ghost" className="text-xs font-bold gap-1 text-emerald-600 dark:text-emerald-400">
+                  View All <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {orders.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm flex flex-col items-center gap-2">
+                  <ShoppingBag className="h-8 w-8" />
+                  No orders placed yet. Scan a QR code to place an order!
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+              ) : (
+                orders.slice(0, 5).map((order) => (
+                  <div key={order.id} className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 dark:text-white text-sm md:text-base">Order {getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
+                        {getStatusBadge(order.status)}
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold uppercase">
+                        {order.table_name || 'N/A'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items • {formatExactTimestamp(order.created_at)}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md truncate">
+                        {order.items.map(i => `${i.menu_item_name || (i as any).name || (i as any).item_name || 'Item'} x${i.quantity}`).join(', ')}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 dark:border-slate-800">
+                      {(() => {
+                        const validOrderTotal = () => {
+                          return calculateBillingTotals({
+                            items: order.items || [],
+                            batches: order.batches || [],
+                            discountAmount: Number(order.discount_amount || 0),
+                            offerCode: order.offer_code,
+                            specialInstructions: order.special_instructions,
+                            offers: restaurant?.settings?.offers || [],
+                            gstEnabled: restaurant?.settings?.gst_enabled !== false,
+                            gstPercentage: restaurant?.settings?.gst_percentage || 0,
+                            serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
+                            serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
+                            customCharges: restaurant?.settings?.custom_charges || []
+                          }).grandTotal;
+                        };
+                        return <span className="font-extrabold text-slate-900 dark:text-white">{formatPrice(validOrderTotal())}</span>;
+                      })()}
+                      <Link href={`/dashboard/orders?id=${order.id}`}>
+                        <Button variant="outline" size="sm">Manage</Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Top Selling Items */}
-        <div className="lg:col-span-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-xs p-4 sm:p-5">
-          <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white pb-3 border-b border-slate-100 dark:border-slate-800">
-            Top Selling Dishes
-          </h3>
-          {stats.topItems.length === 0 ? (
-            <div className="text-center py-8 text-slate-400 text-xs">
-              No dish sales recorded yet in this period.
-            </div>
-          ) : (
-            <div className="space-y-4 pt-3">
-              {stats.topItems.map((item, index) => (
-                <div key={item.name} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-400">
-                        {index + 1}
+        <Card className="lg:col-span-5 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+          <CardContent className="p-6">
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white pb-4 border-b border-slate-100 dark:border-slate-800">Top Selling Items</h3>
+            {stats.topItems.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-sm">
+                Complete orders to see top selling items.
+              </div>
+            ) : (
+              <div className="space-y-5 pt-4">
+                {stats.topItems.map((item, index) => (
+                  <div key={item.name} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 dark:text-slate-400">
+                          {index + 1}
+                        </span>
+                        {item.name}
                       </span>
-                      {item.name}
-                    </span>
-                    <span className="font-bold text-slate-900 dark:text-white font-mono">{item.count} sold</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{item.count} sold</span>
+                    </div>
+                    {/* Bar Visualization */}
+                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                        style={{ 
+                          width: `${(item.count / stats.topItems[0].count) * 100}%` 
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
+                      <span>Revenue Generated</span>
+                      <span>{formatPrice(item.revenue)}</span>
+                    </div>
                   </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
-                      style={{ 
-                        width: `${stats.topItems[0]?.count ? (item.count / stats.topItems[0].count) * 100 : 0}%` 
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                    <span>Revenue</span>
-                    <span className="font-mono">{formatPrice(item.revenue)}</span>
-                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Third Section: Inventory & Menu Stock Alerts */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+              Inventory & Menu Stock Alerts
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+              Live stock availability & shortage detection across your recipes & menu items.
+            </p>
+          </div>
+          <Link href="/dashboard/inventory">
+            <Button variant="outline" size="sm" className="text-xs font-bold gap-1 self-start sm:self-auto">
+              Manage Inventory <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Out of Stock Card */}
+          <Card className="border border-rose-200 dark:border-rose-900/50 rounded-2xl bg-rose-50/30 dark:bg-rose-950/20 overflow-hidden shadow-sm">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-rose-100 dark:border-rose-900/40 pb-2.5">
+                <span className="text-xs font-extrabold text-rose-900 dark:text-rose-200 uppercase tracking-wider">
+                  Out of Stock ({stockAlerts.outOfStock.length})
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-200">
+                  CRITICAL
+                </span>
+              </div>
+
+              {stockAlerts.outOfStock.length === 0 ? (
+                <div className="py-4 text-center text-xs font-bold text-slate-400 dark:text-slate-500">
+                  🎉 No out of stock items. All recipe ingredients are available!
                 </div>
-              ))}
-            </div>
-          )}
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {stockAlerts.outOfStock.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-rose-100 dark:border-rose-900/30 flex items-start justify-between gap-3 text-xs">
+                      <div>
+                        <span className="font-extrabold text-slate-900 dark:text-white block">{item.name}</span>
+                        <span className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold block mt-0.5">
+                          {item.reasons.join(' • ')}
+                        </span>
+                      </div>
+                      <Link href="/dashboard/inventory">
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 px-2 font-bold">
+                          Restock
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Low Stock Card */}
+          <Card className="border border-amber-200 dark:border-amber-900/50 rounded-2xl bg-amber-50/30 dark:bg-amber-950/20 overflow-hidden shadow-sm">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-amber-100 dark:border-amber-900/40 pb-2.5">
+                <span className="text-xs font-extrabold text-amber-900 dark:text-amber-200 uppercase tracking-wider">
+                  Low Stock ({stockAlerts.lowStock.length})
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                  WARNING
+                </span>
+              </div>
+
+              {stockAlerts.lowStock.length === 0 ? (
+                <div className="py-4 text-center text-xs font-bold text-slate-400 dark:text-slate-500">
+                  👍 No low stock items. All inventory levels are healthy!
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {stockAlerts.lowStock.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-amber-100 dark:border-amber-900/30 flex items-start justify-between gap-3 text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-slate-900 dark:text-white">{item.name}</span>
+                          <span className="text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 rounded">
+                            {item.maxServings} left
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold block mt-0.5">
+                          {item.reasons.join(' • ')}
+                        </span>
+                      </div>
+                      <Link href="/dashboard/inventory">
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/50 px-2 font-bold">
+                          Add Stock
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      {/* ======================================================== */}
-      {/* DELAYED ORDERS MODAL (PRIORITY 4)                         */}
-      {/* ======================================================== */}
-      <Dialog
-        isOpen={delayedOrdersModalOpen}
-        onClose={() => setDelayedOrdersModalOpen(false)}
-        title={`Delayed Orders (${delayedOrdersList.length})`}
-        size="lg"
-      >
-        <div className="space-y-4">
-          <p className="text-xs text-slate-500">
-            Showing all active orders exceeding the 10-minute service threshold. Click "Open Order" to open the live ticket directly.
-          </p>
-          <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-            {delayedOrdersList.length === 0 ? (
-              <p className="text-center py-6 text-slate-400 italic">No delayed orders currently.</p>
-            ) : (
-              delayedOrdersList.map((o) => (
-                <div key={o.id} className="py-3 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 px-2 rounded-lg transition-colors">
+      {/* Fourth Section: Order Cancellation & Prepared Food Waste Impact */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+              Order Cancellation & Prepared Food Waste Impact
+            </h3>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+              Breakdown of today's cancellations by stage, food disposition channels, and net financial loss.
+            </p>
+          </div>
+          <Link href="/dashboard/inventory">
+            <Button variant="outline" size="sm" className="text-xs font-bold gap-1 self-start sm:self-auto">
+              View Dispositions <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Cancellation by Stage */}
+          <Card className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                <span className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                  Cancellations By Stage
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  {cancellationStats.totalCancelledToday} Total Today
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-slate-800 dark:text-slate-200 block">Before Cooking</span>
+                    <span className="text-[10px] text-slate-400">Placed / Accepted</span>
+                  </div>
+                  <span className="font-extrabold text-slate-900 dark:text-white bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-lg text-xs">
+                    {cancellationStats.beforePrepCount}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-200/60 dark:border-amber-900/30">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-amber-900 dark:text-amber-200 block">During Cooking</span>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400">In Preparation</span>
+                  </div>
+                  <span className="font-extrabold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg text-xs">
+                    {cancellationStats.duringPrepCount}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-rose-50/60 dark:bg-rose-950/20 rounded-xl border border-rose-200/60 dark:border-rose-900/30">
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-rose-900 dark:text-rose-200 block">After Cooking / Served</span>
+                    <span className="text-[10px] text-rose-700 dark:text-rose-400">Ready / Served</span>
+                  </div>
+                  <span className="font-extrabold text-rose-800 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60 px-2 py-0.5 rounded-lg text-xs">
+                    {cancellationStats.afterPrepCount}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Prepared Food Dispositions */}
+          <Card className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                <span className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                  Cooked Food Dispositions
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
+                  {cancellationStats.totalDispositionsCount} Logged
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-xs">
+                <div className="flex items-center justify-between p-2.5 bg-blue-50/60 dark:bg-blue-950/20 rounded-xl border border-blue-200/60 dark:border-blue-900/30">
                   <div>
-                    <p className="font-bold text-slate-900 dark:text-white text-sm">
-                      {o.table_name} • <span className="font-normal text-slate-500">{o.dish}</span>
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Waiter: <strong className="text-slate-700 dark:text-slate-300">{o.waiter}</strong> • Status: {o.status}
-                    </p>
+                    <span className="font-bold text-blue-900 dark:text-blue-200 block">Reallocated / Resold</span>
+                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Given to other tables</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-sm font-bold font-mono text-rose-600 dark:text-rose-400">{o.elapsedStr}</p>
-                      <p className="text-[10px] text-slate-400 font-medium">waiting</p>
-                    </div>
-                    <Link 
-                      href={`/dashboard/orders?id=${o.id}`}
-                      onClick={() => setDelayedOrdersModalOpen(false)}
-                      className="inline-flex items-center justify-center bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold h-8 px-3 rounded-lg cursor-pointer shadow-xs"
-                    >
-                      Open Order
-                    </Link>
+                  <span className="font-extrabold text-blue-800 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded-lg text-xs">
+                    {cancellationStats.reallocatedDishesCount} dishes
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-200/60 dark:border-amber-900/30">
+                  <div>
+                    <span className="font-bold text-amber-900 dark:text-amber-200 block">Staff / Complimentary</span>
+                    <span className="text-[10px] text-amber-700 dark:text-amber-400">Internal consumption</span>
                   </div>
+                  <span className="font-extrabold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg text-xs">
+                    {cancellationStats.staffAndOtherDishesCount} dishes
+                  </span>
                 </div>
-              ))
-            )}
-          </div>
+
+                <div className="flex items-center justify-between p-2.5 bg-rose-50/60 dark:bg-rose-950/20 rounded-xl border border-rose-200/60 dark:border-rose-900/30">
+                  <div>
+                    <span className="font-bold text-rose-900 dark:text-rose-200 block">Discarded / Wasted</span>
+                    <span className="text-[10px] text-rose-700 dark:text-rose-400">Total food dumped</span>
+                  </div>
+                  <span className="font-extrabold text-rose-800 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60 px-2 py-0.5 rounded-lg text-xs">
+                    {cancellationStats.wasteDishesCount} dishes
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Financial Loss Breakdown */}
+          <Card className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                <span className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                  Unpaid Cancellation Loss
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300">
+                  ESTIMATED IMPACT
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-500">Gross Cancelled Bill Value:</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                    {formatPrice(cancellationStats.totalCancelledGrossValue, restaurant?.settings?.currency)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-500">Payments Retained / Paid:</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    +{formatPrice(cancellationStats.paidBeforeCancelValue, restaurant?.settings?.currency)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                  <span className="text-slate-500">Wasted Raw Ingredient Cost:</span>
+                  <span className="font-bold text-rose-600 dark:text-rose-400">
+                    -{formatPrice(cancellationStats.estimatedWasteFoodCost, restaurant?.settings?.currency)}
+                  </span>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/50">
+                  <div>
+                    <span className="font-black text-rose-900 dark:text-rose-200 block text-xs">Net Financial Loss:</span>
+                    <span className="text-[10px] text-rose-700 dark:text-rose-400 font-semibold">Uncollected bill + wasted stock</span>
+                  </div>
+                  <span className="font-black text-rose-600 dark:text-rose-400 text-sm">
+                    {formatPrice(cancellationStats.estimatedLoss, restaurant?.settings?.currency)}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </Dialog>
-
-      {/* ======================================================== */}
-      {/* WAITER DETAILS DRILLDOWN MODAL (PRIORITY 10 & 20I)         */}
-      {/* ======================================================== */}
-      {selectedWaiterModal && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150"
-          onClick={(e) => { if (e.target === e.currentTarget) setSelectedWaiterModal(null); }}
-        >
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">{selectedWaiterModal.name}</h3>
-                <p className="text-xs text-slate-500">Waiter Performance & Audit Log</p>
-              </div>
-              <button
-                type="button"
-                id="close-waiter-modal-btn"
-                onClick={() => setSelectedWaiterModal(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg cursor-pointer transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Orders Served</p>
-                  <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{selectedWaiterModal.ordersServed}</p>
-                </div>
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Average</p>
-                  <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{selectedWaiterModal.serveAvg}</p>
-                </div>
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Fastest</p>
-                  <p className="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 leading-tight">{selectedWaiterModal.fastest}</p>
-                </div>
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Slowest</p>
-                  <p className="text-xl sm:text-2xl font-bold font-mono text-slate-500 mt-1 leading-tight">{selectedWaiterModal.slowest}</p>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    Recent Deliveries Log (Click Order to Inspect)
-                  </h4>
-                  <span className="text-[10px] text-slate-400">Deep link enabled</span>
-                </div>
-                <div className="max-h-60 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 text-xs pr-1">
-                  {selectedWaiterModal.history && selectedWaiterModal.history.length > 0 ? (
-                    selectedWaiterModal.history.map((h: any, i: number) => {
-                      const href = h.orderId ? `/dashboard/orders?id=${h.orderId}` : '/dashboard/orders';
-                      return (
-                        <a
-                          key={i}
-                          href={href}
-                          onClick={(e) => { e.preventDefault(); router.push(href); }}
-                          className="py-2.5 px-3 flex justify-between items-center rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors group cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <span className="w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[11px] font-bold group-hover:scale-105 transition-transform shrink-0">
-                              {i + 1}
-                            </span>
-                            <div>
-                              <p className="font-semibold text-slate-900 dark:text-white text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                                {h.tableName || 'Table'} • <span className="font-normal text-slate-500">{h.dish || 'Order'}</span>
-                              </p>
-                              <p className="text-xs text-slate-400">{h.timestamp}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 text-xs">{h.durationStr}</span>
-                            <span className="inline-flex items-center text-[11px] font-medium text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
-                              Open <ChevronRight className="h-3 w-3 ml-0.5" />
-                            </span>
-                          </div>
-                        </a>
-                      );
-                    })
-                  ) : (
-                    <p className="text-xs text-slate-400 italic py-4 text-center">No recent deliveries recorded in this period.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }
