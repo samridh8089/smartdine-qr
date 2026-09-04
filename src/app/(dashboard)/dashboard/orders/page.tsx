@@ -1002,8 +1002,8 @@ export default function OrdersPage() {
       {/* Header section: title + actions + tabs all in one row */}
       <div className="shrink-0 flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-[36px] font-bold text-slate-900 dark:text-white tracking-tight leading-tight">Live Orders &amp; Requests</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-[14px] font-normal mt-1">Manage statuses, print bills, and resolve customer requests in real time.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Live Orders &amp; Requests</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-normal mt-0.5">Manage statuses, print bills, and resolve customer requests in real time.</p>
         </div>
 
         <div className="flex items-center gap-2">

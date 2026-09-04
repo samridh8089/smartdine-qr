@@ -1015,7 +1015,7 @@ export default function ReportsPage() {
       {/* HEADER & DATE RANGE FILTER */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4 print:hidden">
         <div>
-          <h1 className="text-[36px] font-bold text-slate-900 dark:text-white tracking-tight leading-tight">Analytics & Reports</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Analytics & Reports</h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
             Real-time sales performance, GST tax snapshots, portion analytics & accounting reports.
           </p>
@@ -1143,23 +1143,23 @@ export default function ReportsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 lg:gap-3.5">
         {kpiCards.map((kpi) => {
           return (
-            <Card 
+            <div 
               key={kpi.id} 
-              className={`bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs transition-all rounded-xl p-3.5 flex flex-col justify-between h-full min-h-[110px] ${kpi.cardBorder || ''}`}
+              className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-sm transition-all rounded-xl p-3.5 flex flex-col justify-between h-full min-h-[110px] ${kpi.cardBorder || ''}`}
             >
               <div className="space-y-1">
-                <span className="text-[10px] xl:text-[11px] font-semibold uppercase tracking-wider block text-slate-500 dark:text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider block text-slate-500 dark:text-slate-400">
                   {kpi.label}
                 </span>
-                <p className={`text-base xl:text-lg 2xl:text-xl font-bold font-mono tracking-tight whitespace-nowrap pt-1 ${kpi.valueColor}`}>
+                <p className={`text-lg xl:text-xl font-bold font-mono tracking-tight whitespace-nowrap pt-1 ${kpi.valueColor}`}>
                   {kpi.value}
                 </p>
               </div>
 
-              <p className="text-[10px] xl:text-[11px] text-slate-400 dark:text-slate-500 font-medium leading-tight pt-1">
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium leading-tight pt-1">
                 {kpi.desc}
               </p>
-            </Card>
+            </div>
           );
         })}
       </div>
@@ -1168,7 +1168,7 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
-            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">GST Tax Summary</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">GST Tax Summary</h3>
             <p className="text-xs text-slate-400 font-medium">Tax calculated from stored order snapshots for {salesSummary.periodLabel}.</p>
           </div>
           <Badge variant="success" className="font-mono text-xs">
@@ -1237,7 +1237,7 @@ export default function ReportsPage() {
               ⚡
             </div>
             <div>
-              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Kitchen SLA Intelligence</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Kitchen SLA Intelligence</h3>
               <p className="text-xs text-slate-400 font-medium">Automatic lifecycle velocity from order placement to table delivery.</p>
             </div>
           </div>
@@ -1249,22 +1249,22 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Accept Time</p>
-              <p className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white">{kitchenSlaStats.avgAcceptTimeSec} sec</p>
+              <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">{kitchenSlaStats.avgAcceptTimeSec} sec</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 60 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Prep Time</p>
-              <p className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white">{kitchenSlaStats.avgPrepTimeMin} min</p>
+              <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">{kitchenSlaStats.avgPrepTimeMin} min</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 15 min</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ready → Served</p>
-              <p className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white">{kitchenSlaStats.readyToServedSec} sec</p>
+              <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">{kitchenSlaStats.readyToServedSec} sec</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 90 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Fulfillment</p>
-              <p className="text-2xl lg:text-3xl font-bold text-indigo-600 dark:text-indigo-400">{kitchenSlaStats.totalFulfillmentMin} min</p>
+              <p className="text-xl sm:text-2xl font-bold font-mono text-indigo-600 dark:text-indigo-400">{kitchenSlaStats.totalFulfillmentMin} min</p>
               <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mt-1">End-to-End Delivery</p>
             </div>
           </div>
@@ -1279,7 +1279,7 @@ export default function ReportsPage() {
               🏆
             </div>
             <div>
-              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Waiter Performance Intelligence</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Waiter Performance Intelligence</h3>
               <p className="text-xs text-slate-400 font-medium">Productivity leaderboard, delivery speeds, and table turnaround.</p>
             </div>
           </div>
@@ -1337,7 +1337,7 @@ export default function ReportsPage() {
                 🪑
               </div>
               <div>
-                <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Table Turnover Intelligence</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Table Turnover Intelligence</h3>
                 <p className="text-xs text-slate-400 font-medium">Turnover counts, stay durations, and revenue density.</p>
               </div>
             </div>
@@ -1380,7 +1380,7 @@ export default function ReportsPage() {
                 🔥
               </div>
               <div>
-                <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Peak Hour Heatmap</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Peak Hour Heatmap</h3>
                 <p className="text-xs text-slate-400 font-medium">Hourly order rush and revenue distribution matrix.</p>
               </div>
             </div>
@@ -1460,7 +1460,7 @@ export default function ReportsPage() {
               ⚠️
             </div>
             <div>
-              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Kitchen Bottleneck Detection</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Kitchen Bottleneck Detection</h3>
               <p className="text-xs text-slate-400 font-medium">Automated identification of slow dishes, cancelled recipes, and stuck tickets.</p>
             </div>
           </div>
@@ -1525,7 +1525,7 @@ export default function ReportsPage() {
         <Card className="lg:col-span-2 border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
-              <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Item & Portion Performance</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Item & Portion Performance</h3>
               <p className="text-xs text-slate-400 font-medium">Distinct sales metrics for each dish and portion size.</p>
             </div>
             
@@ -1593,7 +1593,7 @@ export default function ReportsPage() {
         {/* 4. CATEGORY PERFORMANCE */}
         <Card className="lg:col-span-1 border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3">
-            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Category Performance</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Category Performance</h3>
             <p className="text-xs text-slate-400 font-medium">Sales breakdown across menu categories.</p>
           </CardHeader>
           <CardContent>
@@ -1622,7 +1622,7 @@ export default function ReportsPage() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Customer Analytics & Retention</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Customer Analytics & Retention</h3>
             <p className="text-xs text-slate-400 font-medium">Customer order counts, lifetime spending, and frequency for {salesSummary.periodLabel}.</p>
           </div>
         </div>
@@ -1631,25 +1631,25 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Total Guests</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{customerSummary.totalCustomers}</p>
+            <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">{customerSummary.totalCustomers}</p>
             <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1">Unique customer sessions</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">New Customers</p>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{customerSummary.newCustomers}</p>
+            <p className="text-xl sm:text-2xl font-bold font-mono text-blue-600 dark:text-blue-400 mt-1">{customerSummary.newCustomers}</p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">First-time visitors</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Returning Guests</p>
-            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">{customerSummary.returningCustomers}</p>
+            <p className="text-xl sm:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 mt-1">{customerSummary.returningCustomers}</p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Repeat diners</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Avg Order Value (AOV)</p>
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+            <p className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
               {formatPrice(customerSummary.avgAOV, restaurant?.settings?.currency || 'INR')}
             </p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Spend per order</p>
@@ -1659,7 +1659,7 @@ export default function ReportsPage() {
         {/* Top Customers Table */}
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3">
-            <h3 className="text-[28px] font-bold text-slate-900 dark:text-white tracking-tight">Top Spending Customers / Tables</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Top Spending Customers / Tables</h3>
             <p className="text-xs text-slate-400 font-medium">Ranked by total spending in the selected period.</p>
           </CardHeader>
           <CardContent>
@@ -1710,7 +1710,7 @@ export default function ReportsPage() {
       <Card className="border border-red-200/80 dark:border-red-950/60 bg-red-50/10 dark:bg-red-950/10 shadow-2xs rounded-xl">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
-            <h3 className="text-[28px] font-bold text-red-900 dark:text-red-300 tracking-tight">Order Cancellations & Loss Analysis</h3>
+            <h3 className="text-lg font-bold text-red-900 dark:text-red-300 tracking-tight">Order Cancellations & Loss Analysis</h3>
             <p className="text-xs text-red-600/80 dark:text-red-400/80 font-medium">Audit of cancelled orders and lost revenue during {salesSummary.periodLabel}.</p>
           </div>
           <div className="text-right">
