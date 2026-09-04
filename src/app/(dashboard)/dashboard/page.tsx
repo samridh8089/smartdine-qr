@@ -643,7 +643,7 @@ export default function DashboardPage() {
             {restaurant?.name || 'The Foody Hub'}
           </h1>
           <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 mt-1">
-            Operations Command Center • Realtime restaurant health & velocity
+            Operations Command Center • Realtime restaurant health & performance
           </p>
         </div>
 
@@ -723,105 +723,7 @@ export default function DashboardPage() {
       )}
 
       {/* ======================================================== */}
-      {/* PRIORITY 3 & 4: TOP 6 CORE SUMMARY CARDS (UNIFORM)       */}
-      {/* ======================================================== */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-        {/* 1. Revenue Today */}
-        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col justify-between h-full">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
-                {timeFilter === 'today' ? 'Revenue Today' : timeFilter === '7d' ? 'Revenue (7 Days)' : 'Revenue (30 Days)'}
-              </p>
-              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
-                ₹{Math.round(revenueMetrics.settled > 0 ? revenueMetrics.settled : revenueMetrics.totalVolume).toLocaleString('en-IN')}
-              </h3>
-            </div>
-            <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
-              <div>
-                <span className="text-slate-400 block text-[10px]">Settled</span>
-                <span className="font-mono font-medium text-slate-700 dark:text-slate-300">₹{Math.round(revenueMetrics.settled).toLocaleString('en-IN')}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px]">Pending</span>
-                <span className="font-mono font-medium text-amber-600 dark:text-amber-400">₹{Math.round(revenueMetrics.pending).toLocaleString('en-IN')}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px]">Cancelled</span>
-                <span className="font-mono font-medium text-slate-400">₹{Math.round(revenueMetrics.cancelled).toLocaleString('en-IN')}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 2. Delayed Orders */}
-        <Card className={`border rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between ${delayedOrdersList.length > 0 ? 'border-rose-200 dark:border-rose-900/60' : 'border-slate-200/80 dark:border-slate-800/80'}`}>
-          <CardContent className="p-4 flex flex-col justify-between h-full">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Delayed Orders</p>
-              <h3 className={`text-[36px] font-semibold font-mono leading-none mt-1 ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                {delayedOrdersList.length}
-              </h3>
-            </div>
-            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">&gt; 10 min waiting</p>
-          </CardContent>
-        </Card>
-
-        {/* 3. Tables Occupied */}
-        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col justify-between h-full">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Tables Occupied</p>
-              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
-                {tableOccupancy.occupied} of {tableOccupancy.total}
-              </h3>
-            </div>
-            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">{tableOccupancy.occupancyRate}% dining room occupied</p>
-          </CardContent>
-        </Card>
-
-        {/* 4. Orders Waiting */}
-        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col justify-between h-full">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Orders Waiting</p>
-              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
-                {kitchenIntelligence.queueDepth}
-              </h3>
-            </div>
-            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">New, preparing, ready</p>
-          </CardContent>
-        </Card>
-
-        {/* 5. Average Cooking Time */}
-        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col justify-between h-full">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Average Cooking Time</p>
-              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
-                {commandCenterMetrics.kitchenAvgPrepStr}
-              </h3>
-            </div>
-            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">Accepted → Ready</p>
-          </CardContent>
-        </Card>
-
-        {/* 6. Average Pickup Time */}
-        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
-          <CardContent className="p-4 flex flex-col justify-between h-full">
-            <div>
-              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Average Pickup Time</p>
-              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
-                {commandCenterMetrics.avgPickupTimeStr}
-              </h3>
-            </div>
-            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">Ready → Served</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ======================================================== */}
-      {/* PRIORITY 5 & 22: TOP-5 DELAYED ORDERS PANEL              */}
+      {/* TOP-5 DELAYED ORDERS PANEL (SECTION 1: DELAYED ORDERS)    */}
       {/* ======================================================== */}
       {delayedOrdersList.length > 0 && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-3">
@@ -880,6 +782,91 @@ export default function DashboardPage() {
       )}
 
       {/* ======================================================== */}
+      {/* 5 CORE SUMMARY KPI CARDS: 1-5 HIERARCHY                  */}
+      {/* ======================================================== */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        {/* 1. Revenue Today */}
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
+          <CardContent className="p-4 flex flex-col justify-between h-full">
+            <div>
+              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+                {timeFilter === 'today' ? 'Revenue Today' : timeFilter === '7d' ? 'Revenue (7 Days)' : 'Revenue (30 Days)'}
+              </p>
+              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
+                ₹{Math.round(revenueMetrics.settled > 0 ? revenueMetrics.settled : revenueMetrics.totalVolume).toLocaleString('en-IN')}
+              </h3>
+            </div>
+            <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+              <div>
+                <span className="text-slate-400 block text-[10px]">Settled</span>
+                <span className="font-mono font-medium text-slate-700 dark:text-slate-300">₹{Math.round(revenueMetrics.settled).toLocaleString('en-IN')}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Pending</span>
+                <span className="font-mono font-medium text-amber-600 dark:text-amber-400">₹{Math.round(revenueMetrics.pending).toLocaleString('en-IN')}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Cancelled</span>
+                <span className="font-mono font-medium text-slate-400">₹{Math.round(revenueMetrics.cancelled).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 2. Tables Occupied */}
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
+          <CardContent className="p-4 flex flex-col justify-between h-full">
+            <div>
+              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Tables Occupied</p>
+              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
+                {tableOccupancy.occupied} of {tableOccupancy.total}
+              </h3>
+            </div>
+            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">{tableOccupancy.occupancyRate}% dining room occupied</p>
+          </CardContent>
+        </Card>
+
+        {/* 3. Orders Waiting */}
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
+          <CardContent className="p-4 flex flex-col justify-between h-full">
+            <div>
+              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Orders Waiting</p>
+              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
+                {kitchenIntelligence.queueDepth}
+              </h3>
+            </div>
+            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">New, preparing, ready</p>
+          </CardContent>
+        </Card>
+
+        {/* 4. Average Cooking Time */}
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
+          <CardContent className="p-4 flex flex-col justify-between h-full">
+            <div>
+              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Average Cooking Time</p>
+              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
+                {commandCenterMetrics.kitchenAvgPrepStr}
+              </h3>
+            </div>
+            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">Accepted → Ready</p>
+          </CardContent>
+        </Card>
+
+        {/* 5. Average Pickup Time */}
+        <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs h-[148px] flex flex-col justify-between">
+          <CardContent className="p-4 flex flex-col justify-between h-full">
+            <div>
+              <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Average Pickup Time</p>
+              <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
+                {commandCenterMetrics.avgPickupTimeStr}
+              </h3>
+            </div>
+            <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">Ready → Served</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ======================================================== */}
       {/* PRIORITY 3 & 8: LIVE TABLE OCCUPANCY (DIRECTLY AFTER KPIS) */}
       {/* ======================================================== */}
       <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
@@ -928,7 +915,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <h2 className="text-[20px] font-semibold text-slate-900 dark:text-white">Live Operations Command Center</h2>
-              <p className="text-[13px] font-normal text-slate-500">Service speed, fulfillment velocity, and kitchen/waiter performance.</p>
+              <p className="text-[13px] font-normal text-slate-500">Service speed, kitchen performance, and staff performance.</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -954,7 +941,7 @@ export default function DashboardPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Kitchen Performance</h3>
-                <span className="text-xs text-slate-400 font-mono">Kitchen Live Velocity</span>
+                <span className="text-xs text-slate-400 font-mono">Kitchen Live Speed</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
                 <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
@@ -1001,60 +988,11 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 2. Live Service Timings */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Live Service Timings</h3>
-                <span className="text-xs text-slate-400 font-mono">Target: &lt; 15 mins</span>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Pickup Time</p>
-                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgPickupTimeStr}</p>
-                  <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 45 sec</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Serve Time</p>
-                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgServeTimeStr}</p>
-                  <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 90 sec</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Delayed Orders</p>
-                  <p className={`text-[36px] font-semibold font-mono leading-none ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-                    {delayedOrdersList.length}
-                  </p>
-                  <p className="text-[13px] text-slate-500 mt-2">&gt; 10 min threshold</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Oldest Pending Order</p>
-                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">
-                    {commandCenterMetrics.longestWaitingOrder ? formatElapsedMs(nowTime - new Date(commandCenterMetrics.longestWaitingOrder.created_at).getTime()) : '0 sec'}
-                  </p>
-                  <p className="text-[13px] text-slate-500 mt-2 truncate">{commandCenterMetrics.longestWaitingOrder?.table_name || 'All On Time'}</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Cooking Time</p>
-                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.kitchenAvgPrepStr}</p>
-                  <p className="text-[13px] text-slate-500 mt-2">Accepted → Ready</p>
-                </div>
-
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Service Speed</p>
-                  <p className="text-[36px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono leading-none">{commandCenterMetrics.slaSuccessRate}</p>
-                  <p className="text-[13px] text-slate-500 mt-2">Within 15 min Goal</p>
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Waiter Performance */}
+            {/* 2. Waiter Performance */}
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Waiter Performance</h3>
-                <span className="text-xs text-slate-400 font-mono">Realtime Staff Velocity</span>
+                <span className="text-xs text-slate-400 font-mono">Realtime Staff Performance</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
@@ -1107,6 +1045,55 @@ export default function DashboardPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            {/* 3. Service Timings */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Service Timings</h3>
+                <span className="text-xs text-slate-400 font-mono">Target: &lt; 15 mins</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Pickup Time</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgPickupTimeStr}</p>
+                  <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 45 sec</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Serve Time</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgServeTimeStr}</p>
+                  <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 90 sec</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Delayed Orders</p>
+                  <p className={`text-[36px] font-semibold font-mono leading-none ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                    {delayedOrdersList.length}
+                  </p>
+                  <p className="text-[13px] text-slate-500 mt-2">&gt; 10 min threshold</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Oldest Pending Order</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">
+                    {commandCenterMetrics.longestWaitingOrder ? formatElapsedMs(nowTime - new Date(commandCenterMetrics.longestWaitingOrder.created_at).getTime()) : '0 sec'}
+                  </p>
+                  <p className="text-[13px] text-slate-500 mt-2 truncate">{commandCenterMetrics.longestWaitingOrder?.table_name || 'All On Time'}</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Cooking Time</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.kitchenAvgPrepStr}</p>
+                  <p className="text-[13px] text-slate-500 mt-2">Accepted → Ready</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Service Speed</p>
+                  <p className="text-[36px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono leading-none">{commandCenterMetrics.slaSuccessRate}</p>
+                  <p className="text-[13px] text-slate-500 mt-2">Within 15 min Goal</p>
+                </div>
               </div>
             </div>
           </div>
