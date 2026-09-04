@@ -499,8 +499,8 @@ export default function TablesPage() {
       {/* Title Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-[36px] font-bold text-slate-900 dark:text-white tracking-tight leading-tight">Table Management</h2>
-          <p className="text-slate-500 text-[14px] font-normal mt-1">Generate QR codes for tables, merge dining groups, and monitor order flows by location.</p>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Table Management</h2>
+          <p className="text-xs text-slate-500 font-normal mt-0.5">Generate QR codes for tables, merge dining groups, and monitor order flows by location.</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedTableIds.length >= 2 && (
@@ -517,24 +517,24 @@ export default function TablesPage() {
       {/* Live Occupancy Header Widget */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <p className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Tables</p>
-          <p className="text-[34px] font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.total}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Tables</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.total}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <p className="text-[12px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Available</p>
-          <p className="text-[34px] font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 leading-tight">{tableStats.available}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Available</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 leading-tight">{tableStats.available}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <p className="text-[12px] font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Occupied</p>
-          <p className="text-[34px] font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 leading-tight">{tableStats.occupied}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Occupied</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 leading-tight">{tableStats.occupied}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <p className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">Inactive / QR Off</p>
-          <p className="text-[34px] font-bold font-mono text-slate-700 dark:text-slate-300 mt-1 leading-tight">{tableStats.inactive}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Inactive / QR Off</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-slate-700 dark:text-slate-300 mt-1 leading-tight">{tableStats.inactive}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs col-span-2 sm:col-span-1">
-          <p className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Occupancy %</p>
-          <p className="text-[34px] font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.occupancyRate}%</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Occupancy %</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.occupancyRate}%</p>
         </div>
       </div>
 
