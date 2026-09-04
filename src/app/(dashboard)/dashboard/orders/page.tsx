@@ -240,6 +240,27 @@ export default function OrdersPage() {
     setLoading(false);
   };
 
+  // Priority 9 (Phase-20E): Open Order deep-linking with auto-scroll, statusFilter unblocking, and focus
+  useEffect(() => {
+    if (!orderIdParam || orders.length === 0) return;
+    
+    setSelectedOrderId(orderIdParam);
+    const targetOrder = orders.find(o => o.id === orderIdParam);
+    if (targetOrder && statusFilter !== 'all' && targetOrder.status !== statusFilter) {
+      setStatusFilter('all');
+    }
+
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`order-item-${orderIdParam}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [orderIdParam, orders, statusFilter]);
+
   useEffect(() => {
     if (restaurant?.id) {
       loadInitialData(restaurant.id);
@@ -1068,10 +1089,11 @@ export default function OrdersPage() {
                   return (
                     <button
                       key={order.id}
+                      id={`order-item-${order.id}`}
                       onClick={() => handleSelectOrder(order)}
                       className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer ${
                         isSelected 
-                          ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-500/80 shadow-sm text-slate-900 dark:text-white' 
+                          ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-500/80 shadow-sm ring-2 ring-emerald-500/30 text-slate-900 dark:text-white' 
                           : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
                       }`}
                     >
