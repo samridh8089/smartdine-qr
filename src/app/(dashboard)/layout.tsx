@@ -296,8 +296,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Full RBAC navigation guard enforcing ALLOWED_PATHS[dbRole]
   useEffect(() => {
     if (!loading && profile) {
-      const allowed = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'];
-      if (!allowed.includes(pathname)) {
+      const allowedPaths = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'] || [];
+      const isAllowed = pathname === '/dashboard' || allowedPaths.some(p => pathname === p || pathname.startsWith(`${p}/`));
+      if (!isAllowed) {
         const defaultRoute = dbRole === 'kitchen' ? '/dashboard/kds' : (dbRole === 'waiter' || dbRole === 'cashier') ? '/dashboard/orders' : '/dashboard';
         router.replace(defaultRoute);
       }
@@ -418,7 +419,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Sidebar */}
           <aside className={`
-            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
+            fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}>
             {/* Logo Section */}
@@ -429,7 +430,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
               <button 
                 onClick={() => setSidebarOpen(false)} 
-                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                aria-label="Close sidebar"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -450,7 +452,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     else if (newRole === 'waiter') router.push('/dashboard/orders');
                     else router.push('/dashboard');
                   }}
-                  className="block w-full px-2.5 py-1.5 text-xs text-slate-200 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="block w-full px-2.5 py-1.5 text-xs text-slate-200 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/50 cursor-pointer"
                 >
                   <option value="owner">Owner Portal</option>
                   <option value="waiter">Waiter Portal</option>
@@ -472,7 +474,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     href={item.href}
                     onClick={() => setSidebarOpen(false)}
                     className={`
-                      flex items-center justify-between px-3.5 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer select-none
+                      flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-medium transition-colors group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
                       ${isActive 
                         ? 'bg-emerald-600 text-white shadow-xs font-semibold' 
                         : isLocked
