@@ -88,8 +88,10 @@ export default function LoginPage() {
       }
     }
 
-    // Navigation to dashboard for verified users
-    router.push('/dashboard');
+    // Navigation to dashboard for verified users with redirect preservation
+    const redirectParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('redirect') : null;
+    const targetUrl = redirectParam && redirectParam.startsWith('/dashboard') ? redirectParam : '/dashboard';
+    router.push(targetUrl);
     setLoading(false);
   };
 

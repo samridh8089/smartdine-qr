@@ -14,10 +14,140 @@ import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
 import { 
   Plus, Edit2, Trash2, Check, X, Tag, ListFilter, 
-  HelpCircle, Eye, EyeOff, AlertTriangle, Coffee, Sparkles, Camera, CheckCircle2, Upload
+  HelpCircle, Eye, EyeOff, AlertTriangle, Coffee, Sparkles, Camera, CheckCircle2, Upload, UtensilsCrossed
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
+
+interface MenuItemCardProps {
+  item: MenuItem;
+  onToggleAvailability: (id: string, current: boolean) => void;
+  onEdit: (item: MenuItem) => void;
+  onDelete: (id: string) => void;
+}
+
+function MenuItemCard({ item, onToggleAvailability, onEdit, onDelete }: MenuItemCardProps) {
+  const [imgError, setImgError] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  return (
+    <div className={`border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs overflow-hidden flex flex-col justify-between transition-all duration-200 hover:shadow-sm ${!item.is_available ? 'opacity-75 bg-slate-50/50 dark:bg-slate-950/50' : ''}`}>
+      {/* Fixed aspect-ratio image container (Priority 2: no CLS, no stretch, no clipping) */}
+      <div className="relative w-full aspect-[16/10] overflow-hidden bg-slate-100 dark:bg-slate-800/60 shrink-0 border-b border-slate-100 dark:border-slate-800">
+        {item.image_url && !imgError ? (
+          <>
+            {!imgLoaded && (
+              <div className="absolute inset-0 bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            )}
+            <img 
+              src={item.image_url} 
+              alt={item.name} 
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgError(true)}
+              className={`w-full h-full object-cover transition-transform duration-300 hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            />
+          </>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-850 p-4 text-center select-none">
+            <div className="h-10 w-10 rounded-full bg-slate-200/60 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-1.5">
+              <UtensilsCrossed className="h-5 w-5 stroke-[1.5]" />
+            </div>
+            <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+              {item.is_veg ? 'Vegetarian' : 'Non-Vegetarian'}
+            </span>
+          </div>
+        )}
+
+        {/* Dietary Pill Indicator */}
+        <span className="absolute top-2.5 left-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs px-2 py-0.5 rounded-md shadow-xs flex items-center gap-1.5 border border-slate-200/70 dark:border-slate-700/70 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
+          <span className={`h-2 w-2 rounded-full ${item.is_veg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+          <span>{item.is_veg ? 'Veg' : 'Non-Veg'}</span>
+        </span>
+
+        {/* Stock Status Indicator */}
+        {!item.is_available && (
+          <span className="absolute top-2.5 right-2.5 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-xs">
+            Out of Stock
+          </span>
+        )}
+      </div>
+
+      {/* Card Details (Priority 5 & 6: Unified Typography & Inventory Style) */}
+      <CardContent className="flex-1 flex flex-col justify-between p-4 space-y-3">
+        <div className="space-y-1.5">
+          <div className="flex items-start justify-between gap-2">
+            <h4 className="font-semibold text-slate-900 dark:text-white text-[15px] line-clamp-1" title={item.name}>
+              {item.name}
+            </h4>
+            <span className="font-semibold font-mono text-slate-950 dark:text-white text-[15px] shrink-0">
+              {formatPrice(item.price)}
+            </span>
+          </div>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed min-h-[2.5rem]">
+            {item.description || 'No description provided.'}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <Badge variant={item.is_veg ? 'veg' : 'non-veg'}>
+              {item.is_veg ? 'Veg' : 'Non-Veg'}
+            </Badge>
+            <Badge variant={item.is_available ? 'success' : 'error'}>
+              {item.is_available ? 'In Stock' : 'Out of Stock'}
+            </Badge>
+            <Link href="/dashboard/inventory">
+              <span className="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-md text-[10px] font-medium border border-slate-200/80 dark:border-slate-700/80 transition-colors cursor-pointer">
+                Recipe: Configurable →
+              </span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Card Actions */}
+        <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 mt-auto">
+          <button 
+            type="button"
+            onClick={() => onToggleAvailability(item.id, item.is_available)}
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+              item.is_available 
+                ? 'border-slate-200 dark:border-slate-700 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white bg-slate-50 dark:bg-slate-800/60' 
+                : 'border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100'
+            }`}
+          >
+            {item.is_available ? (
+              <>
+                <EyeOff className="h-3.5 w-3.5" /> Mark Out of Stock
+              </>
+            ) : (
+              <>
+                <Eye className="h-3.5 w-3.5" /> Mark In Stock
+              </>
+            )}
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onEdit(item)}
+              className="p-1.5 border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Edit dish"
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete(item.id)}
+              className="p-1.5 border border-rose-200 dark:border-rose-900 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer"
+              title="Delete dish"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </CardContent>
+    </div>
+  );
+}
 
 export default function MenuManagementPage() {
   const { restaurant, activeRole, planSpec } = useRestaurant();
@@ -130,26 +260,34 @@ export default function MenuManagementPage() {
 
   useEffect(() => {
     async function loadMenu() {
-      const user = await getActiveUser();
-      if (!user || !user.restaurant_id) return;
-      const restId = user.restaurant_id;
-      setRestaurantId(restId);
+      try {
+        const user = await getActiveUser();
+        const restId = restaurant?.id || user?.restaurant_id;
+        if (!restId) {
+          setLoading(false);
+          return;
+        }
+        setRestaurantId(restId);
 
-      const rest = await db.getRestaurantById(restId);
-      if (rest) {
-        setActivePlan(rest.subscription_plan);
+        const rest = restaurant || (await db.getRestaurantById(restId));
+        if (rest) {
+          setActivePlan(rest.subscription_plan);
+        }
+
+        const [cats, items] = await Promise.all([
+          db.getCategories(restId),
+          db.getMenuItems(restId)
+        ]);
+        setCategories(cats);
+        setMenuItems(items);
+      } catch (err) {
+        console.error('[MenuManagement] loadMenu error:', err);
+      } finally {
+        setLoading(false);
       }
-
-      const cats = await db.getCategories(restId);
-      setCategories(cats);
-
-      const items = await db.getMenuItems(restId);
-      setMenuItems(items);
-
-      setLoading(false);
     }
     loadMenu();
-  }, []);
+  }, [restaurant?.id]);
 
   const refreshMenu = async () => {
     if (!restaurantId) return;
@@ -433,81 +571,13 @@ export default function MenuManagementPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {filteredItems.map((item) => (
-                <Card key={item.id} className={`flex flex-col ${!item.is_available ? 'opacity-70 bg-slate-50/50' : ''}`}>
-                  {item.image_url ? (
-                    <img 
-                      src={item.image_url} 
-                      alt={item.name} 
-                      className="h-44 w-full object-cover shrink-0 border-b border-slate-100"
-                    />
-                  ) : (
-                    <div className="h-44 bg-slate-50 flex items-center justify-center text-slate-300 shrink-0 border-b border-slate-100">
-                      No Image Available
-                    </div>
-                  )}
-                  <CardContent className="flex-1 flex flex-col justify-between p-5 space-y-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="font-extrabold text-slate-900 text-base line-clamp-1">{item.name}</h4>
-                        <span className="font-extrabold text-slate-950 shrink-0">{formatPrice(item.price)}</span>
-                      </div>
-                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed min-h-[2rem]">
-                        {item.description || 'No description provided.'}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                        <Badge variant={item.is_veg ? 'veg' : 'non-veg'}>
-                          {item.is_veg ? 'Veg' : 'Non-Veg'}
-                        </Badge>
-                        <Badge variant={item.is_available ? 'success' : 'error'}>
-                          {item.is_available ? 'In Stock' : 'Out of Stock'}
-                        </Badge>
-                        <Link href="/dashboard/inventory">
-                          <span className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 px-2 py-0.5 rounded-md text-[10px] font-bold hover:underline cursor-pointer">
-                            Recipe: Configurable →
-                          </span>
-                        </Link>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-auto">
-                      <button 
-                        onClick={() => toggleAvailability(item.id, item.is_available)}
-                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-1 rounded transition-colors ${
-                          item.is_available 
-                            ? 'text-slate-500 hover:text-slate-700 bg-slate-100' 
-                            : 'text-emerald-600 hover:text-emerald-700 bg-emerald-50'
-                        }`}
-                      >
-                        {item.is_available ? (
-                          <>
-                            <EyeOff className="h-3.5 w-3.5" /> Mark Out of Stock
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="h-3.5 w-3.5" /> Mark In Stock
-                          </>
-                        )}
-                      </button>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleOpenItemModal(item)}
-                          className="p-2 border border-slate-200 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-50 transition-colors"
-                          title="Edit dish"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="p-2 border border-rose-100 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Delete dish"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <MenuItemCard
+                  key={item.id}
+                  item={item}
+                  onToggleAvailability={toggleAvailability}
+                  onEdit={handleOpenItemModal}
+                  onDelete={handleDeleteItem}
+                />
               ))}
             </div>
           )}

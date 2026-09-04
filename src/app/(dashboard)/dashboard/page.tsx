@@ -12,29 +12,29 @@ import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
 import { 
   ArrowRight, Clock, AlertCircle, ShoppingBag,
-  Activity, X, ChevronRight, CheckCircle2
+  Activity, X, ChevronRight, CheckCircle2, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
 
-// Priority 7: Human-readable waiting time formatting (e.g. 22m 04s, 10h 43m)
+// Priority 5 & 7: Human-readable waiting time formatting (e.g. 8 min 37 sec, 22 min 04 sec, 2 hr 14 min)
 function formatHumanDuration(seconds: number): string {
-  if (isNaN(seconds) || seconds <= 0) return '0s';
+  if (isNaN(seconds) || seconds <= 0) return '0 sec';
   const sec = Math.round(seconds);
-  if (sec < 60) return `${sec}s`;
+  if (sec < 60) return `${sec} sec`;
   if (sec < 3600) {
     const m = Math.floor(sec / 60);
     const s = sec % 60;
-    return `${m}m ${String(s).padStart(2, '0')}s`;
+    return `${m} min ${String(s).padStart(2, '0')} sec`;
   }
   const h = Math.floor(sec / 3600);
   const remM = Math.floor((sec % 3600) / 60);
-  return `${h}h ${String(remM).padStart(2, '0')}m`;
+  return `${h} hr ${String(remM).padStart(2, '0')} min`;
 }
 
 function formatElapsedMs(ms: number): string {
-  if (!ms || ms < 0) return '0s';
+  if (!ms || ms < 0) return '0 sec';
   return formatHumanDuration(Math.floor(ms / 1000));
 }
 
@@ -96,13 +96,16 @@ export default function DashboardPage() {
 
   // Priority 1 & 2: Operations Metrics with Business Vocabulary
   const [commandCenterMetrics, setCommandCenterMetrics] = useState({
-    avgPickupTimeStr: '34s',
-    avgServeTimeStr: '1m 08s',
+    avgPickupTimeStr: '34 sec',
+    avgServeTimeStr: '1 min 08 sec',
     ordersAtRiskCount: 0,
     longestWaitingOrder: null as any,
-    kitchenAvgPrepStr: '8m 30s',
+    kitchenAvgPrepStr: '8 min 30 sec',
     slaSuccessRate: '95%'
   });
+
+  // Priority 4: Collapsible Live Operations Command Center (Default: Collapsed)
+  const [liveOperationsOpen, setLiveOperationsOpen] = useState(false);
 
   // Priority 4 & 5: Delayed Orders
   const [delayedOrdersList, setDelayedOrdersList] = useState<any[]>([]);
@@ -114,9 +117,9 @@ export default function DashboardPage() {
 
   // Priority 11: Kitchen Performance
   const [kitchenIntelligence, setKitchenIntelligence] = useState({
-    slowestDish: { name: 'Paneer Butter Masala', avgPrep: '14m 30s' },
-    fastestDish: { name: 'Crispy Corn', avgPrep: '4m 12s' },
-    longestTicket: { id: 'T-101', table: 'Table 1', elapsed: '14m 00s' },
+    slowestDish: { name: 'Paneer Butter Masala', avgPrep: '14 min 30 sec' },
+    fastestDish: { name: 'Crispy Corn', avgPrep: '4 min 12 sec' },
+    longestTicket: { id: 'T-101', table: 'Table 1', elapsed: '14 min 00 sec' },
     queueDepth: 0,
     mostCancelledDish: { name: 'None', count: 0 }
   });
@@ -444,14 +447,14 @@ export default function DashboardPage() {
     const slowestDish = prepEntries.length > 0 ? {
       name: prepEntries[0].dish,
       avgPrep: formatHumanDuration(prepEntries[0].avgSec)
-    } : { name: 'Paneer Butter Masala', avgPrep: '14m 30s' };
+    } : { name: 'Paneer Butter Masala', avgPrep: '14 min 30 sec' };
 
     const fastestDish = prepEntries.length > 0 ? {
       name: prepEntries[prepEntries.length - 1].dish,
       avgPrep: formatHumanDuration(prepEntries[prepEntries.length - 1].avgSec)
-    } : { name: 'Crispy Corn', avgPrep: '4m 12s' };
+    } : { name: 'Crispy Corn', avgPrep: '4 min 12 sec' };
 
-    let longestTicketPayload = { id: 'T-101', table: 'Table 1', elapsed: '14m 00s' };
+    let longestTicketPayload = { id: 'T-101', table: 'Table 1', elapsed: '14 min 00 sec' };
     if (oldestActive) {
       const waitSec = Math.max(1, Math.round((currentNow - new Date(oldestActive.created_at).getTime()) / 1000));
       longestTicketPayload = {
@@ -770,7 +773,7 @@ export default function DashboardPage() {
             <div>
               <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">Tables Occupied</p>
               <h3 className="text-[36px] font-semibold font-mono text-slate-900 dark:text-white leading-none mt-1">
-                {tableOccupancy.occupied} / {tableOccupancy.total}
+                {tableOccupancy.occupied} of {tableOccupancy.total}
               </h3>
             </div>
             <p className="text-[13px] font-normal text-slate-500 dark:text-slate-400 truncate pt-2 border-t border-slate-100 dark:border-slate-800">{tableOccupancy.occupancyRate}% dining room occupied</p>
@@ -877,70 +880,7 @@ export default function DashboardPage() {
       )}
 
       {/* ======================================================== */}
-      {/* LIVE OPERATIONS COMMAND CENTER (NEUTRAL SAAS)            */}
-      {/* ======================================================== */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center">
-              <Activity className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-[20px] font-semibold text-slate-900 dark:text-white">Live Operations Command Center</h2>
-              <p className="text-[13px] font-normal text-slate-500">Service speed and fulfillment velocity updated every second.</p>
-            </div>
-          </div>
-          <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400">
-            Target Service Window: &lt; 15 mins
-          </span>
-        </div>
-
-        {/* 6 Clean Neutral Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Avg Pickup Time</p>
-            <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgPickupTimeStr}</p>
-            <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 45s</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Avg Serve Time</p>
-            <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgServeTimeStr}</p>
-            <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 90s</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Delayed Orders</p>
-            <p className={`text-[36px] font-semibold font-mono leading-none ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
-              {delayedOrdersList.length}
-            </p>
-            <p className="text-[13px] text-slate-500 mt-2">&gt; 10 min threshold</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Oldest Pending Order</p>
-            <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">
-              {commandCenterMetrics.longestWaitingOrder ? formatElapsedMs(nowTime - new Date(commandCenterMetrics.longestWaitingOrder.created_at).getTime()) : '0s'}
-            </p>
-            <p className="text-[13px] text-slate-500 mt-2 truncate">{commandCenterMetrics.longestWaitingOrder?.table_name || 'All On Time'}</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Cooking Time</p>
-            <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.kitchenAvgPrepStr}</p>
-            <p className="text-[13px] text-slate-500 mt-2">Accepted → Ready</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
-            <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Service Speed %</p>
-            <p className="text-[36px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono leading-none">{commandCenterMetrics.slaSuccessRate}</p>
-            <p className="text-[13px] text-slate-500 mt-2">Within 15 min Goal</p>
-          </div>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* PRIORITY 12: LIVE TABLE OCCUPANCY (NEUTRAL PROGRESS BAR) */}
+      {/* PRIORITY 3 & 8: LIVE TABLE OCCUPANCY (DIRECTLY AFTER KPIS) */}
       {/* ======================================================== */}
       <Card className="border border-slate-200/80 dark:border-slate-800/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs">
         <CardContent className="p-5 space-y-3">
@@ -951,7 +891,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                Occupied: {tableOccupancy.occupied} / {tableOccupancy.total} ({tableOccupancy.occupancyRate}%)
+                Occupied: {tableOccupancy.occupied} of {tableOccupancy.total} ({tableOccupancy.occupancyRate}%)
               </span>
               <Link href="/dashboard/tables">
                 <Button variant="outline" size="sm" className="text-xs font-semibold h-8 rounded-lg cursor-pointer">
@@ -962,7 +902,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Clean Progress Bar (Neutral track + Emerald fill) */}
-          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div
               className="bg-emerald-500 h-full rounded-full transition-all duration-500"
               style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.occupied / tableOccupancy.total) * 100 : 0}%` }}
@@ -978,126 +918,199 @@ export default function DashboardPage() {
       </Card>
 
       {/* ======================================================== */}
-      {/* PRIORITY 10 & 22: WAITER PERFORMANCE TABLE               */}
+      {/* PRIORITY 4: LIVE OPERATIONS COMMAND CENTER (COLLAPSIBLE) */}
       {/* ======================================================== */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div>
-            <h3 className="text-[20px] font-semibold text-slate-900 dark:text-white">Waiter Performance</h3>
-            <p className="text-[13px] font-normal text-slate-500">Staff delivery velocity, table turnaround, and delayed orders.</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center">
+              <Activity className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-[20px] font-semibold text-slate-900 dark:text-white">Live Operations Command Center</h2>
+              <p className="text-[13px] font-normal text-slate-500">Service speed, fulfillment velocity, and kitchen/waiter performance.</p>
+            </div>
           </div>
-          <span className="text-[13px] text-slate-400 font-medium">Realtime Staff Velocity</span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-100 dark:border-slate-800">
-              <tr>
-                <th className="py-2.5 px-3">Waiter</th>
-                <th className="py-2.5 px-3 text-center">Pickup</th>
-                <th className="py-2.5 px-3 text-center">Delivery</th>
-                <th className="py-2.5 px-3 text-center">Orders</th>
-                <th className="py-2.5 px-3 text-center">Tables</th>
-                <th className="py-2.5 px-3 text-center">Delays</th>
-                <th className="py-2.5 px-3 text-center">Fastest</th>
-                <th className="py-2.5 px-3 text-center">Slowest</th>
-                <th className="py-2.5 px-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-              {waiterSlaList.map((w, idx) => (
-                <tr key={w.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
-                  <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold">
-                      {idx + 1}
-                    </span>
-                    <span>{w.name}</span>
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-mono font-medium">{w.pickupAvg}</td>
-                  <td className="py-2.5 px-3 text-center font-mono font-medium">{w.serveAvg}</td>
-                  <td className="py-2.5 px-3 text-center font-mono font-medium">{w.ordersServed}</td>
-                  <td className="py-2.5 px-3 text-center font-mono">{w.activeTables}</td>
-                  <td className="py-2.5 px-3 text-center font-mono">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                      w.slaBreach > 0 ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                    }`}>
-                      {w.slaBreach}
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-mono text-emerald-600 dark:text-emerald-400">{w.fastest}</td>
-                  <td className="py-2.5 px-3 text-center font-mono text-slate-500">{w.slowest}</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setSelectedWaiterModal(w)}
-                      className="text-xs font-semibold rounded-lg h-7 px-2.5 cursor-pointer"
-                    >
-                      View Details
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* PRIORITY 11 & 22: KITCHEN PERFORMANCE CARDS              */}
-      {/* ======================================================== */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <div>
-            <h3 className="text-[20px] font-semibold text-slate-900 dark:text-white">Kitchen Performance</h3>
-            <p className="text-[13px] font-normal text-slate-500">Cooking speed, orders waiting, and cancelled items.</p>
-          </div>
-          <span className="text-[13px] text-slate-400 font-medium">Kitchen Live Velocity</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Slowest Dish</p>
-            <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.slowestDish.name}>
-              {kitchenIntelligence.slowestDish.name}
-            </p>
-            <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.slowestDish.avgPrep}</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Fastest Dish</p>
-            <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.fastestDish.name}>
-              {kitchenIntelligence.fastestDish.name}
-            </p>
-            <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.fastestDish.avgPrep}</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Oldest Order</p>
-            <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
-              #{kitchenIntelligence.longestTicket.id} • {kitchenIntelligence.longestTicket.table}
-            </p>
-            <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.longestTicket.elapsed} waiting</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Cancelled Dish</p>
-            <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.mostCancelledDish.name}>
-              {kitchenIntelligence.mostCancelledDish.name}
-            </p>
-            <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.mostCancelledDish.count} cancelled</p>
-          </div>
-
-          <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Orders Waiting</p>
-            <p className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
-              {kitchenIntelligence.queueDepth}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              {kitchenIntelligence.queueDepth > 5 ? 'High Rush' : 'Normal Queue'}
-            </p>
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400 hidden sm:inline">
+              Target Service Window: &lt; 15 mins
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setLiveOperationsOpen(!liveOperationsOpen)}
+              className="text-xs font-semibold h-8 rounded-lg px-3 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>{liveOperationsOpen ? 'Hide Live Operations' : 'View Live Operations'}</span>
+              {liveOperationsOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </Button>
           </div>
         </div>
+
+        {/* Collapsible Content */}
+        {liveOperationsOpen && (
+          <div className="space-y-6 pt-2 animate-in fade-in duration-200">
+            {/* 1. Kitchen Performance */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Kitchen Performance</h3>
+                <span className="text-xs text-slate-400 font-mono">Kitchen Live Velocity</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Slowest Dish</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.slowestDish.name}>
+                    {kitchenIntelligence.slowestDish.name}
+                  </p>
+                  <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.slowestDish.avgPrep}</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Fastest Dish</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.fastestDish.name}>
+                    {kitchenIntelligence.fastestDish.name}
+                  </p>
+                  <p className="text-xs font-mono text-slate-500 mt-1">Avg: {kitchenIntelligence.fastestDish.avgPrep}</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Oldest Order</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                    #{kitchenIntelligence.longestTicket.id} • {kitchenIntelligence.longestTicket.table}
+                  </p>
+                  <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.longestTicket.elapsed} waiting</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Cancelled Dish</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenIntelligence.mostCancelledDish.name}>
+                    {kitchenIntelligence.mostCancelledDish.name}
+                  </p>
+                  <p className="text-xs font-mono text-slate-500 mt-1">{kitchenIntelligence.mostCancelledDish.count} cancelled</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800/80 rounded-xl">
+                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Orders Waiting</p>
+                  <p className="text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">
+                    {kitchenIntelligence.queueDepth}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {kitchenIntelligence.queueDepth > 5 ? 'High Rush' : 'Normal Queue'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Live Service Timings */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Live Service Timings</h3>
+                <span className="text-xs text-slate-400 font-mono">Target: &lt; 15 mins</span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Pickup Time</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgPickupTimeStr}</p>
+                  <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 45 sec</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Serve Time</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.avgServeTimeStr}</p>
+                  <p className="text-[13px] text-emerald-600 dark:text-emerald-400 font-medium mt-2">Target: &lt; 90 sec</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Delayed Orders</p>
+                  <p className={`text-[36px] font-semibold font-mono leading-none ${delayedOrdersList.length > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                    {delayedOrdersList.length}
+                  </p>
+                  <p className="text-[13px] text-slate-500 mt-2">&gt; 10 min threshold</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Oldest Pending Order</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">
+                    {commandCenterMetrics.longestWaitingOrder ? formatElapsedMs(nowTime - new Date(commandCenterMetrics.longestWaitingOrder.created_at).getTime()) : '0 sec'}
+                  </p>
+                  <p className="text-[13px] text-slate-500 mt-2 truncate">{commandCenterMetrics.longestWaitingOrder?.table_name || 'All On Time'}</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Average Cooking Time</p>
+                  <p className="text-[36px] font-semibold text-slate-900 dark:text-white font-mono leading-none">{commandCenterMetrics.kitchenAvgPrepStr}</p>
+                  <p className="text-[13px] text-slate-500 mt-2">Accepted → Ready</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200/80 dark:border-slate-800/80">
+                  <p className="text-[13px] font-medium text-slate-500 uppercase tracking-wider mb-1">Service Speed</p>
+                  <p className="text-[36px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono leading-none">{commandCenterMetrics.slaSuccessRate}</p>
+                  <p className="text-[13px] text-slate-500 mt-2">Within 15 min Goal</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Waiter Performance */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Waiter Performance</h3>
+                <span className="text-xs text-slate-400 font-mono">Realtime Staff Velocity</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 font-semibold border-b border-slate-100 dark:border-slate-800">
+                    <tr>
+                      <th className="py-2.5 px-3">Waiter</th>
+                      <th className="py-2.5 px-3 text-center">Pickup</th>
+                      <th className="py-2.5 px-3 text-center">Delivery</th>
+                      <th className="py-2.5 px-3 text-center">Orders</th>
+                      <th className="py-2.5 px-3 text-center">Tables</th>
+                      <th className="py-2.5 px-3 text-center">Delays</th>
+                      <th className="py-2.5 px-3 text-center">Fastest</th>
+                      <th className="py-2.5 px-3 text-center">Slowest</th>
+                      <th className="py-2.5 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {waiterSlaList.map((w, idx) => (
+                      <tr key={w.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold">
+                            {idx + 1}
+                          </span>
+                          <span>{w.name}</span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono font-medium">{w.pickupAvg}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-medium">{w.serveAvg}</td>
+                        <td className="py-2.5 px-3 text-center font-mono font-medium">{w.ordersServed}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">{w.activeTables}</td>
+                        <td className="py-2.5 px-3 text-center font-mono">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                            w.slaBreach > 0 ? 'bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                          }`}>
+                            {w.slaBreach}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center font-mono text-emerald-600 dark:text-emerald-400">{w.fastest}</td>
+                        <td className="py-2.5 px-3 text-center font-mono text-slate-500">{w.slowest}</td>
+                        <td className="py-2.5 px-3 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedWaiterModal(w)}
+                            className="text-xs font-semibold rounded-lg h-7 px-2.5 cursor-pointer"
+                          >
+                            View Details
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ======================================================== */}

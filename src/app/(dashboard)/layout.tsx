@@ -112,7 +112,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const user = await getActiveUser();
     if (!user) {
-      router.push('/login');
+      const redirectUrl = pathname && pathname.startsWith('/dashboard') ? `/login?redirect=${encodeURIComponent(pathname)}` : '/login';
+      router.push(redirectUrl);
       return;
     }
     if (user.role === 'super_admin') {
