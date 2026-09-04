@@ -128,3 +128,40 @@ export async function POST(req: Request) {
   }
 }
 
+export async function DELETE(req: Request) {
+  try {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+      return NextResponse.json({ error: 'Storage service key not configured' }, { status: 500 });
+    }
+    const { searchParams } = new URL(req.url);
+    const imageUrl = searchParams.get('url');
+    if (!imageUrl) {
+      return NextResponse.json({ error: 'Missing url parameter' }, { status: 400 });
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    let bucketName = 'menu-item-images';
+    let filePath = '';
+
+    if (imageUrl.includes('/menu-item-images/')) {
+      bucketName = 'menu-item-images';
+      filePath = decodeURIComponent(imageUrl.split('/menu-item-images/')[1] || '').replace(/\.\./g, '');
+    } else if (imageUrl.includes('/smartdine-images/')) {
+      bucketName = 'smartdine-images';
+      filePath = decodeURIComponent(imageUrl.split('/smartdine-images/')[1] || '').replace(/\.\./g, '');
+    } else {
+      return NextResponse.json({ success: true, message: 'Non-storage URL ignored' });
+    }
+
+    if (filePath) {
+      await supabaseAdmin.storage.from(bucketName).remove([filePath]);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return handleApiError('Upload-Image DELETE', err, 'Failed to remove image from storage.', 500);
+  }
+}
+
+
