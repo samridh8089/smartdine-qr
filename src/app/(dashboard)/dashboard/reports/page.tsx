@@ -1152,7 +1152,7 @@ export default function ReportsPage() {
                 <span className="text-[11px] font-bold uppercase tracking-wider block text-slate-500 dark:text-slate-400">
                   {kpi.label}
                 </span>
-                <p className={`text-lg xl:text-xl font-bold font-mono tracking-tight whitespace-nowrap pt-1 ${kpi.valueColor}`}>
+                <p className={`text-lg xl:text-xl font-black tracking-tight whitespace-nowrap pt-1 ${kpi.valueColor}`}>
                   {kpi.value}
                 </p>
               </div>
@@ -1250,22 +1250,22 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Accept Time</p>
-              <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">{kitchenSlaStats.avgAcceptTimeSec} sec</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.avgAcceptTimeSec} sec</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 60 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Prep Time</p>
-              <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">{kitchenSlaStats.avgPrepTimeMin} min</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.avgPrepTimeMin} min</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 15 min</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ready → Served</p>
-              <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white">{kitchenSlaStats.readyToServedSec} sec</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.readyToServedSec} sec</p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 90 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Fulfillment</p>
-              <p className="text-xl sm:text-2xl font-bold font-mono text-indigo-600 dark:text-indigo-400">{kitchenSlaStats.totalFulfillmentMin} min</p>
+              <p className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">{kitchenSlaStats.totalFulfillmentMin} min</p>
               <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mt-1">End-to-End Delivery</p>
             </div>
           </div>
@@ -1419,7 +1419,7 @@ export default function ReportsPage() {
               </div>
               <div className="p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                 <p className="text-[10px] font-bold text-slate-400 uppercase">Peak Rev/hr</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5 font-mono">
+                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">
                   {formatPrice(hourlyHeatmap.find(h => h.label === peakHourSummary.peakHour)?.revenue || 0)}
                 </p>
               </div>
@@ -1632,25 +1632,25 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Total Guests</p>
-            <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1">{customerSummary.totalCustomers}</p>
+            <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">{customerSummary.totalCustomers}</p>
             <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1">Unique customer sessions</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">New Customers</p>
-            <p className="text-xl sm:text-2xl font-bold font-mono text-blue-600 dark:text-blue-400 mt-1">{customerSummary.newCustomers}</p>
+            <p className="text-xl sm:text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">{customerSummary.newCustomers}</p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">First-time visitors</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Returning Guests</p>
-            <p className="text-xl sm:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 mt-1">{customerSummary.returningCustomers}</p>
+            <p className="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400 mt-1">{customerSummary.returningCustomers}</p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Repeat diners</p>
           </Card>
 
           <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl p-4">
             <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">Avg Order Value (AOV)</p>
-            <p className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+            <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
               {formatPrice(customerSummary.avgAOV, restaurant?.settings?.currency || 'INR')}
             </p>
             <p className="text-[11px] text-slate-400 font-medium mt-1">Spend per order</p>
@@ -1718,7 +1718,7 @@ export default function ReportsPage() {
             <span className="text-xs font-bold text-red-700 dark:text-red-400">
               {cancellationStats.cancelledCount} Cancelled Orders
             </span>
-            <p className="text-sm font-bold font-mono text-red-600 dark:text-red-400">
+            <p className="text-sm font-bold text-red-600 dark:text-red-400">
               - {formatPrice(cancellationStats.totalLost, restaurant?.settings?.currency || 'INR')}
             </p>
           </div>
