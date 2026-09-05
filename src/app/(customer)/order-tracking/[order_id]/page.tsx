@@ -333,7 +333,9 @@ export default function OrderTrackingPage({ params }: PageProps) {
     offerCode: order.offer_code,
     specialInstructions: order.special_instructions,
     offers: restaurant?.settings?.offers || [],
-    gstEnabled,
+    settings: restaurant?.settings,
+    gstNumber: restaurant?.gst_number,
+    gstEnabled: restaurant?.settings?.gst_enabled,
     gstPercentage,
     serviceChargeEnabled,
     serviceChargePercentage,
@@ -1163,11 +1165,24 @@ export default function OrderTrackingPage({ params }: PageProps) {
                   <span>GST (0%)</span>
                   <span>{formatPrice(0, restaurant.settings.currency)}</span>
                 </div>
-              ) : gstEnabled && calculatedGst > 0 ? (
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                  <span>GST ({gstPercentage}%)</span>
-                  <span>{formatPrice(calculatedGst, restaurant.settings.currency)}</span>
-                </div>
+              ) : calcResult.gstAmount > 0 ? (
+                calcResult.taxType === 'cgst_sgst' && calcResult.cgstPercentage > 0 ? (
+                  <>
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                      <span>CGST ({calcResult.cgstPercentage}%)</span>
+                      <span>{formatPrice(calcResult.cgstAmount, restaurant.settings.currency)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                      <span>SGST ({calcResult.sgstPercentage}%)</span>
+                      <span>{formatPrice(calcResult.sgstAmount, restaurant.settings.currency)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    <span>GST ({calcResult.taxRateSnapshot || 0}%)</span>
+                    <span>{formatPrice(calcResult.gstAmount, restaurant.settings.currency)}</span>
+                  </div>
+                )
               ) : null}
 
               {serviceChargeEnabled && calculatedServiceCharge > 0 && (

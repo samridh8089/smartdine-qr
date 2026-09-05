@@ -1657,7 +1657,7 @@ export const db = {
     const serviceChargePercentage = serviceChargeEnabled ? (restaurant.settings.service_charge_percentage || 0) : 0;
 
     const discAmt = Number(discountAmount || 0);
-    const taxCalc = calculateOrderTax(batchSubtotal, discAmt, restaurant.settings);
+    const taxCalc = calculateOrderTax(batchSubtotal, discAmt, restaurant.settings, restaurant.gst_number);
 
     const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
 
@@ -2027,7 +2027,7 @@ export const db = {
       discAmt = Math.max(Number(activeOrder.discount_amount || 0), batchDiscAmt);
     }
 
-    const taxCalc = calculateOrderTax(newSubtotal, discAmt, rest?.settings);
+    const taxCalc = calculateOrderTax(newSubtotal, discAmt, rest?.settings, rest?.gst_number);
     const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
 
     let customChargesTotal = 0;

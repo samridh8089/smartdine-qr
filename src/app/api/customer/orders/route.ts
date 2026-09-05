@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     // 3. TAX & BILLING COMPUTATION PHASE
     timer.start('tax');
     const discAmt = Number(discountAmount || 0);
-    const taxCalc = calculateOrderTax(subtotal, discAmt, restaurant.settings || {});
+    const taxCalc = calculateOrderTax(subtotal, discAmt, restaurant.settings || {}, restaurant.gst_number);
 
     const serviceChargeEnabled = restaurant.settings?.service_charge_enabled !== false;
     const serviceChargePercentage = serviceChargeEnabled ? (restaurant.settings?.service_charge_percentage || 0) : 0;
@@ -164,11 +164,7 @@ export async function POST(req: Request) {
 
       createdOrder = updatedOrderData || activeOrder;
     } else {
-      // Create new order matching PostgreSQL relational schema with exact 50/50 GST split
-      const initialGst = parseFloat(taxCalc.taxTotal.toFixed(2));
-      const initialCgst = parseFloat((initialGst / 2).toFixed(2));
-      const initialSgst = parseFloat((initialGst - initialCgst).toFixed(2));
-
+      // Create new order matching PostgreSQL relational schema with exact tax split
       const orderPayload = {
         restaurant_id: restaurantId,
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
@@ -179,11 +175,14 @@ export async function POST(req: Request) {
         special_instructions: specialInstructions || null,
         subtotal: parseFloat(subtotal.toFixed(2)),
         discount_total: taxCalc.discountTotal,
-        cgst_amount: initialCgst,
-        sgst_amount: initialSgst,
+        cgst_amount: taxCalc.cgstAmount,
+        sgst_amount: taxCalc.sgstAmount,
         igst_amount: taxCalc.igstAmount,
-        gst: initialGst,
-        tax_total: initialGst,
+        gst: taxCalc.taxTotal,
+        tax_total: taxCalc.taxTotal,
+        tax_type_snapshot: taxCalc.taxTypeSnapshot,
+        tax_rate_snapshot: taxCalc.taxRateSnapshot,
+        service_charge: serviceCharge,
         total: grandTotal,
         grand_total: grandTotal,
         created_at: new Date().toISOString(),

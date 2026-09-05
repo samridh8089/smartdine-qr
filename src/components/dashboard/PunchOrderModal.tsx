@@ -123,7 +123,9 @@ export default function PunchOrderModal({
   // Calculations using canonical Billing Engine (BUG-B1, BUG-B2)
   const calcResult = calculateBillingTotals({
     items: cart.map(c => ({ price: c.menuItem.price, quantity: c.quantity })),
-    gstEnabled: restaurant.settings.gst_enabled !== false,
+    settings: restaurant.settings,
+    gstNumber: restaurant.gst_number,
+    gstEnabled: restaurant.settings.gst_enabled,
     gstPercentage: restaurant.settings.gst_percentage || 0,
     serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
     serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,

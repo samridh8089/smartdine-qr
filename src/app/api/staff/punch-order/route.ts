@@ -95,7 +95,7 @@ export async function POST(req: Request) {
 
     // 3. TAX COMPUTATION PHASE
     timer.start('tax');
-    const taxCalc = calculateOrderTax(subtotal, 0, restaurant.settings || {});
+    const taxCalc = calculateOrderTax(subtotal, 0, restaurant.settings || {}, restaurant.gst_number);
     const serviceChargeEnabled = restaurant.settings?.service_charge_enabled !== false;
     const serviceChargePercentage = serviceChargeEnabled ? (restaurant.settings?.service_charge_percentage || 0) : 0;
     const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
@@ -123,6 +123,8 @@ export async function POST(req: Request) {
         supabase.from('orders').update({
           subtotal: (activeOrder.subtotal || 0) + subtotal,
           total_amount: (activeOrder.total_amount || 0) + grandTotal,
+          total: (activeOrder.total || activeOrder.total_amount || 0) + grandTotal,
+          grand_total: (activeOrder.grand_total || activeOrder.total || 0) + grandTotal,
           updated_at: new Date().toISOString()
         }).eq('id', activeOrder.id).select().single()
       ]);
@@ -143,7 +145,14 @@ export async function POST(req: Request) {
         sgst_amount: taxCalc.sgstAmount,
         igst_amount: taxCalc.igstAmount,
         total_tax: taxCalc.taxTotal,
+        gst: taxCalc.taxTotal,
+        tax_total: taxCalc.taxTotal,
+        tax_type_snapshot: taxCalc.taxTypeSnapshot,
+        tax_rate_snapshot: taxCalc.taxRateSnapshot,
+        service_charge: serviceCharge,
         total_amount: grandTotal,
+        total: grandTotal,
+        grand_total: grandTotal,
         items: itemsPayload,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()

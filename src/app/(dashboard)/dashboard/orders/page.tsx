@@ -742,7 +742,9 @@ export default function OrdersPage() {
       offerCode: selectedOrder.offer_code,
       specialInstructions: selectedOrder.special_instructions,
       offers: restaurant.settings.offers || [],
-      gstEnabled: restaurant.settings.gst_enabled !== false,
+      settings: restaurant.settings,
+      gstNumber: restaurant.gst_number,
+      gstEnabled: restaurant.settings.gst_enabled,
       gstPercentage: restaurant.settings.gst_percentage || 0,
       serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
@@ -796,6 +798,14 @@ export default function OrdersPage() {
                 ${validItems.map(i => `<tr><td>${i.quantity}x ${i.menu_item_name}</td><td class="text-right">${formatPrice(i.price * i.quantity, restaurant.settings.currency)}</td></tr>`).join('')}
               </table>
               <div class="divider"></div>
+              <p class="text-right">Subtotal: ${formatPrice(calcResult.validSubtotal, restaurant.settings.currency)}</p>
+              ${calcResult.discountAmount > 0 ? `<p class="text-right">Discount: -${formatPrice(calcResult.discountAmount, restaurant.settings.currency)}</p>` : ''}
+              ${calcResult.taxType === 'cgst_sgst' && calcResult.cgstAmount > 0 ? `
+                <p class="text-right">CGST (${calcResult.cgstPercentage}%): ${formatPrice(calcResult.cgstAmount, restaurant.settings.currency)}</p>
+                <p class="text-right">SGST (${calcResult.sgstPercentage}%): ${formatPrice(calcResult.sgstAmount, restaurant.settings.currency)}</p>
+              ` : (calcResult.gstAmount > 0 ? `<p class="text-right">GST: ${formatPrice(calcResult.gstAmount, restaurant.settings.currency)}</p>` : '')}
+              ${calcResult.serviceChargeAmount > 0 ? `<p class="text-right">Service Charge: ${formatPrice(calcResult.serviceChargeAmount, restaurant.settings.currency)}</p>` : ''}
+              <div class="divider"></div>
               <p class="bold text-right">Total: ${formatPrice(calcResult.grandTotal, restaurant.settings.currency)}</p>
             </body>
           </html>
@@ -814,7 +824,12 @@ export default function OrdersPage() {
         items: selectedOrder.items || [],
         batches: selectedOrder.batches || [],
         discountAmount: Number(selectedOrder.discount_amount || 0),
-        gstEnabled: restaurant.settings.gst_enabled !== false,
+        offerCode: selectedOrder.offer_code,
+        specialInstructions: selectedOrder.special_instructions,
+        offers: restaurant.settings.offers || [],
+        settings: restaurant.settings,
+        gstNumber: restaurant.gst_number,
+        gstEnabled: restaurant.settings.gst_enabled,
         gstPercentage: restaurant.settings.gst_percentage || 0,
         serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
         serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
@@ -1154,7 +1169,9 @@ export default function OrdersPage() {
                             offerCode: order.offer_code,
                             specialInstructions: order.special_instructions,
                             offers: restaurant?.settings?.offers || [],
-                            gstEnabled: restaurant?.settings?.gst_enabled !== false,
+                            settings: restaurant?.settings,
+                            gstNumber: restaurant?.gst_number,
+                            gstEnabled: restaurant?.settings?.gst_enabled,
                             gstPercentage: restaurant?.settings?.gst_percentage || 0,
                             serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
                             serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
@@ -1710,7 +1727,9 @@ export default function OrdersPage() {
                 offerCode: selectedOrder.offer_code,
                 specialInstructions: selectedOrder.special_instructions,
                 offers: restaurant.settings.offers || [],
-                gstEnabled: restaurant.settings.gst_enabled !== false,
+                settings: restaurant.settings,
+                gstNumber: restaurant.gst_number,
+                gstEnabled: restaurant.settings.gst_enabled,
                 gstPercentage: restaurant.settings.gst_percentage || 0,
                 serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
                 serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
@@ -1797,7 +1816,9 @@ export default function OrdersPage() {
                 offerCode: selectedOrder.offer_code,
                 specialInstructions: selectedOrder.special_instructions,
                 offers: restaurant?.settings?.offers || [],
-                gstEnabled: restaurant?.settings?.gst_enabled !== false,
+                settings: restaurant?.settings,
+                gstNumber: restaurant?.gst_number,
+                gstEnabled: restaurant?.settings?.gst_enabled,
                 gstPercentage: restaurant?.settings?.gst_percentage || 0,
                 serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
                 serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
@@ -2117,7 +2138,9 @@ export default function OrdersPage() {
                       offerCode: selectedOrder.offer_code,
                       specialInstructions: selectedOrder.special_instructions,
                       offers: restaurant.settings.offers || [],
-                      gstEnabled: restaurant.settings.gst_enabled !== false,
+                      settings: restaurant.settings,
+                      gstNumber: restaurant.gst_number,
+                      gstEnabled: restaurant.settings.gst_enabled,
                       gstPercentage: restaurant.settings.gst_percentage || 0,
                       serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
                       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
@@ -2144,11 +2167,24 @@ export default function OrdersPage() {
                             <span className="font-medium">{formatPrice(c.calculatedAmount, restaurant.settings.currency)}</span>
                           </div>
                         ))}
-                        {restaurant.settings.gst_enabled !== false && calcResult.gstAmount > 0 && (
-                          <div className="flex justify-between text-sm text-slate-500 dark:text-slate-400">
-                            <span>GST ({restaurant.settings.gst_percentage || 0}%)</span>
-                            <span className="font-medium">{formatPrice(calcResult.gstAmount, restaurant.settings.currency)}</span>
-                          </div>
+                        {calcResult.gstAmount > 0 && (
+                          calcResult.taxType === 'cgst_sgst' && calcResult.cgstPercentage > 0 ? (
+                            <>
+                              <div className="flex justify-between text-sm text-slate-500 dark:text-slate-400">
+                                <span>CGST ({calcResult.cgstPercentage}%)</span>
+                                <span className="font-medium">{formatPrice(calcResult.cgstAmount, restaurant.settings.currency)}</span>
+                              </div>
+                              <div className="flex justify-between text-sm text-slate-500 dark:text-slate-400">
+                                <span>SGST ({calcResult.sgstPercentage}%)</span>
+                                <span className="font-medium">{formatPrice(calcResult.sgstAmount, restaurant.settings.currency)}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="flex justify-between text-sm text-slate-500 dark:text-slate-400">
+                              <span>GST ({calcResult.taxRateSnapshot || 0}%)</span>
+                              <span className="font-medium">{formatPrice(calcResult.gstAmount, restaurant.settings.currency)}</span>
+                            </div>
+                          )
                         )}
                         {restaurant.settings.service_charge_enabled !== false && calcResult.serviceChargeAmount > 0 && (
                           <div className="flex justify-between text-sm text-slate-500 dark:text-slate-400">
