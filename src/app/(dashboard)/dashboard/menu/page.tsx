@@ -524,7 +524,7 @@ export default function MenuManagementPage() {
                         : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-100'
                     }`}
                   >
-                    <span className="truncate pr-8">{cat.name}</span>
+                    <span className="truncate pr-24 lg:pr-8">{cat.name}</span>
                     <Badge 
                       variant="neutral" 
                       className={selectedCategoryId === cat.id ? 'bg-emerald-700 border-emerald-500 text-emerald-100' : ''}
@@ -532,7 +532,7 @@ export default function MenuManagementPage() {
                       {catCount}
                     </Badge>
                   </button>
-                  <div className="absolute right-10 hidden group-hover:flex items-center gap-1">
+                  <div className="absolute right-10 flex lg:hidden lg:group-hover:flex items-center gap-1">
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleOpenCatModal(cat); }}
                       className={`p-1.5 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-800 shadow-sm`}
