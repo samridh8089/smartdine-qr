@@ -242,7 +242,7 @@ export default function OrdersPage() {
 
   // Priority 9 (Phase-20E): Open Order deep-linking with auto-scroll, statusFilter unblocking, and focus
   useEffect(() => {
-    if (!orderIdParam || orders.length === 0) return;
+    if (loading || !orderIdParam || orders.length === 0) return;
     
     setSelectedOrderId(orderIdParam);
     const targetOrder = orders.find(o => o.id === orderIdParam);
@@ -272,7 +272,7 @@ export default function OrdersPage() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [orderIdParam, orders, statusFilter]);
+  }, [orderIdParam, orders, statusFilter, loading]);
 
   useEffect(() => {
     if (restaurant?.id) {
