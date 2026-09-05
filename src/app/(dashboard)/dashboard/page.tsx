@@ -417,7 +417,7 @@ export default function DashboardPage() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Revenue Today</p>
               <span className="text-emerald-500 text-xs font-bold">Today</span>
             </div>
-            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">{formatPrice(stats.revenue)}</h3>
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">{formatPrice(stats.revenue)}</h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{stats.totalOrders} valid orders</p>
           </CardContent>
         </Card>
@@ -428,7 +428,7 @@ export default function DashboardPage() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Orders</p>
               <span className="text-blue-500 text-xs font-bold">Today</span>
             </div>
-            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.totalOrders}</h3>
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">{stats.totalOrders}</h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{stats.totalOrders} non-cancelled</p>
           </CardContent>
         </Card>
@@ -439,7 +439,7 @@ export default function DashboardPage() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Active Tables</p>
               <span className="text-purple-500 text-xs font-bold">Live</span>
             </div>
-            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.activeTablesCount}</h3>
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">{stats.activeTablesCount}</h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               {stats.activeTableNames.length > 0 ? `Tables: ${stats.activeTableNames.join(', ')}` : '0 dining now'}
             </p>
@@ -452,7 +452,7 @@ export default function DashboardPage() {
               <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Avg Order Value</p>
               <span className="text-amber-500 text-xs font-bold">Per Order</span>
             </div>
-            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 dark:text-white mt-1">
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">
               {stats.totalOrders > 0 ? formatPrice(stats.revenue / stats.totalOrders) : '₹0'}
             </h3>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Per closed ticket</p>
@@ -508,19 +508,19 @@ export default function DashboardPage() {
           {/* 4-Stat KPI Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
-              <p className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{tableOccupancy.total}</p>
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.total}</p>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Total Tables</p>
             </div>
             <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-xl p-3">
-              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-tight">{tableOccupancy.available}</p>
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-emerald-600 dark:text-emerald-400 leading-tight whitespace-nowrap">{tableOccupancy.available}</p>
               <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mt-1">🟢 Available</p>
             </div>
             <div className="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-xl p-3">
-              <p className="text-2xl font-black text-rose-600 dark:text-rose-400 leading-tight">{tableOccupancy.occupied}</p>
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-rose-600 dark:text-rose-400 leading-tight whitespace-nowrap">{tableOccupancy.occupied}</p>
               <p className="text-xs font-bold text-rose-700 dark:text-rose-300 mt-1">🔴 Occupied</p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
-              <p className="text-2xl font-black text-slate-600 dark:text-slate-400 leading-tight">{tableOccupancy.inactive}</p>
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-600 dark:text-slate-400 leading-tight whitespace-nowrap">{tableOccupancy.inactive}</p>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">⚪ QR Disabled</p>
             </div>
           </div>
