@@ -253,8 +253,21 @@ export default function OrdersPage() {
     const timer = setTimeout(() => {
       const el = document.getElementById(`order-item-${orderIdParam}`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.focus();
+      }
+
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      if (isMobile) {
+        const detailEl = document.getElementById('order-details-panel');
+        if (detailEl) {
+          detailEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      } else {
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
     }, 350);
 
@@ -452,6 +465,14 @@ export default function OrdersPage() {
   const handleSelectOrder = (order: Order) => {
     setSelectedOrderId(order.id);
     router.replace(`/dashboard/orders?id=${order.id}`);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setTimeout(() => {
+        const detailEl = document.getElementById('order-details-panel');
+        if (detailEl) {
+          detailEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
   };
 
   // Cancellation & Food Disposition State
@@ -1235,7 +1256,10 @@ export default function OrdersPage() {
           </div>
 
           {/* Right Side: Order Detail & Billing panel */}
-          <div className="hidden md:flex flex-1 flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm relative">
+          <div
+            id="order-details-panel"
+            className={`${orderIdParam ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm relative`}
+          >
             {selectedOrder && mergedGroupDetails && viewMode === 'merged' ? (
               <div className="flex-1 flex flex-col bg-white dark:bg-slate-900">
                 {/* Merged Group Header Bar */}
