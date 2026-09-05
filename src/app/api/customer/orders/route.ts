@@ -38,12 +38,13 @@ export async function POST(req: Request) {
 
     // 2. INVENTORY & MENU ITEM PARALLEL VALIDATION PHASE
     timer.start('inventory');
-    const [rRes, tRes, mRes, activeOrdersRes] = await Promise.all([
+    const [rRes, tRes, mRes, vRes, activeOrdersRes] = await Promise.all([
       supabase.from('restaurants').select('*').eq('id', restaurantId).maybeSingle(),
       (tableId && tableId !== 'takeaway' && tableId !== 'reservation') 
         ? supabase.from('tables').select('*').eq('id', tableId).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       supabase.from('menu_items').select('*').eq('restaurant_id', restaurantId),
+      supabase.from('menu_item_variants').select('id, menu_item_id, name, price, is_available'),
       (orderType === 'dine_in' && tableId && tableId !== 'takeaway' && tableId !== 'reservation')
         ? supabase.from('orders').select('*').eq('table_id', tableId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [], error: null })
@@ -62,8 +63,12 @@ export async function POST(req: Request) {
     };
 
     const allMenuItems = mRes.data || [];
+    const allVariants = vRes.data || [];
     let subtotal = 0;
     const itemsPayload: any[] = [];
+
+    const isValidUuid = (val?: any): boolean =>
+      typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
 
     for (const entry of items) {
       const itemId = entry.menuItemId || entry.id || entry.menu_item_id;
@@ -76,11 +81,22 @@ export async function POST(req: Request) {
       const price = Number(entry.price !== undefined ? entry.price : menuItem.price);
       subtotal += price * qty;
 
+      let safeVariantId: string | null = null;
+      let safeVariantName: string | null = entry.variantName || null;
+
+      if (entry.variantId && isValidUuid(entry.variantId)) {
+        const vMatch = allVariants.find((v: any) => v.id === entry.variantId.trim() && v.menu_item_id === menuItem.id);
+        if (vMatch) {
+          safeVariantId = vMatch.id;
+          safeVariantName = vMatch.name || safeVariantName;
+        }
+      }
+
       itemsPayload.push({
         menu_item_id: menuItem.id,
-        menu_item_name: entry.variantName ? `${menuItem.name} (${entry.variantName})` : menuItem.name,
-        variant_id: entry.variantId || null,
-        variant_name: entry.variantName || null,
+        menu_item_name: safeVariantName ? `${menuItem.name} (${safeVariantName})` : menuItem.name,
+        variant_id: safeVariantId,
+        variant_name: safeVariantName,
         quantity: qty,
         price,
         notes: entry.notes || null
@@ -142,7 +158,10 @@ export async function POST(req: Request) {
       }));
 
       if (addOnItemsPayload.length > 0) {
-        await supabase.from('order_items').insert(addOnItemsPayload);
+        const { error: itemsErr } = await supabase.from('order_items').insert(addOnItemsPayload);
+        if (itemsErr) {
+          console.error('Failed to insert add-on order items:', itemsErr);
+        }
       }
 
       const newSubtotal = parseFloat(((activeOrder.subtotal || 0) + subtotal).toFixed(2));
@@ -225,7 +244,10 @@ export async function POST(req: Request) {
       }));
 
       if (orderItemsPayload.length > 0) {
-        await supabase.from('order_items').insert(orderItemsPayload);
+        const { error: itemsErr } = await supabase.from('order_items').insert(orderItemsPayload);
+        if (itemsErr) {
+          console.error('Failed to insert order items:', itemsErr);
+        }
       }
     }
     timer.end('order_insert');

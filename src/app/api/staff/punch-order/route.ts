@@ -81,10 +81,13 @@ export async function POST(req: Request) {
       const price = Number(entry.price !== undefined ? entry.price : menuItem.price);
       subtotal += price * qty;
 
+      const rawVariantId = entry.variantId || entry.variant_id || null;
+      const validVariantId = (typeof rawVariantId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawVariantId.trim())) ? rawVariantId.trim() : null;
+
       itemsPayload.push({
         menu_item_id: menuItem.id,
         menu_item_name: entry.variantName ? `${menuItem.name} (${entry.variantName})` : menuItem.name,
-        variant_id: entry.variantId || entry.variant_id || null,
+        variant_id: validVariantId,
         variant_name: entry.variantName || entry.variant_name || null,
         quantity: qty,
         price,
@@ -108,28 +111,66 @@ export async function POST(req: Request) {
     let createdOrder: any = null;
 
     if (activeOrder) {
-      const newBatchIndex = (activeOrder.batches || []).length + 1;
-      const batchPayload = {
+      const { data: existingBatches } = await supabase
+        .from('order_batches')
+        .select('batch_number')
+        .eq('order_id', activeOrder.id);
+      const newBatchIndex = (existingBatches?.length || 0) + 1;
+
+      const { data: newBatchData, error: batchInsertErr } = await supabase
+        .from('order_batches')
+        .insert([{
+          order_id: activeOrder.id,
+          batch_number: newBatchIndex,
+          status: 'new',
+          special_instructions: specialInstructions || null
+        }])
+        .select()
+        .single();
+
+      if (batchInsertErr) {
+        console.error('Failed to create punch-order batch:', batchInsertErr);
+      }
+
+      // Insert items into relational order_items table
+      const addOnItemsPayload = itemsPayload.map((item: any) => ({
         order_id: activeOrder.id,
-        batch_number: newBatchIndex,
-        items: itemsPayload,
-        status: 'new',
-        special_instructions: specialInstructions || null,
-        subtotal
-      };
+        batch_id: newBatchData?.id || null,
+        menu_item_id: item.menu_item_id,
+        menu_item_name: item.menu_item_name,
+        quantity: item.quantity,
+        price: item.price,
+        variant_id: item.variant_id || null,
+        variant_name: item.variant_name || null,
+        notes: item.notes || null,
+        created_at: new Date().toISOString()
+      }));
 
-      const [batchRes, orderUpdateRes] = await Promise.all([
-        supabase.from('order_batches').insert([batchPayload]).select().single(),
-        supabase.from('orders').update({
-          subtotal: (activeOrder.subtotal || 0) + subtotal,
-          total_amount: (activeOrder.total_amount || 0) + grandTotal,
-          total: (activeOrder.total || activeOrder.total_amount || 0) + grandTotal,
-          grand_total: (activeOrder.grand_total || activeOrder.total || 0) + grandTotal,
-          updated_at: new Date().toISOString()
-        }).eq('id', activeOrder.id).select().single()
-      ]);
+      if (addOnItemsPayload.length > 0) {
+        const { error: itemsErr } = await supabase.from('order_items').insert(addOnItemsPayload);
+        if (itemsErr) {
+          console.error('Failed to insert add-on order items:', itemsErr);
+        }
+      }
 
-      createdOrder = orderUpdateRes.data || activeOrder;
+      const newSubtotal = parseFloat(((activeOrder.subtotal || 0) + subtotal).toFixed(2));
+      const newGst = parseFloat(((activeOrder.gst || 0) + taxCalc.taxTotal).toFixed(2));
+      const newTotal = parseFloat(((activeOrder.total || activeOrder.grand_total || 0) + grandTotal).toFixed(2));
+      const newCgst = parseFloat((newGst / 2).toFixed(2));
+      const newSgst = parseFloat((newGst - newCgst).toFixed(2));
+
+      const { data: updatedOrderData } = await supabase.from('orders').update({
+        subtotal: newSubtotal,
+        gst: newGst,
+        tax_total: newGst,
+        cgst_amount: newCgst,
+        sgst_amount: newSgst,
+        total: newTotal,
+        grand_total: newTotal,
+        updated_at: new Date().toISOString()
+      }).eq('id', activeOrder.id).select().single();
+
+      createdOrder = updatedOrderData || activeOrder;
     } else {
       const orderPayload = {
         restaurant_id: restaurantId,
@@ -139,7 +180,7 @@ export async function POST(req: Request) {
         order_type: orderType,
         payment_status: paymentStatus,
         special_instructions: specialInstructions || null,
-        subtotal,
+        subtotal: parseFloat(subtotal.toFixed(2)),
         discount_total: taxCalc.discountTotal,
         cgst_amount: taxCalc.cgstAmount,
         sgst_amount: taxCalc.sgstAmount,
@@ -150,10 +191,8 @@ export async function POST(req: Request) {
         tax_type_snapshot: taxCalc.taxTypeSnapshot,
         tax_rate_snapshot: taxCalc.taxRateSnapshot,
         service_charge: serviceCharge,
-        total_amount: grandTotal,
         total: grandTotal,
         grand_total: grandTotal,
-        items: itemsPayload,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -171,14 +210,32 @@ export async function POST(req: Request) {
 
       createdOrder = newOrderData;
 
-      await supabase.from('order_batches').insert([{
+      const { data: initialBatchData } = await supabase.from('order_batches').insert([{
         order_id: createdOrder.id,
         batch_number: 1,
-        items: itemsPayload,
         status: 'new',
-        special_instructions: specialInstructions || null,
-        subtotal
-      }]);
+        special_instructions: specialInstructions || null
+      }]).select().single();
+
+      const orderItemsPayload = itemsPayload.map((item: any) => ({
+        order_id: createdOrder.id,
+        batch_id: initialBatchData?.id || null,
+        menu_item_id: item.menu_item_id,
+        menu_item_name: item.menu_item_name,
+        quantity: item.quantity,
+        price: item.price,
+        variant_id: item.variant_id || null,
+        variant_name: item.variant_name || null,
+        notes: item.notes || null,
+        created_at: new Date().toISOString()
+      }));
+
+      if (orderItemsPayload.length > 0) {
+        const { error: itemsErr } = await supabase.from('order_items').insert(orderItemsPayload);
+        if (itemsErr) {
+          console.error('Failed to insert order items:', itemsErr);
+        }
+      }
     }
     timer.end('order_insert');
 
