@@ -1172,7 +1172,7 @@ export default function ReportsPage() {
             <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">GST Tax Summary</h3>
             <p className="text-xs text-slate-400 font-medium">Tax calculated from stored order snapshots for {salesSummary.periodLabel}.</p>
           </div>
-          <Badge variant="success" className="font-mono text-xs">
+          <Badge variant="success" className="font-bold text-xs">
             Stored Snapshots Active
           </Badge>
         </CardHeader>
@@ -1189,34 +1189,34 @@ export default function ReportsPage() {
                   <th className="py-3 px-4 text-right">Total GST Collected</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[15px] font-medium">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
                 <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Intrastate (CGST + SGST)</td>
-                  <td className="py-3.5 px-4 text-right font-mono">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-mono text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
+                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">
                     {formatPrice(salesSummary.cgstCollected + salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
                 <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Interstate (IGST)</td>
-                  <td className="py-3.5 px-4 text-right font-mono">{formatPrice(salesSummary.igstCollected > 0 ? salesSummary.taxableSales : 0, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-mono text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-mono text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-mono text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.igstCollected > 0 ? salesSummary.taxableSales : 0, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
+                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
+                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">
                     {formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
-                <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-bold text-sm border-t-2 border-slate-200 dark:border-slate-700">
-                  <td className="py-4 px-4 text-slate-900 dark:text-white">Total GST Collected</td>
-                  <td className="py-4 px-4 text-right font-mono">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-mono text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-mono text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-mono text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-mono text-emerald-700 dark:text-emerald-300">
+                <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-black text-xs border-t-2 border-slate-200 dark:border-slate-700">
+                  <td className="py-4 px-4 text-slate-900 dark:text-white font-black">Total GST Collected</td>
+                  <td className="py-4 px-4 text-right font-extrabold text-slate-900 dark:text-white">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">
                     {formatPrice(salesSummary.totalGstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
@@ -1308,18 +1308,18 @@ export default function ReportsPage() {
                       </span>
                       <span>{w.waiterName}</span>
                     </td>
-                    <td className="py-3 px-4 text-center font-mono font-bold text-slate-900 dark:text-white">{w.ordersServed}</td>
-                    <td className="py-3 px-4 text-center font-mono">{w.avgServeSec}s</td>
-                    <td className="py-3 px-4 text-center font-mono text-emerald-600 dark:text-emerald-400">{w.fastestSec}s</td>
-                    <td className="py-3 px-4 text-center font-mono text-rose-500">{w.slowestSec}s</td>
-                    <td className="py-3 px-4 text-center font-mono">
+                    <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{w.ordersServed}</td>
+                    <td className="py-3 px-4 text-center font-semibold">{w.avgServeSec}s</td>
+                    <td className="py-3 px-4 text-center font-semibold text-emerald-600 dark:text-emerald-400">{w.fastestSec}s</td>
+                    <td className="py-3 px-4 text-center font-semibold text-rose-500">{w.slowestSec}s</td>
+                    <td className="py-3 px-4 text-center">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
                         w.delayPercent > 10 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                       }`}>
                         {w.delayPercent}%
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-center font-mono font-bold">{w.activeTables}</td>
+                    <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{w.activeTables}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1360,11 +1360,11 @@ export default function ReportsPage() {
                   {tableTurnoverList.map((t) => (
                     <tr key={t.tableName} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{t.tableName}</td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-indigo-600 dark:text-indigo-400">{t.turnoverCount}</td>
-                      <td className="py-3 px-4 text-center font-mono">{t.avgStayDurationMin}m</td>
-                      <td className="py-3 px-4 text-center font-mono text-rose-500">{t.occupiedTimeMin}m</td>
-                      <td className="py-3 px-4 text-center font-mono text-emerald-600">{t.freeTimeMin}m</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold">{formatPrice(t.totalRevenue, restaurant?.settings?.currency || 'INR')}</td>
+                      <td className="py-3 px-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{t.turnoverCount}</td>
+                      <td className="py-3 px-4 text-center font-semibold">{t.avgStayDurationMin}m</td>
+                      <td className="py-3 px-4 text-center font-semibold text-rose-500">{t.occupiedTimeMin}m</td>
+                      <td className="py-3 px-4 text-center font-semibold text-emerald-600">{t.freeTimeMin}m</td>
+                      <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white">{formatPrice(t.totalRevenue, restaurant?.settings?.currency || 'INR')}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1444,7 +1444,7 @@ export default function ReportsPage() {
                   >
                     <p className="text-[10px] font-bold uppercase">{slot.label}</p>
                     <p className="text-sm font-bold mt-0.5">{slot.ordersCount}</p>
-                    <p className="text-[9px] font-mono opacity-80">{slot.ordersCount > 0 ? `₹${Math.round(slot.revenue)}` : '-'}</p>
+                    <p className="text-[9px] font-semibold opacity-80">{slot.ordersCount > 0 ? `₹${Math.round(slot.revenue)}` : '-'}</p>
                   </div>
                 );
               })}
@@ -1476,7 +1476,7 @@ export default function ReportsPage() {
               <p className="text-base font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.slowestDish.name}>
                 {kitchenBottlenecks.slowestDish.name}
               </p>
-              <p className="text-xs font-mono font-bold text-amber-700 dark:text-amber-400 mt-1">
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mt-1">
                 Avg: {kitchenBottlenecks.slowestDish.avgPrepMin} min prep
               </p>
             </div>
@@ -1486,7 +1486,7 @@ export default function ReportsPage() {
               <p className="text-base font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.mostCancelledDish.name}>
                 {kitchenBottlenecks.mostCancelledDish.name}
               </p>
-              <p className="text-xs font-mono font-bold text-rose-700 dark:text-rose-400 mt-1">
+              <p className="text-xs font-bold text-rose-700 dark:text-rose-400 mt-1">
                 {kitchenBottlenecks.mostCancelledDish.count} cancellations
               </p>
             </div>
@@ -1496,7 +1496,7 @@ export default function ReportsPage() {
               <p className="text-base font-bold text-slate-900 dark:text-white mt-1">
                 #{kitchenBottlenecks.longestPendingTicket.orderId} • {kitchenBottlenecks.longestPendingTicket.tableName}
               </p>
-              <p className="text-xs font-mono font-bold text-indigo-700 dark:text-indigo-400 mt-1">
+              <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 mt-1">
                 Waiting {kitchenBottlenecks.longestPendingTicket.elapsedMin} min
               </p>
             </div>
@@ -1565,7 +1565,7 @@ export default function ReportsPage() {
                       <th className="py-3 px-4 text-right">Gross Sales</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[15px] font-medium">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
                     {sortedPerformance.map((row) => (
                       <tr key={row.key} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                         <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{row.name}</td>
@@ -1578,8 +1578,8 @@ export default function ReportsPage() {
                             <span className="text-slate-400 text-xs">-</span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-center font-bold font-mono">{row.quantity}</td>
-                        <td className="py-3 px-4 text-right font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                        <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{row.quantity}</td>
+                        <td className="py-3 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">
                           {formatPrice(row.grossSales, restaurant?.settings?.currency || 'INR')}
                         </td>
                       </tr>
@@ -1608,7 +1608,7 @@ export default function ReportsPage() {
                       <p className="font-bold text-xs text-slate-900 dark:text-white">{cat.categoryName}</p>
                       <p className="text-[10px] text-slate-400 font-semibold">{cat.quantity} items sold</p>
                     </div>
-                    <span className="font-bold text-xs font-mono text-emerald-600 dark:text-emerald-400">
+                    <span className="font-black text-xs text-emerald-600 dark:text-emerald-400">
                       {formatPrice(cat.sales, restaurant?.settings?.currency || 'INR')}
                     </span>
                   </div>
@@ -1678,7 +1678,7 @@ export default function ReportsPage() {
                       <th className="py-3 px-4 text-right">Last Visit</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-[15px] font-medium">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
                     {topCustomers.map((cust, idx) => (
                       <tr key={cust.key} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                         <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -1687,11 +1687,11 @@ export default function ReportsPage() {
                           </span>
                           {cust.name}
                         </td>
-                        <td className="py-3.5 px-4 text-center font-mono font-bold">{cust.orderCount}</td>
-                        <td className="py-3.5 px-4 text-right font-mono text-slate-600 dark:text-slate-300">
+                        <td className="py-3.5 px-4 text-center font-bold text-slate-900 dark:text-white">{cust.orderCount}</td>
+                        <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">
                           {formatPrice(cust.avgOrderValue, restaurant?.settings?.currency || 'INR')}
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">
                           {formatPrice(cust.totalSpent, restaurant?.settings?.currency || 'INR')}
                         </td>
                         <td className="py-3.5 px-4 text-right text-xs text-slate-400">
@@ -1738,15 +1738,15 @@ export default function ReportsPage() {
                     <th className="py-3 px-4 text-right">Lost Value</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-red-100 dark:divide-red-900/30 text-[15px] font-medium">
+                <tbody className="divide-y divide-red-100 dark:divide-red-900/30 text-xs font-semibold">
                   {cancellationStats.reasons.map((cr, idx) => (
                     <tr key={idx} className="hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all">
                       <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full bg-red-500" />
                         {cr.reason}
                       </td>
-                      <td className="py-3 px-4 text-center font-mono font-bold text-red-600 dark:text-red-400">{cr.count}</td>
-                      <td className="py-3 px-4 text-right font-mono font-bold text-red-700 dark:text-red-300">
+                      <td className="py-3 px-4 text-center font-bold text-red-600 dark:text-red-400">{cr.count}</td>
+                      <td className="py-3 px-4 text-right font-black text-red-700 dark:text-red-300">
                         {formatPrice(cr.lostAmount, restaurant?.settings?.currency || 'INR')}
                       </td>
                     </tr>
@@ -1794,7 +1794,7 @@ export default function ReportsPage() {
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Gross Sales</p>
                     <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.grossSales)}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{salesSummary.totalOrders} total orders</p>
+                    <p className="text-[10px] text-slate-400 font-medium">{salesSummary.totalOrders} total orders</p>
                   </div>
                   <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-800">
                     <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase">Net Revenue</p>
@@ -1804,12 +1804,12 @@ export default function ReportsPage() {
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Total GST (5%)</p>
                     <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.totalGstCollected)}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">CGST: {formatPrice(salesSummary.cgstCollected)} | SGST: {formatPrice(salesSummary.sgstCollected)}</p>
+                    <p className="text-[10px] text-slate-400 font-medium">CGST: {formatPrice(salesSummary.cgstCollected)} | SGST: {formatPrice(salesSummary.sgstCollected)}</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Peak Hour Rush</p>
                     <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{peakHourSummary.peakHour}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{peakHourSummary.peakOrders} orders</p>
+                    <p className="text-[10px] text-slate-400 font-medium">{peakHourSummary.peakOrders} orders</p>
                   </div>
                 </div>
               </div>
@@ -1857,7 +1857,7 @@ export default function ReportsPage() {
                           <span className="font-bold text-slate-800 dark:text-slate-200">{w.name}</span>
                         </div>
                         <div className="text-right">
-                          <span className="font-mono font-bold text-slate-900 dark:text-white">{w.ordersServed} served</span>
+                          <span className="font-bold text-slate-900 dark:text-white">{w.ordersServed} served</span>
                           <span className="text-[10px] text-slate-400 ml-1.5">(Avg: {w.avgServeTimeSec}s)</span>
                         </div>
                       </div>
@@ -1870,15 +1870,15 @@ export default function ReportsPage() {
                   <div className="space-y-1.5 text-xs">
                     <p className="flex justify-between font-medium">
                       <span>Low Stock Ingredients:</span>
-                      <span className="font-mono font-bold text-amber-600">{lowStockItems.length} items</span>
+                      <span className="font-bold text-amber-600">{lowStockItems.length} items</span>
                     </p>
                     <p className="flex justify-between font-medium">
                       <span>Cancelled Orders:</span>
-                      <span className="font-mono font-bold text-rose-500">{cancellationStats.cancelledCount} orders</span>
+                      <span className="font-bold text-rose-500">{cancellationStats.cancelledCount} orders</span>
                     </p>
                     <p className="flex justify-between font-medium">
                       <span>Food Wastage Cost:</span>
-                      <span className="font-mono font-bold text-rose-600">
+                      <span className="font-black text-rose-600">
                         {formatPrice(
                           dispositionsList.reduce((acc: number, d: any) => acc + Number(d.raw_materials_wasted_cost || 0), 0)
                         )}
