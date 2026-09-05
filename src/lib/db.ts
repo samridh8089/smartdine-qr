@@ -1138,13 +1138,13 @@ export const db = {
     }
   },
 
-  async getTablesWithLiveStatus(restaurantId: string): Promise<{
+  async getTablesWithLiveStatus(restaurantId: string, preloadedOrders?: Order[]): Promise<{
     tables: Table[];
     stats: { total: number; available: number; occupied: number; inactive: number; occupancyRate: number };
   }> {
     const [rawTables, allOrders, rest] = await Promise.all([
       this.getTables(restaurantId),
-      this.getOrders(restaurantId),
+      preloadedOrders ? Promise.resolve(preloadedOrders) : this.getOrders(restaurantId),
       this.getRestaurantById(restaurantId)
     ]);
 
