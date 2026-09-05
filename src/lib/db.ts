@@ -573,26 +573,14 @@ export const db = {
   async getOffers(restaurantId: string): Promise<Offer[]> {
     try {
       const rest = await this.getRestaurantById(restaurantId);
-      if (rest?.settings?.offers && rest.settings.offers.length > 0) {
+      if (rest?.settings?.offers && Array.isArray(rest.settings.offers)) {
         saveStoredOffers(restaurantId, rest.settings.offers);
         return rest.settings.offers;
       }
     } catch (e) {}
 
-    try {
-      const { data, error } = await supabase
-        .from('offers')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .order('created_at', { ascending: false });
-
-      if (!error && data && data.length > 0) {
-        saveStoredOffers(restaurantId, data as Offer[]);
-        return data as Offer[];
-      }
-    } catch (e) {}
-
-    return getStoredOffers(restaurantId);
+    const stored = getStoredOffers(restaurantId);
+    return stored || [];
   },
 
   async createOffer(restaurantId: string, offerData: Partial<Offer>): Promise<Offer> {
@@ -613,7 +601,7 @@ export const db = {
       created_at: new Date().toISOString(),
     };
 
-    // 1. Sync to restaurant.settings.offers in Supabase DB
+    // 1. Sync to canonical restaurant.settings.offers in Supabase DB
     try {
       const rest = await this.getRestaurantById(restaurantId);
       if (rest) {
@@ -627,12 +615,7 @@ export const db = {
       }
     } catch (e) {}
 
-    // 2. Try inserting into offers table
-    try {
-      await supabase.from('offers').insert(newOffer);
-    } catch (e) {}
-
-    // 3. Save to localStorage
+    // 2. Save to localStorage cache
     const current = getStoredOffers(restaurantId);
     const updated = [newOffer, ...current.filter(o => o.id !== newOffer.id)];
     saveStoredOffers(restaurantId, updated);
@@ -640,36 +623,28 @@ export const db = {
     return newOffer;
   },
 
-  async updateOffer(id: string, offerData: Partial<Offer>): Promise<Offer> {
-    let targetRestId = '';
+  async updateOffer(id: string, offerData: Partial<Offer>, restaurantId?: string): Promise<Offer> {
+    let targetRestId = restaurantId || offerData.restaurant_id || '';
     
-    // Find target restaurant ID
-    if (typeof window !== 'undefined') {
+    // Find target restaurant ID from localStorage if not provided
+    if (!targetRestId && typeof window !== 'undefined') {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('smartdine_offers_')) {
           const raw = localStorage.getItem(key);
           if (raw) {
-            const list: Offer[] = JSON.parse(raw);
-            const found = list.find(o => o.id === id);
-            if (found) {
-              targetRestId = found.restaurant_id;
-              break;
-            }
+            try {
+              const list: Offer[] = JSON.parse(raw);
+              const found = list.find(o => o.id === id);
+              if (found) {
+                targetRestId = found.restaurant_id;
+                break;
+              }
+            } catch (e) {}
           }
         }
       }
     }
-
-    try {
-      const { data } = await supabase
-        .from('offers')
-        .update(offerData)
-        .eq('id', id)
-        .select()
-        .single();
-      if (data) targetRestId = data.restaurant_id;
-    } catch (e) {}
 
     if (targetRestId) {
       try {
@@ -688,26 +663,56 @@ export const db = {
       } catch (e) {}
     }
 
-    throw new Error('Offer updated');
-  },
-
-  async deleteOffer(id: string): Promise<void> {
-    try {
-      await supabase.from('offers').delete().eq('id', id);
-    } catch (e) {}
-
+    // Fallback update in local storage cache
     if (typeof window !== 'undefined') {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('smartdine_offers_')) {
-          const restId = key.replace('smartdine_offers_', '');
           const raw = localStorage.getItem(key);
           if (raw) {
-            const list: Offer[] = JSON.parse(raw);
-            const filtered = list.filter(o => o.id !== id);
-            localStorage.setItem(key, JSON.stringify(filtered));
-
             try {
+              const list: Offer[] = JSON.parse(raw);
+              const index = list.findIndex(o => o.id === id);
+              if (index >= 0) {
+                list[index] = { ...list[index], ...offerData };
+                localStorage.setItem(key, JSON.stringify(list));
+                return list[index];
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    }
+
+    return {
+      id,
+      restaurant_id: targetRestId,
+      title: offerData.title || 'Special Discount Offer',
+      code: (offerData.code || 'PROMO10').toUpperCase(),
+      description: offerData.description || '',
+      discount_type: offerData.discount_type || 'percentage',
+      discount_value: Number(offerData.discount_value || 10),
+      min_order_amount: Number(offerData.min_order_amount || 0),
+      banner_url: offerData.banner_url || '',
+      bg_gradient: offerData.bg_gradient || 'from-slate-950 via-purple-950 to-slate-900',
+      is_active: offerData.is_active !== false,
+      created_at: new Date().toISOString()
+    };
+  },
+
+  async deleteOffer(id: string, restaurantId?: string): Promise<void> {
+    if (typeof window !== 'undefined') {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('smartdine_offers_')) {
+          const restId = restaurantId || key.replace('smartdine_offers_', '');
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            try {
+              const list: Offer[] = JSON.parse(raw);
+              const filtered = list.filter(o => o.id !== id);
+              localStorage.setItem(key, JSON.stringify(filtered));
+
               const rest = await this.getRestaurantById(restId);
               if (rest) {
                 await supabase
@@ -719,6 +724,18 @@ export const db = {
           }
         }
       }
+    } else if (restaurantId) {
+      try {
+        const rest = await this.getRestaurantById(restaurantId);
+        if (rest) {
+          const currentOffers = rest.settings?.offers || [];
+          const filtered = currentOffers.filter(o => o.id !== id);
+          await supabase
+            .from('restaurants')
+            .update({ settings: { ...rest.settings, offers: filtered } })
+            .eq('id', restaurantId);
+        }
+      } catch (e) {}
     }
   },
   // --- Restaurant Management ---
