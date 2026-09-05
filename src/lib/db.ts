@@ -947,16 +947,20 @@ export const db = {
       const availableItems = allItems.filter(i => i.is_available);
       if (availableItems.length === 0) return [];
 
-      const { data: orderItems } = await supabase
-        .from('order_items')
-        .select('menu_item_id, quantity, is_cancelled, status')
+      const { data: recentOrders } = await supabase
+        .from('orders')
+        .select('order_items(menu_item_id, quantity, is_cancelled)')
         .eq('restaurant_id', restaurantId)
-        .limit(500);
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      const orderItems = (recentOrders || []).flatMap((o: any) => o.order_items || []);
 
       if (orderItems && orderItems.length > 0) {
         const itemSalesMap: Record<string, number> = {};
         orderItems.forEach((oi: any) => {
-          if (oi.is_cancelled || oi.status === 'cancelled') return;
+          if (oi.is_cancelled) return;
           itemSalesMap[oi.menu_item_id] = (itemSalesMap[oi.menu_item_id] || 0) + (oi.quantity || 1);
         });
 
@@ -1591,7 +1595,7 @@ export const db = {
       itemsPayload.push({
         menu_item_id: menuItem.id,
         menu_item_name: itemName,
-        variant_id: variantId,
+        variant_id: (typeof variantId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(variantId.trim())) ? variantId.trim() : null,
         variant_name: variantName,
         quantity: entry.quantity,
         price: itemPrice,
@@ -1958,7 +1962,8 @@ export const db = {
     const finalItemsPayload = itemsPayload.map(item => ({
       order_id: activeOrder.id,
       batch_id: newBatch.id,
-      ...item
+      ...item,
+      variant_id: (typeof item.variant_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.variant_id.trim())) ? item.variant_id.trim() : null
     }));
 
     console.log('BATCH ITEMS CREATED (Active Order Append):', JSON.stringify(finalItemsPayload));
@@ -2147,15 +2152,15 @@ export const db = {
       try {
         await supabase
           .from('order_items')
-          .update({ status: 'served', is_served: true })
+          .update({ is_served: true })
           .eq('order_id', id)
-          .neq('status', 'cancelled');
+          .eq('is_cancelled', false);
       } catch (e) {}
     } else if (status === 'cancelled') {
       try {
         await supabase
           .from('order_items')
-          .update({ status: 'cancelled', is_cancelled: true })
+          .update({ is_cancelled: true })
           .eq('order_id', id);
       } catch (e) {}
     }

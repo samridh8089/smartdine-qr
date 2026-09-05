@@ -2050,7 +2050,6 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
       if (targetStatus === 'cancelled') {
         try {
           await supabase.from('order_items').update({
-            status: 'cancelled',
             is_cancelled: true,
             notes: `[CANCELLED] ${cancellationReason || 'Cancelled'}`
           }).eq('batch_id', batchId);
