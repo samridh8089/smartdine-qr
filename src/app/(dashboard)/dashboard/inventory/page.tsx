@@ -9,7 +9,8 @@ import {
   formatReservedStockDisplay,
   areUnitsCompatible, 
   STANDARD_UNIT_GROUPS, 
-  normalizeUnit 
+  normalizeUnit,
+  UNIT_MAP
 } from '@/lib/inventoryUnits';
 import { 
   syncInventoryMenuAvailability, 
@@ -35,6 +36,37 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   }, []);
   if (!mounted) return null;
   return createPortal(children, document.body);
+}
+
+function getCompatibleUnits(unit: string) {
+  const norm = normalizeUnit(unit);
+  const mapping = UNIT_MAP[norm];
+  if (!mapping) return [{ value: unit, label: unit }];
+
+  if (mapping.category === 'mass') {
+    return [
+      { value: 'kg', label: 'kg (kilogram)' },
+      { value: 'gram', label: 'gram (g)' },
+      { value: 'mg', label: 'mg (milligram)' }
+    ];
+  }
+  if (mapping.category === 'volume') {
+    return [
+      { value: 'litre', label: 'litre (L)' },
+      { value: 'ml', label: 'millilitre (ml)' },
+      { value: 'tbsp', label: 'tbsp (~15ml)' },
+      { value: 'tsp', label: 'tsp (~5ml)' }
+    ];
+  }
+  if (mapping.category === 'count') {
+    return [
+      { value: 'piece', label: 'piece (pcs)' },
+      { value: 'dozen', label: 'dozen (12 pcs)' },
+      { value: 'box', label: 'box' },
+      { value: 'packet', label: 'packet' }
+    ];
+  }
+  return [{ value: unit, label: unit }];
 }
 
 export default function InventoryDashboardPage() {
@@ -119,6 +151,7 @@ export default function InventoryDashboardPage() {
     quantity: '',
     unit: 'kg',
     unit_cost: '',
+    cost_unit: 'kg',
     notes: ''
   });
 
@@ -240,6 +273,49 @@ export default function InventoryDashboardPage() {
 
   const todayWasteValue = wasteLogs.filter(w => w.created_at >= todayIso).reduce((sum, w) => sum + Number(w.cost_impact || 0), 0);
   const todayPurchaseValue = purchases.filter(p => p.created_at >= todayIso).reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+
+  // Purchase Modal Calculation & Live Preview
+  const selectedPurchaseItem = items.find(i => i.id === purchaseForm.inventory_item_id);
+  const purchaseCompatibleUnits = selectedPurchaseItem
+    ? getCompatibleUnits(selectedPurchaseItem.unit)
+    : [
+        { value: 'kg', label: 'kg (kilogram)' },
+        { value: 'gram', label: 'gram (g)' },
+        { value: 'litre', label: 'litre (L)' },
+        { value: 'ml', label: 'millilitre (ml)' },
+        { value: 'piece', label: 'piece (pcs)' }
+      ];
+
+  const previewQty = Number(purchaseForm.quantity) || 0;
+  const previewRate = Number(purchaseForm.unit_cost) || 0;
+  let previewQtyInItemUnit = previewQty;
+  let previewQtyInRateUnit = previewQty;
+  let previewTotalAmount = 0;
+  let previewCostInItemUnit = 0;
+
+  if (selectedPurchaseItem && previewQty > 0) {
+    const pUnit = purchaseForm.unit || selectedPurchaseItem.unit;
+    const pRateUnit = purchaseForm.cost_unit || pUnit;
+
+    if (normalizeUnit(pUnit) !== normalizeUnit(selectedPurchaseItem.unit) && areUnitsCompatible(pUnit, selectedPurchaseItem.unit)) {
+      try {
+        previewQtyInItemUnit = convertUnit(previewQty, pUnit, selectedPurchaseItem.unit);
+      } catch {
+        previewQtyInItemUnit = previewQty;
+      }
+    }
+
+    if (normalizeUnit(pUnit) !== normalizeUnit(pRateUnit) && areUnitsCompatible(pUnit, pRateUnit)) {
+      try {
+        previewQtyInRateUnit = convertUnit(previewQty, pUnit, pRateUnit);
+      } catch {
+        previewQtyInRateUnit = previewQty;
+      }
+    }
+
+    previewTotalAmount = parseFloat((previewQtyInRateUnit * previewRate).toFixed(2));
+    previewCostInItemUnit = previewQtyInItemUnit > 0 ? parseFloat((previewTotalAmount / previewQtyInItemUnit).toFixed(6)) : 0;
+  }
 
   // Recipe Costing Helper
   const calculateRecipeMetrics = (menuItem: any) => {
@@ -785,25 +861,40 @@ export default function InventoryDashboardPage() {
     }
   };
 
+
   // Purchase Entry Handler
   const handleSavePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { supplier_name, invoice_number, inventory_item_id, quantity, unit, unit_cost, notes } = purchaseForm;
+    const { supplier_name, invoice_number, inventory_item_id, quantity, unit, unit_cost, cost_unit, notes } = purchaseForm;
     const qty = Number(quantity);
     const cost = Number(unit_cost);
 
-    if (!inventory_item_id || qty <= 0) return alert('Select item and valid quantity');
+    if (!inventory_item_id || qty <= 0 || isNaN(qty)) return alert('Select item and valid quantity');
+    if (cost < 0 || isNaN(cost)) return alert('Enter a valid unit cost');
 
     try {
       const item = items.find(i => i.id === inventory_item_id);
       if (!item) return;
 
+      const purchaseUnit = unit || item.unit;
+      const rateUnit = cost_unit || purchaseUnit;
+
+      // 1. Convert purchase quantity into the item's base unit (e.g. 5 kg -> 5000 gram)
       let qtyInItemUnit = qty;
-      if (unit !== item.unit && areUnitsCompatible(unit, item.unit)) {
-        qtyInItemUnit = convertUnit(qty, unit, item.unit);
+      if (normalizeUnit(purchaseUnit) !== normalizeUnit(item.unit) && areUnitsCompatible(purchaseUnit, item.unit)) {
+        qtyInItemUnit = convertUnit(qty, purchaseUnit, item.unit);
       }
 
-      const totalAmount = qty * cost;
+      // 2. Convert quantity into the rate unit to calculate total purchase cost (e.g. 500 g @ ₹50/kg -> 0.5 kg * 50 = ₹25)
+      let qtyInRateUnit = qty;
+      if (normalizeUnit(purchaseUnit) !== normalizeUnit(rateUnit) && areUnitsCompatible(purchaseUnit, rateUnit)) {
+        qtyInRateUnit = convertUnit(qty, purchaseUnit, rateUnit);
+      }
+
+      const totalAmount = parseFloat((qtyInRateUnit * cost).toFixed(2));
+
+      // 3. Compute cost per item base unit (e.g. ₹200 / 5000 g = ₹0.04/g, ₹25 / 500 g = ₹0.05/g)
+      const costInItemUnit = qtyInItemUnit > 0 ? parseFloat((totalAmount / qtyInItemUnit).toFixed(6)) : item.cost_per_unit;
 
       const { data: purch } = await supabase.from('inventory_purchases').insert({
         restaurant_id: restaurantId,
@@ -820,7 +911,7 @@ export default function InventoryDashboardPage() {
           inventory_item_id,
           quantity: qtyInItemUnit,
           unit: item.unit,
-          unit_cost: cost,
+          unit_cost: costInItemUnit,
           total_cost: totalAmount
         });
 
@@ -829,7 +920,7 @@ export default function InventoryDashboardPage() {
 
         await supabase.from('inventory_items').update({
           current_stock: afterStock,
-          cost_per_unit: cost > 0 ? cost : item.cost_per_unit,
+          cost_per_unit: costInItemUnit > 0 ? costInItemUnit : item.cost_per_unit,
           supplier: supplier_name || item.supplier,
           updated_at: new Date().toISOString()
         }).eq('id', inventory_item_id);
@@ -845,12 +936,21 @@ export default function InventoryDashboardPage() {
           reference_type: 'purchase',
           reference_id: purch[0].id,
           user_name: activeRole === 'owner' ? 'Owner' : 'Manager',
-          notes: `Stock purchase in: ${qty} ${unit} (₹${cost}/${unit})`
+          notes: `Stock purchase in: ${qty} ${purchaseUnit} @ ₹${cost}/${rateUnit} (Total ₹${totalAmount}, Effective: ₹${costInItemUnit}/${item.unit})${notes ? ` - ${notes}` : ''}`
         });
       }
 
       setShowPurchaseModal(false);
-      setPurchaseForm({ supplier_name: '', invoice_number: '', inventory_item_id: '', quantity: '', unit: 'kg', unit_cost: '', notes: '' });
+      setPurchaseForm({
+        supplier_name: '',
+        invoice_number: '',
+        inventory_item_id: '',
+        quantity: '',
+        unit: 'kg',
+        unit_cost: '',
+        cost_unit: 'kg',
+        notes: ''
+      });
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Purchase save error');
@@ -1226,7 +1326,9 @@ export default function InventoryDashboardPage() {
                             {formatQuantityWithUnit(item.minimum_stock, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
-                            ₹{Number(item.cost_per_unit || 0).toFixed(2)} / {item.unit}
+                            ₹{Number(item.cost_per_unit || 0) > 0 && Number(item.cost_per_unit || 0) < 0.01
+                              ? Number(item.cost_per_unit || 0).toFixed(4)
+                              : Number(item.cost_per_unit || 0).toFixed(2)} / {item.unit}
                           </td>
                           <td className="py-3.5 px-4 font-black text-emerald-600 dark:text-emerald-400">
                             ₹{val.toFixed(2)}
@@ -2336,24 +2438,127 @@ export default function InventoryDashboardPage() {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600">Raw Material Item *</label>
-                    <select value={purchaseForm.inventory_item_id} onChange={e => setPurchaseForm({ ...purchaseForm, inventory_item_id: e.target.value })} required className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold cursor-pointer">
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Raw Material Item *</label>
+                    <select
+                      value={purchaseForm.inventory_item_id}
+                      onChange={e => {
+                        const selId = e.target.value;
+                        const sel = items.find(i => i.id === selId);
+                        let defaultUnit = 'kg';
+                        if (sel) {
+                          const norm = normalizeUnit(sel.unit);
+                          const mapping = UNIT_MAP[norm];
+                          if (mapping?.category === 'mass') {
+                            defaultUnit = 'kg';
+                          } else if (mapping?.category === 'volume') {
+                            defaultUnit = 'litre';
+                          } else if (mapping?.category === 'count') {
+                            defaultUnit = sel.unit || 'piece';
+                          } else {
+                            defaultUnit = sel.unit || 'unit';
+                          }
+                        }
+                        setPurchaseForm({
+                          ...purchaseForm,
+                          inventory_item_id: selId,
+                          unit: defaultUnit,
+                          cost_unit: defaultUnit
+                        });
+                      }}
+                      required
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold cursor-pointer"
+                    >
                       <option value="">Select Item...</option>
                       {items.map(i => (
-                        <option key={i.id} value={i.id}>{i.name} (Current: {i.current_stock} {i.unit})</option>
+                        <option key={i.id} value={i.id}>{i.name} ({i.category}) — Current: {i.current_stock} {i.unit}</option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600">Quantity Purchased *</label>
-                      <input type="number" step="any" value={purchaseForm.quantity} onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })} required className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Quantity Purchased *</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="e.g. 5"
+                          value={purchaseForm.quantity}
+                          onChange={e => setPurchaseForm({ ...purchaseForm, quantity: e.target.value })}
+                          required
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold"
+                        />
+                        <select
+                          value={purchaseForm.unit}
+                          onChange={e => {
+                            const newUnit = e.target.value;
+                            setPurchaseForm({
+                              ...purchaseForm,
+                              unit: newUnit,
+                              cost_unit: newUnit
+                            });
+                          }}
+                          className="w-32 px-2 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          {purchaseCompatibleUnits.map(u => (
+                            <option key={u.value} value={u.value}>{u.label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
+
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600">Unit Cost ₹ *</label>
-                      <input type="number" step="any" value={purchaseForm.unit_cost} onChange={e => setPurchaseForm({ ...purchaseForm, unit_cost: e.target.value })} required className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Unit Cost ₹ *</label>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="e.g. 40"
+                          value={purchaseForm.unit_cost}
+                          onChange={e => setPurchaseForm({ ...purchaseForm, unit_cost: e.target.value })}
+                          required
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold"
+                        />
+                        <select
+                          value={purchaseForm.cost_unit || purchaseForm.unit}
+                          onChange={e => setPurchaseForm({ ...purchaseForm, cost_unit: e.target.value })}
+                          className="w-32 px-2 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          {purchaseCompatibleUnits.map(u => (
+                            <option key={u.value} value={u.value}>per {u.value}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
+                  </div>
+
+                  {selectedPurchaseItem && previewQty > 0 && previewRate > 0 && (
+                    <div className="p-3 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-xl text-xs space-y-1">
+                      <div className="flex justify-between font-bold text-sky-900 dark:text-sky-300">
+                        <span>Total Purchase Amount:</span>
+                        <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">₹{previewTotalAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                        <span>Stock Added ({selectedPurchaseItem.unit}):</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">+{previewQtyInItemUnit} {selectedPurchaseItem.unit}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
+                        <span>Effective Cost per {selectedPurchaseItem.unit}:</span>
+                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                          ₹{previewCostInItemUnit < 0.01 && previewCostInItemUnit > 0 ? previewCostInItemUnit.toFixed(4) : previewCostInItemUnit.toFixed(2)} / {selectedPurchaseItem.unit}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Notes</label>
+                    <input
+                      value={purchaseForm.notes}
+                      onChange={e => setPurchaseForm({ ...purchaseForm, notes: e.target.value })}
+                      placeholder="Optional notes"
+                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold"
+                    />
                   </div>
                 </div>
 
