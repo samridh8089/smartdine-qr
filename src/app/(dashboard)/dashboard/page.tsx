@@ -531,7 +531,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Recent Orders List */}
         <Card className="lg:col-span-7 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden">
-          <CardContent className="p-0">
+          <CardContent className="!p-0 !px-0 !py-0">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Recent Orders</h3>
