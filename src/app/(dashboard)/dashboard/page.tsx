@@ -38,17 +38,29 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isReloadingRef = useRef(false);
+  const pendingReloadRef = useRef(false);
+
+  const debouncedReload = (restId: string) => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      if (restId) loadDataForRest(restId);
+    }, 150);
+  };
 
   const loadDataForRest = async (restId: string) => {
+    if (isReloadingRef.current) {
+      pendingReloadRef.current = true;
+      return;
+    }
+    isReloadingRef.current = true;
     try {
       const activeRest = restaurant || contextRestaurant || (await db.getRestaurantById(restId));
       if (!restaurant && activeRest) setRestaurant(activeRest);
 
-      // Phase 1: Fast Parallel Fetch of Core Orders & Table Live Status
-      const [allOrders, liveTableData] = await Promise.all([
-        db.getOrders(restId),
-        db.getTablesWithLiveStatus(restId)
-      ]);
+      // Phase 1: Fast Parallel Fetch of Core Orders & Table Live Status (reusing allOrders)
+      const allOrders = await db.getOrders(restId);
+      const liveTableData = await db.getTablesWithLiveStatus(restId, allOrders);
 
       setOrders(allOrders);
       if (liveTableData?.stats) {
@@ -204,6 +216,12 @@ export default function DashboardPage() {
     } catch (err) {
       console.error('Error in loadDataForRest:', err);
       setLoading(false);
+    } finally {
+      isReloadingRef.current = false;
+      if (pendingReloadRef.current) {
+        pendingReloadRef.current = false;
+        debouncedReload(restId);
+      }
     }
   };
 
@@ -230,13 +248,6 @@ export default function DashboardPage() {
   useEffect(() => {
     let activeRestId = '';
     let channel: any = null;
-
-    const debouncedReload = (restId: string) => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = setTimeout(() => {
-        if (restId) loadDataForRest(restId);
-      }, 200);
-    };
 
     async function initDashboard() {
       try {
@@ -277,13 +288,13 @@ export default function DashboardPage() {
                   });
                 } catch (e) {}
               }
-              loadDataForRest(restId);
+              debouncedReload(restId);
             }
           )
           .on(
             'broadcast',
             { event: 'order-status-updated' },
-            () => loadDataForRest(restId)
+            () => debouncedReload(restId)
           )
           .on(
             'postgres_changes',
@@ -293,7 +304,7 @@ export default function DashboardPage() {
               table: 'orders',
               filter: `restaurant_id=eq.${restId}`
             },
-            () => loadDataForRest(restId)
+            () => debouncedReload(restId)
           )
           .on(
             'postgres_changes',
@@ -302,7 +313,7 @@ export default function DashboardPage() {
               schema: 'public',
               table: 'order_batches'
             },
-            () => loadDataForRest(restId)
+            () => debouncedReload(restId)
           )
           .on(
             'postgres_changes',
@@ -312,7 +323,7 @@ export default function DashboardPage() {
               table: 'inventory_items',
               filter: `restaurant_id=eq.${restId}`
             },
-            () => loadDataForRest(restId)
+            () => debouncedReload(restId)
           )
           .on(
             'postgres_changes',
@@ -322,7 +333,7 @@ export default function DashboardPage() {
               table: 'tables',
               filter: `restaurant_id=eq.${restId}`
             },
-            () => loadDataForRest(restId)
+            () => debouncedReload(restId)
           )
           .on(
             'postgres_changes',
