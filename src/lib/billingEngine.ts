@@ -1,3 +1,5 @@
+import { calculateOrderTax, RestaurantTaxSettings } from './tax';
+
 export interface BillingItem {
   price: number;
   quantity: number;
@@ -33,6 +35,8 @@ export interface BillingInput {
   serviceChargeEnabled?: boolean;
   serviceChargePercentage?: number;
   customCharges?: CustomCharge[];
+  settings?: RestaurantTaxSettings | any;
+  gstNumber?: string;
 }
 
 export interface BillingResult {
@@ -55,6 +59,17 @@ export interface BillingResult {
     taxable: boolean;
   }>;
 
+  // New detailed tax fields for complete parity with tax.ts
+  cgstAmount: number;
+  sgstAmount: number;
+  igstAmount: number;
+  cgstPercentage: number;
+  sgstPercentage: number;
+  igstPercentage: number;
+  taxType: 'cgst_sgst' | 'igst' | 'none';
+  taxMode: 'cgst_sgst' | 'igst' | 'none';
+  taxRateSnapshot: number;
+
   // Future-proof alias fields
   subtotal: number;
   discount: number;
@@ -73,6 +88,9 @@ export interface BillingResult {
     discountedSubtotal: number;
     taxableSubtotal: number;
     gst: number;
+    cgstAmount: number;
+    sgstAmount: number;
+    igstAmount: number;
     serviceCharge: number;
     taxableCustomCharges: number;
     nonTaxableCustomCharges: number;
@@ -254,12 +272,34 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
   // 5. Taxable Base (Subtotal after discount + ONLY Taxable Custom Charges)
   const taxableBase = discountedSubtotal + taxableCustomChargesTotal;
 
-  // 6. GST & Service Charge Calculation
-  const effectiveGstPct = gstEnabled !== false ? (gstPercentage || 0) : 0;
-  const gstAmount = parseFloat(((taxableBase * effectiveGstPct) / 100).toFixed(2));
+  // 6. GST & Service Charge Calculation via Authoritative Tax Engine
+  const effectiveSettings: RestaurantTaxSettings = {
+    ...(input.settings || {}),
+    gst_enabled: input.settings?.gst_enabled !== undefined
+      ? input.settings.gst_enabled
+      : (input.gstEnabled !== undefined ? input.gstEnabled : undefined),
+    tax_mode: input.settings?.tax_mode || 'cgst_sgst',
+    gst_percentage: input.settings?.gst_percentage !== undefined
+      ? input.settings.gst_percentage
+      : (input.gstPercentage !== undefined ? input.gstPercentage : undefined),
+    cgst_percentage: input.settings?.cgst_percentage,
+    sgst_percentage: input.settings?.sgst_percentage,
+    igst_percentage: input.settings?.igst_percentage,
+    gst_number: input.gstNumber || input.settings?.gst_number
+  };
 
-  const effectiveScPct = serviceChargeEnabled !== false ? (serviceChargePercentage || 0) : 0;
-  const serviceChargeAmount = parseFloat(((taxableBase * effectiveScPct) / 100).toFixed(2));
+  const taxResult = calculateOrderTax(
+    taxableBase,
+    0,
+    effectiveSettings,
+    effectiveSettings.gst_number
+  );
+
+  const gstAmount = taxResult.taxTotal;
+
+  const isScEnabled = serviceChargeEnabled !== false && (input.settings?.service_charge_enabled !== false);
+  const scPct = isScEnabled ? (serviceChargePercentage || input.settings?.service_charge_percentage || 0) : 0;
+  const serviceChargeAmount = parseFloat(((taxableBase * scPct) / 100).toFixed(2));
 
   // 7. Grand Total
   const grandTotal = parseFloat((discountedSubtotal + customChargesTotal + gstAmount + serviceChargeAmount).toFixed(2));
@@ -282,6 +322,9 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
     discountedSubtotal: discountedSubtotalVal,
     taxableSubtotal: taxableSubtotalVal,
     gst: gstVal,
+    cgstAmount: taxResult.cgstAmount,
+    sgstAmount: taxResult.sgstAmount,
+    igstAmount: taxResult.igstAmount,
     serviceCharge: serviceChargeVal,
     taxableCustomCharges: taxableCustomChargesVal,
     nonTaxableCustomCharges: nonTaxableCustomChargesVal,
@@ -299,6 +342,15 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
     customChargesTotal: customChargesVal,
     taxableBase: taxableSubtotalVal,
     gstAmount: gstVal,
+    cgstAmount: taxResult.cgstAmount,
+    sgstAmount: taxResult.sgstAmount,
+    igstAmount: taxResult.igstAmount,
+    cgstPercentage: taxResult.cgstPercentage,
+    sgstPercentage: taxResult.sgstPercentage,
+    igstPercentage: taxResult.igstPercentage,
+    taxType: taxResult.taxTypeSnapshot,
+    taxMode: taxResult.taxTypeSnapshot,
+    taxRateSnapshot: taxResult.taxRateSnapshot,
     serviceChargeAmount: serviceChargeVal,
     grandTotal: grandTotalVal,
     customChargesSnapshot,

@@ -7,6 +7,7 @@ import { db, Restaurant, Category, MenuItem, Table, CustomerRequest, Offer, isSu
 import { parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
 import { formatPrice } from '@/lib/utils';
 import { calculateOrderTax } from '@/lib/tax';
+import { calculateBillingTotals } from '@/lib/billingEngine';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -1111,26 +1112,48 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     }
   }
 
-  const taxCalc = calculateOrderTax(cartSubtotal, discountAmount, restaurant?.settings);
+  const billingResult = calculateBillingTotals({
+    items: cart.map(c => ({
+      price: c.price !== undefined && c.price !== null ? c.price : c.menuItem.price,
+      quantity: c.quantity
+    })),
+    discountAmount,
+    offerCode: appliedOffer?.code,
+    offers: restaurant?.settings?.offers || [],
+    settings: restaurant?.settings,
+    gstNumber: restaurant?.gst_number,
+    gstEnabled: restaurant?.settings?.gst_enabled,
+    gstPercentage: restaurant?.settings?.gst_percentage,
+    serviceChargeEnabled: restaurant?.settings?.service_charge_enabled,
+    serviceChargePercentage: restaurant?.settings?.service_charge_percentage,
+    customCharges: restaurant?.settings?.custom_charges || []
+  });
+
+  const taxCalc = {
+    subtotal: billingResult.validSubtotal,
+    discountTotal: billingResult.discountAmount,
+    taxableAmount: billingResult.taxableBase,
+    cgstPercentage: billingResult.cgstPercentage,
+    sgstPercentage: billingResult.sgstPercentage,
+    igstPercentage: billingResult.igstPercentage,
+    cgstAmount: billingResult.cgstAmount,
+    sgstAmount: billingResult.sgstAmount,
+    igstAmount: billingResult.igstAmount,
+    taxTotal: billingResult.gstAmount,
+    grandTotal: billingResult.grandTotal,
+    taxTypeSnapshot: billingResult.taxType,
+    taxRateSnapshot: billingResult.taxRateSnapshot
+  };
 
   const serviceChargeEnabled = restaurant?.settings?.service_charge_enabled !== false;
-  const serviceChargePercentage = serviceChargeEnabled ? (restaurant?.settings?.service_charge_percentage || 0) : 0;
+  const serviceCharge = billingResult.serviceChargeAmount;
+  const customChargesList = billingResult.customChargesSnapshot.map(c => ({
+    ...c,
+    id: c.name,
+    calculatedValue: c.calculatedAmount
+  }));
 
-  const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
-
-  // Calculate custom charges
-  let customChargesTotal = 0;
-  const customChargesList = (restaurant?.settings?.custom_charges || [])
-    .filter(c => c.enabled === true)
-    .map(c => {
-      const val = c.type === 'percentage'
-        ? parseFloat(((taxCalc.taxableAmount * c.value) / 100).toFixed(2))
-        : c.value;
-      customChargesTotal += val;
-      return { ...c, calculatedValue: val };
-    });
-
-  const cartTotal = parseFloat((taxCalc.grandTotal + serviceCharge + customChargesTotal).toFixed(2));
+  const cartTotal = billingResult.grandTotal;
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/50 dark:bg-slate-950/40 pb-24 transition-colors">
