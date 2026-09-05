@@ -397,7 +397,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -530,7 +530,7 @@ export default function DashboardPage() {
       {/* Second Section: Recent Orders (7 cols) + Top Selling Items (5 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Recent Orders List */}
-        <Card className="lg:col-span-7 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden">
+        <Card className="lg:col-span-7 min-w-0 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden">
           <CardContent className="!p-0 !px-0 !py-0">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
@@ -553,7 +553,7 @@ export default function DashboardPage() {
               ) : (
                 orders.slice(0, 5).map((order) => (
                   <div key={order.id} className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                    <div className="space-y-1">
+                    <div className="space-y-1 min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-900 dark:text-white text-sm md:text-base">Order {getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
                         {getStatusBadge(order.status)}
@@ -581,7 +581,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Top Selling Items */}
-        <Card className="lg:col-span-5 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+        <Card className="lg:col-span-5 min-w-0 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
           <CardContent className="p-6">
             <h3 className="text-base font-extrabold text-slate-900 dark:text-white pb-4 border-b border-slate-100 dark:border-slate-800">Top Selling Items</h3>
             {stats.topItems.length === 0 ? (
