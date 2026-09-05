@@ -14,7 +14,7 @@ import {
   ArrowRight, Clock, CheckCircle2, AlertCircle, ShoppingBag
 } from 'lucide-react';
 
-import { calculateBillingTotals } from '@/lib/billingEngine';
+import { calculateBillingTotals, isRevenueOrder, getOrderRevenueAmount, calculateOrdersRevenue } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
 
 export default function DashboardPage() {
@@ -56,22 +56,7 @@ export default function DashboardPage() {
       }
 
       const getValidOrderTotal = (o: Order) => {
-        const calcResult = calculateBillingTotals({
-          items: o.items || [],
-          batches: o.batches || [],
-          discountAmount: Number(o.discount_amount || 0),
-          offerCode: o.offer_code,
-          specialInstructions: o.special_instructions,
-          offers: activeRest?.settings?.offers || [],
-          settings: activeRest?.settings,
-          gstNumber: activeRest?.gst_number,
-          gstEnabled: activeRest?.settings?.gst_enabled,
-          gstPercentage: activeRest?.settings?.gst_percentage || 0,
-          serviceChargeEnabled: activeRest?.settings?.service_charge_enabled !== false,
-          serviceChargePercentage: activeRest?.settings?.service_charge_percentage || 0,
-          customCharges: activeRest?.settings?.custom_charges || []
-        });
-        return calcResult.grandTotal;
+        return getOrderRevenueAmount(o);
       };
 
       // Compute statistics for "today"
@@ -84,9 +69,7 @@ export default function DashboardPage() {
         return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled';
       });
       
-      const revenue = todayOrders
-        .filter(o => o.status === 'completed' || (o.status === 'served' && o.payment_status === 'paid'))
-        .reduce((sum, o) => sum + getValidOrderTotal(o), 0);
+      const revenue = calculateOrdersRevenue(todayOrders);
 
       // Compute Active Tables (orders with status !== 'completed' && status !== 'cancelled')
       const activeOrders = allOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
@@ -110,7 +93,7 @@ export default function DashboardPage() {
       // Calculate Top Selling Items
       const itemCounts: Record<string, { name: string; count: number; revenue: number }> = {};
       allOrders
-        .filter(o => o.status === 'completed' || (o.status === 'served' && o.payment_status === 'paid'))
+        .filter(isRevenueOrder)
         .forEach(o => {
           (o.items || []).forEach(item => {
             if (item.is_cancelled || item.status === 'cancelled' || item.notes?.includes('[CANCELLED]')) return;
@@ -572,26 +555,9 @@ export default function DashboardPage() {
                       </p>
                     </div>
                     <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 dark:border-slate-800">
-                      {(() => {
-                        const validOrderTotal = () => {
-                          return calculateBillingTotals({
-                            items: order.items || [],
-                            batches: order.batches || [],
-                            discountAmount: Number(order.discount_amount || 0),
-                            offerCode: order.offer_code,
-                            specialInstructions: order.special_instructions,
-                            offers: restaurant?.settings?.offers || [],
-                            settings: restaurant?.settings,
-                            gstNumber: restaurant?.gst_number,
-                            gstEnabled: restaurant?.settings?.gst_enabled,
-                            gstPercentage: restaurant?.settings?.gst_percentage || 0,
-                            serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
-                            serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
-                            customCharges: restaurant?.settings?.custom_charges || []
-                          }).grandTotal;
-                        };
-                        return <span className="font-extrabold text-slate-900 dark:text-white">{formatPrice(validOrderTotal())}</span>;
-                      })()}
+                      <span className="font-extrabold text-slate-900 dark:text-white">
+                        {formatPrice(getOrderRevenueAmount(order))}
+                      </span>
                       <Link href={`/dashboard/orders?id=${order.id}`}>
                         <Button variant="outline" size="sm">Manage</Button>
                       </Link>

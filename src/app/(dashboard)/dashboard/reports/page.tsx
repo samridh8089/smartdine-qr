@@ -14,6 +14,7 @@ import {
   ShoppingBag, ClipboardList, Lock, Banknote, Download, FileText, Filter, ArrowUpDown,
   Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight
 } from 'lucide-react';
+import { isRevenueOrder } from '@/lib/billingEngine';
 
 interface ItemPerformanceRow {
   key: string;
@@ -229,8 +230,8 @@ export default function ReportsPage() {
       periodLabel = `${sDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} – ${eDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
     }
 
-    // EXCLUDE CANCELLED ORDERS FROM SALES AND TAX CALCULATIONS!
-    const validOrders = rangeOrders.filter(o => o.status !== 'cancelled');
+    // REVENUE-ELIGIBLE ORDERS ONLY: PAID OR COMPLETED ORDERS (EXCLUDES UNPAID PENDING & CANCELLED)
+    const validOrders = rangeOrders.filter(isRevenueOrder);
 
     let grossSales = 0;
     let totalDiscount = 0;
@@ -565,7 +566,7 @@ export default function ReportsPage() {
       const h = new Date(o.created_at).getHours();
       if (hoursArr[h]) {
         hoursArr[h].ordersCount += 1;
-        if (o.status !== 'cancelled') {
+        if (isRevenueOrder(o)) {
           hoursArr[h].revenue += Number(o.grand_total || o.total || 0);
         }
       }

@@ -369,3 +369,48 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
     breakdown: breakdownObj
   };
 }
+
+/**
+ * Canonical check for whether an order represents realized revenue.
+ * Realized Revenue includes only:
+ * - payment_status === "paid"
+ * - OR status === "completed"
+ * Excludes: unpaid, pending, preparing, ready, cancelled, refunded.
+ */
+export function isRevenueOrder(order: {
+  status?: string | null;
+  payment_status?: string | null;
+  refund_status?: string | null;
+} | null | undefined): boolean {
+  if (!order) return false;
+  if (order.status === 'cancelled') return false;
+  if (order.payment_status === 'refunded' || order.refund_status === 'full') return false;
+  return order.payment_status === 'paid' || order.status === 'completed';
+}
+
+/**
+ * Authoritative stored revenue amount for an order.
+ * Follows Canonical Rule: Number(order.grand_total ?? order.total ?? 0)
+ * Uses stored database values without recalculating GST or reconstructing totals.
+ */
+export function getOrderRevenueAmount(order: {
+  grand_total?: number | string | null;
+  total?: number | string | null;
+} | null | undefined): number {
+  if (!order) return 0;
+  const val = Number((order as any).grand_total ?? (order as any).total ?? 0);
+  return isNaN(val) ? 0 : val;
+}
+
+/**
+ * Authoritative single revenue calculation for any collection of orders.
+ * Filters only realized revenue orders and sums their stored database totals.
+ */
+export function calculateOrdersRevenue(orders: any[] | null | undefined): number {
+  if (!Array.isArray(orders)) return 0;
+  const total = orders
+    .filter(isRevenueOrder)
+    .reduce((sum, o) => sum + getOrderRevenueAmount(o), 0);
+  return Math.round((total + Number.EPSILON) * 100) / 100;
+}
+
