@@ -15,7 +15,8 @@ import {
 import { 
   syncInventoryMenuAvailability, 
   getHourlyInventoryImpactReport,
-  recordRestockPurchase
+  recordRestockPurchase,
+  getItemStockStatus
 } from '@/lib/inventoryEngine';
 import { checkResourceLimitForRestaurant } from '@/lib/entitlements';
 import { 
@@ -253,16 +254,18 @@ export default function InventoryDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_transactions', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_alerts', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_reservations', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_purchases', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [restaurantId]);
 
-  // Calculated Summary Metrics
+  // Calculated Summary Metrics (Using canonical getItemStockStatus: BUG-INV-009)
   const totalItemsCount = items.length;
   const totalStockValue = items.reduce((sum, item) => sum + (Number(item.current_stock || 0) * Number(item.cost_per_unit || 0)), 0);
-  const lowStockCount = items.filter(i => i.current_stock > 0 && i.current_stock <= i.minimum_stock).length;
-  const outOfStockCount = items.filter(i => i.current_stock <= 0).length;
+  const lowStockCount = items.filter(i => getItemStockStatus(i).isLow).length;
+  const outOfStockCount = items.filter(i => getItemStockStatus(i).isOut).length;
 
   const todayStart = new Date();
   todayStart.setHours(0,0,0,0);
@@ -989,7 +992,7 @@ export default function InventoryDashboardPage() {
     }
   };
 
-  // Filtered Inventory Items
+  // Filtered Inventory Items (Using canonical getItemStockStatus: BUG-INV-009)
   const filteredItems = items.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -997,9 +1000,10 @@ export default function InventoryDashboardPage() {
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
 
     let matchesStatus = true;
-    if (selectedStockStatus === 'low') matchesStatus = item.current_stock > 0 && item.current_stock <= item.minimum_stock;
-    if (selectedStockStatus === 'out') matchesStatus = item.current_stock <= 0;
-    if (selectedStockStatus === 'in') matchesStatus = item.current_stock > item.minimum_stock;
+    const { isLow, isOut, isInStock } = getItemStockStatus(item);
+    if (selectedStockStatus === 'low') matchesStatus = isLow;
+    if (selectedStockStatus === 'out') matchesStatus = isOut;
+    if (selectedStockStatus === 'in') matchesStatus = isInStock;
 
     return matchesSearch && matchesCategory && matchesStatus;
   });
@@ -1270,11 +1274,7 @@ export default function InventoryDashboardPage() {
                     </tr>
                   ) : (
                     filteredItems.map(item => {
-                      const physical = Number(item.current_stock || 0);
-                      const reserved = Number(item.reserved_stock || 0);
-                      const availableToSell = Math.max(0, physical - reserved);
-                      const isOut = availableToSell <= 0;
-                      const isLow = availableToSell > 0 && availableToSell <= item.minimum_stock;
+                      const { physical, reserved, availableToSell, isOut, isLow } = getItemStockStatus(item);
                       const val = physical * Number(item.cost_per_unit || 0);
 
                       return (
