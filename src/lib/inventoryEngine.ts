@@ -2513,3 +2513,38 @@ export async function recordRestockPurchase(params: RecordRestockParams): Promis
   restockItemMutexMap.set(mutexKey, currentOp);
   return await currentOp;
 }
+
+/**
+ * Canonical Inventory Item Stock Eligibility & Status Helper (BUG-INV-009)
+ * Evaluates identical status across summary counter cards, table filters, and row badges.
+ * Available-to-sell = Math.max(0, current_stock - reserved_stock)
+ * Out of Stock: availableToSell <= 0
+ * Low Stock: availableToSell > 0 && availableToSell <= minimum_stock
+ * In Stock: availableToSell > minimum_stock
+ */
+export function getItemStockStatus(item: {
+  current_stock?: number | null;
+  reserved_stock?: number | null;
+  minimum_stock?: number | null;
+}) {
+  const physical = Number(item.current_stock || 0);
+  const reserved = Number(item.reserved_stock || 0);
+  const availableToSell = Math.max(0, parseFloat((physical - reserved).toFixed(4)));
+  const minStock = Number(item.minimum_stock || 0);
+
+  const isOut = availableToSell <= 0;
+  const isLow = availableToSell > 0 && availableToSell <= minStock;
+  const isInStock = availableToSell > minStock;
+
+  return {
+    physical,
+    reserved,
+    availableToSell,
+    minStock,
+    isOut,
+    isLow,
+    isInStock,
+    status: isOut ? ('out' as const) : isLow ? ('low' as const) : ('in' as const)
+  };
+}
+
