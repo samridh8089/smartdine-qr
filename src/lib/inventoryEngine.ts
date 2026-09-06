@@ -337,15 +337,22 @@ export async function consumeReservedInventoryForOrderBatch(
     const existingTxItemIds = new Set((existingTx || []).map(t => t.inventory_item_id));
 
     // 2. Fetch reservations for this batch or order
-    const { data: batchReservations } = await supabase
+    const { data: batchReservations, error: fetchResErr } = await supabase
       .from('inventory_reservations')
       .select('*')
       .eq('restaurant_id', restaurantId)
       .or(`batch_id.eq.${batchId},order_id.eq.${orderId}`);
 
+    if (fetchResErr) {
+      console.error('[InventoryEngine] Error fetching reservations:', fetchResErr);
+      result.success = false;
+      result.errors.push(`Failed to fetch inventory reservations: ${fetchResErr.message}`);
+      return result;
+    }
+
     if (batchReservations && batchReservations.length > 0) {
-      // Filter out reservations that have already been consumed (by checking existingTxItemIds)
-      const unconsumedReservations = batchReservations.filter(r => !existingTxItemIds.has(r.inventory_item_id));
+      // Filter out reservations that have already been consumed (by checking status and existingTxItemIds)
+      const unconsumedReservations = batchReservations.filter(r => (r.status === 'ACTIVE' || !r.status) && !existingTxItemIds.has(r.inventory_item_id));
 
       if (unconsumedReservations.length === 0) {
         result.skipped = true;
@@ -366,6 +373,43 @@ export async function consumeReservedInventoryForOrderBatch(
 
       const itemMap = new Map<string, any>();
       (allItems || []).forEach(i => itemMap.set(i.id, i));
+
+      // LAYER 1 APPLICATION GUARD (BUG-INV-008): Upfront stock validation before any deduction
+      // If beforeStock < resQty, block consumption immediately and return clear error. Never write negative values.
+      const insufficientStockErrors: string[] = [];
+      for (const res of unconsumedReservations) {
+        const itemId = res.inventory_item_id;
+        const resQty = Number(res.reserved_quantity || 0);
+        let itemData = itemMap.get(itemId);
+
+        if (!itemData) {
+          const { data: fresh } = await supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('id', itemId)
+            .eq('restaurant_id', restaurantId)
+            .single();
+          if (fresh) {
+            itemData = fresh;
+            itemMap.set(itemId, fresh);
+          }
+        }
+
+        if (!itemData) continue;
+
+        const beforeStock = Number(itemData.current_stock || 0);
+        if (beforeStock < resQty) {
+          const errorMsg = `Cannot consume inventory: Insufficient physical stock for "${itemData.name || itemId}". Current stock is ${beforeStock} ${itemData.unit || res.unit}, but required deduction is ${resQty} ${res.unit}. Consumption blocked to prevent negative stock.`;
+          insufficientStockErrors.push(errorMsg);
+        }
+      }
+
+      if (insufficientStockErrors.length > 0) {
+        console.error(`[InventoryEngine] NEGATIVE_STOCK_GUARD_BLOCKED (Reserved Flow) - OrderID: ${orderId}, BatchID: ${batchId}:`, insufficientStockErrors);
+        result.success = false;
+        result.errors.push(...insufficientStockErrors);
+        return result;
+      }
 
       const transactionsToInsert: any[] = [];
       const reservationIdsToUpdate: string[] = [];
@@ -388,7 +432,16 @@ export async function consumeReservedInventoryForOrderBatch(
         if (!itemData) continue;
 
         const beforeStock = Number(itemData.current_stock || 0);
-        const afterStock = parseFloat((beforeStock - resQty).toFixed(4));
+
+        // Defense-in-depth safety guard: double check before deduction
+        if (beforeStock < resQty) {
+          console.error(`[InventoryEngine] DEFENSE_IN_DEPTH_BLOCKED: Item ${itemId} beforeStock (${beforeStock}) < resQty (${resQty})`);
+          result.success = false;
+          result.errors.push(`Insufficient stock for "${itemData.name || itemId}"`);
+          continue;
+        }
+
+        const afterStock = Math.max(0, parseFloat((beforeStock - resQty).toFixed(4)));
         const newReserved = Math.max(0, parseFloat((Number(itemData.reserved_stock || 0) - resQty).toFixed(4)));
         const itemKey = `${idempotencyKey}_${itemId}`;
 
@@ -418,7 +471,7 @@ export async function consumeReservedInventoryForOrderBatch(
           order_id: orderId,
           batch_id: batchId,
           idempotency_key: itemKey,
-          user_id: userId || null,
+          user_id: (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) ? userId : null,
           user_name: userName || 'Kitchen Preparing',
           notes: `Consumed for order batch in preparation (${resQty} ${res.unit})`
         });
@@ -509,6 +562,34 @@ export async function consumeReservedInventoryForOrderBatch(
         }
       }
 
+      // LAYER 1 APPLICATION GUARD (BUG-INV-008): Upfront stock validation for direct demand
+      // If beforeStock < req.requiredQty, block consumption immediately and return clear error.
+      const insufficientDemandErrors: string[] = [];
+      for (const [rawId, req] of Array.from(demandMap.entries())) {
+        if (existingTxItemIds.has(rawId)) continue;
+
+        const { data: freshItem } = await supabase
+          .from('inventory_items')
+          .select('*')
+          .eq('id', rawId)
+          .eq('restaurant_id', restaurantId)
+          .single();
+
+        const itemData = freshItem || req.rawItem;
+        const beforeStock = Number(itemData.current_stock || 0);
+        if (beforeStock < req.requiredQty) {
+          const errorMsg = `Cannot consume inventory: Insufficient physical stock for "${itemData.name || rawId}". Current stock is ${beforeStock} ${itemData.unit || req.unit}, but required deduction is ${req.requiredQty} ${req.unit}. Consumption blocked to prevent negative stock.`;
+          insufficientDemandErrors.push(errorMsg);
+        }
+      }
+
+      if (insufficientDemandErrors.length > 0) {
+        console.error(`[InventoryEngine] NEGATIVE_STOCK_GUARD_BLOCKED (Direct Flow) - OrderID: ${orderId}, BatchID: ${batchId}:`, insufficientDemandErrors);
+        result.success = false;
+        result.errors.push(...insufficientDemandErrors);
+        return result;
+      }
+
       const transactionsToInsert: any[] = [];
 
       for (const [rawId, req] of Array.from(demandMap.entries())) {
@@ -523,7 +604,16 @@ export async function consumeReservedInventoryForOrderBatch(
 
         const itemData = freshItem || req.rawItem;
         const beforeStock = Number(itemData.current_stock || 0);
-        const afterStock = parseFloat((beforeStock - req.requiredQty).toFixed(4));
+
+        // Defense-in-depth safety guard: double check before deduction
+        if (beforeStock < req.requiredQty) {
+          console.error(`[InventoryEngine] DEFENSE_IN_DEPTH_BLOCKED: Item ${rawId} beforeStock (${beforeStock}) < requiredQty (${req.requiredQty})`);
+          result.success = false;
+          result.errors.push(`Insufficient stock for "${itemData.name || rawId}"`);
+          continue;
+        }
+
+        const afterStock = Math.max(0, parseFloat((beforeStock - req.requiredQty).toFixed(4)));
         const itemKey = `${idempotencyKey}_${rawId}`;
 
         await supabase
@@ -545,7 +635,7 @@ export async function consumeReservedInventoryForOrderBatch(
           order_id: orderId,
           batch_id: batchId,
           idempotency_key: itemKey,
-          user_id: userId || null,
+          user_id: (userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) ? userId : null,
           user_name: userName || 'Kitchen Preparing',
           notes: `Consumed for order batch in preparation: ${req.dishLabels.join(', ')} (${req.requiredQty.toFixed(3)} ${req.unit})`
         });
@@ -634,7 +724,14 @@ export async function healUnconsumedActiveReservations(restaurantId: string): Pr
 
       const qty = Number(res.reserved_quantity || 0);
       const beforeStock = Number(item.current_stock || 0);
-      const afterStock = parseFloat((beforeStock - qty).toFixed(4));
+
+      // LAYER 1 APPLICATION GUARD (BUG-INV-008): Skip auto-healing if stock would drop below 0
+      if (beforeStock < qty) {
+        console.warn(`[SELF_HEALING_INVENTORY] Cannot auto-consume item "${item.name || item.id}": stock (${beforeStock}) < required (${qty}). Skipping to prevent negative stock.`);
+        continue;
+      }
+
+      const afterStock = Math.max(0, parseFloat((beforeStock - qty).toFixed(4)));
       const newReserved = Math.max(0, parseFloat((Number(item.reserved_stock || 0) - qty).toFixed(4)));
 
       item.current_stock = afterStock;
@@ -1990,9 +2087,14 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
           }));
 
           const cRes = await consumeReservedInventoryForOrderBatch(restaurantId, orderId, b.id, formatted, undefined, actor);
-          consumptionResultStr = cRes.skipped 
-            ? 'ALREADY_CONSUMED_IDEMPOTENT' 
-            : `CONSUMED_${cRes.transactionsCreated}_ITEMS`;
+          if (!cRes.success) {
+            consumptionResultStr = `CONSUMPTION_BLOCKED: ${cRes.errors.join('; ')}`;
+            console.error(`[FORENSIC_INVENTORY_TRACE] CONSUMPTION_BLOCKED_NEGATIVE_STOCK_GUARD - BatchID: ${b.id}, Errors:`, cRes.errors);
+          } else {
+            consumptionResultStr = cRes.skipped 
+              ? 'ALREADY_CONSUMED_IDEMPOTENT' 
+              : `CONSUMED_${cRes.transactionsCreated}_ITEMS`;
+          }
         }
 
         // Fetch newly created/existing transaction IDs
