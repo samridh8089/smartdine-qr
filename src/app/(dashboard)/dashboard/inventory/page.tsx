@@ -211,6 +211,14 @@ export default function InventoryDashboardPage() {
   const [recipeSteps, setRecipeSteps] = useState('');
   const [recipeServingSize, setRecipeServingSize] = useState('1 Portion');
   const [focusedDishId, setFocusedDishId] = useState<string | null>(null);
+  const [recipeToDelete, setRecipeToDelete] = useState<{
+    menuItem: any;
+    variantId: string | null;
+    recipeIds: string[];
+    displayName: string;
+    ingredients: Array<{ name: string; quantity: number | string; unit: string }>;
+  } | null>(null);
+  const [isDeletingRecipe, setIsDeletingRecipe] = useState(false);
 
   // AI Recipe Draft Modal
   const [showAiModal, setShowAiModal] = useState(false);
@@ -846,6 +854,104 @@ export default function InventoryDashboardPage() {
       }
     } catch (err: any) {
       alert(err.message || 'Error saving recipe');
+    }
+  };
+
+  // Recipe Delete Prompt Helper
+  const promptDeleteRecipe = (menuItem: any, variantId: string | null = null) => {
+    if (!menuItem) return;
+
+    let targetRecipes: any[] = [];
+    let variantLabel = '';
+
+    if (variantId) {
+      targetRecipes = recipes.filter(r => r.menu_item_id === menuItem.id && r.variant_id === variantId);
+      const vObj = (menuItem.variants || []).find((v: any) => v.id === variantId);
+      if (vObj) variantLabel = ` (${vObj.name})`;
+    } else {
+      const baseRecipe = recipes.find(r => r.menu_item_id === menuItem.id && (!r.variant_id || r.variant_id === null));
+      if (baseRecipe) {
+        targetRecipes = [baseRecipe];
+      }
+      const allDishRecipes = recipes.filter(r => r.menu_item_id === menuItem.id);
+      if (targetRecipes.length === 0) {
+        targetRecipes = allDishRecipes;
+      }
+      if (allDishRecipes.length > 1 && menuItem.has_variants) {
+        targetRecipes = allDishRecipes;
+        variantLabel = ' (All Portions)';
+      }
+    }
+
+    if (targetRecipes.length === 0) {
+      alert('No saved recipe found to delete.');
+      return;
+    }
+
+    const recipeIds = targetRecipes.map(r => r.id);
+    const ingredientsList: Array<{ name: string; quantity: number | string; unit: string }> = [];
+
+    targetRecipes.forEach(r => {
+      (r.inventory_recipe_ingredients || []).forEach((ing: any) => {
+        const invItem = items.find(i => i.id === ing.inventory_item_id);
+        ingredientsList.push({
+          name: invItem ? invItem.name : 'Unknown Item',
+          quantity: ing.quantity,
+          unit: ing.unit || 'unit'
+        });
+      });
+    });
+
+    setRecipeToDelete({
+      menuItem,
+      variantId,
+      recipeIds,
+      displayName: `${menuItem.name}${variantLabel}`,
+      ingredients: ingredientsList
+    });
+  };
+
+  // Recipe Delete Confirmation Execution
+  const handleConfirmDeleteRecipe = async () => {
+    if (!recipeToDelete || recipeToDelete.recipeIds.length === 0) return;
+    setIsDeletingRecipe(true);
+    try {
+      // 1. Delete linked ingredients first
+      const { error: ingErr } = await supabase
+        .from('inventory_recipe_ingredients')
+        .delete()
+        .in('recipe_id', recipeToDelete.recipeIds);
+      if (ingErr) throw ingErr;
+
+      // 2. Delete recipe with restaurant safety check
+      const { error: recErr } = await supabase
+        .from('inventory_recipes')
+        .delete()
+        .in('id', recipeToDelete.recipeIds)
+        .eq('restaurant_id', restaurantId);
+      if (recErr) throw recErr;
+
+      // 3. Reset states & reload data
+      const targetDishId = recipeToDelete.menuItem.id;
+      setRecipeToDelete(null);
+      setShowRecipeModal(false);
+      setSelectedMenuItemForRecipe(null);
+      setSelectedRecipeVariantId(null);
+      await loadData();
+
+      if (targetDishId) {
+        setTimeout(() => {
+          const rowEl = document.getElementById(`recipe-row-${targetDishId}`);
+          if (rowEl) {
+            rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 80);
+      }
+    } catch (err: any) {
+      console.error('Failed to delete recipe:', err);
+      alert(err.message || 'Error deleting recipe');
+    } finally {
+      setIsDeletingRecipe(false);
     }
   };
 
@@ -1535,14 +1641,36 @@ export default function InventoryDashboardPage() {
                                   {v.name}
                                 </button>
                               ))}
+                              {recipes.some(r => r.menu_item_id === item.id) && (
+                                <button
+                                  onClick={() => promptDeleteRecipe(item, null)}
+                                  className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl cursor-pointer border border-rose-200 dark:border-rose-900/50 transition-colors inline-flex items-center justify-center"
+                                  title="Delete Recipe"
+                                  aria-label="Delete Recipe"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
                           ) : (
-                            <button
-                              onClick={() => openRecipeModalForDish(item, null)}
-                              className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold hover:opacity-90 cursor-pointer"
-                            >
-                              {metrics.isConfigured ? 'Edit Recipe' : 'Configure Recipe'}
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openRecipeModalForDish(item, null)}
+                                className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold hover:opacity-90 cursor-pointer"
+                              >
+                                {metrics.isConfigured ? 'Edit Recipe' : 'Configure Recipe'}
+                              </button>
+                              {metrics.isConfigured && (
+                                <button
+                                  onClick={() => promptDeleteRecipe(item, null)}
+                                  className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl cursor-pointer border border-rose-200 dark:border-rose-900/50 transition-colors inline-flex items-center justify-center"
+                                  title="Delete Recipe"
+                                  aria-label="Delete Recipe"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -2256,9 +2384,119 @@ export default function InventoryDashboardPage() {
                 </div>
               </div>
 
-              <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 bg-slate-50 dark:bg-slate-950/50 shrink-0">
-                <button onClick={handleCloseRecipeModal} className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer">Cancel</button>
-                <button onClick={handleSaveRecipe} className="px-5 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500 shadow-sm whitespace-nowrap">Save Official Recipe</button>
+              <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-950/50 shrink-0">
+                <div>
+                  {selectedMenuItemForRecipe && recipes.some(r => 
+                    r.menu_item_id === selectedMenuItemForRecipe.id && 
+                    (selectedRecipeVariantId ? r.variant_id === selectedRecipeVariantId : (!r.variant_id || r.variant_id === null))
+                  ) && (
+                    <button
+                      type="button"
+                      onClick={() => promptDeleteRecipe(selectedMenuItemForRecipe, selectedRecipeVariantId)}
+                      className="px-3.5 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl cursor-pointer transition-colors flex items-center gap-1.5"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete Recipe</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button onClick={handleCloseRecipeModal} className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer">Cancel</button>
+                  <button onClick={handleSaveRecipe} className="px-5 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500 shadow-sm whitespace-nowrap">Save Official Recipe</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* MODAL: DELETE RECIPE CONFIRMATION */}
+      {recipeToDelete && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 overflow-hidden pointer-events-auto">
+            <div 
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" 
+              onClick={() => !isDeletingRecipe && setRecipeToDelete(null)} 
+            />
+            <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl animate-pop z-10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-xl">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-slate-900 dark:text-white">Delete Recipe?</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      {recipeToDelete.displayName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => !isDeletingRecipe && setRecipeToDelete(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+                  disabled={isDeletingRecipe}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Warning Alert */}
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>Permanent Recipe Deletion</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300/90 font-medium">
+                  Are you sure you want to delete this recipe? The dish will revert to unconfigured. Inventory stock and ledger history will NOT be affected.
+                </p>
+              </div>
+
+              {/* Linked Inventory Items Preview */}
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                  Linked Ingredients ({recipeToDelete.ingredients.length})
+                </label>
+                {recipeToDelete.ingredients.length > 0 ? (
+                  <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950/40 p-1">
+                    {recipeToDelete.ingredients.map((ing, idx) => (
+                      <div key={idx} className="px-3 py-1.5 flex justify-between items-center text-xs font-semibold">
+                        <span className="text-slate-800 dark:text-slate-200">{ing.name}</span>
+                        <span className="text-slate-500 dark:text-slate-400 font-mono text-[11px] font-bold">
+                          {ing.quantity} {ing.unit}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No ingredients mapped</p>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setRecipeToDelete(null)}
+                  disabled={isDeletingRecipe}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteRecipe}
+                  disabled={isDeletingRecipe}
+                  className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl cursor-pointer transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isDeletingRecipe ? (
+                    <span>Deleting...</span>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete Recipe</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
