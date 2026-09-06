@@ -202,6 +202,14 @@ export default function InventoryDashboardPage() {
   const [editingItem, setEditingItem] = useState<any | null>(null);
   const [itemUnitType, setItemUnitType] = useState<string>('gram');
   const [customUnitName, setCustomUnitName] = useState<string>('');
+  const [itemToDelete, setItemToDelete] = useState<any | null>(null);
+  const [itemDependencyBlock, setItemDependencyBlock] = useState<{
+    item: any;
+    linkedRecipesCount: number;
+    dishNames: string[];
+    firstDishId: string | null;
+  } | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState(false);
 
   // Recipe Modal
   const [showRecipeModal, setShowRecipeModal] = useState(false);
@@ -357,10 +365,11 @@ export default function InventoryDashboardPage() {
   }, [restaurantId]);
 
   // Calculated Summary Metrics (Using canonical getItemStockStatus: BUG-INV-009)
-  const totalItemsCount = items.length;
-  const totalStockValue = items.reduce((sum, item) => sum + (Number(item.current_stock || 0) * Number(item.cost_per_unit || 0)), 0);
-  const lowStockCount = items.filter(i => getItemStockStatus(i).isLow).length;
-  const outOfStockCount = items.filter(i => getItemStockStatus(i).isOut).length;
+  const activeItems = items.filter(i => i.is_active !== false);
+  const totalItemsCount = activeItems.length;
+  const totalStockValue = activeItems.reduce((sum, item) => sum + (Number(item.current_stock || 0) * Number(item.cost_per_unit || 0)), 0);
+  const lowStockCount = activeItems.filter(i => getItemStockStatus(i).isLow).length;
+  const outOfStockCount = activeItems.filter(i => getItemStockStatus(i).isOut).length;
 
   const todayStart = new Date();
   todayStart.setHours(0,0,0,0);
@@ -529,6 +538,68 @@ export default function InventoryDashboardPage() {
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Error saving item');
+    }
+  };
+
+  // Item Delete Prompt Helper (with Recipe Dependency Protection)
+  const promptDeleteItem = (item: any) => {
+    if (!item) return;
+
+    // Check if item is used in any recipes
+    const linked = recipes.filter(r => 
+      (r.inventory_recipe_ingredients || []).some((ing: any) => ing.inventory_item_id === item.id)
+    );
+
+    if (linked.length > 0) {
+      const dishNames: string[] = [];
+      linked.forEach(r => {
+        const dish = menuItems.find(m => m.id === r.menu_item_id);
+        const dishName = dish ? dish.name : 'Unknown Dish';
+        if (r.variant_id && dish?.variants) {
+          const v = dish.variants.find((v: any) => v.id === r.variant_id);
+          dishNames.push(v ? `${dishName} (${v.name})` : dishName);
+        } else {
+          dishNames.push(dishName);
+        }
+      });
+
+      setItemDependencyBlock({
+        item,
+        linkedRecipesCount: linked.length,
+        dishNames,
+        firstDishId: linked[0]?.menu_item_id || null
+      });
+      return;
+    }
+
+    setItemToDelete(item);
+  };
+
+  // Item Delete Confirmation Execution (Soft Delete)
+  const handleConfirmDeleteItem = async () => {
+    if (!itemToDelete) return;
+    setIsDeletingItem(true);
+    try {
+      const { error } = await supabase
+        .from('inventory_items')
+        .update({
+          is_active: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', itemToDelete.id)
+        .eq('restaurant_id', restaurantId);
+
+      if (error) throw error;
+
+      setItemToDelete(null);
+      setShowItemModal(false);
+      setEditingItem(null);
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to delete inventory item:', err);
+      alert(err.message || 'Error deleting item');
+    } finally {
+      setIsDeletingItem(false);
     }
   };
 
@@ -1186,7 +1257,7 @@ export default function InventoryDashboardPage() {
   };
 
   // Filtered Inventory Items (Using canonical getItemStockStatus: BUG-INV-009)
-  const filteredItems = items.filter(item => {
+  const filteredItems = activeItems.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -1235,6 +1306,7 @@ export default function InventoryDashboardPage() {
             }}
             className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
           >
+            <Sparkles className="h-4 w-4" />
             <span>Generate AI Recipe</span>
           </button>
 
@@ -1257,7 +1329,7 @@ export default function InventoryDashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <ResourceUsageCard
           title="Inventory Items"
-          used={items.length}
+          used={activeItems.length}
           limit={planSpec?.limits?.inventory_items ?? 100}
           unitLabel="used"
         />
@@ -1365,7 +1437,7 @@ export default function InventoryDashboardPage() {
       {/* ERP Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto pb-2 scrollbar-none">
         {[
-          { id: 'items', label: 'Inventory Items', icon: Boxes, badge: items.length },
+          { id: 'items', label: 'Inventory Items', icon: Boxes, badge: activeItems.length },
           { id: 'recipes', label: 'Recipes & Costing', icon: BookOpen, badge: recipes.length },
           { id: 'dispositions', label: 'Food Dispositions', icon: UtensilsCrossed, badge: dispositions.length },
           { id: 'transactions', label: 'Transaction Ledger', icon: History, badge: transactions.length },
@@ -1513,17 +1585,29 @@ export default function InventoryDashboardPage() {
                             )}
                           </td>
                           <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() => {
-                                setEditingItem(item);
-                                setItemUnitType(item.unit || 'gram');
-                                setCustomUnitName('');
-                                setShowItemModal(true);
-                              }}
-                              className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                            >
-                              <Edit3 className="h-4 w-4" />
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setEditingItem(item);
+                                  setItemUnitType(item.unit || 'gram');
+                                  setCustomUnitName('');
+                                  setShowItemModal(true);
+                                }}
+                                className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                                title="Edit Item"
+                                aria-label="Edit Item"
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => promptDeleteItem(item)}
+                                className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg cursor-pointer border border-rose-200 dark:border-rose-900/50 transition-colors inline-flex items-center justify-center"
+                                title="Delete Item"
+                                aria-label="Delete Item"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -2005,7 +2089,7 @@ export default function InventoryDashboardPage() {
                 className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold cursor-pointer"
               >
                 <option value="all">All Raw Ingredients</option>
-                {items.map(i => (
+                {activeItems.map(i => (
                   <option key={i.id} value={i.id}>{i.name}</option>
                 ))}
               </select>
@@ -2123,11 +2207,211 @@ export default function InventoryDashboardPage() {
                   </div>
                 </div>
 
-                <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2 bg-slate-50 dark:bg-slate-800/80 flex-shrink-0">
-                  <button type="button" onClick={() => setShowItemModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer">Cancel</button>
-                  <button type="submit" className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500">Save Item</button>
+                <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80 flex-shrink-0">
+                  <div>
+                    {editingItem && (
+                      <button
+                        type="button"
+                        onClick={() => promptDeleteItem(editingItem)}
+                        className="px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl cursor-pointer transition-colors flex items-center gap-1.5"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>Delete Item</span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setShowItemModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer">Cancel</button>
+                    <button type="submit" className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500">Save Item</button>
+                  </div>
                 </div>
               </form>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* MODAL: ITEM RECIPE DEPENDENCY BLOCK */}
+      {itemDependencyBlock && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 overflow-hidden pointer-events-auto">
+            <div 
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" 
+              onClick={() => setItemDependencyBlock(null)} 
+            />
+            <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl animate-pop z-10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-slate-900 dark:text-white">Cannot Delete Item</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      {itemDependencyBlock.item.name} is in use
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setItemDependencyBlock(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Warning Alert */}
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <AlertOctagon className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>Active Recipe Dependencies</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300/90 font-medium">
+                  <strong>{itemDependencyBlock.item.name}</strong> is currently used in <strong>{itemDependencyBlock.linkedRecipesCount}</strong> recipe{itemDependencyBlock.linkedRecipesCount > 1 ? 's' : ''}. You must remove or replace it in those recipes before this item can be deleted.
+                </p>
+              </div>
+
+              {/* Linked Recipes List */}
+              <div>
+                <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                  Linked Dishes / Recipes ({itemDependencyBlock.dishNames.length})
+                </label>
+                <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950/40 p-1">
+                  {itemDependencyBlock.dishNames.map((name, idx) => (
+                    <div key={idx} className="px-3 py-1.5 flex justify-between items-center text-xs font-semibold">
+                      <span className="text-slate-800 dark:text-slate-200">{name}</span>
+                      <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 px-2 py-0.5 rounded-md">
+                        Required Ingredient
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons: Cancel and View Recipes */}
+              <div className="pt-2 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setItemDependencyBlock(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetDish = itemDependencyBlock.firstDishId;
+                    setItemDependencyBlock(null);
+                    setShowItemModal(false);
+                    setActiveTab('recipes');
+                    if (targetDish) {
+                      setFocusedDishId(targetDish);
+                      setTimeout(() => {
+                        const rowEl = document.getElementById(`recipe-row-${targetDish}`);
+                        if (rowEl) rowEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 100);
+                    }
+                  }}
+                  className="px-5 py-2 text-xs font-bold bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 rounded-xl cursor-pointer transition-colors shadow-sm flex items-center gap-1.5"
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  <span>View Recipes</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* MODAL: DELETE INVENTORY ITEM CONFIRMATION */}
+      {itemToDelete && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 overflow-hidden pointer-events-auto">
+            <div 
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" 
+              onClick={() => !isDeletingItem && setItemToDelete(null)} 
+            />
+            <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md p-5 sm:p-6 space-y-4 shadow-2xl animate-pop z-10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 rounded-xl">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-slate-900 dark:text-white">Delete Inventory Item?</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      {itemToDelete.name} ({itemToDelete.category || 'General'})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => !isDeletingItem && setItemToDelete(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+                  disabled={isDeletingItem}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Warning Alert */}
+              <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl p-3 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <span>Soft Delete & Archive Item</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300/90 font-medium">
+                  This item will be archived and hidden from active inventory. Past purchase history and ledger audit logs will remain intact.
+                </p>
+              </div>
+
+              {/* Item Info Summary */}
+              <div className="bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Current Stock</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">
+                    {formatStockQuantity(itemToDelete.current_stock, itemToDelete.unit)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Linked Recipes</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    0 recipes (Safe to delete)
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">Unit Cost</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">
+                    ₹{formatCurrency(itemToDelete.cost_per_unit)} / {itemToDelete.unit}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons: Cancel and Delete Item */}
+              <div className="pt-2 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setItemToDelete(null)}
+                  disabled={isDeletingItem}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteItem}
+                  disabled={isDeletingItem}
+                  className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl cursor-pointer transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isDeletingItem ? (
+                    <span>Deleting...</span>
+                  ) : (
+                    <>
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete Item</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </ModalPortal>
@@ -2300,7 +2584,7 @@ export default function InventoryDashboardPage() {
                             className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
                           >
                             <option value="">Select Raw Inventory Item...</option>
-                            {items.map(item => (
+                            {activeItems.map(item => (
                               <option key={item.id} value={item.id}>
                                 {item.name} ({item.category}) — {formatStockQuantity(item.current_stock, item.unit)} in stock
                               </option>
@@ -2802,7 +3086,7 @@ export default function InventoryDashboardPage() {
                       className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold cursor-pointer"
                     >
                       <option value="">Select Item...</option>
-                      {items.map(i => (
+                      {activeItems.map(i => (
                         <option key={i.id} value={i.id}>{i.name} ({i.category}) — Current: {formatStockQuantity(i.current_stock, i.unit)}</option>
                       ))}
                     </select>
@@ -2949,7 +3233,7 @@ export default function InventoryDashboardPage() {
                     <label className="block text-[11px] font-bold text-slate-600">Item Wasted *</label>
                     <select value={wasteForm.inventory_item_id} onChange={e => setWasteForm({ ...wasteForm, inventory_item_id: e.target.value })} required className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold cursor-pointer">
                       <option value="">Select Item...</option>
-                      {items.map(i => (
+                      {activeItems.map(i => (
                         <option key={i.id} value={i.id}>{i.name} (Current: {formatStockQuantity(i.current_stock, i.unit)})</option>
                       ))}
                     </select>
