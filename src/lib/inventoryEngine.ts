@@ -2280,3 +2280,236 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
     };
   }
 }
+
+// Mutex queue map for restock operations to eliminate concurrent race conditions (BUG-INV-010)
+const restockItemMutexMap = new Map<string, Promise<any>>();
+
+export interface RecordRestockParams {
+  restaurantId: string;
+  inventoryItemId: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  costUnit?: string;
+  supplierName?: string;
+  invoiceNumber?: string;
+  notes?: string;
+  actorRole?: string;
+  idempotencyKey?: string;
+}
+
+export interface RecordRestockResult {
+  success: boolean;
+  skipped?: boolean;
+  purchaseId?: string;
+  transactionId?: string;
+  beforeStock?: number;
+  afterStock?: number;
+  addedStock?: number;
+  error?: string;
+}
+
+/**
+ * Atomic serialized purchase restock recording with idempotency and race condition protection (BUG-INV-010).
+ * Prevents concurrent duplicate writes and stale before_stock calculation.
+ */
+export async function recordRestockPurchase(params: RecordRestockParams): Promise<RecordRestockResult> {
+  const {
+    restaurantId,
+    inventoryItemId,
+    quantity,
+    unit,
+    unitCost,
+    costUnit,
+    supplierName,
+    invoiceNumber,
+    notes,
+    actorRole,
+    idempotencyKey
+  } = params;
+
+  if (!restaurantId || !inventoryItemId || quantity <= 0 || isNaN(quantity) || unitCost < 0 || isNaN(unitCost)) {
+    return { success: false, error: 'Invalid restock parameters' };
+  }
+
+  // 1. Idempotency Check upfront
+  if (idempotencyKey) {
+    const { data: existingTx } = await supabase
+      .from('inventory_transactions')
+      .select('id, reference_id, before_stock, after_stock')
+      .eq('restaurant_id', restaurantId)
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
+
+    if (existingTx) {
+      console.warn(`[InventoryEngine] DUPLICATE_RESTOCK_SKIPPED: Restock with key ${idempotencyKey} already processed.`);
+      return {
+        success: true,
+        skipped: true,
+        purchaseId: existingTx.reference_id,
+        transactionId: existingTx.id,
+        beforeStock: Number(existingTx.before_stock),
+        afterStock: Number(existingTx.after_stock),
+        error: 'Duplicate restock request skipped'
+      };
+    }
+  }
+
+  // 2. Concurrency Mutex Queue per item: Serialize concurrent restocks to eliminate race conditions
+  const mutexKey = `${restaurantId}:${inventoryItemId}`;
+  const previousOp = restockItemMutexMap.get(mutexKey) || Promise.resolve();
+
+  const currentOp = (async () => {
+    try {
+      await previousOp;
+    } catch {
+      // Ignore errors from previous operation in queue
+    }
+
+    // Check idempotency again after acquiring mutex
+    if (idempotencyKey) {
+      const { data: existingTxAfterWait } = await supabase
+        .from('inventory_transactions')
+        .select('id, reference_id, before_stock, after_stock')
+        .eq('restaurant_id', restaurantId)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle();
+
+      if (existingTxAfterWait) {
+        console.warn(`[InventoryEngine] DUPLICATE_RESTOCK_SKIPPED (After Lock): Restock key ${idempotencyKey} found.`);
+        return {
+          success: true,
+          skipped: true,
+          purchaseId: existingTxAfterWait.reference_id,
+          transactionId: existingTxAfterWait.id,
+          beforeStock: Number(existingTxAfterWait.before_stock),
+          afterStock: Number(existingTxAfterWait.after_stock)
+        };
+      }
+    }
+
+    // 3. Always fetch FRESH item from the database (NEVER use stale React state)
+    const { data: freshItem, error: fetchErr } = await supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('id', inventoryItemId)
+      .eq('restaurant_id', restaurantId)
+      .single();
+
+    if (fetchErr || !freshItem) {
+      return { success: false, error: fetchErr?.message || 'Inventory item not found' };
+    }
+
+    const purchaseUnit = unit || freshItem.unit;
+    const rateUnit = costUnit || purchaseUnit;
+
+    // Unit conversions
+    let qtyInItemUnit = quantity;
+    if (normalizeUnit(purchaseUnit) !== normalizeUnit(freshItem.unit) && areUnitsCompatible(purchaseUnit, freshItem.unit)) {
+      qtyInItemUnit = convertUnit(quantity, purchaseUnit, freshItem.unit);
+    }
+
+    let qtyInRateUnit = quantity;
+    if (normalizeUnit(purchaseUnit) !== normalizeUnit(rateUnit) && areUnitsCompatible(purchaseUnit, rateUnit)) {
+      qtyInRateUnit = convertUnit(quantity, purchaseUnit, rateUnit);
+    }
+
+    const totalAmount = parseFloat((qtyInRateUnit * unitCost).toFixed(2));
+    const costInItemUnit = qtyInItemUnit > 0 ? parseFloat((totalAmount / qtyInItemUnit).toFixed(6)) : freshItem.cost_per_unit;
+
+    // 4. Create purchase record
+    const { data: purch, error: purchErr } = await supabase
+      .from('inventory_purchases')
+      .insert({
+        restaurant_id: restaurantId,
+        supplier_name: supplierName || null,
+        invoice_number: invoiceNumber || null,
+        total_amount: totalAmount,
+        notes: notes || null,
+        created_by: actorRole === 'owner' ? 'Owner' : 'Manager'
+      })
+      .select();
+
+    if (purchErr || !purch || purch.length === 0) {
+      return { success: false, error: purchErr?.message || 'Failed to create purchase entry' };
+    }
+
+    const purchaseId = purch[0].id;
+
+    // 5. Create purchase item record
+    const { error: pItemErr } = await supabase
+      .from('inventory_purchase_items')
+      .insert({
+        purchase_id: purchaseId,
+        inventory_item_id: inventoryItemId,
+        quantity: qtyInItemUnit,
+        unit: freshItem.unit,
+        unit_cost: costInItemUnit,
+        total_cost: totalAmount
+      });
+
+    if (pItemErr) {
+      console.error('[InventoryEngine] Error creating purchase item:', pItemErr);
+    }
+
+    // 6. Calculate accurate before and after stock
+    const beforeStock = Number(freshItem.current_stock || 0);
+    const afterStock = parseFloat((beforeStock + qtyInItemUnit).toFixed(4));
+
+    // 7. Update inventory item stock and cost
+    const { error: updateErr } = await supabase
+      .from('inventory_items')
+      .update({
+        current_stock: afterStock,
+        cost_per_unit: costInItemUnit > 0 ? costInItemUnit : freshItem.cost_per_unit,
+        supplier: supplierName || freshItem.supplier,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', inventoryItemId)
+      .eq('restaurant_id', restaurantId);
+
+    if (updateErr) {
+      return { success: false, error: updateErr.message || 'Failed to update inventory stock' };
+    }
+
+    // 8. Insert immutable transaction ledger with idempotency key
+    const primaryKey = idempotencyKey || `purch_${inventoryItemId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const { data: txData, error: txErr } = await supabase
+      .from('inventory_transactions')
+      .insert({
+        restaurant_id: restaurantId,
+        inventory_item_id: inventoryItemId,
+        quantity: qtyInItemUnit,
+        unit: freshItem.unit,
+        before_stock: beforeStock,
+        after_stock: afterStock,
+        transaction_type: 'PURCHASE',
+        reference_type: 'purchase',
+        reference_id: purchaseId,
+        idempotency_key: primaryKey,
+        user_name: actorRole === 'owner' ? 'Owner' : 'Manager',
+        notes: `Stock purchase in: ${quantity} ${purchaseUnit} @ ₹${unitCost}/${rateUnit} (Total ₹${totalAmount}, Effective: ₹${costInItemUnit}/${freshItem.unit})${notes ? ` - ${notes}` : ''}`
+      })
+      .select()
+      .single();
+
+    if (txErr) {
+      console.warn('[InventoryEngine] Notice on transaction insertion:', txErr.message);
+    }
+
+    // 9. Sync Live Menu Availability in background
+    syncInventoryMenuAvailability(restaurantId).catch(() => {});
+
+    return {
+      success: true,
+      purchaseId,
+      transactionId: txData?.id,
+      beforeStock,
+      afterStock,
+      addedStock: qtyInItemUnit
+    };
+  })();
+
+  restockItemMutexMap.set(mutexKey, currentOp);
+  return await currentOp;
+}
