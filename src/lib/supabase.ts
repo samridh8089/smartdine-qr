@@ -173,7 +173,7 @@ if (typeof window !== 'undefined') {
 export const IS_MOCK_MODE = false;
 
 export const storage = {
-  async uploadImage(file: File, restaurantId: string, path: string): Promise<string> {
+  async uploadImage(file: File, restaurantId: string, path: string, previousUrl?: string): Promise<string> {
     if (file.size > MAX_FILE_SIZE_BYTES) {
       throw new Error('File size exceeds the 5 MB limit.');
     }
@@ -223,7 +223,8 @@ export const storage = {
         body: JSON.stringify({
           restaurantId,
           itemId: uniqueSubPath,
-          imageUrl: dataUrl
+          imageUrl: dataUrl,
+          previousUrl: previousUrl || undefined
         })
       });
 
@@ -313,14 +314,20 @@ export const storage = {
     return publicUrl;
   },
 
-  async deleteImage(publicUrl: string): Promise<void> {
+  async deleteImage(publicUrl: string, excludeItemId?: string): Promise<void> {
     try {
       if (!publicUrl || !publicUrl.includes('supabase.co/storage')) return;
 
+      const params = new URLSearchParams({ url: publicUrl });
+      if (excludeItemId) params.set('excludeItemId', excludeItemId);
+
       if (typeof window !== 'undefined') {
-        await fetch(`/api/ai-menu/upload-image?url=${encodeURIComponent(publicUrl)}`, {
+        const res = await fetch(`/api/ai-menu/upload-image?${params.toString()}`, {
           method: 'DELETE'
         });
+        if (!res.ok) {
+          console.warn(`[Storage Delete] Server responded with status ${res.status}`);
+        }
         return;
       }
 
@@ -335,6 +342,7 @@ export const storage = {
       } else {
         return;
       }
+      filePath = filePath.replace(/^\/+/, '').split('?')[0].trim();
       if (!filePath) return;
 
       const { error } = await supabase.storage
