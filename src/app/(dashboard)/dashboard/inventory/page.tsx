@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRestaurant } from '../../layout';
 import { supabase } from '@/lib/supabase';
 import { 
@@ -14,7 +14,8 @@ import {
 } from '@/lib/inventoryUnits';
 import { 
   syncInventoryMenuAvailability, 
-  getHourlyInventoryImpactReport 
+  getHourlyInventoryImpactReport,
+  recordRestockPurchase
 } from '@/lib/inventoryEngine';
 import { checkResourceLimitForRestaurant } from '@/lib/entitlements';
 import { 
@@ -144,6 +145,9 @@ export default function InventoryDashboardPage() {
 
   // Purchase Modal
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false);
+  const submittingPurchaseRef = useRef(false);
+  const purchaseIdempotencyRef = useRef<string | null>(null);
   const [purchaseForm, setPurchaseForm] = useState({
     supplier_name: '',
     invoice_number: '',
@@ -862,9 +866,16 @@ export default function InventoryDashboardPage() {
   };
 
 
-  // Purchase Entry Handler
+  // Purchase Entry Handler (Protected against race conditions and double submissions: BUG-INV-010)
   const handleSavePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Prevent double-click submissions and concurrent duplicate requests
+    if (submittingPurchaseRef.current || isSubmittingPurchase) {
+      console.warn('[Inventory] Duplicate restock submission blocked by in-flight lock.');
+      return;
+    }
+
     const { supplier_name, invoice_number, inventory_item_id, quantity, unit, unit_cost, cost_unit, notes } = purchaseForm;
     const qty = Number(quantity);
     const cost = Number(unit_cost);
@@ -872,75 +883,34 @@ export default function InventoryDashboardPage() {
     if (!inventory_item_id || qty <= 0 || isNaN(qty)) return alert('Select item and valid quantity');
     if (cost < 0 || isNaN(cost)) return alert('Enter a valid unit cost');
 
+    submittingPurchaseRef.current = true;
+    setIsSubmittingPurchase(true);
+
     try {
       const item = items.find(i => i.id === inventory_item_id);
-      if (!item) return;
+      const purchaseUnit = unit || item?.unit || 'kg';
+      const key = purchaseIdempotencyRef.current || `purch_${inventory_item_id}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-      const purchaseUnit = unit || item.unit;
-      const rateUnit = cost_unit || purchaseUnit;
-
-      // 1. Convert purchase quantity into the item's base unit (e.g. 5 kg -> 5000 gram)
-      let qtyInItemUnit = qty;
-      if (normalizeUnit(purchaseUnit) !== normalizeUnit(item.unit) && areUnitsCompatible(purchaseUnit, item.unit)) {
-        qtyInItemUnit = convertUnit(qty, purchaseUnit, item.unit);
-      }
-
-      // 2. Convert quantity into the rate unit to calculate total purchase cost (e.g. 500 g @ ₹50/kg -> 0.5 kg * 50 = ₹25)
-      let qtyInRateUnit = qty;
-      if (normalizeUnit(purchaseUnit) !== normalizeUnit(rateUnit) && areUnitsCompatible(purchaseUnit, rateUnit)) {
-        qtyInRateUnit = convertUnit(qty, purchaseUnit, rateUnit);
-      }
-
-      const totalAmount = parseFloat((qtyInRateUnit * cost).toFixed(2));
-
-      // 3. Compute cost per item base unit (e.g. ₹200 / 5000 g = ₹0.04/g, ₹25 / 500 g = ₹0.05/g)
-      const costInItemUnit = qtyInItemUnit > 0 ? parseFloat((totalAmount / qtyInItemUnit).toFixed(6)) : item.cost_per_unit;
-
-      const { data: purch } = await supabase.from('inventory_purchases').insert({
-        restaurant_id: restaurantId,
-        supplier_name,
-        invoice_number,
-        total_amount: totalAmount,
+      const restockRes = await recordRestockPurchase({
+        restaurantId,
+        inventoryItemId: inventory_item_id,
+        quantity: qty,
+        unit: purchaseUnit,
+        unitCost: cost,
+        costUnit: cost_unit || purchaseUnit,
+        supplierName: supplier_name,
+        invoiceNumber: invoice_number,
         notes,
-        created_by: activeRole === 'owner' ? 'Owner' : 'Manager'
-      }).select();
+        actorRole: activeRole,
+        idempotencyKey: key
+      });
 
-      if (purch && purch.length > 0) {
-        await supabase.from('inventory_purchase_items').insert({
-          purchase_id: purch[0].id,
-          inventory_item_id,
-          quantity: qtyInItemUnit,
-          unit: item.unit,
-          unit_cost: costInItemUnit,
-          total_cost: totalAmount
-        });
-
-        const beforeStock = Number(item.current_stock || 0);
-        const afterStock = beforeStock + qtyInItemUnit;
-
-        await supabase.from('inventory_items').update({
-          current_stock: afterStock,
-          cost_per_unit: costInItemUnit > 0 ? costInItemUnit : item.cost_per_unit,
-          supplier: supplier_name || item.supplier,
-          updated_at: new Date().toISOString()
-        }).eq('id', inventory_item_id);
-
-        await supabase.from('inventory_transactions').insert({
-          restaurant_id: restaurantId,
-          inventory_item_id,
-          quantity: qtyInItemUnit,
-          unit: item.unit,
-          before_stock: beforeStock,
-          after_stock: afterStock,
-          transaction_type: 'PURCHASE',
-          reference_type: 'purchase',
-          reference_id: purch[0].id,
-          user_name: activeRole === 'owner' ? 'Owner' : 'Manager',
-          notes: `Stock purchase in: ${qty} ${purchaseUnit} @ ₹${cost}/${rateUnit} (Total ₹${totalAmount}, Effective: ₹${costInItemUnit}/${item.unit})${notes ? ` - ${notes}` : ''}`
-        });
+      if (!restockRes.success) {
+        throw new Error(restockRes.error || 'Failed to record restock purchase');
       }
 
       setShowPurchaseModal(false);
+      purchaseIdempotencyRef.current = null;
       setPurchaseForm({
         supplier_name: '',
         invoice_number: '',
@@ -954,6 +924,9 @@ export default function InventoryDashboardPage() {
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Purchase save error');
+    } finally {
+      submittingPurchaseRef.current = false;
+      setIsSubmittingPurchase(false);
     }
   };
 
@@ -1655,7 +1628,10 @@ export default function InventoryDashboardPage() {
               <p className="text-xs text-slate-500">Record supplier purchases to automatically update inventory stock and unit costs</p>
             </div>
             <button
-              onClick={() => setShowPurchaseModal(true)}
+              onClick={() => {
+                purchaseIdempotencyRef.current = `purch_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                setShowPurchaseModal(true);
+              }}
               className="bg-sky-600 hover:bg-sky-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer"
             >
               + Record Purchase
@@ -2415,11 +2391,28 @@ export default function InventoryDashboardPage() {
       {showPurchaseModal && (
         <ModalPortal>
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overflow-hidden pointer-events-auto">
-            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" onClick={() => setShowPurchaseModal(false)} />
+            <div 
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" 
+              onClick={() => {
+                if (!isSubmittingPurchase) {
+                  purchaseIdempotencyRef.current = null;
+                  setShowPurchaseModal(false);
+                }
+              }} 
+            />
             <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[88vh] overflow-hidden animate-pop z-10">
               <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center flex-shrink-0">
                 <h3 className="font-black text-base text-slate-900 dark:text-white">Record Stock Purchase (Stock In)</h3>
-                <button onClick={() => setShowPurchaseModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                <button 
+                  onClick={() => {
+                    if (!isSubmittingPurchase) {
+                      purchaseIdempotencyRef.current = null;
+                      setShowPurchaseModal(false);
+                    }
+                  }} 
+                  disabled={isSubmittingPurchase}
+                  className="text-slate-400 hover:text-slate-600 cursor-pointer disabled:opacity-50"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -2563,8 +2556,33 @@ export default function InventoryDashboardPage() {
                 </div>
 
                 <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2 bg-slate-50 dark:bg-slate-800/80 flex-shrink-0">
-                  <button type="button" onClick={() => setShowPurchaseModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer">Cancel</button>
-                  <button type="submit" className="px-4 py-2 bg-sky-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-sky-500">Submit Purchase</button>
+                  <button 
+                    type="button" 
+                    disabled={isSubmittingPurchase}
+                    onClick={() => {
+                      if (!isSubmittingPurchase) {
+                        purchaseIdempotencyRef.current = null;
+                        setShowPurchaseModal(false);
+                      }
+                    }} 
+                    className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isSubmittingPurchase}
+                    className="px-4 py-2 bg-sky-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    {isSubmittingPurchase ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Recording Purchase...</span>
+                      </>
+                    ) : (
+                      <span>Submit Purchase</span>
+                    )}
+                  </button>
                 </div>
               </form>
             </div>
