@@ -16,7 +16,12 @@ import {
   syncInventoryMenuAvailability, 
   getHourlyInventoryImpactReport,
   recordRestockPurchase,
-  getItemStockStatus
+  getItemStockStatus,
+  formatStockQuantity,
+  formatStock,
+  formatCurrency,
+  roundStockPrecision,
+  roundCostPrecision
 } from '@/lib/inventoryEngine';
 import { checkResourceLimitForRestaurant } from '@/lib/entitlements';
 import { 
@@ -1287,24 +1292,22 @@ export default function InventoryDashboardPage() {
                             {item.category || 'General'}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                            {formatQuantityWithUnit(physical, item.unit)}
+                            {formatStockQuantity(physical, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 font-bold text-amber-600 dark:text-amber-400">
                             {formatReservedStockDisplay(reserved, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 font-black text-emerald-600 dark:text-emerald-400">
-                            {formatQuantityWithUnit(availableToSell, item.unit)}
+                            {formatStockQuantity(availableToSell, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 text-slate-500">
-                            {formatQuantityWithUnit(item.minimum_stock, item.unit)}
+                            {formatStockQuantity(item.minimum_stock, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
-                            ₹{Number(item.cost_per_unit || 0) > 0 && Number(item.cost_per_unit || 0) < 0.01
-                              ? Number(item.cost_per_unit || 0).toFixed(4)
-                              : Number(item.cost_per_unit || 0).toFixed(2)} / {item.unit}
+                            ₹{formatCurrency(item.cost_per_unit)} / {item.unit}
                           </td>
                           <td className="py-3.5 px-4 font-black text-emerald-600 dark:text-emerald-400">
-                            ₹{val.toFixed(2)}
+                            ₹{formatCurrency(val)}
                           </td>
                           <td className="py-3.5 px-4">
                             {isOut ? (
@@ -1599,10 +1602,10 @@ export default function InventoryDashboardPage() {
                         </span>
                       </td>
                       <td className={`py-3 px-4 font-black ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {isPositive ? '+' : ''}{tx.quantity} {tx.unit}
+                        {isPositive ? '+' : ''}{formatStock(tx.quantity)} {tx.unit}
                       </td>
                       <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
-                        {tx.before_stock} → {tx.after_stock} {tx.unit}
+                        {formatStock(tx.before_stock)} → {formatStock(tx.after_stock)} {tx.unit}
                       </td>
                       <td className="py-3 px-4 text-slate-500 max-w-xs truncate">
                         {tx.notes || tx.idempotency_key || '—'}
@@ -2016,15 +2019,15 @@ export default function InventoryDashboardPage() {
                     <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div>
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">Total Recipe Cost</span>
-                        <span className="text-base font-black text-slate-900 dark:text-white">₹{modalTotalCost.toFixed(2)}</span>
+                        <span className="text-base font-black text-slate-900 dark:text-white">₹{formatCurrency(modalTotalCost)}</span>
                       </div>
                       <div>
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Selling Price</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">₹{modalSellingPrice.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">₹{formatCurrency(modalSellingPrice)}</span>
                       </div>
                       <div>
                         <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block">Gross Margin</span>
-                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">₹{modalGrossMargin.toFixed(2)}</span>
+                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">₹{formatCurrency(modalGrossMargin)}</span>
                       </div>
                     </div>
                   );
@@ -2072,7 +2075,7 @@ export default function InventoryDashboardPage() {
                             <option value="">Select Raw Inventory Item...</option>
                             {items.map(item => (
                               <option key={item.id} value={item.id}>
-                                {item.name} ({item.category}) — {item.current_stock} {item.unit} in stock
+                                {item.name} ({item.category}) — {formatStockQuantity(item.current_stock, item.unit)} in stock
                               </option>
                             ))}
                           </select>
@@ -2119,7 +2122,7 @@ export default function InventoryDashboardPage() {
                           </select>
 
                           <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 min-w-[70px] text-right px-1">
-                            ₹{ingCost.toFixed(2)}
+                            ₹{formatCurrency(ingCost)}
                           </span>
 
                           <button
@@ -2463,7 +2466,7 @@ export default function InventoryDashboardPage() {
                     >
                       <option value="">Select Item...</option>
                       {items.map(i => (
-                        <option key={i.id} value={i.id}>{i.name} ({i.category}) — Current: {i.current_stock} {i.unit}</option>
+                        <option key={i.id} value={i.id}>{i.name} ({i.category}) — Current: {formatStockQuantity(i.current_stock, i.unit)}</option>
                       ))}
                     </select>
                   </div>
@@ -2529,16 +2532,16 @@ export default function InventoryDashboardPage() {
                     <div className="p-3 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 rounded-xl text-xs space-y-1">
                       <div className="flex justify-between font-bold text-sky-900 dark:text-sky-300">
                         <span>Total Purchase Amount:</span>
-                        <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">₹{previewTotalAmount.toFixed(2)}</span>
+                        <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400">₹{formatCurrency(previewTotalAmount)}</span>
                       </div>
                       <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
                         <span>Stock Added ({selectedPurchaseItem.unit}):</span>
-                        <span className="font-bold text-slate-800 dark:text-slate-200">+{previewQtyInItemUnit} {selectedPurchaseItem.unit}</span>
+                        <span className="font-bold text-slate-800 dark:text-slate-200">+{formatStock(previewQtyInItemUnit)} {selectedPurchaseItem.unit}</span>
                       </div>
                       <div className="flex justify-between text-slate-600 dark:text-slate-400 text-[11px]">
                         <span>Effective Cost per {selectedPurchaseItem.unit}:</span>
                         <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                          ₹{previewCostInItemUnit < 0.01 && previewCostInItemUnit > 0 ? previewCostInItemUnit.toFixed(4) : previewCostInItemUnit.toFixed(2)} / {selectedPurchaseItem.unit}
+                          ₹{formatCurrency(previewCostInItemUnit)} / {selectedPurchaseItem.unit}
                         </span>
                       </div>
                     </div>
@@ -2610,7 +2613,7 @@ export default function InventoryDashboardPage() {
                     <select value={wasteForm.inventory_item_id} onChange={e => setWasteForm({ ...wasteForm, inventory_item_id: e.target.value })} required className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold cursor-pointer">
                       <option value="">Select Item...</option>
                       {items.map(i => (
-                        <option key={i.id} value={i.id}>{i.name} (Current: {i.current_stock} {i.unit})</option>
+                        <option key={i.id} value={i.id}>{i.name} (Current: {formatStockQuantity(i.current_stock, i.unit)})</option>
                       ))}
                     </select>
                   </div>
