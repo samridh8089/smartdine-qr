@@ -83,12 +83,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid image binary signature. Executable or dangerous files are strictly prohibited.' }, { status: 400 });
     }
 
+    // Normalize true MIME type and extension from verified magic bytes
+    const finalMime = magicCheck.detectedType || mimeType;
+    let finalExt = ext;
+    if (finalMime === 'image/png') finalExt = 'png';
+    else if (finalMime === 'image/webp') finalExt = 'webp';
+    else if (finalMime === 'image/jpeg' || finalMime === 'image/jpg') finalExt = 'jpeg';
+
     // 5. Generate sanitized, isolated path in the required structure: menu_items/<restaurant-id>/<uuid>.<ext>
     const safeRestaurantId = restaurantId.replace(/[^a-zA-Z0-9_\-]/g, '');
     const uniqueId = typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    const safeFileName = sanitizeFilename(`${uniqueId}.${ext}`);
+    const safeFileName = sanitizeFilename(`${uniqueId}.${finalExt}`);
     const filePath = `menu_items/${safeRestaurantId}/${safeFileName}`;
 
     // 6. Upload file buffer to Supabase Storage bucket using service-role client
@@ -96,7 +103,7 @@ export async function POST(req: Request) {
     let { error: uploadErr } = await supabaseAdmin.storage
       .from(bucketName)
       .upload(filePath, buffer, {
-        contentType: mimeType,
+        contentType: finalMime,
         upsert: true
       });
 
@@ -105,7 +112,7 @@ export async function POST(req: Request) {
       const { error: fallbackErr } = await supabaseAdmin.storage
         .from(bucketName)
         .upload(filePath, buffer, {
-          contentType: mimeType,
+          contentType: finalMime,
           upsert: true
         });
 
@@ -114,14 +121,27 @@ export async function POST(req: Request) {
       }
     }
 
-    // 7. Retrieve public URL
+    // 7. Retrieve public URL and ensure accessibility
     const { data: { publicUrl } } = supabaseAdmin.storage
       .from(bucketName)
       .getPublicUrl(filePath);
 
+    const baseSupabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || supabaseUrl).replace(/\/+$/, '');
+    const finalStorageUrl = (publicUrl || `${baseSupabaseUrl}/storage/v1/object/public/${bucketName}/${filePath}`).trim();
+
+    // Verify generated public URL returns HTTP 200 before returning to client
+    try {
+      const verifyRes = await fetch(finalStorageUrl, { method: 'HEAD' });
+      if (!verifyRes.ok && verifyRes.status !== 405) {
+        console.warn(`[Upload Image] HEAD check returned status ${verifyRes.status}`);
+      }
+    } catch (verifyErr) {
+      console.warn('[Upload Image] Pre-flight verification notice:', verifyErr);
+    }
+
     return NextResponse.json({
       success: true,
-      storageUrl: publicUrl,
+      storageUrl: finalStorageUrl,
       bucket: bucketName,
       path: filePath
     });
@@ -155,6 +175,9 @@ export async function DELETE(req: Request) {
     } else {
       return NextResponse.json({ success: true, message: 'Non-storage URL ignored' });
     }
+
+    // Strip any query parameters and leading slashes
+    filePath = filePath.replace(/^\/+/, '').split('?')[0].trim();
 
     if (filePath) {
       await supabaseAdmin.storage.from(bucketName).remove([filePath]);
