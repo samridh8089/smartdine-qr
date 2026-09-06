@@ -2306,11 +2306,38 @@ export interface RecordRestockResult {
   beforeStock?: number;
   afterStock?: number;
   addedStock?: number;
+  oldCost?: number;
+  purchaseCost?: number;
+  finalCostPerUnit?: number;
   error?: string;
 }
 
 /**
+ * Canonical Weighted Average Cost (WAC) Calculator (BUG-INV-004)
+ * Formula: ((Old Stock * Old Cost) + (New Stock * New Cost)) / (Old Stock + New Stock)
+ */
+export function calculateWeightedAverageCost(
+  oldStock: number,
+  oldCost: number,
+  newStock: number,
+  newCost: number
+): number {
+  const cleanOldStock = Math.max(0, Number(oldStock || 0));
+  const cleanOldCost = Math.max(0, Number(oldCost || 0));
+  const cleanNewStock = Math.max(0, Number(newStock || 0));
+  const cleanNewCost = Math.max(0, Number(newCost || 0));
+  const totalStock = cleanOldStock + cleanNewStock;
+
+  if (cleanOldStock > 0 && cleanOldCost > 0 && totalStock > 0) {
+    const totalValue = (cleanOldStock * cleanOldCost) + (cleanNewStock * cleanNewCost);
+    return parseFloat((totalValue / totalStock).toFixed(6));
+  }
+  return cleanNewCost > 0 ? parseFloat(cleanNewCost.toFixed(6)) : parseFloat(cleanOldCost.toFixed(6));
+}
+
+/**
  * Atomic serialized purchase restock recording with idempotency and race condition protection (BUG-INV-010).
+ * Calculates and persists Weighted Average Cost (WAC) on inventory items (BUG-INV-004).
  * Prevents concurrent duplicate writes and stale before_stock calculation.
  */
 export async function recordRestockPurchase(params: RecordRestockParams): Promise<RecordRestockResult> {
@@ -2452,16 +2479,18 @@ export async function recordRestockPurchase(params: RecordRestockParams): Promis
       console.error('[InventoryEngine] Error creating purchase item:', pItemErr);
     }
 
-    // 6. Calculate accurate before and after stock
+    // 6. Calculate accurate before and after stock, and compute Weighted Average Cost (WAC) (BUG-INV-004)
     const beforeStock = Number(freshItem.current_stock || 0);
     const afterStock = parseFloat((beforeStock + qtyInItemUnit).toFixed(4));
+    const oldCost = Number(freshItem.cost_per_unit || 0);
+    const finalCostPerUnit = calculateWeightedAverageCost(beforeStock, oldCost, qtyInItemUnit, costInItemUnit);
 
     // 7. Update inventory item stock and cost
     const { error: updateErr } = await supabase
       .from('inventory_items')
       .update({
         current_stock: afterStock,
-        cost_per_unit: costInItemUnit > 0 ? costInItemUnit : freshItem.cost_per_unit,
+        cost_per_unit: finalCostPerUnit,
         supplier: supplierName || freshItem.supplier,
         updated_at: new Date().toISOString()
       })
@@ -2488,7 +2517,7 @@ export async function recordRestockPurchase(params: RecordRestockParams): Promis
         reference_id: purchaseId,
         idempotency_key: primaryKey,
         user_name: actorRole === 'owner' ? 'Owner' : 'Manager',
-        notes: `Stock purchase in: ${quantity} ${purchaseUnit} @ ₹${unitCost}/${rateUnit} (Total ₹${totalAmount}, Effective: ₹${costInItemUnit}/${freshItem.unit})${notes ? ` - ${notes}` : ''}`
+        notes: `Stock purchase in: ${quantity} ${purchaseUnit} @ ₹${unitCost}/${rateUnit} (Total ₹${totalAmount}, Effective: ₹${costInItemUnit}/${freshItem.unit}, WAC: ₹${finalCostPerUnit}/${freshItem.unit})${notes ? ` - ${notes}` : ''}`
       })
       .select()
       .single();
@@ -2506,7 +2535,10 @@ export async function recordRestockPurchase(params: RecordRestockParams): Promis
       transactionId: txData?.id,
       beforeStock,
       afterStock,
-      addedStock: qtyInItemUnit
+      addedStock: qtyInItemUnit,
+      oldCost,
+      purchaseCost: costInItemUnit,
+      finalCostPerUnit
     };
   })();
 
