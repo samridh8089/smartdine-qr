@@ -234,7 +234,7 @@ export async function reserveInventoryForOrderBatch(
 
       const itemData = rawMap.get(rawId) || req.rawItem;
       const currentReserved = Number(itemData.reserved_stock || 0);
-      const newReserved = parseFloat((currentReserved + req.requiredQty).toFixed(4));
+      const newReserved = roundStockPrecision(currentReserved + req.requiredQty);
       const itemKey = `${idempotencyKey}_${rawId}`;
 
       await supabase
@@ -441,8 +441,8 @@ export async function consumeReservedInventoryForOrderBatch(
           continue;
         }
 
-        const afterStock = Math.max(0, parseFloat((beforeStock - resQty).toFixed(4)));
-        const newReserved = Math.max(0, parseFloat((Number(itemData.reserved_stock || 0) - resQty).toFixed(4)));
+        const afterStock = Math.max(0, roundStockPrecision(beforeStock - resQty));
+        const newReserved = Math.max(0, roundStockPrecision(Number(itemData.reserved_stock || 0) - resQty));
         const itemKey = `${idempotencyKey}_${itemId}`;
 
         // Deduct physical stock & release reserved stock
@@ -613,7 +613,7 @@ export async function consumeReservedInventoryForOrderBatch(
           continue;
         }
 
-        const afterStock = Math.max(0, parseFloat((beforeStock - req.requiredQty).toFixed(4)));
+        const afterStock = Math.max(0, roundStockPrecision(beforeStock - req.requiredQty));
         const itemKey = `${idempotencyKey}_${rawId}`;
 
         await supabase
@@ -731,8 +731,8 @@ export async function healUnconsumedActiveReservations(restaurantId: string): Pr
         continue;
       }
 
-      const afterStock = Math.max(0, parseFloat((beforeStock - qty).toFixed(4)));
-      const newReserved = Math.max(0, parseFloat((Number(item.reserved_stock || 0) - qty).toFixed(4)));
+      const afterStock = Math.max(0, roundStockPrecision(beforeStock - qty));
+      const newReserved = Math.max(0, roundStockPrecision(Number(item.reserved_stock || 0) - qty));
 
       item.current_stock = afterStock;
       item.reserved_stock = newReserved;
@@ -846,7 +846,7 @@ export async function releaseInventoryReservationForOrderBatch(
 
       if (!itemData) continue;
 
-      const newReserved = Math.max(0, parseFloat((Number(itemData.reserved_stock || 0) - resQty).toFixed(4)));
+      const newReserved = Math.max(0, roundStockPrecision(Number(itemData.reserved_stock || 0) - resQty));
 
       // Reduce reserved stock, leave current_stock unchanged!
       await supabase
@@ -940,7 +940,7 @@ export async function cleanupOrphanReservations(restaurantId?: string): Promise<
           .single();
 
         const currentReserved = Number(freshItem?.reserved_stock || 0);
-        const newReserved = Math.max(0, parseFloat((currentReserved - Number(res.reserved_quantity || 0)).toFixed(4)));
+        const newReserved = Math.max(0, roundStockPrecision(currentReserved - Number(res.reserved_quantity || 0)));
 
         await supabase
           .from('inventory_items')
@@ -1062,7 +1062,7 @@ export async function restoreInventoryForOrderBatch(
       if (!itemData) continue;
 
       const beforeStock = Number(itemData.current_stock || 0);
-      const afterStock = parseFloat((beforeStock + qtyToRestore).toFixed(4));
+      const afterStock = roundStockPrecision(beforeStock + qtyToRestore);
 
       await supabase
         .from('inventory_items')
@@ -2313,6 +2313,51 @@ export interface RecordRestockResult {
 }
 
 /**
+ * Canonical Decimal Precision & Formatting Engine (BUG-INV-003)
+ *
+ * Internal Precision:
+ * - High precision calculations (6 decimals: parseFloat(num.toFixed(6)))
+ * - Eliminates rounding drift across repeated arithmetic operations and unit conversions.
+ *
+ * Display Precision:
+ * - Stock: up to 3 decimals without trailing zeroes (e.g. 2.5 kg, 0.125 kg, 333 ml, 0.333 L)
+ * - Currency: 2 decimals (e.g. ₹55.00, ₹137.50), or 4 decimals for micro-rates (< ₹0.01)
+ */
+export function roundStockPrecision(val: number | null | undefined): number {
+  return parseFloat(Number(val || 0).toFixed(6));
+}
+
+export function roundCostPrecision(val: number | null | undefined): number {
+  return parseFloat(Number(val || 0).toFixed(6));
+}
+
+export function formatStock(val: number | null | undefined): string {
+  const num = Number(val || 0);
+  return parseFloat(num.toFixed(3)).toString();
+}
+
+export function formatStockQuantity(quantity: number | null | undefined, unit: string): string {
+  const norm = normalizeUnit(unit);
+  const val = Number(quantity || 0);
+
+  if (norm === 'gram' && val >= 1000) {
+    return `${parseFloat((val / 1000).toFixed(3))} kg`;
+  }
+  if (norm === 'ml' && val >= 1000) {
+    return `${parseFloat((val / 1000).toFixed(3))} litre`;
+  }
+  return `${parseFloat(val.toFixed(3))} ${unit || 'unit'}`;
+}
+
+export function formatCurrency(val: number | null | undefined): string {
+  const num = Number(val || 0);
+  if (num > 0 && num < 0.01) {
+    return (Math.round((num + Number.EPSILON) * 10000) / 10000).toFixed(4);
+  }
+  return (Math.round((num + Number.EPSILON) * 100) / 100).toFixed(2);
+}
+
+/**
  * Canonical Weighted Average Cost (WAC) Calculator (BUG-INV-004)
  * Formula: ((Old Stock * Old Cost) + (New Stock * New Cost)) / (Old Stock + New Stock)
  */
@@ -2479,10 +2524,10 @@ export async function recordRestockPurchase(params: RecordRestockParams): Promis
       console.error('[InventoryEngine] Error creating purchase item:', pItemErr);
     }
 
-    // 6. Calculate accurate before and after stock, and compute Weighted Average Cost (WAC) (BUG-INV-004)
-    const beforeStock = Number(freshItem.current_stock || 0);
-    const afterStock = parseFloat((beforeStock + qtyInItemUnit).toFixed(4));
-    const oldCost = Number(freshItem.cost_per_unit || 0);
+    // 6. Calculate accurate before and after stock, and compute Weighted Average Cost (WAC) (BUG-INV-004, BUG-INV-003)
+    const beforeStock = roundStockPrecision(freshItem.current_stock || 0);
+    const afterStock = roundStockPrecision(beforeStock + qtyInItemUnit);
+    const oldCost = roundCostPrecision(freshItem.cost_per_unit || 0);
     const finalCostPerUnit = calculateWeightedAverageCost(beforeStock, oldCost, qtyInItemUnit, costInItemUnit);
 
     // 7. Update inventory item stock and cost
@@ -2517,7 +2562,7 @@ export async function recordRestockPurchase(params: RecordRestockParams): Promis
         reference_id: purchaseId,
         idempotency_key: primaryKey,
         user_name: actorRole === 'owner' ? 'Owner' : 'Manager',
-        notes: `Stock purchase in: ${quantity} ${purchaseUnit} @ ₹${unitCost}/${rateUnit} (Total ₹${totalAmount}, Effective: ₹${costInItemUnit}/${freshItem.unit}, WAC: ₹${finalCostPerUnit}/${freshItem.unit})${notes ? ` - ${notes}` : ''}`
+        notes: `Stock purchase in: ${formatStock(quantity)} ${purchaseUnit} @ ₹${formatCurrency(unitCost)}/${rateUnit} (Total ₹${formatCurrency(totalAmount)}, Effective: ₹${formatCurrency(costInItemUnit)}/${freshItem.unit}, WAC: ₹${formatCurrency(finalCostPerUnit)}/${freshItem.unit})${notes ? ` - ${notes}` : ''}`
       })
       .select()
       .single();
@@ -2547,7 +2592,7 @@ export async function recordRestockPurchase(params: RecordRestockParams): Promis
 }
 
 /**
- * Canonical Inventory Item Stock Eligibility & Status Helper (BUG-INV-009)
+ * Canonical Inventory Item Stock Eligibility & Status Helper (BUG-INV-009, BUG-INV-003)
  * Evaluates identical status across summary counter cards, table filters, and row badges.
  * Available-to-sell = Math.max(0, current_stock - reserved_stock)
  * Out of Stock: availableToSell <= 0
@@ -2559,10 +2604,10 @@ export function getItemStockStatus(item: {
   reserved_stock?: number | null;
   minimum_stock?: number | null;
 }) {
-  const physical = Number(item.current_stock || 0);
-  const reserved = Number(item.reserved_stock || 0);
-  const availableToSell = Math.max(0, parseFloat((physical - reserved).toFixed(4)));
-  const minStock = Number(item.minimum_stock || 0);
+  const physical = roundStockPrecision(item.current_stock || 0);
+  const reserved = roundStockPrecision(item.reserved_stock || 0);
+  const availableToSell = Math.max(0, roundStockPrecision(physical - reserved));
+  const minStock = roundStockPrecision(item.minimum_stock || 0);
 
   const isOut = availableToSell <= 0;
   const isLow = availableToSell > 0 && availableToSell <= minStock;
