@@ -76,6 +76,88 @@ function getCompatibleUnits(unit: string) {
   return [{ value: unit, label: unit }];
 }
 
+function formatTransactionMeta(tx: any) {
+  const type = tx.transaction_type;
+  const rawQty = Number(tx.quantity) || 0;
+
+  // Extract Order ID: direct order_id, order_batch reference, or idempotency key
+  const orderId = tx.order_id ||
+    (tx.reference_type === 'order_batch' && typeof tx.reference_id === 'string' && tx.reference_id.split(':')[0]?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)?.[0]) ||
+    (typeof tx.idempotency_key === 'string' && tx.idempotency_key.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0]) ||
+    null;
+
+  let label = type;
+  let badgeClass = 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700';
+  let isNegative = rawQty < 0;
+  let effectiveQty = rawQty;
+
+  switch (type) {
+    case 'RESERVATION_CREATED':
+      label = 'Reserve -Qty';
+      badgeClass = 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
+      isNegative = true;
+      effectiveQty = -Math.abs(rawQty);
+      break;
+
+    case 'RESERVATION_RELEASED':
+      label = 'Reserve Restore +Qty';
+      badgeClass = 'bg-teal-100 text-teal-900 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-800';
+      isNegative = false;
+      effectiveQty = Math.abs(rawQty);
+      break;
+
+    case 'ORDER_CONSUMPTION':
+    case 'CONSUMPTION':
+      label = 'Consumption -Qty';
+      badgeClass = 'bg-indigo-100 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800';
+      isNegative = true;
+      effectiveQty = -Math.abs(rawQty);
+      break;
+
+    case 'PURCHASE':
+    case 'RESTOCK':
+      label = 'Restock +Qty';
+      badgeClass = 'bg-sky-100 text-sky-900 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800';
+      isNegative = false;
+      effectiveQty = Math.abs(rawQty);
+      break;
+
+    case 'WASTE':
+      label = 'Waste -Qty';
+      badgeClass = 'bg-rose-100 text-rose-900 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800';
+      isNegative = true;
+      effectiveQty = -Math.abs(rawQty);
+      break;
+
+    case 'CANCELLATION_REVERSAL':
+      label = 'Reserve Restore +Qty';
+      badgeClass = 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
+      isNegative = false;
+      effectiveQty = Math.abs(rawQty);
+      break;
+
+    case 'MANUAL_ADJUSTMENT':
+      label = rawQty >= 0 ? 'Manual Adjustment +Qty' : 'Manual Adjustment -Qty';
+      badgeClass = 'bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800';
+      isNegative = rawQty < 0;
+      effectiveQty = rawQty;
+      break;
+
+    case 'OPENING_STOCK':
+      label = 'Opening Stock +Qty';
+      badgeClass = 'bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800';
+      isNegative = false;
+      effectiveQty = Math.abs(rawQty);
+      break;
+
+    default:
+      label = type;
+      break;
+  }
+
+  return { label, badgeClass, isNegative, effectiveQty, orderId };
+}
+
 export default function InventoryDashboardPage() {
   const { restaurant, activeRole, planSpec } = useRestaurant();
   const restaurantId = restaurant?.id || '';
@@ -1569,48 +1651,65 @@ export default function InventoryDashboardPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full text-left border-collapse min-w-[850px]">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 text-[11px] font-black uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                  <th className="py-3 px-4">Date & Time</th>
-                  <th className="py-3 px-4">Item</th>
-                  <th className="py-3 px-4">Tx Type</th>
-                  <th className="py-3 px-4">Quantity</th>
-                  <th className="py-3 px-4">Before → After</th>
-                  <th className="py-3 px-4">Ref / Notes</th>
-                  <th className="py-3 px-4">Actor</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Date & Time</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Item</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Tx Type</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Quantity</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Before → After</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Order ID</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Ref / Notes</th>
+                  <th className="py-3 px-4 whitespace-nowrap">Actor</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
                 {transactions.map(tx => {
-                  const isPositive = Number(tx.quantity) > 0;
+                  const meta = formatTransactionMeta(tx);
+                  const qtySign = meta.isNegative ? '-' : '+';
+                  const absQty = Math.abs(meta.effectiveQty);
+
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                      <td className="py-3 px-4 text-slate-500">
+                    <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
                         {new Date(tx.created_at).toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3 px-4 font-extrabold text-slate-900 dark:text-white">
+                      <td className="py-3 px-4 font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                         {tx.inventory_items?.name || 'Raw Item'}
                       </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                          tx.transaction_type === 'ORDER_CONSUMPTION' ? 'bg-indigo-100 text-indigo-800' :
-                          tx.transaction_type === 'CANCELLATION_REVERSAL' ? 'bg-emerald-100 text-emerald-800' :
-                          tx.transaction_type === 'PURCHASE' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
-                        }`}>
-                          {tx.transaction_type}
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black inline-flex items-center gap-1 shadow-xs ${meta.badgeClass}`} title={`Raw Type: ${tx.transaction_type}`}>
+                          {meta.label}
                         </span>
                       </td>
-                      <td className={`py-3 px-4 font-black ${isPositive ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {isPositive ? '+' : ''}{formatStock(tx.quantity)} {tx.unit}
+                      <td className={`py-3 px-4 font-black whitespace-nowrap ${meta.isNegative ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {qtySign}{formatStock(absQty)} {tx.unit}
                       </td>
-                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400">
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
                         {formatStock(tx.before_stock)} → {formatStock(tx.after_stock)} {tx.unit}
                       </td>
-                      <td className="py-3 px-4 text-slate-500 max-w-xs truncate">
+                      <td className="py-3 px-4 font-mono text-xs whitespace-nowrap">
+                        {meta.orderId ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span
+                              className="inline-flex items-center font-bold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700 w-fit text-[11px]"
+                              title={meta.orderId}
+                            >
+                              #{meta.orderId.slice(0, 8)}
+                            </span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal truncate max-w-[105px]" title={meta.orderId}>
+                              {meta.orderId}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500 max-w-xs truncate" title={tx.notes || tx.idempotency_key || ''}>
                         {tx.notes || tx.idempotency_key || '—'}
                       </td>
-                      <td className="py-3 px-4 text-slate-500">
+                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
                         {tx.user_name || 'System'}
                       </td>
                     </tr>
