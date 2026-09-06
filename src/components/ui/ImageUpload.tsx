@@ -18,17 +18,21 @@ export function ImageUpload({
   restaurantId,
   pathPrefix
 }: ImageUploadProps) {
-  const [mode, setMode] = useState<'upload' | 'url'>('upload');
+  const [mode, setMode] = useState<'upload' | 'url'>(() => {
+    if (value && !value.includes('supabase.co/storage')) {
+      return 'url';
+    }
+    return 'upload';
+  });
   const [uploading, setUploading] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState(value);
 
-  // Sync internal state with prop value
+  // Sync internal state with prop value when external value changes
   useEffect(() => {
     setUrlInput(value);
-    if (value && !value.includes('supabase.co/storage')) {
-      setMode('url');
-    } else {
-      setMode('upload');
+    if (!value) {
+      setLocalPreview(null);
     }
   }, [value]);
 
@@ -47,47 +51,81 @@ export function ImageUpload({
       return;
     }
 
+    // 1. Instant local preview for immediate visual feedback (0ms render)
+    const previewBlobUrl = URL.createObjectURL(file);
+    setLocalPreview(previewBlobUrl);
     setUploading(true);
+
     try {
       const oldUrl = value;
       const publicUrl = await storage.uploadImage(file, restaurantId, pathPrefix);
       onChange(publicUrl);
+      setUrlInput(publicUrl);
+      setLocalPreview(null);
+      URL.revokeObjectURL(previewBlobUrl);
+
+      // Clean up previous storage image on replacement (if different)
       if (oldUrl && oldUrl.includes('supabase.co/storage') && oldUrl !== publicUrl) {
         try {
           await storage.deleteImage(oldUrl);
         } catch (cleanupErr) {
-          console.error('Failed to clean up previous image during replacement:', cleanupErr);
+          console.warn('Failed to clean up previous image during replacement:', cleanupErr);
         }
       }
     } catch (err: any) {
+      setLocalPreview(null);
+      URL.revokeObjectURL(previewBlobUrl);
       alert(err.message || 'Upload failed');
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
   };
 
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setUrlInput(val);
+    setLocalPreview(null);
     onChange(val);
   };
 
   const handleClear = async () => {
     if (confirm('Are you sure you want to delete this image?')) {
-      if (value && value.includes('supabase.co/storage')) {
+      const oldUrl = value;
+      // 1. Immediately clear from UI and state to prevent browser 400 requests to deleted object
+      setLocalPreview(null);
+      onChange('');
+      setUrlInput('');
+
+      // 2. Clean up from cloud storage in background
+      if (oldUrl && oldUrl.includes('supabase.co/storage')) {
         setUploading(true);
         try {
-          await storage.deleteImage(value);
+          await storage.deleteImage(oldUrl);
         } catch (err) {
-          console.error(err);
+          console.warn('Failed to delete image from storage:', err);
         } finally {
           setUploading(false);
         }
       }
-      onChange('');
-      setUrlInput('');
     }
   };
+
+  const handleSwitchToUrl = () => {
+    setMode('url');
+    // If current value is an uploaded storage URL, clear urlInput so the user can paste a new external URL cleanly
+    if (value && value.includes('supabase.co/storage')) {
+      setUrlInput('');
+    } else {
+      setUrlInput(value);
+    }
+  };
+
+  const handleSwitchToUpload = () => {
+    setMode('upload');
+  };
+
+  const displayImage = localPreview || value;
 
   return (
     <div className="space-y-2">
@@ -98,7 +136,7 @@ export function ImageUpload({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setMode('upload')}
+            onClick={handleSwitchToUpload}
             className={`text-[10px] font-bold px-2 py-1 rounded-md transition-all cursor-pointer ${
               mode === 'upload'
                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
@@ -109,7 +147,7 @@ export function ImageUpload({
           </button>
           <button
             type="button"
-            onClick={() => setMode('url')}
+            onClick={handleSwitchToUrl}
             className={`text-[10px] font-bold px-2 py-1 rounded-md transition-all cursor-pointer ${
               mode === 'url'
                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400'
@@ -123,21 +161,33 @@ export function ImageUpload({
 
       {mode === 'upload' ? (
         <div className="flex items-center gap-4">
-          {value ? (
+          {displayImage ? (
             <div className="relative h-20 w-24 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 group">
               <img
-                src={value}
+                src={displayImage}
                 alt="Preview"
-                className="h-full w-full object-cover"
+                className="h-full w-full object-cover transition-opacity duration-200"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.opacity = '0';
+                }}
+                onLoad={(e) => {
+                  (e.target as HTMLImageElement).style.opacity = '1';
+                }}
               />
-              <button
-                type="button"
-                onClick={handleClear}
-                disabled={uploading}
-                className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:opacity-50"
-              >
-                <X className="h-5 w-5 text-white" />
-              </button>
+              {uploading ? (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 className="h-5 w-5 text-white animate-spin" />
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  title="Remove Image"
+                >
+                  <X className="h-5 w-5 text-white" />
+                </button>
+              )}
             </div>
           ) : (
             <label className="flex flex-col items-center justify-center h-20 w-24 rounded-lg border-2 border-dashed border-slate-200 hover:border-emerald-500 dark:border-slate-800 dark:hover:border-emerald-500 bg-slate-50 dark:bg-slate-950/10 cursor-pointer transition-colors">
@@ -160,10 +210,10 @@ export function ImageUpload({
           )}
 
           <div className="flex-1 text-xs text-slate-400">
-            {value ? (
+            {displayImage ? (
               <div className="flex flex-col gap-1">
                 <span className="font-bold text-slate-600 dark:text-slate-350">Image uploaded successfully</span>
-                <span className="truncate max-w-[200px] text-[10px] font-mono">{value}</span>
+                <span className="truncate max-w-[200px] text-[10px] font-mono">{displayImage}</span>
                 <label className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 cursor-pointer mt-1">
                   <Upload className="h-3 w-3" />
                   <span>Replace Image</span>
@@ -195,7 +245,7 @@ export function ImageUpload({
               className="block w-full pl-9 pr-3 py-2 text-xs border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/20 text-slate-800 dark:text-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
             />
           </div>
-          {value && (
+          {displayImage && (
             <Button
               type="button"
               variant="danger"
