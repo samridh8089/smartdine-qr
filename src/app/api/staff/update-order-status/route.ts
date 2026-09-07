@@ -38,6 +38,13 @@ export async function POST(req: Request) {
     let updatedBatch: any = null;
 
     if (batchId) {
+      // Invoke db side-effects (inventory reservations, lifecycle transitions) FIRST while original batch status is intact
+      try {
+        updatedOrder = await db.updateBatchStatus(batchId, newStatus, staffName, cancellationReason);
+      } catch (dbErr) {
+        console.warn('db.updateBatchStatus side-effect notice:', dbErr);
+      }
+
       const nowIso = new Date().toISOString();
       const batchUpdate: any = { 
         status: newStatus === 'completed' ? 'served' : newStatus, 
@@ -67,13 +74,6 @@ export async function POST(req: Request) {
         .select()
         .single();
       updatedBatch = bRes;
-
-      // Invoke db side-effects (inventory reservations, logs)
-      try {
-        updatedOrder = await db.updateBatchStatus(batchId, newStatus, staffName, cancellationReason);
-      } catch (dbErr) {
-        console.warn('db.updateBatchStatus side-effect notice:', dbErr);
-      }
 
       // Authoritatively update parent order status based on all batches
       const parentOrderId = orderId || updatedBatch?.order_id || updatedOrder?.id;
@@ -119,6 +119,13 @@ export async function POST(req: Request) {
         if (ordData) updatedOrder = ordData;
       }
     } else if (orderId) {
+      // Invoke db side-effects (inventory reservations, lifecycle transitions) FIRST while original order/batch status is intact
+      try {
+        updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
+      } catch (dbErr) {
+        console.warn('db.updateOrderStatus side-effect notice:', dbErr);
+      }
+
       const nowIso = new Date().toISOString();
       const orderUpdate: any = { status: newStatus, updated_at: nowIso };
       if (newStatus === 'served' || newStatus === 'completed') {
@@ -144,11 +151,6 @@ export async function POST(req: Request) {
           .neq('status', 'cancelled');
       }
 
-      try {
-        updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
-      } catch (dbErr) {
-        console.warn('db.updateOrderStatus side-effect notice:', dbErr);
-      }
       if (ordData) updatedOrder = ordData;
     }
     const t_db = performance.now();
