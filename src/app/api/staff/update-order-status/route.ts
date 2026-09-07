@@ -132,6 +132,18 @@ export async function POST(req: Request) {
         .select()
         .single();
 
+      if (newStatus === 'cancelled') {
+        await supabaseAdmin
+          .from('order_batches')
+          .update({
+            status: 'cancelled',
+            special_instructions: cancellationReason ? `[CANCELLED] ${cancellationReason}` : '[CANCELLED]',
+            updated_at: nowIso
+          })
+          .eq('order_id', orderId)
+          .neq('status', 'cancelled');
+      }
+
       try {
         updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
       } catch (dbErr) {
