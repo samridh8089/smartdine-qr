@@ -588,6 +588,8 @@ function saveStoredOffers(restaurantId: string, offers: Offer[]) {
   } catch (e) {}
 }
 
+const restaurantMemoryCache = new Map<string, { data: Restaurant; timestamp: number }>();
+
 export const db = {
   // --- Offers Management ---
   async getOffers(restaurantId: string): Promise<Offer[]> {
@@ -778,15 +780,22 @@ export const db = {
   },
 
   async getRestaurantById(id: string): Promise<Restaurant | null> {
+    const cached = restaurantMemoryCache.get(id);
+    if (cached && Date.now() - cached.timestamp < 30000) {
+      return cached.data;
+    }
     const { data, error } = await supabase
       .from('restaurants')
       .select('*')
       .eq('id', id);
     if (error || !data || data.length === 0) return null;
-    return data[0] as Restaurant;
+    const res = data[0] as Restaurant;
+    restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
+    return res;
   },
 
   async updateRestaurant(id: string, data: Partial<Restaurant>): Promise<Restaurant> {
+    restaurantMemoryCache.delete(id);
     const { data: updated, error } = await supabase
       .from('restaurants')
       .update(data)
@@ -798,6 +807,7 @@ export const db = {
     }
 
     if (updated && updated.length > 0) {
+      restaurantMemoryCache.set(id, { data: updated[0] as Restaurant, timestamp: Date.now() });
       return updated[0] as Restaurant;
     }
 
