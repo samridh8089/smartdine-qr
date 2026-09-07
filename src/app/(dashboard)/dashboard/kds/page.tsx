@@ -429,6 +429,11 @@ export default function KitchenDisplayPage() {
           newStatus: nextStatus,
           staffName: profile?.full_name || 'Kitchen Staff'
         })
+      }).then(async res => {
+        if (!res.ok) {
+          console.warn('API status update returned status', res.status, 'falling back to db.updateBatchStatus');
+          await db.updateBatchStatus(batchId, nextStatus, profile?.full_name || 'Kitchen Staff');
+        }
       }).catch(err => {
         console.warn('API status update fallback to db.updateBatchStatus:', err);
         db.updateBatchStatus(batchId, nextStatus, profile?.full_name || 'Kitchen Staff');

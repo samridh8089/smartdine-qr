@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const validation = validateSchema(body, {
       batchId: { rules: [Validators.string({ max: 100 })], required: false },
       orderId: { rules: [Validators.string({ max: 100 })], required: false },
-      newStatus: { rules: [Validators.enum(['received', 'preparing', 'ready', 'served', 'completed', 'cancelled'] as const)], required: true },
+      newStatus: { rules: [Validators.enum(['accepted', 'received', 'preparing', 'ready', 'served', 'completed', 'cancelled'] as const)], required: true },
       staffName: { rules: [Validators.string({ max: 100 })], required: false },
       cancellationReason: { rules: [Validators.string({ max: 500 })], required: false }
     });

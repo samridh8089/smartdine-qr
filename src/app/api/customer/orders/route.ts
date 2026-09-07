@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { calculateOrderTax } from '@/lib/tax';
 import { ServerTimer } from '@/lib/serverTiming';
 import { handleApiError } from '@/lib/errors';
+import { reserveInventoryForOrderBatch } from '@/lib/inventoryEngine';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
       supabase.from('menu_items').select('*').eq('restaurant_id', restaurantId),
       supabase.from('menu_item_variants').select('id, menu_item_id, name, price, is_available'),
       (orderType === 'dine_in' && tableId && tableId !== 'takeaway' && tableId !== 'reservation')
-        ? supabase.from('orders').select('*').eq('table_id', tableId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).order('created_at', { ascending: false }).limit(1)
+        ? supabase.from('orders').select('*').eq('table_id', tableId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).neq('payment_status', 'paid').order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [], error: null })
     ]);
 
@@ -164,6 +165,26 @@ export async function POST(req: Request) {
         }
       }
 
+      if (newBatchData?.id && itemsPayload.length > 0) {
+        const reservationItems = itemsPayload.map((item: any) => ({
+          menuItemId: item.menu_item_id,
+          menuItemName: item.menu_item_name,
+          variantId: item.variant_id || undefined,
+          variantName: item.variant_name || undefined,
+          quantity: item.quantity
+        }));
+        reserveInventoryForOrderBatch(
+          restaurantId,
+          activeOrder.id,
+          newBatchData.id,
+          reservationItems,
+          undefined,
+          'Customer QR Add-On'
+        ).catch(err => {
+          console.error('[CustomerOrder] Failed to reserve inventory for add-on batch:', err);
+        });
+      }
+
       const newSubtotal = parseFloat(((activeOrder.subtotal || 0) + subtotal).toFixed(2));
       const newGst = parseFloat(((activeOrder.gst || 0) + taxCalc.taxTotal).toFixed(2));
       const newTotal = parseFloat(((activeOrder.total || activeOrder.grand_total || 0) + grandTotal).toFixed(2));
@@ -248,6 +269,26 @@ export async function POST(req: Request) {
         if (itemsErr) {
           console.error('Failed to insert order items:', itemsErr);
         }
+      }
+
+      if (initialBatchData?.id && itemsPayload.length > 0) {
+        const reservationItems = itemsPayload.map((item: any) => ({
+          menuItemId: item.menu_item_id,
+          menuItemName: item.menu_item_name,
+          variantId: item.variant_id || undefined,
+          variantName: item.variant_name || undefined,
+          quantity: item.quantity
+        }));
+        reserveInventoryForOrderBatch(
+          restaurantId,
+          createdOrder.id,
+          initialBatchData.id,
+          reservationItems,
+          undefined,
+          'Customer QR Order'
+        ).catch(err => {
+          console.error('[CustomerOrder] Failed to reserve inventory for initial batch:', err);
+        });
       }
     }
     timer.end('order_insert');
