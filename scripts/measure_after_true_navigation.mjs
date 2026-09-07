@@ -104,7 +104,7 @@ async function measureNavigationSuite(viewport, isMobile = false) {
             document.querySelector('main > div.animate-pulse') ||
             document.querySelector('main > div.space-y-6.animate-pulse') ||
             document.querySelector('main > div.space-y-8.animate-pulse') ||
-            document.querySelector('main .animate-spin')
+            document.querySelector('main > .animate-spin')
           );
 
           if (!isPageLoading) {
