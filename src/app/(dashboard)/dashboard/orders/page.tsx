@@ -33,9 +33,13 @@ export default function OrdersPage() {
     if (!rawSelectedOrder) return null;
     const optStatus = optimisticStatusMap[rawSelectedOrder.id];
     const canonicalStatus = optStatus || db.calculateAggregateOrderStatus(rawSelectedOrder.status, rawSelectedOrder.batches);
+    const updatedBatches = optStatus
+      ? (rawSelectedOrder.batches || []).map((b: any) => ({ ...b, status: optStatus }))
+      : rawSelectedOrder.batches;
     return {
       ...rawSelectedOrder,
-      status: canonicalStatus
+      status: canonicalStatus,
+      batches: updatedBatches
     };
   }, [rawSelectedOrder, optimisticStatusMap]);
   const effectiveStatus = (selectedOrder ? optimisticStatusMap[selectedOrder.id] : null) || selectedOrder?.status;
@@ -605,17 +609,6 @@ export default function OrdersPage() {
     
     // Immediate safe optimistic update (< 10ms visible DOM response)
     setOptimisticStatusMap(prev => ({ ...prev, [orderIdToUpdate]: status }));
-    setOrders(prev => prev.map(o => {
-      if (o.id === orderIdToUpdate) {
-        const updatedBatches = (o.batches || []).map((b: any) => ({ ...b, status }));
-        return {
-          ...o,
-          status,
-          batches: updatedBatches
-        };
-      }
-      return o;
-    }));
 
     try {
       if (status === 'served') {
@@ -1142,18 +1135,21 @@ export default function OrdersPage() {
   }
 
   // Filter orders
-  const filteredOrders = orders.filter(order => {
-    const formattedId = getFormattedOrderId(order, restaurant?.name || '', orders);
-    const matchesSearch = 
-      order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      formattedId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (order.table_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.items.some(i => i.menu_item_name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return orders.filter(order => {
+      const formattedId = getFormattedOrderId(order, restaurant?.name || '');
+      const matchesSearch = !q ||
+        order.id.toLowerCase().includes(q) ||
+        formattedId.toLowerCase().includes(q) ||
+        (order.table_name || '').toLowerCase().includes(q) ||
+        order.items.some(i => i.menu_item_name.toLowerCase().includes(q));
 
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
-  });
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, restaurant?.name, searchQuery, statusFilter]);
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-12">
@@ -1411,6 +1407,10 @@ export default function OrdersPage() {
                       </div>
                       <div className="text-right space-y-1">
                         {(() => {
+                          const displayTotal = order.grand_total != null ? order.grand_total : (order.total != null ? order.total : null);
+                          if (displayTotal != null) {
+                            return <p className="font-bold text-sm text-slate-900 dark:text-white">{formatPrice(displayTotal, restaurant?.settings?.currency)}</p>;
+                          }
                           const cardCalc = calculateBillingTotals({
                             items: order.items || [],
                             batches: order.batches || [],
@@ -1426,7 +1426,7 @@ export default function OrdersPage() {
                             serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
                             customCharges: restaurant?.settings?.custom_charges || []
                           });
-                          return <p className="font-bold text-sm text-slate-900 dark:text-white">{formatPrice(cardCalc.grandTotal, restaurant.settings.currency)}</p>;
+                          return <p className="font-bold text-sm text-slate-900 dark:text-white">{formatPrice(cardCalc.grandTotal, restaurant?.settings?.currency)}</p>;
                         })()}
                         <p className="text-[10px] text-slate-400 font-medium">{formatExactTimestamp(order.created_at)}</p>
                         {order.status === 'ready' && (
