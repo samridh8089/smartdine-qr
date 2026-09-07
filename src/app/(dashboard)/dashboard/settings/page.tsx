@@ -20,10 +20,21 @@ import {
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { getActiveDevices, removeTrustedDevice, logoutAllDevices } from '@/lib/sessionManager';
 
-export default function SettingsPage() {
+export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 'profile' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' } = {}) {
   const { restaurant, profile, planSpec, refresh } = useRestaurant();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications'>(() => {
+    if (initialTab && initialTab !== 'profile') return initialTab;
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname.includes('/staff')) return 'staff';
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['profile', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
+        return tabParam as any;
+      }
+    }
+    return 'profile';
+  });
   const [loading, setLoading] = useState(false);
 
   // Staff OTP Verification Modal State
@@ -155,14 +166,22 @@ export default function SettingsPage() {
 
   // Read URL query parameter for tab deep-linking (e.g. /dashboard/settings?tab=staff)
   useEffect(() => {
+    if (initialTab && initialTab !== 'profile') {
+      setActiveTab(initialTab);
+      return;
+    }
     if (typeof window !== 'undefined') {
+      if (window.location.pathname.includes('/staff')) {
+        setActiveTab('staff');
+        return;
+      }
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
       if (tabParam && ['profile', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
         setActiveTab(tabParam as any);
       }
     }
-  }, []);
+  }, [initialTab]);
 
   // Lazy-load audit logs only when the logs tab is activated
   useEffect(() => {
