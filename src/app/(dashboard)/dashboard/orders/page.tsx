@@ -254,15 +254,17 @@ export default function OrdersPage() {
     setLoading(false);
   };
 
+  const hasHandledDeepLinkRef = useRef(false);
   // Priority 9 (Phase-20E): Open Order deep-linking with auto-scroll, statusFilter unblocking, and focus
   useEffect(() => {
-    if (loading || !orderIdParam || orders.length === 0) return;
+    if (hasHandledDeepLinkRef.current || loading || !orderIdParam || orders.length === 0) return;
     
     setSelectedOrderId(orderIdParam);
     const targetOrder = orders.find(o => o.id === orderIdParam);
     if (targetOrder && statusFilter !== 'all' && targetOrder.status !== statusFilter) {
       setStatusFilter('all');
     }
+    hasHandledDeepLinkRef.current = true;
 
     const timer = setTimeout(() => {
       const el = document.getElementById(`order-item-${orderIdParam}`);
@@ -283,7 +285,7 @@ export default function OrdersPage() {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }
-    }, 350);
+    }, 100);
 
     return () => clearTimeout(timer);
   }, [orderIdParam, orders, statusFilter, loading]);
@@ -333,11 +335,6 @@ export default function OrdersPage() {
     }
   };
 
-  useEffect(() => {
-    if (restaurant?.id) {
-      loadInitialData(restaurant.id);
-    }
-  }, [restaurant, orderIdParam]);
 
   const reloadFnRef = useRef(safeReloadOrders);
   useEffect(() => {
