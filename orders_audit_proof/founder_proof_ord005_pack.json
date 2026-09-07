@@ -1,0 +1,79 @@
+{
+  "deploymentId": "dpl_4y5LabSyzAZ1p8sKPvDhNA31tPXX",
+  "productionUrl": "https://www.cleverops.in",
+  "timestamp": "2026-09-07T11:07:55.900Z",
+  "testA_FullJourney": {
+    "orderId": "078f3a67-c162-4b6d-94eb-ea81fa25247e",
+    "hasSyncIndicator": true,
+    "stages": [
+      {
+        "stage": "accepted",
+        "synced": true,
+        "etaCorrect": true
+      },
+      {
+        "stage": "preparing",
+        "synced": true,
+        "etaCorrect": true
+      },
+      {
+        "stage": "ready",
+        "synced": true,
+        "etaCorrect": true
+      },
+      {
+        "stage": "served",
+        "synced": true,
+        "etaCorrect": true
+      },
+      {
+        "stage": "completed",
+        "synced": true,
+        "etaCorrect": true
+      }
+    ],
+    "passed": true
+  },
+  "testB_CancelJourney": {
+    "orderId": "fc7e0cec-6e8a-4940-9673-d22acbbb9d66",
+    "cancelReflected": true,
+    "hasReason": true,
+    "hasDeclinedBy": true,
+    "etaDismissedOnCancel": true,
+    "passed": true
+  },
+  "testC_NetworkRecovery": {
+    "orderId": "ff936324-5100-4ef8-b927-447f0d7ebc32",
+    "offlinePillVisible": true,
+    "onlinePillVisible": true,
+    "reconciledPreparing": true,
+    "passed": true
+  },
+  "testD_ReloadPreservation": {
+    "orderId": "ff936324-5100-4ef8-b927-447f0d7ebc32",
+    "reloadOrderPreserved": true,
+    "reloadStatusPreserved": true,
+    "reloadTimelinePreserved": true,
+    "passed": true
+  },
+  "testE_InvalidOrderHandling": {
+    "fakeOrderId": "00000000-0000-0000-0000-000000000000",
+    "hasNotFoundTitle": true,
+    "hasReturnButton": true,
+    "noInfiniteSpinner": true,
+    "passed": true
+  },
+  "mobileAudit": {
+    "width": 390,
+    "height": 844,
+    "clean": true,
+    "passed": true
+  },
+  "desktopAudit": {
+    "width": 1440,
+    "height": 900,
+    "clean": true,
+    "passed": true
+  },
+  "allPassed": true
+}

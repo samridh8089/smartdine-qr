@@ -1,0 +1,45 @@
+{
+  "deploymentId": "dpl_7785exUCPGktkZjwYvWvYjavUjhK",
+  "timestamp": "2026-09-07T08:04:28.373Z",
+  "testA": {
+    "passed": true,
+    "orderId": "bcf8ca8a-dc1b-4591-aad7-484db2b50137",
+    "paymentStatus": "paid",
+    "paidAt": "2026-09-07T08:04:55.533+00:00",
+    "orderStatus": "completed",
+    "orderTotal": 189,
+    "revBefore": 567,
+    "revAfter": 756,
+    "revDelta": 189
+  },
+  "testB": {
+    "passed": true,
+    "orderId": "43bb771d-ef96-48f2-a59b-58b45c59d9b3",
+    "click1RowsUpdated": 0,
+    "click2RowsUpdated": 1,
+    "totalRowsUpdated": 1,
+    "doubleRevenuePrevented": true,
+    "paymentStatus": "paid",
+    "orderStatus": "completed",
+    "revDelta": 189
+  },
+  "testC": {
+    "passed": true,
+    "orderId": "bc450b58-7b79-4332-a4c7-eecb9593b6b0",
+    "tab1RowsUpdated": 1,
+    "tab2RowsUpdated": 0,
+    "tab2Blocked": true,
+    "paidAtPreserved": true,
+    "markedPaidBy": "Tab 1 Staff",
+    "revDelta": 189
+  },
+  "testD": {
+    "passed": true,
+    "orderId": "bc450b58-7b79-4332-a4c7-eecb9593b6b0",
+    "refreshRowsUpdated": 0,
+    "orderRemainsPaid": true,
+    "originalPaidAtPreserved": true,
+    "zeroDoubleRevenue": true
+  },
+  "allPassed": true
+}
