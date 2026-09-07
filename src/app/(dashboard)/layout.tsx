@@ -497,13 +497,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     onMouseEnter={() => {
                       try {
                         router.prefetch(item.href);
-                        if (restaurant?.id) dashboardStore.prewarmRoute(item.href, restaurant.id);
+                        const restId = restaurant?.id || profile?.restaurant_id;
+                        if (restId) dashboardStore.prewarmRoute(item.href, restId);
                       } catch (e) {}
                     }}
                     onTouchStart={() => {
                       try {
                         router.prefetch(item.href);
-                        if (restaurant?.id) dashboardStore.prewarmRoute(item.href, restaurant.id);
+                        const restId = restaurant?.id || profile?.restaurant_id;
+                        if (restId) dashboardStore.prewarmRoute(item.href, restId);
                       } catch (e) {}
                     }}
                     onClick={() => setSidebarOpen(false)}

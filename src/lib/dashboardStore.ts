@@ -1,4 +1,4 @@
-﻿import { db, Order, Table, MenuItem, Category, PricingPlan } from '@/lib/db';
+import { db, Order, Table, MenuItem, Category, PricingPlan } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
 interface CacheEntry<T> {
@@ -74,7 +74,43 @@ class DashboardStore {
   prewarmRoute(routePath: string, restId?: string) {
     if (!restId) return;
     try {
-      if (routePath.includes('/orders') || routePath.includes('/kds')) {
+      if (routePath === '/dashboard' || routePath.endsWith('/dashboard')) {
+        if (!this.getCachedOverview(restId)) {
+          Promise.all([
+            db.getOrders(restId),
+            db.getTablesWithLiveStatus(restId)
+          ]).then(([allOrders, liveTableData]) => {
+            if (allOrders) {
+              const now = new Date();
+              const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+              const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+              const todayOrders = allOrders.filter(o => {
+                const t = new Date(o.created_at).getTime();
+                return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled';
+              });
+              const revenue = todayOrders.reduce((sum, o) => sum + Number((o as any).total_amount || (o as any).total || 0), 0);
+              const activeOrders = allOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
+              const activeTableMap = new Map<string, string>();
+              activeOrders.forEach(o => {
+                if (o.table_name && o.order_type !== 'takeaway' && o.order_type !== 'reservation') {
+                  activeTableMap.set(o.table_id || o.table_name, o.table_name);
+                }
+              });
+              this.setCachedOverview(restId, {
+                orders: allOrders,
+                stats: {
+                  totalOrders: todayOrders.length,
+                  revenue,
+                  activeTablesCount: activeTableMap.size,
+                  activeTableNames: Array.from(activeTableMap.values()),
+                  topItems: []
+                },
+                tableOccupancy: liveTableData?.stats || { total: 0, available: 0, occupied: 0, inactive: 0, occupancyRate: 0 }
+              });
+            }
+          }).catch(() => {});
+        }
+      } else if (routePath.includes('/orders') || routePath.includes('/kds')) {
         if (!this.getCachedOrders(restId)) {
           db.getOrders(restId).then(orders => {
             if (orders) this.setCachedOrders(restId, orders);
@@ -106,6 +142,24 @@ class DashboardStore {
             if (categories && menuItems) {
               this.setCachedMenu(restId, { categories, menuItems });
             }
+          }).catch(() => {});
+        }
+      } else if (routePath.includes('/billing')) {
+        if (!this.getCachedBilling(restId)) {
+          Promise.all([
+            db.getTables(restId).catch(() => []),
+            db.getMenuItems(restId).catch(() => []),
+            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
+            supabase.from('inventory_items').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
+            db.getPricingPlans().catch(() => [])
+          ]).then(([tbls, mItems, staffRes, invRes, plans]) => {
+            this.setCachedBilling(restId, {
+              tablesCount: tbls?.length || 0,
+              itemsCount: mItems?.length || 0,
+              staffCount: staffRes.count || 1,
+              invCount: invRes.count || 0,
+              plans: plans || []
+            });
           }).catch(() => {});
         }
       }

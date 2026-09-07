@@ -1162,13 +1162,23 @@ export const db = {
     tables: Table[];
     stats: { total: number; available: number; occupied: number; inactive: number; occupancyRate: number };
   }> {
-    const [rawTables, allOrders, rest] = await Promise.all([
+    const fetchActiveOrders = async (): Promise<any[]> => {
+      if (preloadedOrders) {
+        return preloadedOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
+      }
+      const { data } = await supabase
+        .from('orders')
+        .select('id, table_id, table_name, status, payment_status, created_at')
+        .eq('restaurant_id', restaurantId)
+        .not('status', 'in', '(completed,cancelled)');
+      return data || [];
+    };
+
+    const [rawTables, activeOrders, rest] = await Promise.all([
       this.getTables(restaurantId),
-      preloadedOrders ? Promise.resolve(preloadedOrders) : this.getOrders(restaurantId),
+      fetchActiveOrders(),
       this.getRestaurantById(restaurantId)
     ]);
-
-    const activeOrders = allOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
     const tableStates = rest?.settings?.table_states || {};
     const assignments = rest?.settings?.table_assignments || [];
 
