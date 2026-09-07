@@ -1171,6 +1171,7 @@ export const db = {
   async getTablesWithLiveStatus(restaurantId: string, preloadedOrders?: Order[]): Promise<{
     tables: Table[];
     stats: { total: number; available: number; occupied: number; inactive: number; occupancyRate: number };
+    assignments?: TableAssignment[];
   }> {
     const fetchActiveOrders = async (): Promise<any[]> => {
       if (preloadedOrders) {
@@ -1233,7 +1234,8 @@ export const db = {
 
     return {
       tables: enrichedTables,
-      stats: { total, available, occupied, inactive, occupancyRate }
+      stats: { total, available, occupied, inactive, occupancyRate },
+      assignments: (assignments || []).filter((a: any) => a.active !== false)
     };
   },
 

@@ -36,9 +36,9 @@ export default function TablesPage() {
   const [mergeErrorMsg, setMergeErrorMsg] = useState('');
 
   // QR URLs map, keyed by tableId, storing base64 QR code image data
-  const [qrCodes, setQrCodes] = useState<Record<string, string>>({});
-  const [takeawayQR, setTakeawayQR] = useState('');
-  const [reservationQR, setReservationQR] = useState('');
+  const [qrCodes, setQrCodes] = useState<Record<string, string>>(() => dashboardStore.getCachedTableQRs());
+  const [takeawayQR, setTakeawayQR] = useState<string>(() => (restaurant?.slug ? dashboardStore.getCachedQR(`takeaway:${restaurant.slug}`) : '') || '');
+  const [reservationQR, setReservationQR] = useState<string>(() => (restaurant?.slug ? dashboardStore.getCachedQR(`reservation:${restaurant.slug}`) : '') || '');
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -66,27 +66,14 @@ export default function TablesPage() {
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchTablesData = async (targetRestId: string) => {
+  const fetchTablesData = async (targetRestId: string, force: boolean = false) => {
     try {
-      const [liveTblsData, groups, assigns] = await Promise.all([
-        db.getTablesWithLiveStatus(targetRestId),
-        db.getMergeGroups(targetRestId, 'active'),
-        db.getTableAssignments(targetRestId)
-      ]);
-      if (liveTblsData) {
-        setTables(liveTblsData.tables);
-        setTableStats(liveTblsData.stats);
-      }
-      setActiveMergeGroups(groups || []);
-      setTableAssignments(assigns || []);
-
-      if (liveTblsData) {
-        dashboardStore.setCachedTables(targetRestId, {
-          tables: liveTblsData.tables,
-          stats: liveTblsData.stats,
-          mergeGroups: groups || [],
-          assignments: assigns || []
-        });
+      const data = await dashboardStore.fetchTablesDeduplicated(targetRestId, force);
+      if (data) {
+        setTables(data.tables);
+        setTableStats(data.stats);
+        setActiveMergeGroups(data.mergeGroups);
+        setTableAssignments(data.assignments);
       }
     } catch (e) {
       console.error('Error fetching tables data:', e);
@@ -99,7 +86,7 @@ export default function TablesPage() {
     const debouncedReload = (targetRestId: string) => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
-        if (targetRestId) fetchTablesData(targetRestId);
+        if (targetRestId) fetchTablesData(targetRestId, true);
       }, 200);
     };
 
@@ -157,39 +144,47 @@ export default function TablesPage() {
       
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       
-      // Generate Takeaway QR Code
-      const takeawayUrl = `${origin}/menu/${restaurantSlug}/takeaway`;
-      const takeDataUrl = await generateQRDataURL(takeawayUrl);
+      // 1. Generate Takeaway QR Code (use cache if available)
+      const takeawayKey = `takeaway:${restaurantSlug}`;
+      let takeDataUrl = dashboardStore.getCachedQR(takeawayKey);
+      if (!takeDataUrl) {
+        const takeawayUrl = `${origin}/menu/${restaurantSlug}/takeaway`;
+        takeDataUrl = await generateQRDataURL(takeawayUrl);
+        dashboardStore.setCachedQR(takeawayKey, takeDataUrl);
+      }
       setTakeawayQR(takeDataUrl);
 
-      // Generate Table Reservation QR Code
-      const reservationUrl = `${origin}/menu/${restaurantSlug}/reservation`;
-      const resDataUrl = await generateQRDataURL(reservationUrl);
+      // 2. Generate Table Reservation QR Code (use cache if available)
+      const reservationKey = `reservation:${restaurantSlug}`;
+      let resDataUrl = dashboardStore.getCachedQR(reservationKey);
+      if (!resDataUrl) {
+        const reservationUrl = `${origin}/menu/${restaurantSlug}/reservation`;
+        resDataUrl = await generateQRDataURL(reservationUrl);
+        dashboardStore.setCachedQR(reservationKey, resDataUrl);
+      }
       setReservationQR(resDataUrl);
 
       if (tables.length === 0) return;
       
-      const newQRs: Record<string, string> = {};
-      for (const table of tables) {
-        // Customer QR link structure: /menu/[slug]/table/[id]
-        const targetUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
-        const dataUrl = await generateQRDataURL(targetUrl);
-        newQRs[table.id] = dataUrl;
+      // 3. Generate Table QRs in parallel for missing tables only
+      const missingTables = tables.filter(t => !dashboardStore.getCachedQR(`table:${t.id}`));
+      if (missingTables.length > 0) {
+        await Promise.all(
+          missingTables.map(async (table) => {
+            const targetUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
+            const dataUrl = await generateQRDataURL(targetUrl);
+            dashboardStore.setCachedQR(`table:${table.id}`, dataUrl);
+          })
+        );
       }
-      setQrCodes(newQRs);
+      setQrCodes(dashboardStore.getCachedTableQRs());
     }
     generateQRs();
   }, [tables, restaurantSlug]);
 
   const refreshTables = async () => {
     if (!restaurantId) return;
-    const { tables: liveTbls, stats } = await db.getTablesWithLiveStatus(restaurantId);
-    setTables(liveTbls);
-    setTableStats(stats);
-    const groups = await db.getMergeGroups(restaurantId, 'active');
-    setActiveMergeGroups(groups || []);
-    const assigns = await db.getTableAssignments(restaurantId);
-    setTableAssignments(assigns || []);
+    await fetchTablesData(restaurantId, true);
   };
 
   const handleToggleQR = async (tableId: string, currentEnabled: boolean) => {
@@ -289,7 +284,7 @@ export default function TablesPage() {
     try {
       const isOccupied = currentStatus !== 'occupied';
       await db.toggleTableOccupancy(restaurantId, tableId, isOccupied);
-      await fetchTablesData(restaurantId);
+      await fetchTablesData(restaurantId, true);
     } catch (err: any) {
       alert('Failed to update table occupancy: ' + (err.message || err));
     }
