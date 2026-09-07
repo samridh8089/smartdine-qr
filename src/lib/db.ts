@@ -475,6 +475,26 @@ export interface Order {
   discount_amount?: number;
 }
 
+export const VALID_ORDER_TRANSITIONS: Record<Order['status'], Order['status'][]> = {
+  new: ['accepted', 'cancelled'],
+  accepted: ['preparing', 'cancelled'],
+  preparing: ['ready'],
+  ready: ['served'],
+  served: ['completed'],
+  completed: [],
+  cancelled: []
+};
+
+export const ALLOWED_PRIOR_STATUSES: Record<Order['status'], Order['status'][]> = {
+  new: [],
+  accepted: ['new'],
+  preparing: ['accepted'],
+  ready: ['preparing'],
+  served: ['ready'],
+  completed: ['served'],
+  cancelled: ['new', 'accepted']
+};
+
 export interface InventoryReservation {
   id: string;
   restaurant_id: string;
@@ -2126,34 +2146,82 @@ export const db = {
     const currentOrder = await this.getOrderById(id);
     if (!currentOrder) throw new Error('Order not found');
 
-    if (status === 'served') {
-      // 1. Fast path: check current order status
-      if (currentOrder.status === 'served' || currentOrder.status === 'completed') {
-        const conflictErr: any = new Error("Order already served by another team member.");
-        conflictErr.code = 'ORDER_ALREADY_SERVED';
-        conflictErr.status = 409;
-        throw conflictErr;
-      }
-
-      // 2. Concurrency-safe atomic conditional row lock in database
-      const { data: lockResult, error: lockErr } = await supabase
-        .from('orders')
-        .update({ status: 'served', updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .in('status', ['ready', 'accepted', 'preparing', 'new'])
-        .select('id, status');
-
-      if (lockErr || !lockResult || lockResult.length === 0) {
-        // Zero rows affected indicates another waiter won the race
-        const { data: freshOrder } = await supabase.from('orders').select('status').eq('id', id).single();
-        if (freshOrder?.status === 'served' || freshOrder?.status === 'completed') {
-          const conflictErr: any = new Error("Order already served by another team member.");
-          conflictErr.code = 'ORDER_ALREADY_SERVED';
-          conflictErr.status = 409;
-          throw conflictErr;
-        }
-      }
+    // BUG-ORD-003: Idempotent return if already in requested status
+    if (currentOrder.status === status) {
+      return currentOrder;
     }
+
+    // BUG-ORD-003: Strict State Machine Validation
+    const allowedTransitions = VALID_ORDER_TRANSITIONS[currentOrder.status] || [];
+    if (!allowedTransitions.includes(status)) {
+      const transitionErr: any = new Error(
+        `Invalid order status transition from "${currentOrder.status}" to "${status}".`
+      );
+      transitionErr.code = 'INVALID_STATUS_TRANSITION';
+      transitionErr.status = 409;
+      throw transitionErr;
+    }
+
+    // BUG-ORD-003: Concurrency-Safe Atomic Conditional Row Lock in Database
+    const allowedPriors = ALLOWED_PRIOR_STATUSES[status] || [];
+    const nowIso = new Date().toISOString();
+    const orderUpdate: any = { status, updated_at: nowIso };
+    if (status === 'served' || status === 'completed') {
+      orderUpdate.completed_at = nowIso;
+      orderUpdate.completed_by = userName || 'Staff Member';
+    } else if (status === 'cancelled') {
+      orderUpdate.cancelled_at = nowIso;
+      orderUpdate.cancelled_by = userName || 'Staff Member';
+      orderUpdate.cancellation_reason = cancellationReason || 'Cancelled';
+    }
+
+    const { data: lockResult, error: lockErr } = await supabase
+      .from('orders')
+      .update(orderUpdate)
+      .eq('id', id)
+      .in('status', allowedPriors)
+      .select('id, status');
+
+    if (lockErr) throw lockErr;
+
+    if (!lockResult || lockResult.length === 0) {
+      // Zero rows affected indicates another tab/staff member won the race
+      const freshOrder = await this.getOrderById(id);
+      if (freshOrder?.status === status) {
+        return freshOrder; // Concurrent winner already transitioned to target
+      }
+      const conflictErr: any = new Error(
+        `Order status was modified concurrently (current: "${freshOrder?.status || 'unknown'}"). Cannot transition to "${status}".`
+      );
+      conflictErr.code = 'STALE_STATUS_CONFLICT';
+      conflictErr.status = 409;
+      throw conflictErr;
+    }
+
+    // BUG-ORD-003: Synchronize non-cancelled batches to match parent status and timestamp
+    const batchTargetStatus = status === 'completed' ? 'served' : status;
+    const batchUpdateData: any = { status: batchTargetStatus, updated_at: nowIso };
+    if (status === 'accepted') {
+      batchUpdateData.accepted_at = nowIso;
+      batchUpdateData.accepted_by = userName || 'Staff Member';
+    } else if (status === 'preparing') {
+      batchUpdateData.preparing_at = nowIso;
+      batchUpdateData.preparing_by = userName || 'Staff Member';
+    } else if (status === 'ready') {
+      batchUpdateData.ready_at = nowIso;
+      batchUpdateData.ready_by = userName || 'Staff Member';
+    } else if (status === 'served' || status === 'completed') {
+      batchUpdateData.served_at = nowIso;
+      batchUpdateData.served_by = userName || 'Staff Member';
+    } else if (status === 'cancelled') {
+      batchUpdateData.special_instructions = cancellationReason ? `[CANCELLED] ${cancellationReason}` : '[CANCELLED]';
+    }
+
+    await supabase
+      .from('order_batches')
+      .update(batchUpdateData)
+      .eq('order_id', id)
+      .neq('status', 'cancelled');
 
     // Authoritative Server-Side Order-Level Lifecycle Transition & Defensive Inventory Consumption
     await transitionOrderBatchLifecycle({
@@ -2291,6 +2359,69 @@ export const db = {
 
     const currentOrder = await this.getOrderById(orderId);
     if (!currentOrder) throw new Error('Order not found');
+
+    // BUG-ORD-003: Idempotent return if batch is already in requested status
+    if (existingBatch && existingBatch.status === status) {
+      return currentOrder;
+    }
+
+    // BUG-ORD-003: Strict State Machine Validation for Batch
+    const currentBatchStatus = (existingBatch?.status || 'new') as Order['status'];
+    const allowedTransitions = VALID_ORDER_TRANSITIONS[currentBatchStatus] || [];
+    if (!allowedTransitions.includes(status as Order['status'])) {
+      const transitionErr: any = new Error(
+        `Invalid batch status transition from "${currentBatchStatus}" to "${status}".`
+      );
+      transitionErr.code = 'INVALID_STATUS_TRANSITION';
+      transitionErr.status = 409;
+      throw transitionErr;
+    }
+
+    // BUG-ORD-003: Concurrency-Safe Atomic Conditional Row Lock on order_batches
+    const allowedPriors = ALLOWED_PRIOR_STATUSES[status as Order['status']] || [];
+    const nowIso = new Date().toISOString();
+    const batchUpdateData: any = { 
+      status, 
+      updated_at: nowIso 
+    };
+    if (status === 'accepted') {
+      batchUpdateData.accepted_at = nowIso;
+      batchUpdateData.accepted_by = userName || 'Kitchen Staff';
+    } else if (status === 'preparing') {
+      batchUpdateData.preparing_at = nowIso;
+      batchUpdateData.preparing_by = userName || 'Kitchen Staff';
+    } else if (status === 'ready') {
+      batchUpdateData.ready_at = nowIso;
+      batchUpdateData.ready_by = userName || 'Kitchen Staff';
+    } else if (status === 'served') {
+      batchUpdateData.served_at = nowIso;
+      batchUpdateData.served_by = userName || 'Staff Member';
+    } else if (status === 'cancelled') {
+      batchUpdateData.special_instructions = cancellationReason ? `[CANCELLED] ${cancellationReason}` : '[CANCELLED]';
+    }
+
+    const { data: lockResult, error: lockErr } = await supabase
+      .from('order_batches')
+      .update(batchUpdateData)
+      .eq('id', batchId)
+      .in('status', allowedPriors)
+      .select('id, status');
+
+    if (lockErr) throw lockErr;
+
+    if (!lockResult || lockResult.length === 0) {
+      // Zero rows affected indicates another staff member or tab updated this batch concurrently
+      const { data: freshBatch } = await supabase.from('order_batches').select('status').eq('id', batchId).single();
+      if (freshBatch?.status === status) {
+        return (await this.getOrderById(orderId)) || currentOrder;
+      }
+      const conflictErr: any = new Error(
+        `Batch status was modified concurrently (current: "${freshBatch?.status || 'unknown'}"). Cannot transition to "${status}".`
+      );
+      conflictErr.code = 'STALE_STATUS_CONFLICT';
+      conflictErr.status = 409;
+      throw conflictErr;
+    }
 
     // Authoritative Server-Side Batch Lifecycle Transition & Inventory Consumption
     await transitionOrderBatchLifecycle({

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { db, Order, Restaurant, CustomerRequest, OrderBatch } from '@/lib/db';
+import { db, Order, Restaurant, CustomerRequest, OrderBatch, VALID_ORDER_TRANSITIONS } from '@/lib/db';
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
@@ -54,6 +54,7 @@ export default function OrdersPage() {
 
   const [processingRequestIds, setProcessingRequestIds] = useState<string[]>([]);
   const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
+  const processingOrderIdsRef = useRef<Set<string>>(new Set());
   const [punchModalOpen, setPunchModalOpen] = useState(false);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printOrderData, setPrintOrderData] = useState<any | null>(null);
@@ -499,7 +500,7 @@ export default function OrdersPage() {
 
   const updateOrderStatus = async (status: Order['status'], cancellationReason?: string) => {
     if (!selectedOrder || !restaurant) return;
-    if (processingOrderIds.includes(selectedOrder.id)) return;
+    if (processingOrderIds.includes(selectedOrder.id) || processingOrderIdsRef.current.has(selectedOrder.id)) return;
 
     if (status === 'cancelled') {
       const isEarlyStage = ['new', 'accepted'].includes(selectedOrder.status);
@@ -516,7 +517,15 @@ export default function OrdersPage() {
       return;
     }
 
+    // Client-side state machine guard
+    const allowedTransitions = VALID_ORDER_TRANSITIONS[selectedOrder.status] || [];
+    if (!allowedTransitions.includes(status)) {
+      showToast(`Cannot change status from "${selectedOrder.status}" to "${status}".`, "Invalid Action", "warning");
+      return;
+    }
+
     const orderIdToUpdate = selectedOrder.id;
+    processingOrderIdsRef.current.add(orderIdToUpdate);
     setProcessingOrderIds(prev => [...prev, orderIdToUpdate]);
     
     // Immediate safe optimistic update
@@ -563,8 +572,13 @@ export default function OrdersPage() {
         showToast("Order already served by another team member.", "Waiter Notice", "info");
         return;
       }
+      if (err.code === 'STALE_STATUS_CONFLICT' || err.code === 'INVALID_STATUS_TRANSITION') {
+        showToast(err.message || "Order status was updated concurrently.", "Sync Notice", "info");
+        return;
+      }
       alert(`Failed to update order status: ${err.message}`);
     } finally {
+      processingOrderIdsRef.current.delete(orderIdToUpdate);
       setProcessingOrderIds(prev => prev.filter(id => id !== orderIdToUpdate));
     }
   };
@@ -599,6 +613,15 @@ export default function OrdersPage() {
     }
 
     const orderIdToCancel = selectedOrder.id;
+    if (processingOrderIdsRef.current.has(orderIdToCancel)) return;
+
+    const allowedTransitions = VALID_ORDER_TRANSITIONS[selectedOrder.status] || [];
+    if (!allowedTransitions.includes('cancelled')) {
+      alert(`Cannot cancel an order with status "${selectedOrder.status}". Only new or accepted orders can be cancelled.`);
+      return;
+    }
+
+    processingOrderIdsRef.current.add(orderIdToCancel);
     setIsSubmittingCancellation(true);
     setOrders(prev => prev.map(o => o.id === orderIdToCancel ? { ...o, status: 'cancelled' } : o));
 
@@ -671,6 +694,7 @@ export default function OrdersPage() {
       setOrders(allOrders);
       alert(`Error during cancellation: ${err.message}`);
     } finally {
+      processingOrderIdsRef.current.delete(orderIdToCancel);
       setIsSubmittingCancellation(false);
     }
   };
@@ -980,7 +1004,7 @@ export default function OrdersPage() {
                 </div>
               </div>
               <button
-                disabled={orders.find(o => o.status === 'ready') ? processingOrderIds.includes(orders.find(o => o.status === 'ready')!.id) : false}
+                disabled={orders.find(o => o.status === 'ready') ? (processingOrderIds.includes(orders.find(o => o.status === 'ready')!.id) || processingOrderIdsRef.current.has(orders.find(o => o.status === 'ready')!.id)) : false}
                 className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-1.5 rounded-lg text-xs cursor-pointer disabled:opacity-50 transition-all flex items-center gap-1.5"
                 onClick={async () => {
                   const firstReady = orders.find(o => o.status === 'ready');
@@ -994,6 +1018,9 @@ export default function OrdersPage() {
                     showToast("Order already served by another team member.", "Waiter Notice", "info");
                     return;
                   }
+
+                  if (processingOrderIdsRef.current.has(firstReady.id)) return;
+                  processingOrderIdsRef.current.add(firstReady.id);
 
                   setProcessingOrderIds(prev => [...prev, firstReady.id]);
                   setOrders(prev => prev.map(o => o.id === firstReady.id ? { ...o, status: 'served' } : o));
@@ -1011,13 +1038,14 @@ export default function OrdersPage() {
                       : allOrders;
                     setOrders(filteredOrders);
 
-                    if (err.code === 'ORDER_ALREADY_SERVED' || err.message?.includes('already served')) {
+                    if (err.code === 'ORDER_ALREADY_SERVED' || err.code === 'STALE_STATUS_CONFLICT' || err.message?.includes('already served')) {
                       window.dispatchEvent(new Event('stop-waiter-sound'));
                       showToast("Order already served by another team member.", "Waiter Notice", "info");
                       return;
                     }
                     alert(`Failed to serve order: ${err.message}`);
                   } finally {
+                    processingOrderIdsRef.current.delete(firstReady.id);
                     setProcessingOrderIds(prev => prev.filter(id => id !== firstReady.id));
                   }
                 }}
@@ -1236,8 +1264,8 @@ export default function OrdersPage() {
                             <Button
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
-                              isLoading={processingOrderIds.includes(order.id)}
-                              disabled={processingOrderIds.includes(order.id)}
+                              isLoading={processingOrderIds.includes(order.id) || processingOrderIdsRef.current.has(order.id)}
+                              disabled={processingOrderIds.includes(order.id) || processingOrderIdsRef.current.has(order.id)}
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 if (order.status === 'served' || order.status === 'completed') {
@@ -1245,6 +1273,9 @@ export default function OrdersPage() {
                                   showToast("Order already served by another team member.", "Waiter Notice", "info");
                                   return;
                                 }
+
+                                if (processingOrderIdsRef.current.has(order.id)) return;
+                                processingOrderIdsRef.current.add(order.id);
 
                                 setProcessingOrderIds(prev => [...prev, order.id]);
                                 try {
@@ -1257,7 +1288,7 @@ export default function OrdersPage() {
                                   setOrders(filteredOrders);
                                   window.dispatchEvent(new Event('storage'));
                                 } catch (err: any) {
-                                  if (err.code === 'ORDER_ALREADY_SERVED' || err.message?.includes('already served')) {
+                                  if (err.code === 'ORDER_ALREADY_SERVED' || err.code === 'STALE_STATUS_CONFLICT' || err.message?.includes('already served')) {
                                     window.dispatchEvent(new Event('stop-waiter-sound'));
                                     showToast("Order already served by another team member.", "Waiter Notice", "info");
                                     const allOrders = await db.getOrders(restaurant.id);
@@ -1269,6 +1300,7 @@ export default function OrdersPage() {
                                   }
                                   alert(`Failed to serve order: ${err.message}`);
                                 } finally {
+                                  processingOrderIdsRef.current.delete(order.id);
                                   setProcessingOrderIds(prev => prev.filter(id => id !== order.id));
                                 }
                               }}
