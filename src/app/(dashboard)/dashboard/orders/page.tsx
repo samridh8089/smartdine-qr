@@ -27,6 +27,10 @@ export default function OrdersPage() {
   const { restaurant, activeRole, profile } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
   const [optimisticStatusMap, setOptimisticStatusMap] = useState<Record<string, Order['status']>>({});
+  const optimisticStatusMapRef = useRef<Record<string, Order['status']>>({});
+  useEffect(() => {
+    optimisticStatusMapRef.current = optimisticStatusMap;
+  }, [optimisticStatusMap]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(orderIdParam || null);
   const rawSelectedOrder = (selectedOrderId ? orders.find(o => o.id === selectedOrderId) : null) || (orders.length > 0 ? orders[0] : null);
   const selectedOrder = useMemo(() => {
@@ -314,7 +318,7 @@ export default function OrdersPage() {
       setOrders(filteredOrders.map(o => {
         const inFlight = Array.from(processingOrderIdsRef.current).find(k => k.startsWith(`${o.id}:`));
         const inFlightStatus = inFlight ? (inFlight.split(':')[1] as Order['status']) : undefined;
-        const optStatus = inFlightStatus || optimisticStatusMap[o.id];
+        const optStatus = inFlightStatus || optimisticStatusMapRef.current[o.id] || optimisticStatusMap[o.id];
         if (optStatus) {
           return {
             ...o,
@@ -420,9 +424,9 @@ export default function OrdersPage() {
             setOrders(prev => prev.map(o => {
               if (o.id === updated.id) {
                 const inFlight = Array.from(processingOrderIdsRef.current).some(k => k.startsWith(`${o.id}:`));
-                const optStatus = optimisticStatusMap[o.id];
+                const optStatus = optimisticStatusMapRef.current[o.id] || optimisticStatusMap[o.id];
                 if (inFlight || optStatus) {
-                  return { ...o, ...updated, status: o.status, batches: o.batches };
+                  return { ...o, ...updated, status: optStatus || o.status, batches: (o.batches || []).map((b: any) => ({ ...b, status: optStatus || b.status })) };
                 }
                 return { ...o, ...updated };
               }
@@ -608,6 +612,7 @@ export default function OrdersPage() {
     const origBatches = origOrder?.batches || selectedOrder.batches;
     
     // Immediate safe optimistic update (< 10ms visible DOM response)
+    optimisticStatusMapRef.current[orderIdToUpdate] = status;
     setOptimisticStatusMap(prev => ({ ...prev, [orderIdToUpdate]: status }));
 
     try {
@@ -638,17 +643,15 @@ export default function OrdersPage() {
       const resData = await res.json();
       const updated = resData.order;
       if (updated) {
-        setOptimisticStatusMap(prev => {
-          const next = { ...prev };
-          delete next[orderIdToUpdate];
-          return next;
-        });
+        optimisticStatusMapRef.current[orderIdToUpdate] = updated.status;
+        setOptimisticStatusMap(prev => ({ ...prev, [orderIdToUpdate]: updated.status }));
         setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
       }
       
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
       // Functional rollback on failure
+      delete optimisticStatusMapRef.current[orderIdToUpdate];
       setOptimisticStatusMap(prev => {
         const next = { ...prev };
         delete next[orderIdToUpdate];
@@ -725,6 +728,7 @@ export default function OrdersPage() {
 
     // Immediate optimistic UI response: close modal instantly and update status in DOM (< 20ms)
     setCancelModalOpen(false);
+    optimisticStatusMapRef.current[orderIdToCancel] = 'cancelled';
     setOptimisticStatusMap(prev => ({ ...prev, [orderIdToCancel]: 'cancelled' }));
     setOrders(prev => prev.map(o => o.id === orderIdToCancel ? {
       ...o,
@@ -1022,6 +1026,7 @@ export default function OrdersPage() {
 
     // Immediate Optimistic UI update: Close modal & reflect Paid/Completed in DOM immediately (< 20ms)
     setPaymentModalOpen(false);
+    optimisticStatusMapRef.current[targetOrderId] = 'completed';
     setOptimisticStatusMap(prev => ({ ...prev, [targetOrderId]: 'completed' }));
     setOrders(prev => prev.map(o => o.id === targetOrderId ? {
       ...o,
