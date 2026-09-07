@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db, MenuItem, Table, Restaurant, Category } from '@/lib/db';
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { formatPrice } from '@/lib/utils';
@@ -51,6 +51,7 @@ export default function PunchOrderModal({
 
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
@@ -141,6 +142,7 @@ export default function PunchOrderModal({
 
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current || submitting) return;
     if (cart.length === 0) {
       setErrorMsg('Please add at least one item to the cart.');
       return;
@@ -150,6 +152,7 @@ export default function PunchOrderModal({
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     setErrorMsg('');
 
@@ -200,6 +203,7 @@ export default function PunchOrderModal({
       console.error('Punch order failed:', err);
       setErrorMsg(err.message || 'Failed to punch order. Please try again.');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };

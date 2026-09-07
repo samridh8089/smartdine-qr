@@ -99,6 +99,8 @@ export default function OrdersPage() {
 
   const [payMergedModalOpen, setPayMergedModalOpen] = useState(false);
   const [paymentMethodChoice, setPaymentMethodChoice] = useState<'cash' | 'online_upi'>('cash');
+  const [submittingPayMerged, setSubmittingPayMerged] = useState(false);
+  const submittingPayMergedRef = useRef(false);
 
   const handlePayMergedGroup = () => {
     if (!mergedGroupDetails) return;
@@ -107,6 +109,9 @@ export default function OrdersPage() {
 
   const executePayMergedGroup = async () => {
     if (!mergedGroupDetails || !restaurant) return;
+    if (submittingPayMergedRef.current || submittingPayMerged) return;
+    submittingPayMergedRef.current = true;
+    setSubmittingPayMerged(true);
 
     try {
       const sessionId = mergedGroupDetails.sessionId || mergedGroupDetails.group?.active_session_id;
@@ -118,7 +123,8 @@ export default function OrdersPage() {
           .select('id')
           .eq('restaurant_id', restaurant.id)
           .eq('merge_group_id', mergedGroupDetails.group.id)
-          .neq('status', 'cancelled');
+          .neq('status', 'cancelled')
+          .neq('payment_status', 'paid');
 
         for (const o of (groupOrders || [])) {
           await db.updateOrderStatus(o.id, 'completed', profile?.full_name || 'Cashier');
@@ -130,6 +136,9 @@ export default function OrdersPage() {
       alert(`Merged Session "${mergedGroupDetails.group.name}" completely settled & paid via ${paymentMethodChoice.toUpperCase()}.`);
     } catch (err: any) {
       alert('Failed to complete merged session: ' + err.message);
+    } finally {
+      submittingPayMergedRef.current = false;
+      setSubmittingPayMerged(false);
     }
   };
 
@@ -752,6 +761,7 @@ export default function OrdersPage() {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const submittingPaymentRef = useRef(false);
 
   const handlePrintInvoice = () => {
     if (!selectedOrder || !restaurant) return;
@@ -839,6 +849,13 @@ export default function OrdersPage() {
 
   const handleConfirmPayment = async () => {
     if (!selectedOrder || !restaurant) return;
+    if (submittingPaymentRef.current || submittingPayment) return;
+    if (selectedOrder.payment_status === 'paid') {
+      alert('This order has already been marked as paid.');
+      setPaymentModalOpen(false);
+      return;
+    }
+    submittingPaymentRef.current = true;
     setSubmittingPayment(true);
     try {
       const calcResult = calculateBillingTotals({
@@ -857,7 +874,8 @@ export default function OrdersPage() {
         customCharges: restaurant.settings.custom_charges || []
       });
 
-      const { error } = await supabase
+      // BUG-ORD-002: Atomic conditional database update - only set paid if not already paid
+      const { data: updatedRows, error } = await supabase
         .from('orders')
         .update({
           payment_status: 'paid',
@@ -870,9 +888,20 @@ export default function OrdersPage() {
           custom_charges: calcResult.customChargesSnapshot,
           total: calcResult.grandTotal
         })
-        .eq('id', selectedOrder.id);
+        .eq('id', selectedOrder.id)
+        .neq('payment_status', 'paid')
+        .select();
 
       if (error) throw error;
+
+      // Idempotency check: If 0 rows were updated, this order was already paid concurrently (multi-tab or double click)
+      if (!updatedRows || updatedRows.length === 0) {
+        alert('This order has already been marked as paid.');
+        setPaymentModalOpen(false);
+        const allOrders = await db.getOrders(restaurant.id);
+        setOrders(allOrders);
+        return;
+      }
 
       // Authoritative lifecycle completion: consumes any unconsumed inventory, syncs batches & items
       const updated = await db.updateOrderStatus(
@@ -891,6 +920,7 @@ export default function OrdersPage() {
     } catch (err: any) {
       alert(`Failed to complete payment: ${err.message}`);
     } finally {
+      submittingPaymentRef.current = false;
       setSubmittingPayment(false);
     }
   };
@@ -1727,16 +1757,28 @@ export default function OrdersPage() {
                           Serve Order
                         </Button>
                       )}
-                      {selectedOrder.status === 'served' && (
+                      {selectedOrder.status === 'served' && selectedOrder.payment_status !== 'paid' && (
                         <Button 
                           size="sm" 
                           className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold shadow-md" 
-                          isLoading={processingOrderIds.includes(selectedOrder.id)}
-                          disabled={processingOrderIds.includes(selectedOrder.id)}
-                          onClick={() => setPaymentModalOpen(true)}
+                          isLoading={processingOrderIds.includes(selectedOrder.id) || submittingPayment}
+                          disabled={processingOrderIds.includes(selectedOrder.id) || submittingPayment}
+                          onClick={() => {
+                            if (selectedOrder.payment_status === 'paid') {
+                              alert('This order has already been marked as paid.');
+                              return;
+                            }
+                            setPaymentModalOpen(true);
+                          }}
                         >
                           Complete Bill & Pay
                         </Button>
+                      )}
+                      {selectedOrder.payment_status === 'paid' && (
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold text-xs rounded-xl border border-emerald-200 dark:border-emerald-800">
+                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Paid ({selectedOrder.payment_method?.toUpperCase() || 'PAID'})</span>
+                        </div>
                       )}
 
       {/* Payment Method Selection Modal */}
@@ -1814,7 +1856,7 @@ export default function OrdersPage() {
                     <Button
                       className={paymentMethod === 'cash' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6' : 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6'}
                       isLoading={submittingPayment}
-                      disabled={submittingPayment}
+                      disabled={submittingPayment || selectedOrder.payment_status === 'paid'}
                       onClick={handleConfirmPayment}
                     >
                       {paymentMethod === 'cash'

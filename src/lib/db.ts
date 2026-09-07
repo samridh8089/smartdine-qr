@@ -2218,6 +2218,12 @@ export const db = {
       return currentOrder;
     }
 
+    // BUG-ORD-002: Once an order is paid, prevent any downgrades or duplicate updates
+    if (currentOrder && currentOrder.payment_status === 'paid' && paymentStatus !== 'paid') {
+      console.warn(`[updateOrderPaymentStatus] Order ${orderId} is already paid. Ignoring request to change status to ${paymentStatus}.`);
+      return currentOrder;
+    }
+
     const updatePayload: any = { payment_status: paymentStatus };
     const now = new Date().toISOString();
     if (paymentStatus === 'customer_marked_paid' || paymentStatus === 'paid') {
@@ -2229,13 +2235,26 @@ export const db = {
       if (reference) updatePayload.payment_reference = reference;
     }
 
-    const { data: updated, error } = await supabase
-      .from('orders')
-      .update(updatePayload)
-      .eq('id', orderId)
-      .select();
+    let updateQuery = supabase.from('orders').update(updatePayload).eq('id', orderId);
+    if (paymentStatus === 'paid') {
+      // BUG-ORD-002: Atomic conditional guard to prevent race conditions & duplicate payment marking
+      updateQuery = updateQuery.neq('payment_status', 'paid');
+    }
+
+    const { data: updated, error } = await updateQuery.select();
+    if (error) {
+      console.error('[updateOrderPaymentStatus] Error updating payment status:', error);
+      throw error;
+    }
+
     const fullOrder = await this.getOrderById(orderId);
     if (!fullOrder) throw new Error('Order not found');
+
+    // If paymentStatus is 'paid' and 0 rows were updated, another concurrent process already marked it paid
+    if (paymentStatus === 'paid' && (!updated || updated.length === 0)) {
+      console.log(`[updateOrderPaymentStatus] Order ${orderId} is already marked paid (atomic idempotent no-op).`);
+      return fullOrder;
+    }
 
     if (paymentStatus === 'paid') {
       if (fullOrder.table_id) {
@@ -3691,7 +3710,9 @@ export const db = {
 
     const { data: sessionOrders } = await orderQuery;
 
-    const unpaidOrderIds = (sessionOrders || []).map(o => o.id);
+    const unpaidOrderIds = (sessionOrders || [])
+      .filter(o => o.payment_status !== 'paid')
+      .map(o => o.id);
     for (const ordId of unpaidOrderIds) {
       await transitionOrderBatchLifecycle({
         restaurantId,
