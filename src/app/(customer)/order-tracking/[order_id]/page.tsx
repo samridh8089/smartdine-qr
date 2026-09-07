@@ -60,7 +60,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
   const [mergedGroupDetails, setMergedGroupDetails] = useState<any | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
-  const [showTimeline, setShowTimeline] = useState<boolean>(false);
+  const [showTimeline, setShowTimeline] = useState<boolean>(true);
 
   const loadOrderData = async () => {
     try {
@@ -153,6 +153,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
           } else if (payload.payload?.newStatus) {
             setOrder(prev => prev ? { ...prev, status: payload.payload.newStatus } : prev);
           }
+          loadOrderData();
         }
       )
       .on(
@@ -165,6 +166,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
           } else if (payload.payload?.newStatus) {
             setOrder(prev => prev ? { ...prev, status: payload.payload.newStatus } : prev);
           }
+          loadOrderData();
         }
       )
       .on(
@@ -490,6 +492,28 @@ export default function OrderTrackingPage({ params }: PageProps) {
             )}
             <span>• Receipt #{getFormattedOrderId(order, restaurant.name)}</span>
           </p>
+          <div className="pt-2 text-center">
+            <span
+              id="live-order-status-badge"
+              data-status={order.status}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs ${
+                order.status === 'completed' || order.status === 'served'
+                  ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                  : order.status === 'ready'
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 dark:border-purple-800 animate-pulse'
+                  : order.status === 'preparing'
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse'
+                  : order.status === 'accepted'
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
+                  : order.status === 'cancelled'
+                  ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
+                  : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${['preparing', 'ready'].includes(order.status) ? 'bg-amber-500 animate-ping' : 'bg-current'}`} />
+              <span>Status: {order.status}</span>
+            </span>
+          </div>
         </div>
 
         {/* MERGED GROUP SESSION BANNER — Shown when this order belongs to a merged session */}
