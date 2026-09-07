@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "audit:hooks": "node scripts/audit-react-hooks.mjs",
     "test:e2e": "playwright test",
     "test:e2e:p0": "playwright test --grep @p0 --project=chromium",
     "test:e2e:headed": "playwright test --headed --project=chromium",
