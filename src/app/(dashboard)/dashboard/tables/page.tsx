@@ -109,25 +109,27 @@ export default function TablesPage() {
       await fetchTablesData(targetRestId);
       setLoading(false);
 
-      // Realtime subscription to live orders, table changes and QR state
-      channel = supabase
-        .channel(`tables_page_${targetRestId}_${Date.now()}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${targetRestId}` },
-          () => debouncedReload(targetRestId)
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${targetRestId}` },
-          () => debouncedReload(targetRestId)
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${targetRestId}` },
-          () => debouncedReload(targetRestId)
-        )
-        .subscribe();
+      // Realtime subscription deferred slightly so it never blocks first interactive paint
+      const realtimeTimer = setTimeout(() => {
+        channel = supabase
+          .channel(`tables_page_${targetRestId}_${Date.now()}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${targetRestId}` },
+            () => debouncedReload(targetRestId)
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${targetRestId}` },
+            () => debouncedReload(targetRestId)
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${targetRestId}` },
+            () => debouncedReload(targetRestId)
+          )
+          .subscribe();
+      }, 150);
     }
     loadTables();
 
@@ -139,47 +141,73 @@ export default function TablesPage() {
 
   // Compute and load base64 QR codes whenever tables change
   useEffect(() => {
+    let isMounted = true;
+
     async function generateQRs() {
       if (!restaurantSlug) return;
       
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       
-      // 1. Generate Takeaway QR Code (use cache if available)
+      // 1. Generate Takeaway QR Code (fast 256px thumbnail)
       const takeawayKey = `takeaway:${restaurantSlug}`;
       let takeDataUrl = dashboardStore.getCachedQR(takeawayKey);
       if (!takeDataUrl) {
         const takeawayUrl = `${origin}/menu/${restaurantSlug}/takeaway`;
-        takeDataUrl = await generateQRDataURL(takeawayUrl);
+        takeDataUrl = await generateQRDataURL(takeawayUrl, { width: 256, errorCorrectionLevel: 'M' });
         dashboardStore.setCachedQR(takeawayKey, takeDataUrl);
       }
-      setTakeawayQR(takeDataUrl);
+      if (isMounted) setTakeawayQR(takeDataUrl);
 
-      // 2. Generate Table Reservation QR Code (use cache if available)
+      // 2. Generate Table Reservation QR Code (fast 256px thumbnail)
       const reservationKey = `reservation:${restaurantSlug}`;
       let resDataUrl = dashboardStore.getCachedQR(reservationKey);
       if (!resDataUrl) {
         const reservationUrl = `${origin}/menu/${restaurantSlug}/reservation`;
-        resDataUrl = await generateQRDataURL(reservationUrl);
+        resDataUrl = await generateQRDataURL(reservationUrl, { width: 256, errorCorrectionLevel: 'M' });
         dashboardStore.setCachedQR(reservationKey, resDataUrl);
       }
-      setReservationQR(resDataUrl);
+      if (isMounted) setReservationQR(resDataUrl);
 
       if (tables.length === 0) return;
       
-      // 3. Generate Table QRs in parallel for missing tables only
-      const missingTables = tables.filter(t => !dashboardStore.getCachedQR(`table:${t.id}`));
-      if (missingTables.length > 0) {
+      // 3. Priority B: Prioritize visible tables (first 6) for instant frame 0 interactive paint
+      const visibleTables = tables.slice(0, 6);
+      const offscreenTables = tables.slice(6);
+
+      const missingVisible = visibleTables.filter(t => !dashboardStore.getCachedQR(`table:${t.id}`));
+      if (missingVisible.length > 0) {
         await Promise.all(
-          missingTables.map(async (table) => {
+          missingVisible.map(async (table) => {
             const targetUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
-            const dataUrl = await generateQRDataURL(targetUrl);
+            const dataUrl = await generateQRDataURL(targetUrl, { width: 256, errorCorrectionLevel: 'M' });
             dashboardStore.setCachedQR(`table:${table.id}`, dataUrl);
           })
         );
       }
-      setQrCodes(dashboardStore.getCachedTableQRs());
+      if (isMounted) setQrCodes(dashboardStore.getCachedTableQRs());
+
+      // Generate offscreen tables after initial render
+      const missingOffscreen = offscreenTables.filter(t => !dashboardStore.getCachedQR(`table:${t.id}`));
+      if (missingOffscreen.length > 0) {
+        setTimeout(async () => {
+          if (!isMounted) return;
+          await Promise.all(
+            missingOffscreen.map(async (table) => {
+              const targetUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
+              const dataUrl = await generateQRDataURL(targetUrl, { width: 256, errorCorrectionLevel: 'M' });
+              dashboardStore.setCachedQR(`table:${table.id}`, dataUrl);
+            })
+          );
+          if (isMounted) setQrCodes(dashboardStore.getCachedTableQRs());
+        }, 80);
+      }
     }
+
     generateQRs();
+
+    return () => {
+      isMounted = false;
+    };
   }, [tables, restaurantSlug]);
 
   const refreshTables = async () => {
@@ -290,8 +318,11 @@ export default function TablesPage() {
     }
   };
 
-  const downloadQR = (table: Table) => {
-    const qrData = qrCodes[table.id];
+  const downloadQR = async (table: Table) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const customerUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
+    const highResQR = await generateQRDataURL(customerUrl, { width: 512, errorCorrectionLevel: 'H' });
+    const qrData = highResQR || qrCodes[table.id];
     if (!qrData) return;
 
     const link = document.createElement('a');
@@ -306,12 +337,12 @@ export default function TablesPage() {
     return name.toLowerCase().replace(/[^a-z0-9]/g, '-');
   };
 
-  const printTableQR = (table: Table) => {
-    const qrData = qrCodes[table.id];
-    if (!qrData) return;
-
+  const printTableQR = async (table: Table) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const customerUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
+    const highResQR = await generateQRDataURL(customerUrl, { width: 512, errorCorrectionLevel: 'H' });
+    const qrData = highResQR || qrCodes[table.id];
+    if (!qrData) return;
 
     // Create a printable window
     const printWindow = window.open('', '_blank');

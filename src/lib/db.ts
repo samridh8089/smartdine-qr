@@ -1174,7 +1174,7 @@ export const db = {
     assignments?: TableAssignment[];
   }> {
     const fetchActiveOrders = async (): Promise<any[]> => {
-      if (preloadedOrders) {
+      if (preloadedOrders && preloadedOrders.length > 0) {
         return preloadedOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
       }
       const { data } = await supabase
@@ -1185,8 +1185,17 @@ export const db = {
       return data || [];
     };
 
+    const fetchRawTables = async (): Promise<any[]> => {
+      const { data } = await supabase
+        .from('tables')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .order('name', { ascending: true });
+      return data || [];
+    };
+
     const [rawTables, activeOrders, rest] = await Promise.all([
-      this.getTables(restaurantId),
+      fetchRawTables(),
       fetchActiveOrders(),
       this.getRestaurantById(restaurantId)
     ]);
