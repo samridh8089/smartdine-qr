@@ -38,7 +38,24 @@ export async function POST(req: Request) {
     let updatedOrder: any = null;
     let updatedBatch: any = null;
 
-    if (batchId) {
+    if (effectiveStatus === 'completed') {
+      let targetOrderId = orderId;
+      if (!targetOrderId && batchId) {
+        const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).single();
+        targetOrderId = bRec?.order_id;
+      }
+      if (!targetOrderId) {
+        return NextResponse.json({ error: 'orderId could not be resolved for completed status' }, { status: 400 });
+      }
+      try {
+        updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason);
+      } catch (dbErr: any) {
+        if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
+          return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
+        }
+        throw dbErr;
+      }
+    } else if (batchId) {
       try {
         updatedOrder = await db.updateBatchStatus(batchId, effectiveStatus, staffName, cancellationReason);
       } catch (dbErr: any) {

@@ -2365,6 +2365,11 @@ export const db = {
       return currentOrder;
     }
 
+    // BUG-ORD-003: "completed" is an order-level lifecycle state. If requested via batch, delegate to order level.
+    if ((status as string) === 'completed') {
+      return this.updateOrderStatus(orderId, 'completed', userName, cancellationReason);
+    }
+
     // BUG-ORD-003: Strict State Machine Validation for Batch
     const currentBatchStatus = (existingBatch?.status || 'new') as Order['status'];
     const allowedTransitions = VALID_ORDER_TRANSITIONS[currentBatchStatus] || [];
