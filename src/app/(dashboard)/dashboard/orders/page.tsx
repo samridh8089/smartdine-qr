@@ -1012,6 +1012,13 @@ export default function OrdersPage() {
     setPaymentModalOpen(false);
     optimisticStatusMapRef.current[targetOrderId] = 'completed';
     setOptimisticStatusMap(prev => ({ ...prev, [targetOrderId]: 'completed' }));
+    setOrders(prev => prev.map(o => o.id === targetOrderId ? {
+      ...o,
+      payment_status: 'paid',
+      payment_method: chosenMethod,
+      paid_at: new Date().toISOString(),
+      status: 'completed'
+    } : o));
 
     const calcResult = calculateBillingTotals({
       items: selectedOrder.items || [],
@@ -1028,17 +1035,6 @@ export default function OrdersPage() {
       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
       customCharges: restaurant.settings.custom_charges || []
     });
-    setOrders(prev => prev.map(o => o.id === targetOrderId ? {
-      ...o,
-      payment_status: 'paid',
-      payment_method: chosenMethod,
-      paid_at: new Date().toISOString(),
-      status: 'completed',
-      subtotal: calcResult.validSubtotal,
-      gst: calcResult.gstAmount,
-      service_charge: calcResult.serviceChargeAmount,
-      total: calcResult.grandTotal
-    } : o));
     showToast(`Payment of ${formatPrice(calcResult.grandTotal, restaurant.settings.currency)} recorded successfully!`, "Bill Settled", "success");
     window.dispatchEvent(new Event('storage'));
 
