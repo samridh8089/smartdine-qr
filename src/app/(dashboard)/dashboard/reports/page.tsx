@@ -47,19 +47,39 @@ interface CancellationPerformanceRow {
   lostAmount: number;
 }
 
+// Indian Standard Time (IST / Asia/Kolkata) Helpers for Precise Restaurant Accounting
+function getISTDateString(d: Date | string = new Date()): string {
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(dateObj);
+}
+
+function getISTMonthYear(d: Date | string = new Date()): { month: number; year: number } {
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', month: 'numeric', year: 'numeric' }).formatToParts(dateObj);
+  const month = Number(parts.find(p => p.type === 'month')?.value) - 1;
+  const year = Number(parts.find(p => p.type === 'year')?.value);
+  return { month, year };
+}
+
+function getISTHour(d: Date | string): number {
+  const dateObj = typeof d === 'string' ? new Date(d) : d;
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hourCycle: 'h23' }).formatToParts(dateObj);
+  return Number(parts.find(p => p.type === 'hour')?.value || 0);
+}
+
 export default function ReportsPage() {
   const { restaurant } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom'>('today');
   
-  // Date Range Controls
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [customStartDate, setCustomStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [customEndDate, setCustomEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [appliedStartDate, setAppliedStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [appliedEndDate, setAppliedEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  // Date Range Controls (Standardized to IST)
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => getISTMonthYear().month);
+  const [selectedYear, setSelectedYear] = useState<number>(() => getISTMonthYear().year);
+  const [customStartDate, setCustomStartDate] = useState<string>(() => getISTDateString());
+  const [customEndDate, setCustomEndDate] = useState<string>(() => getISTDateString());
+  const [appliedStartDate, setAppliedStartDate] = useState<string>(() => getISTDateString());
+  const [appliedEndDate, setAppliedEndDate] = useState<string>(() => getISTDateString());
 
   // Performance Table Sorting & Limit
   const [itemSortBy, setItemSortBy] = useState<'quantity' | 'revenue'>('revenue');
@@ -186,48 +206,43 @@ export default function ReportsPage() {
     let periodLabel = '';
 
     const now = new Date();
+    const todayIST = getISTDateString(now);
 
     if (timeRange === 'today') {
-      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
-      rangeOrders = allOrders.filter(o => {
-        const t = new Date(o.created_at).getTime();
-        return t >= startOfDay && t <= endOfDay;
-      });
-      periodLabel = `Today (${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})`;
+      rangeOrders = allOrders.filter(o => getISTDateString(o.created_at) === todayIST);
+      const nowISTParts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }).format(now);
+      periodLabel = `Today (${nowISTParts})`;
     } else if (timeRange === 'yesterday') {
-      const yDate = new Date();
-      yDate.setDate(yDate.getDate() - 1);
-      const startOfDay = new Date(yDate.getFullYear(), yDate.getMonth(), yDate.getDate(), 0, 0, 0, 0).getTime();
-      const endOfDay = new Date(yDate.getFullYear(), yDate.getMonth(), yDate.getDate(), 23, 59, 59, 999).getTime();
-      rangeOrders = allOrders.filter(o => {
-        const t = new Date(o.created_at).getTime();
-        return t >= startOfDay && t <= endOfDay;
-      });
-      periodLabel = `Yesterday (${yDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})`;
+      const yDate = new Date(now.getTime() - 24 * 3600 * 1000);
+      const yDateIST = getISTDateString(yDate);
+      rangeOrders = allOrders.filter(o => getISTDateString(o.created_at) === yDateIST);
+      const yISTParts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }).format(yDate);
+      periodLabel = `Yesterday (${yISTParts})`;
     } else if (timeRange === 'weekly') {
-      const startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-      startDate.setDate(startDate.getDate() - 6);
-      rangeOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= startDate.getTime());
-      periodLabel = `Last 7 Days (${startDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} – ${now.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})`;
+      const weekStartDate = new Date(now.getTime() - 6 * 24 * 3600 * 1000);
+      const weekStartIST = getISTDateString(weekStartDate);
+      const startMs = new Date(`${weekStartIST}T00:00:00+05:30`).getTime();
+      rangeOrders = allOrders.filter(o => new Date(o.created_at).getTime() >= startMs);
+      const startParts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' }).format(weekStartDate);
+      const endParts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }).format(now);
+      periodLabel = `Last 7 Days (${startParts} – ${endParts})`;
     } else if (timeRange === 'monthly') {
       rangeOrders = allOrders.filter(o => {
-        const d = new Date(o.created_at);
-        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+        const { month: oMonth, year: oYear } = getISTMonthYear(o.created_at);
+        return oMonth === selectedMonth && oYear === selectedYear;
       });
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       periodLabel = `${monthNames[selectedMonth]} ${selectedYear}`;
     } else if (timeRange === 'custom') {
-      const startMs = new Date(`${appliedStartDate}T00:00:00`).getTime();
-      const endMs = new Date(`${appliedEndDate}T23:59:59`).getTime();
+      const startMs = new Date(`${appliedStartDate}T00:00:00+05:30`).getTime();
+      const endMs = new Date(`${appliedEndDate}T23:59:59.999+05:30`).getTime();
       rangeOrders = allOrders.filter(o => {
         const t = new Date(o.created_at).getTime();
         return t >= startMs && t <= endMs;
       });
-      const sDate = new Date(`${appliedStartDate}T00:00:00`);
-      const eDate = new Date(`${appliedEndDate}T00:00:00`);
-      periodLabel = `${sDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })} – ${eDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+      const sParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(startMs));
+      const eParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(endMs));
+      periodLabel = `${sParts} – ${eParts}`;
     }
 
     // REVENUE-ELIGIBLE ORDERS ONLY: PAID OR COMPLETED ORDERS (EXCLUDES UNPAID PENDING & CANCELLED)
@@ -270,7 +285,11 @@ export default function ReportsPage() {
       let oCgst = Number(o.cgst_amount || 0);
       let oSgst = Number(o.sgst_amount || 0);
       let oIgst = Number(o.igst_amount || 0);
-      let oTaxTotal = Number(o.tax_total ?? o.gst ?? 0);
+      let oTaxTotal = Number(
+        (o.tax_total !== null && o.tax_total !== undefined && Number(o.tax_total) > 0)
+          ? o.tax_total
+          : (o.gst || 0)
+      );
 
       // Fallback for legacy orders where tax_total / gst > 0 but cgst/sgst/igst are 0
       if (oTaxTotal > 0 && oCgst === 0 && oSgst === 0 && oIgst === 0) {
@@ -563,7 +582,7 @@ export default function ReportsPage() {
     });
 
     rangeOrders.forEach(o => {
-      const h = new Date(o.created_at).getHours();
+      const h = getISTHour(o.created_at);
       if (hoursArr[h]) {
         hoursArr[h].ordersCount += 1;
         if (isRevenueOrder(o)) {
@@ -684,7 +703,7 @@ export default function ReportsPage() {
     ];
 
     const rows: string[][] = validOrders.map(o => {
-      const dt = new Date(o.created_at).toLocaleString('en-IN');
+      const dt = new Date(o.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
       const tableOrType = o.order_type === 'takeaway' ? 'Takeaway' : (o.table_name || 'Table');
 
       const itemsSubtotal = (o.items || []).reduce((sum, i) => {
@@ -712,7 +731,11 @@ export default function ReportsPage() {
       let oCgst = Number(o.cgst_amount || 0);
       let oSgst = Number(o.sgst_amount || 0);
       let oIgst = Number(o.igst_amount || 0);
-      let oTaxTotal = Number(o.tax_total ?? o.gst ?? 0);
+      let oTaxTotal = Number(
+        (o.tax_total !== null && o.tax_total !== undefined && Number(o.tax_total) > 0)
+          ? o.tax_total
+          : (o.gst || 0)
+      );
 
       if (oTaxTotal > 0 && oCgst === 0 && oSgst === 0 && oIgst === 0) {
         const isIgst = o.tax_type_snapshot === 'igst' || restaurant?.settings?.tax_mode === 'igst';
@@ -772,7 +795,7 @@ export default function ReportsPage() {
     const rows: string[][] = [];
 
     validOrders.forEach(o => {
-      const dt = new Date(o.created_at).toLocaleString('en-IN');
+      const dt = new Date(o.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
       const tableOrType = o.order_type === 'takeaway' ? 'Takeaway' : (o.table_name || 'Table');
 
       (o.items || []).forEach(item => {
@@ -834,7 +857,7 @@ export default function ReportsPage() {
     const rows: string[][] = [];
 
     validOrders.forEach(o => {
-      const dt = new Date(o.created_at).toLocaleString('en-IN');
+      const dt = new Date(o.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
       const tableOrType = o.order_type === 'takeaway' ? 'Takeaway' : (o.table_name || 'Table');
 
       const itemsSubtotal = (o.items || []).reduce((sum, i) => {
@@ -862,7 +885,11 @@ export default function ReportsPage() {
       let oCgst = Number(o.cgst_amount || 0);
       let oSgst = Number(o.sgst_amount || 0);
       let oIgst = Number(o.igst_amount || 0);
-      let oTaxTotal = Number(o.tax_total ?? o.gst ?? 0);
+      let oTaxTotal = Number(
+        (o.tax_total !== null && o.tax_total !== undefined && Number(o.tax_total) > 0)
+          ? o.tax_total
+          : (o.gst || 0)
+      );
 
       if (oTaxTotal > 0 && oCgst === 0 && oSgst === 0 && oIgst === 0) {
         const isIgst = o.tax_type_snapshot === 'igst' || restaurant?.settings?.tax_mode === 'igst';
@@ -1695,7 +1722,7 @@ export default function ReportsPage() {
                           {formatPrice(cust.totalSpent, restaurant?.settings?.currency || 'INR')}
                         </td>
                         <td className="py-3.5 px-4 text-right text-xs text-slate-400">
-                          {new Date(cust.lastVisit).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          {new Date(cust.lastVisit).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                         </td>
                       </tr>
                     ))}
