@@ -14,7 +14,7 @@ import {
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
   LogOut, MenuSquare, X, ChevronRight, User, Settings,
-  ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock
+  ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users
 } from 'lucide-react';
 
 // Central Route to Entitlement Feature Key Mapping
@@ -67,7 +67,8 @@ const ALL_MENU_ITEMS = [
   { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
   { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
   { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
-  { name: 'Settings & Staff', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
+  { name: 'Staff Management', href: '/dashboard/staff', icon: Users, roles: ['owner', 'manager'] },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

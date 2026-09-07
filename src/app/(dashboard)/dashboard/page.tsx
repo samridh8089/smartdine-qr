@@ -423,49 +423,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Founder Quick Launch Hub — Instant 1-Tap Navigation */}
-      <div className="bg-white dark:bg-slate-900/90 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-xs">
-        <div className="flex items-center justify-between mb-3 px-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Founder Quick Launch</span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-              ⚡ Instant &lt;300ms
-            </span>
-          </div>
-          <span className="text-[11px] font-medium text-slate-400 hidden sm:inline">Tap any section to launch instantly</span>
-        </div>
-        <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
-          {[
-            { name: 'Orders', href: '/dashboard/orders', icon: ClipboardList, color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/50 border-blue-100 dark:border-blue-900/50' },
-            { name: 'KDS', href: '/dashboard/kds', icon: ChefHat, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/50 border-amber-100 dark:border-amber-900/50' },
-            { name: 'Inventory', href: '/dashboard/inventory', icon: Boxes, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950/50 border-orange-100 dark:border-orange-900/50' },
-            { name: 'Menu', href: '/dashboard/menu', icon: MenuSquare, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/50 border-emerald-100 dark:border-emerald-900/50' },
-            { name: 'Tables', href: '/dashboard/tables', icon: QrCode, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950/50 border-purple-100 dark:border-purple-900/50' },
-            { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-950/50 border-indigo-100 dark:border-indigo-900/50' },
-            { name: 'Billing', href: '/dashboard/billing', icon: CreditCard, color: 'text-rose-500 bg-rose-50 dark:bg-rose-950/50 border-rose-100 dark:border-rose-900/50' },
-            { name: 'Staff', href: '/dashboard/staff', icon: Users, color: 'text-teal-500 bg-teal-50 dark:bg-teal-950/50 border-teal-100 dark:border-teal-900/50' },
-            { name: 'Settings', href: '/dashboard/settings', icon: Settings, color: 'text-slate-600 bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700' }
-          ].map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                prefetch={true}
-                className="flex flex-col items-center justify-center p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/60 dark:bg-slate-850/40 hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all text-center group cursor-pointer"
-              >
-                <div className={`h-8 w-8 rounded-lg flex items-center justify-center mb-1.5 border transition-transform group-hover:scale-110 ${item.color}`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate w-full">
-                  {item.name}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Top Row: Revenue & Core Stats (4 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
