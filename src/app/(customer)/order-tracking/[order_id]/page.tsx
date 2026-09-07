@@ -117,6 +117,24 @@ export default function OrderTrackingPage({ params }: PageProps) {
     loadOrderData();
   }, [orderId]);
 
+  // BUG-ORD-004: Instantly reconcile state whenever phone is unlocked or browser tab is foregrounded
+  useEffect(() => {
+    const handleActive = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Customer Tracking] Tab foregrounded / device unlocked - refreshing order data');
+        loadOrderData();
+      }
+    };
+
+    window.addEventListener('visibilitychange', handleActive);
+    window.addEventListener('focus', handleActive);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleActive);
+      window.removeEventListener('focus', handleActive);
+    };
+  }, [orderId]);
+
   // Realtime Supabase Subscription for Order Status and Batch updates
   useEffect(() => {
     if (!orderId) return;
@@ -147,6 +165,19 @@ export default function OrderTrackingPage({ params }: PageProps) {
           } else if (payload.payload?.newStatus) {
             setOrder(prev => prev ? { ...prev, status: payload.payload.newStatus } : prev);
           }
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'payment-updated' },
+        (payload) => {
+          console.log('Realtime broadcast customer payment-updated:', payload);
+          if (payload.payload?.updatedOrder) {
+            setOrder(payload.payload.updatedOrder);
+          } else {
+            setOrder(prev => prev ? { ...prev, payment_status: 'paid', status: 'completed' } : prev);
+          }
+          loadOrderData();
         }
       )
       .on(

@@ -4,6 +4,7 @@ import { calculateOrderTax } from '@/lib/tax';
 import { ServerTimer } from '@/lib/serverTiming';
 import { handleApiError } from '@/lib/errors';
 import { reserveInventoryForOrderBatch } from '@/lib/inventoryEngine';
+import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -425,19 +426,14 @@ export async function POST(req: Request) {
       timestamp: Date.now()
     };
 
-    // Broadcast on tenant-scoped channels instantly
-    await Promise.all([
-      supabase.channel(`kds_${restaurantId}`).send({
-        type: 'broadcast',
-        event: 'new-order',
-        payload: realtimePayload
-      }).catch(() => {}),
-      supabase.channel(`overview_dashboard_${restaurantId}`).send({
-        type: 'broadcast',
-        event: 'new-order',
-        payload: realtimePayload
-      }).catch(() => {})
-    ]);
+    // Broadcast on tenant-scoped channels instantly (Live Orders, KDS, Overview Dashboard)
+    await broadcastOrderRealtimeEvent({
+      restaurantId,
+      orderId: createdOrder.id,
+      eventType: 'new-order',
+      payload: realtimePayload,
+      client: supabase
+    });
     timer.end('realtime');
 
     const res = NextResponse.json({

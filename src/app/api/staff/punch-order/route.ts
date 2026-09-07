@@ -4,6 +4,7 @@ import { calculateOrderTax } from '@/lib/tax';
 import { ServerTimer } from '@/lib/serverTiming';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
+import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 
 export async function POST(req: Request) {
   const totalStart = performance.now();
@@ -247,18 +248,14 @@ export async function POST(req: Request) {
       timestamp: Date.now()
     };
 
-    await Promise.all([
-      supabase.channel(`kds_${restaurantId}`).send({
-        type: 'broadcast',
-        event: 'new-order',
-        payload: realtimePayload
-      }).catch(() => {}),
-      supabase.channel(`overview_dashboard_${restaurantId}`).send({
-        type: 'broadcast',
-        event: 'new-order',
-        payload: realtimePayload
-      }).catch(() => {})
-    ]);
+    // Broadcast on tenant-scoped channels instantly (Live Orders, KDS, Overview Dashboard)
+    await broadcastOrderRealtimeEvent({
+      restaurantId,
+      orderId: createdOrder.id,
+      eventType: 'new-order',
+      payload: realtimePayload,
+      client: supabase
+    });
     timer.end('realtime');
 
     const response = NextResponse.json({
