@@ -15,6 +15,7 @@ class DashboardStore {
   private billingCache = new Map<string, CacheEntry<{ tablesCount: number; itemsCount: number; staffCount: number; invCount: number; plans: PricingPlan[] }>>();
   private overviewCache = new Map<string, CacheEntry<any>>();
   private inFlightTables = new Map<string, Promise<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[] }>>();
+  private inFlightBilling = new Map<string, Promise<{ tablesCount: number; itemsCount: number; staffCount: number; invCount: number; plans: PricingPlan[] }>>();
   private qrCache = new Map<string, string>();
 
   // QR Code Cache
@@ -64,6 +65,71 @@ class DashboardStore {
     })();
 
     this.inFlightTables.set(restId, promise);
+    return promise;
+  }
+
+  // Deduplicated billing metrics fetching
+  fetchBillingDeduplicated(restId: string, force: boolean = false): Promise<{ tablesCount: number; itemsCount: number; staffCount: number; invCount: number; plans: PricingPlan[] }> {
+    if (!force && this.inFlightBilling.has(restId)) {
+      return this.inFlightBilling.get(restId)!;
+    }
+
+    const promise = (async () => {
+      try {
+        const getHeadCount = async (tableName: string, fallback: number = 0): Promise<number> => {
+          try {
+            const { count } = await supabase.from(tableName).select('id', { count: 'exact', head: true }).eq('restaurant_id', restId);
+            return count ?? fallback;
+          } catch {
+            return fallback;
+          }
+        };
+
+        // 1. Fast count for tables (from cache if present, else lightweight head count)
+        const cachedTables = this.getCachedTables(restId);
+        const tablesPromise = cachedTables
+          ? Promise.resolve(cachedTables.tables.length)
+          : getHeadCount('tables', 0);
+
+        // 2. Fast count for menu items (from cache if present, else lightweight head count)
+        const cachedMenu = this.getCachedMenu(restId);
+        const itemsPromise = cachedMenu
+          ? Promise.resolve(cachedMenu.menuItems.length)
+          : getHeadCount('menu_items', 0);
+
+        // 3. Fast count for staff profiles
+        const staffPromise = getHeadCount('profiles', 1);
+
+        // 4. Fast count for inventory items
+        const invPromise = getHeadCount('inventory_items', 0);
+
+        // 5. Pricing plans
+        const plansPromise = db.getPricingPlans().catch(() => []);
+
+        const [tablesCount, itemsCount, staffCount, invCount, plans] = await Promise.all([
+          tablesPromise,
+          itemsPromise,
+          staffPromise,
+          invPromise,
+          plansPromise
+        ]);
+
+        const result = {
+          tablesCount,
+          itemsCount,
+          staffCount,
+          invCount,
+          plans: plans || []
+        };
+
+        this.setCachedBilling(restId, result);
+        return result;
+      } finally {
+        this.inFlightBilling.delete(restId);
+      }
+    })();
+
+    this.inFlightBilling.set(restId, promise);
     return promise;
   }
 
@@ -185,21 +251,7 @@ class DashboardStore {
         }
       } else if (routePath.includes('/billing')) {
         if (!this.getCachedBilling(restId)) {
-          Promise.all([
-            db.getTables(restId).catch(() => []),
-            db.getMenuItems(restId).catch(() => []),
-            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
-            supabase.from('inventory_items').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
-            db.getPricingPlans().catch(() => [])
-          ]).then(([tbls, mItems, staffRes, invRes, plans]) => {
-            this.setCachedBilling(restId, {
-              tablesCount: tbls?.length || 0,
-              itemsCount: mItems?.length || 0,
-              staffCount: staffRes.count || 1,
-              invCount: invRes.count || 0,
-              plans: plans || []
-            });
-          }).catch(() => {});
+          this.fetchBillingDeduplicated(restId).catch(() => {});
         }
       }
     } catch (e) {}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRestaurant } from '../../layout';
-import { db, Restaurant, PricingPlan, getEffectiveSubscriptionStatus } from '@/lib/db';
+import { db, Restaurant, PricingPlan, getEffectiveSubscriptionStatus, DEFAULT_PRICING_PLANS } from '@/lib/db';
 import { parsePlanSpec } from '@/lib/entitlements';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -12,7 +12,7 @@ import {
   Sparkles, Trash2, ShieldAlert
 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
-import { supabase, getActiveUser } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { dashboardStore } from '@/lib/dashboardStore';
@@ -29,94 +29,67 @@ export default function BillingPage() {
   const [inventoryCount, setInventoryCount] = useState(() => initialCachedBilling?.invCount || 0);
   const [aiMenuUsage, setAiMenuUsage] = useState<{ used: number; limit: number | null }>({ used: 0, limit: planSpec?.ai_limits?.ai_menu_analysis ?? null });
   const [aiRecipeUsage, setAiRecipeUsage] = useState<{ used: number; limit: number | null }>({ used: 0, limit: planSpec?.ai_limits?.ai_recipe_generation ?? null });
-  const [loading, setLoading] = useState(() => !initialCachedBilling);
+  const [loading, setLoading] = useState(() => !restaurant && !initialCachedBilling);
 
   // Billing pricing interval state
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>(() => initialCachedBilling?.plans || []);
+  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>(() => initialCachedBilling?.plans?.length ? initialCachedBilling.plans : DEFAULT_PRICING_PLANS);
 
   // Deletion state
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
-    async function loadBilling() {
-      let activeRest = restaurant;
-      let restId = activeRest?.id;
-      let loadedPlans: PricingPlan[] = [];
+    if (!restId) return;
+    let isMounted = true;
 
-      try {
-        if (!restId) {
-          const user = await getActiveUser();
-          if (user?.restaurant_id) {
-            restId = user.restaurant_id;
-            activeRest = await db.getRestaurantById(user.restaurant_id);
-          }
-        }
-
-        if (restId) {
-          // Load counts and pricing plans in parallel
-          const [tables, items, staffRes, invRes, plans] = await Promise.all([
-            db.getTables(restId).catch(() => []),
-            db.getMenuItems(restId).catch(() => []),
-            supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
-            supabase.from('inventory_items').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
-            db.getPricingPlans().catch(() => [])
-          ]);
-
-          setTablesCount(tables.length);
-          setItemsCount(items.length);
-          setStaffCount(staffRes.count || 1);
-          setInventoryCount(invRes.count || 0);
-          setPricingPlans(plans);
-
-          dashboardStore.setCachedBilling(restId, {
-            tablesCount: tables.length,
-            itemsCount: items.length,
-            staffCount: staffRes.count || 1,
-            invCount: invRes.count || 0,
-            plans
-          });
-
-          // Unblock loading immediately
-          setLoading(false);
-
-          // Background load AI usage checks without blocking pricing UI
-          Promise.all([
-            fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`).then(r => r.ok ? r.json() : null).catch(() => null),
-            fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_recipe_generation`).then(r => r.ok ? r.json() : null).catch(() => null)
-          ]).then(([mData, rData]) => {
-            if (mData) setAiMenuUsage({ used: mData.used, limit: mData.limit });
-            if (rData) setAiRecipeUsage({ used: rData.used, limit: rData.limit });
-          });
-        } else {
-          const plans = await db.getPricingPlans().catch(() => []);
-          setPricingPlans(plans);
-          setLoading(false);
-        }
-      } catch (e) {
-        console.error('Error loading billing info:', e);
-        setLoading(false);
+    // Deduplicated parallel fetch for billing counts and pricing plans
+    dashboardStore.fetchBillingDeduplicated(restId).then(data => {
+      if (!isMounted) return;
+      setTablesCount(data.tablesCount);
+      setItemsCount(data.itemsCount);
+      setStaffCount(data.staffCount);
+      setInventoryCount(data.invCount);
+      if (data.plans && data.plans.length > 0) {
+        setPricingPlans(data.plans);
       }
+      setLoading(false);
+    }).catch(() => {
+      if (isMounted) setLoading(false);
+    });
 
-      const intervalParam = searchParams.get('interval');
-      if (intervalParam && ['monthly', 'yearly'].includes(intervalParam)) {
-        setBillingInterval(intervalParam as any);
-      } else if (activeRest?.billing_interval) {
-        setBillingInterval(activeRest.billing_interval);
-      }
+    // Background load AI usage checks without blocking pricing UI
+    Promise.all([
+      fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_recipe_generation`).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]).then(([mData, rData]) => {
+      if (!isMounted) return;
+      if (mData) setAiMenuUsage({ used: mData.used, limit: mData.limit });
+      if (rData) setAiRecipeUsage({ used: rData.used, limit: rData.limit });
+    });
 
-      // Auto-open Razorpay Modal if redirected after signup
-      const checkoutParam = searchParams.get('checkout');
-      const planParam = searchParams.get('plan');
-      if (checkoutParam === 'true' && planParam && ['starter', 'pro', 'premium'].includes(planParam)) {
-        setTimeout(() => {
-          handleUpgradePlan(planParam as any, loadedPlans);
-        }, 300);
-      }
+    return () => {
+      isMounted = false;
+    };
+  }, [restId]);
+
+  useEffect(() => {
+    const intervalParam = searchParams.get('interval');
+    if (intervalParam && ['monthly', 'yearly'].includes(intervalParam)) {
+      setBillingInterval(intervalParam as any);
+    } else if (restaurant?.billing_interval) {
+      setBillingInterval(restaurant.billing_interval);
     }
-    loadBilling();
-  }, [restaurant, searchParams]);
+
+    // Auto-open Razorpay Modal if redirected after signup
+    const checkoutParam = searchParams.get('checkout');
+    const planParam = searchParams.get('plan');
+    if (checkoutParam === 'true' && planParam && ['starter', 'pro', 'premium'].includes(planParam)) {
+      setTimeout(() => {
+        handleUpgradePlan(planParam as any);
+      }, 300);
+    }
+  }, [searchParams, restaurant?.billing_interval]);
 
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null);
 

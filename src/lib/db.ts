@@ -590,6 +590,14 @@ function saveStoredOffers(restaurantId: string, offers: Offer[]) {
 
 const restaurantMemoryCache = new Map<string, { data: Restaurant; timestamp: number }>();
 
+export const DEFAULT_PRICING_PLANS: PricingPlan[] = [
+  { id: 'starter', name: 'Starter', price_monthly: 299, price_yearly: 2500, features: ['Standard KDS', 'Basic Sales Overview', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 15, max_items: 50 },
+  { id: 'pro', name: 'Pro', price_monthly: 799, price_yearly: 6000, features: ['Premium KDS with Sound Alerts', 'Analytics Dashboard', 'Waiter Panel & Real-Time Calling', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 35, max_items: 150 },
+  { id: 'premium', name: 'Premium', price_monthly: 1499, price_yearly: 10000, features: ['Premium KDS with Sound Alerts', 'Analytics Dashboard', 'Waiter Panel & Real-Time Calling', 'Custom Branding & Logo Upload', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 9999, max_items: 9999 }
+];
+
+let cachedPricingPlans: PricingPlan[] | null = null;
+
 export const db = {
   // --- Offers Management ---
   async getOffers(restaurantId: string): Promise<Offer[]> {
@@ -2791,16 +2799,16 @@ export const db = {
   },
 
   // --- Pricing Plans CRUD ---
-  async getPricingPlans(): Promise<PricingPlan[]> {
+  async getPricingPlans(force: boolean = false): Promise<PricingPlan[]> {
+    if (cachedPricingPlans && !force) {
+      return cachedPricingPlans;
+    }
+
     const { data, error } = await supabase
       .from('pricing_plans')
       .select('*');
 
-    const defaultPlans: PricingPlan[] = [
-      { id: 'starter', name: 'Starter', price_monthly: 299, price_yearly: 2500, features: ['Standard KDS', 'Basic Sales Overview', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'] },
-      { id: 'pro', name: 'Pro', price_monthly: 799, price_yearly: 6000, features: ['Premium KDS with Sound Alerts', 'Analytics Dashboard', 'Waiter Panel & Real-Time Calling', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'] },
-      { id: 'premium', name: 'Premium', price_monthly: 1499, price_yearly: 10000, features: ['Premium KDS with Sound Alerts', 'Analytics Dashboard', 'Waiter Panel & Real-Time Calling', 'Custom Branding & Logo Upload', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'] }
-    ];
+    const defaultPlans: PricingPlan[] = DEFAULT_PRICING_PLANS;
 
     const rawPlans = (error || !data || data.length === 0) ? defaultPlans : data;
 
@@ -2870,6 +2878,7 @@ export const db = {
       };
     }) as PricingPlan[];
 
+    cachedPricingPlans = result;
     return result;
   },
 
@@ -2891,7 +2900,8 @@ export const db = {
     }
 
     // Refresh local in-memory plan cache
-    await this.getPricingPlans();
+    cachedPricingPlans = null;
+    await this.getPricingPlans(true);
 
     return json.plan as PricingPlan;
   },

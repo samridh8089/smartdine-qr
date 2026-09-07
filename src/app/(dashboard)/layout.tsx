@@ -269,12 +269,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, [restaurant?.id, activeRole]);
 
-  // Idle background prewarm for Tables route
+  // Idle background prewarm for Tables and Billing routes
   useEffect(() => {
     const restId = restaurant?.id || profile?.restaurant_id;
     if (!restId) return;
     const timer = setTimeout(() => {
       dashboardStore.prewarmRoute('/dashboard/tables', restId);
+      dashboardStore.prewarmRoute('/dashboard/billing', restId);
     }, 800);
     return () => clearTimeout(timer);
   }, [restaurant?.id, profile?.restaurant_id]);
