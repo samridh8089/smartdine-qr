@@ -263,7 +263,7 @@ export default function DashboardPage() {
             });
           }
         } catch (e) {}
-      }, 50);
+      }, 1000);
 
     } catch (err) {
       console.error('Error in loadDataForRest:', err);

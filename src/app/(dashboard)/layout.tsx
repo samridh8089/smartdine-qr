@@ -269,6 +269,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, [restaurant?.id, activeRole]);
 
+  // Idle background prewarm for Tables route
+  useEffect(() => {
+    const restId = restaurant?.id || profile?.restaurant_id;
+    if (!restId) return;
+    const timer = setTimeout(() => {
+      dashboardStore.prewarmRoute('/dashboard/tables', restId);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [restaurant?.id, profile?.restaurant_id]);
+
   // Global Audio stop listeners triggered by actions
   useEffect(() => {
     const handleStopSound = () => stopGlobalAlarm();
@@ -520,7 +530,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         if (restId) dashboardStore.prewarmRoute(item.href, restId);
                       } catch (e) {}
                     }}
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={() => {
+                      if (sidebarOpen) setSidebarOpen(false);
+                    }}
                     className={`
                       flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all group
                       ${isActive 
