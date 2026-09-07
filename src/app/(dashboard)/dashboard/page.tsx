@@ -31,14 +31,43 @@ export default function DashboardPage() {
   const { restaurant: contextRestaurant, profile: contextProfile } = useRestaurant();
   const restId = contextRestaurant?.id || contextProfile?.restaurant_id;
   const initialCachedOverview = restId ? dashboardStore.getCachedOverview(restId) : null;
-  const [orders, setOrders] = useState<Order[]>(() => initialCachedOverview?.orders || []);
+  const cachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
+  const hasCachedData = Boolean(initialCachedOverview || (cachedOrders && cachedOrders.length >= 0));
+  const [orders, setOrders] = useState<Order[]>(() => initialCachedOverview?.orders || cachedOrders || []);
   const [restaurant, setRestaurant] = useState<any>(contextRestaurant);
-  const [stats, setStats] = useState<OverviewStats>(() => initialCachedOverview?.stats || {
-    totalOrders: 0,
-    revenue: 0,
-    activeTablesCount: 0,
-    activeTableNames: [],
-    topItems: []
+  const [stats, setStats] = useState<OverviewStats>(() => {
+    if (initialCachedOverview?.stats) return initialCachedOverview.stats;
+    if (cachedOrders && cachedOrders.length > 0) {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+      const todayOrders = cachedOrders.filter(o => {
+        const t = new Date(o.created_at).getTime();
+        return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled';
+      });
+      const revenue = calculateOrdersRevenue(todayOrders);
+      const activeOrders = cachedOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
+      const activeTableMap = new Map<string, string>();
+      activeOrders.forEach(o => {
+        if (o.table_name && o.order_type !== 'takeaway' && o.order_type !== 'reservation') {
+          activeTableMap.set(o.table_id || o.table_name, o.table_name);
+        }
+      });
+      return {
+        totalOrders: todayOrders.length,
+        revenue,
+        activeTablesCount: activeTableMap.size,
+        activeTableNames: Array.from(activeTableMap.values()),
+        topItems: []
+      };
+    }
+    return {
+      totalOrders: 0,
+      revenue: 0,
+      activeTablesCount: 0,
+      activeTableNames: [],
+      topItems: []
+    };
   });
   const [tableOccupancy, setTableOccupancy] = useState(() => initialCachedOverview?.tableOccupancy || {
     total: 0,
@@ -47,7 +76,7 @@ export default function DashboardPage() {
     inactive: 0,
     occupancyRate: 0
   });
-  const [loading, setLoading] = useState(() => !initialCachedOverview);
+  const [loading, setLoading] = useState(() => !hasCachedData);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isReloadingRef = useRef(false);
