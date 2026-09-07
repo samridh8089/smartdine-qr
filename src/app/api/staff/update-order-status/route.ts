@@ -33,13 +33,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'batchId or orderId is required' }, { status: 400 });
     }
 
+    const effectiveStatus = (newStatus === 'received' ? 'accepted' : newStatus);
     const t_start = performance.now();
     let updatedOrder: any = null;
     let updatedBatch: any = null;
 
     if (batchId) {
       try {
-        updatedOrder = await db.updateBatchStatus(batchId, newStatus, staffName, cancellationReason);
+        updatedOrder = await db.updateBatchStatus(batchId, effectiveStatus, staffName, cancellationReason);
       } catch (dbErr: any) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
       updatedBatch = bRes;
     } else if (orderId) {
       try {
-        updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
+        updatedOrder = await db.updateOrderStatus(orderId, effectiveStatus, staffName, cancellationReason);
       } catch (dbErr: any) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
