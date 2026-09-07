@@ -16,16 +16,20 @@ import {
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
+import { dashboardStore } from '@/lib/dashboardStore';
 
 export default function TablesPage() {
-  const [restaurantId, setRestaurantId] = useState('');
-  const [restaurantSlug, setRestaurantSlug] = useState('');
-  const [tables, setTables] = useState<Table[]>([]);
-  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>('starter');
-  const [loading, setLoading] = useState(true);
+  const { restaurant, profile, planSpec } = useRestaurant();
+  const restId = restaurant?.id || profile?.restaurant_id;
+  const initialCachedTables = restId ? dashboardStore.getCachedTables(restId) : null;
+  const [restaurantId, setRestaurantId] = useState(restId || '');
+  const [restaurantSlug, setRestaurantSlug] = useState(restaurant?.slug || '');
+  const [tables, setTables] = useState<Table[]>(() => initialCachedTables?.tables || []);
+  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>(restaurant?.subscription_plan || 'starter');
+  const [loading, setLoading] = useState(() => !initialCachedTables);
 
   // Merged Tables state
-  const [activeMergeGroups, setActiveMergeGroups] = useState<any[]>([]);
+  const [activeMergeGroups, setActiveMergeGroups] = useState<any[]>(() => initialCachedTables?.mergeGroups || []);
   const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeGroupName, setMergeGroupName] = useState('');
@@ -42,8 +46,8 @@ export default function TablesPage() {
   const [errorMsg, setErrorMsg] = useState('');
 
   // Table Assignments State
-  const [tableAssignments, setTableAssignments] = useState<any[]>([]);
-  const [tableStats, setTableStats] = useState({
+  const [tableAssignments, setTableAssignments] = useState<any[]>(() => initialCachedTables?.assignments || []);
+  const [tableStats, setTableStats] = useState(() => initialCachedTables?.stats || {
     total: 0,
     available: 0,
     occupied: 0,
@@ -62,17 +66,28 @@ export default function TablesPage() {
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const fetchTablesData = async (restId: string) => {
+  const fetchTablesData = async (targetRestId: string) => {
     try {
-      const { tables: liveTbls, stats } = await db.getTablesWithLiveStatus(restId);
-      setTables(liveTbls);
-      setTableStats(stats);
-
-      const groups = await db.getMergeGroups(restId, 'active');
+      const [liveTblsData, groups, assigns] = await Promise.all([
+        db.getTablesWithLiveStatus(targetRestId),
+        db.getMergeGroups(targetRestId, 'active'),
+        db.getTableAssignments(targetRestId)
+      ]);
+      if (liveTblsData) {
+        setTables(liveTblsData.tables);
+        setTableStats(liveTblsData.stats);
+      }
       setActiveMergeGroups(groups || []);
-
-      const assigns = await db.getTableAssignments(restId);
       setTableAssignments(assigns || []);
+
+      if (liveTblsData) {
+        dashboardStore.setCachedTables(targetRestId, {
+          tables: liveTblsData.tables,
+          stats: liveTblsData.stats,
+          mergeGroups: groups || [],
+          assignments: assigns || []
+        });
+      }
     } catch (e) {
       console.error('Error fetching tables data:', e);
     }
@@ -81,45 +96,49 @@ export default function TablesPage() {
   useEffect(() => {
     let channel: any = null;
 
-    const debouncedReload = (restId: string) => {
+    const debouncedReload = (targetRestId: string) => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
-        if (restId) fetchTablesData(restId);
+        if (targetRestId) fetchTablesData(targetRestId);
       }, 200);
     };
 
     async function loadTables() {
-      const user = await getActiveUser();
-      if (!user || !user.restaurant_id) return;
-      const restId = user.restaurant_id;
-      setRestaurantId(restId);
+      const targetRestId = restaurant?.id || profile?.restaurant_id;
+      if (!targetRestId) return;
+      setRestaurantId(targetRestId);
 
-      const rest = await db.getRestaurantById(restId);
-      if (rest) {
-        setRestaurantSlug(rest.slug);
-        setActivePlan(rest.subscription_plan);
+      if (restaurant) {
+        setRestaurantSlug(restaurant.slug);
+        setActivePlan(restaurant.subscription_plan);
+      } else {
+        const rest = await db.getRestaurantById(targetRestId);
+        if (rest) {
+          setRestaurantSlug(rest.slug);
+          setActivePlan(rest.subscription_plan);
+        }
       }
 
-      await fetchTablesData(restId);
+      await fetchTablesData(targetRestId);
       setLoading(false);
 
       // Realtime subscription to live orders, table changes and QR state
       channel = supabase
-        .channel(`tables_page_${restId}_${Date.now()}`)
+        .channel(`tables_page_${targetRestId}_${Date.now()}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restId}` },
-          () => debouncedReload(restId)
+          { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${targetRestId}` },
+          () => debouncedReload(targetRestId)
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${restId}` },
-          () => debouncedReload(restId)
+          { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${targetRestId}` },
+          () => debouncedReload(targetRestId)
         )
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${restId}` },
-          () => debouncedReload(restId)
+          { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${targetRestId}` },
+          () => debouncedReload(targetRestId)
         )
         .subscribe();
     }
@@ -490,7 +509,6 @@ export default function TablesPage() {
     );
   }
 
-  const { planSpec } = useRestaurant();
   const maxTablesLimit = planSpec.limits.tables;
   const tablesUsed = tables.length;
 

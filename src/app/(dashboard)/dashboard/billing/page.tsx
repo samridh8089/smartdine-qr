@@ -15,22 +15,25 @@ import { formatPrice } from '@/lib/utils';
 import { supabase, getActiveUser } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
+import { dashboardStore } from '@/lib/dashboardStore';
 
 export default function BillingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { restaurant, profile, planSpec, refresh } = useRestaurant();
-  const [tablesCount, setTablesCount] = useState(0);
-  const [itemsCount, setItemsCount] = useState(0);
-  const [staffCount, setStaffCount] = useState(1);
-  const [inventoryCount, setInventoryCount] = useState(0);
+  const restId = restaurant?.id || profile?.restaurant_id;
+  const initialCachedBilling = restId ? dashboardStore.getCachedBilling(restId) : null;
+  const [tablesCount, setTablesCount] = useState(() => initialCachedBilling?.tablesCount || 0);
+  const [itemsCount, setItemsCount] = useState(() => initialCachedBilling?.itemsCount || 0);
+  const [staffCount, setStaffCount] = useState(() => initialCachedBilling?.staffCount || 1);
+  const [inventoryCount, setInventoryCount] = useState(() => initialCachedBilling?.invCount || 0);
   const [aiMenuUsage, setAiMenuUsage] = useState<{ used: number; limit: number | null }>({ used: 0, limit: planSpec?.ai_limits?.ai_menu_analysis ?? null });
   const [aiRecipeUsage, setAiRecipeUsage] = useState<{ used: number; limit: number | null }>({ used: 0, limit: planSpec?.ai_limits?.ai_recipe_generation ?? null });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialCachedBilling);
 
   // Billing pricing interval state
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
-  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
+  const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>(() => initialCachedBilling?.plans || []);
 
   // Deletion state
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -52,14 +55,12 @@ export default function BillingPage() {
         }
 
         if (restId) {
-          // Load counts and AI usage in parallel
-          const [tables, items, staffRes, invRes, mUsageRes, rUsageRes, plans] = await Promise.all([
+          // Load counts and pricing plans in parallel
+          const [tables, items, staffRes, invRes, plans] = await Promise.all([
             db.getTables(restId).catch(() => []),
             db.getMenuItems(restId).catch(() => []),
             supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
             supabase.from('inventory_items').select('id', { count: 'exact', head: true }).eq('restaurant_id', restId),
-            fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`).catch(() => null),
-            fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_recipe_generation`).catch(() => null),
             db.getPricingPlans().catch(() => [])
           ]);
 
@@ -67,26 +68,34 @@ export default function BillingPage() {
           setItemsCount(items.length);
           setStaffCount(staffRes.count || 1);
           setInventoryCount(invRes.count || 0);
-
-          if (mUsageRes && mUsageRes.ok) {
-            const mData = await mUsageRes.json();
-            setAiMenuUsage({ used: mData.used, limit: mData.limit });
-          }
-          if (rUsageRes && rUsageRes.ok) {
-            const rData = await rUsageRes.json();
-            setAiRecipeUsage({ used: rData.used, limit: rData.limit });
-          }
-
-          loadedPlans = plans;
           setPricingPlans(plans);
+
+          dashboardStore.setCachedBilling(restId, {
+            tablesCount: tables.length,
+            itemsCount: items.length,
+            staffCount: staffRes.count || 1,
+            invCount: invRes.count || 0,
+            plans
+          });
+
+          // Unblock loading immediately
+          setLoading(false);
+
+          // Background load AI usage checks without blocking pricing UI
+          Promise.all([
+            fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`).then(r => r.ok ? r.json() : null).catch(() => null),
+            fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_recipe_generation`).then(r => r.ok ? r.json() : null).catch(() => null)
+          ]).then(([mData, rData]) => {
+            if (mData) setAiMenuUsage({ used: mData.used, limit: mData.limit });
+            if (rData) setAiRecipeUsage({ used: rData.used, limit: rData.limit });
+          });
         } else {
           const plans = await db.getPricingPlans().catch(() => []);
-          loadedPlans = plans;
           setPricingPlans(plans);
+          setLoading(false);
         }
       } catch (e) {
         console.error('Error loading billing info:', e);
-      } finally {
         setLoading(false);
       }
 

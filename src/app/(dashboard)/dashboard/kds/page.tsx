@@ -16,13 +16,19 @@ import {
 } from 'lucide-react';
 import { playLoudBell, unlockAudio, stopLoudBell } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
+import { dashboardStore } from '@/lib/dashboardStore';
 
 
 export default function KitchenDisplayPage() {
   const { restaurant, profile, alarmMuted, setAlarmMuted } = useRestaurant();
-  const [restaurantId, setRestaurantId] = useState('');
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
+  const restId = restaurant?.id || profile?.restaurant_id;
+  const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
+  const [restaurantId, setRestaurantId] = useState(restId || '');
+  const [orders, setOrders] = useState<Order[]>(() => {
+    if (!initialCachedOrders) return [];
+    return initialCachedOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
+  });
+  const [loading, setLoading] = useState(() => !initialCachedOrders);
   const [processingBatchIds, setProcessingBatchIds] = useState<string[]>([]);
   const processingBatchIdsRef = useRef<Set<string>>(new Set());
 
@@ -116,22 +122,23 @@ export default function KitchenDisplayPage() {
   const alertedBatchIds = useRef<Set<string>>(new Set());
 
   const loadKdsData = async (restId: string) => {
-    const allOrders = await db.getOrders(restId);
-    const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
-    setOrders(activeOrders);
-    
-    // Add existing order and batch IDs to the alerted sets so they don't trigger the bell on load
-    allOrders.forEach(o => {
-      alertedOrderIds.current.add(o.id);
-      o.batches?.forEach(b => alertedBatchIds.current.add(b.id));
-    });
-    
     try {
-      const [recipesRes, itemsRes, txsRes] = await Promise.all([
+      const [allOrders, recipesRes, itemsRes, txsRes] = await Promise.all([
+        db.getOrders(restId),
         supabase.from('inventory_recipes').select('*, inventory_recipe_ingredients(*)').eq('restaurant_id', restId),
         supabase.from('inventory_items').select('*').eq('restaurant_id', restId),
-        supabase.from('inventory_transactions').select('*').eq('restaurant_id', restId).eq('transaction_type', 'ORDER_CONSUMPTION')
+        supabase.from('inventory_transactions').select('*').eq('restaurant_id', restId).eq('transaction_type', 'ORDER_CONSUMPTION').order('created_at', { ascending: false }).limit(100)
       ]);
+
+      const activeOrders = (allOrders || []).filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
+      setOrders(activeOrders);
+      dashboardStore.setCachedOrders(restId, allOrders);
+      
+      // Add existing order and batch IDs to the alerted sets so they don't trigger the bell on load
+      allOrders.forEach(o => {
+        alertedOrderIds.current.add(o.id);
+        o.batches?.forEach(b => alertedBatchIds.current.add(b.id));
+      });
 
       if (recipesRes.data) {
         const rMap: Record<string, any> = {};
@@ -167,15 +174,16 @@ export default function KitchenDisplayPage() {
     }
     isReloadingRef.current = true;
     try {
-      const allOrders = await db.getOrders(restId);
-      const activeOrders = allOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
-      setOrders(activeOrders);
-
-      const [recipesRes, itemsRes, txsRes] = await Promise.all([
+      const [allOrders, recipesRes, itemsRes, txsRes] = await Promise.all([
+        db.getOrders(restId),
         supabase.from('inventory_recipes').select('*, inventory_recipe_ingredients(*)').eq('restaurant_id', restId),
         supabase.from('inventory_items').select('*').eq('restaurant_id', restId),
-        supabase.from('inventory_transactions').select('*').eq('restaurant_id', restId).eq('transaction_type', 'ORDER_CONSUMPTION')
+        supabase.from('inventory_transactions').select('*').eq('restaurant_id', restId).eq('transaction_type', 'ORDER_CONSUMPTION').order('created_at', { ascending: false }).limit(100)
       ]);
+
+      const activeOrders = (allOrders || []).filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
+      setOrders(activeOrders);
+      dashboardStore.setCachedOrders(restId, allOrders);
 
       if (recipesRes.data) {
         const rMap: Record<string, any> = {};

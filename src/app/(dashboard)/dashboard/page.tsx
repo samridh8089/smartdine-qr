@@ -17,26 +17,37 @@ import {
 
 import { calculateBillingTotals, isRevenueOrder, getOrderRevenueAmount, calculateOrdersRevenue } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
+import { dashboardStore } from '@/lib/dashboardStore';
+
+interface OverviewStats {
+  totalOrders: number;
+  revenue: number;
+  activeTablesCount: number;
+  activeTableNames: string[];
+  topItems: { name: string; count: number; revenue: number }[];
+}
 
 export default function DashboardPage() {
   const { restaurant: contextRestaurant, profile: contextProfile } = useRestaurant();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const restId = contextRestaurant?.id || contextProfile?.restaurant_id;
+  const initialCachedOverview = restId ? dashboardStore.getCachedOverview(restId) : null;
+  const [orders, setOrders] = useState<Order[]>(() => initialCachedOverview?.orders || []);
   const [restaurant, setRestaurant] = useState<any>(contextRestaurant);
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<OverviewStats>(() => initialCachedOverview?.stats || {
     totalOrders: 0,
     revenue: 0,
     activeTablesCount: 0,
-    activeTableNames: [] as string[],
-    topItems: [] as { name: string; count: number; revenue: number }[]
+    activeTableNames: [],
+    topItems: []
   });
-  const [tableOccupancy, setTableOccupancy] = useState({
+  const [tableOccupancy, setTableOccupancy] = useState(() => initialCachedOverview?.tableOccupancy || {
     total: 0,
     available: 0,
     occupied: 0,
     inactive: 0,
     occupancyRate: 0
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialCachedOverview);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isReloadingRef = useRef(false);
@@ -126,12 +137,19 @@ export default function DashboardPage() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 5);
 
-      setStats({
+      const computedStats = {
         totalOrders: todayOrders.length,
         revenue,
         activeTablesCount: activeTableMap.size,
         activeTableNames: activeTableNamesList,
         topItems
+      };
+      setStats(computedStats);
+
+      dashboardStore.setCachedOverview(restId, {
+        orders: allOrders,
+        stats: computedStats,
+        tableOccupancy: liveTableData?.stats || tableOccupancy
       });
 
       // INSTANT RENDER: Unblock loading immediately for sub-second UI paint
