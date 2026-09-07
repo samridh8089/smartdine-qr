@@ -45,9 +45,9 @@ export default function OrdersPage() {
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
 
   // Real-time toast state
-  const [toast, setToast] = useState<{ message: string; visible: boolean; title?: string; variant?: 'success' | 'info' | 'warning' } | null>(null);
-  const showToast = (message: string, title?: string, variant?: 'success' | 'info' | 'warning') => {
-    setToast({ message, title: title || (variant === 'info' ? 'Order Notice' : 'New Order'), visible: true, variant: variant || 'success' });
+  const [toast, setToast] = useState<{ message: string; visible: boolean; title?: string; variant?: 'success' | 'info' | 'warning' | 'error' } | null>(null);
+  const showToast = (message: string, title?: string, variant?: 'success' | 'info' | 'warning' | 'error') => {
+    setToast({ message, title: title || (variant === 'info' ? 'Order Notice' : variant === 'error' ? 'Error' : 'New Order'), visible: true, variant: variant || 'success' });
     setTimeout(() => {
       setToast(prev => prev && prev.message === message ? { ...prev, visible: false } : prev);
     }, 5000);
@@ -547,7 +547,6 @@ export default function OrdersPage() {
 
   const updateOrderStatus = async (status: Order['status'], cancellationReason?: string) => {
     if (!selectedOrder || !restaurant) return;
-    if (processingOrderIds.includes(selectedOrder.id) || processingOrderIdsRef.current.has(selectedOrder.id)) return;
 
     if (status === 'cancelled') {
       const isEarlyStage = ['new', 'accepted'].includes(selectedOrder.status);
@@ -572,10 +571,17 @@ export default function OrdersPage() {
     }
 
     const orderIdToUpdate = selectedOrder.id;
-    processingOrderIdsRef.current.add(orderIdToUpdate);
-    setProcessingOrderIds(prev => [...prev, orderIdToUpdate]);
+    const actionKey = `${orderIdToUpdate}:${status}`;
+    if (processingOrderIdsRef.current.has(actionKey)) return;
+    processingOrderIdsRef.current.add(actionKey);
+    setProcessingOrderIds(prev => [...prev, actionKey]);
+
+    // Snapshot original status & batches for robust error rollback
+    const origOrder = orders.find(o => o.id === orderIdToUpdate);
+    const origStatus = origOrder?.status || selectedOrder.status;
+    const origBatches = origOrder?.batches || selectedOrder.batches;
     
-    // Immediate safe optimistic update
+    // Immediate safe optimistic update (< 10ms visible DOM response)
     setOrders(prev => prev.map(o => {
       if (o.id === orderIdToUpdate) {
         const updatedBatches = (o.batches || []).map((b: any) => ({ ...b, status }));
@@ -614,24 +620,24 @@ export default function OrdersPage() {
       }
 
       const resData = await res.json();
-      const updated = resData.order || (await db.getOrderById(orderIdToUpdate));
+      const updated = resData.order;
       if (updated) {
-        setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+        setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
       }
-      
-      const allOrders = await db.getOrders(restaurant.id);
-      const filteredOrders = activeRole === 'waiter'
-        ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
-        : allOrders;
-      setOrders(filteredOrders);
       
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
-      const allOrders = await db.getOrders(restaurant.id);
-      const filteredOrders = activeRole === 'waiter'
-        ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
-        : allOrders;
-      setOrders(filteredOrders);
+      // Functional rollback on failure
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderIdToUpdate) {
+          return {
+            ...o,
+            status: origStatus,
+            batches: origBatches
+          };
+        }
+        return o;
+      }));
 
       if (err.code === 'ORDER_ALREADY_SERVED' || err.message?.includes('already served')) {
         window.dispatchEvent(new Event('stop-waiter-sound'));
@@ -642,10 +648,10 @@ export default function OrdersPage() {
         showToast(err.message || "Order status was updated concurrently.", "Sync Notice", "info");
         return;
       }
-      alert(`Failed to update order status: ${err.message}`);
+      showToast(`Failed to update order status: ${err.message}`, "Error", "error");
     } finally {
-      processingOrderIdsRef.current.delete(orderIdToUpdate);
-      setProcessingOrderIds(prev => prev.filter(id => id !== orderIdToUpdate));
+      processingOrderIdsRef.current.delete(actionKey);
+      setProcessingOrderIds(prev => prev.filter(id => id !== actionKey));
     }
   };
 
@@ -683,13 +689,25 @@ export default function OrdersPage() {
 
     const allowedTransitions = VALID_ORDER_TRANSITIONS[selectedOrder.status] || [];
     if (!allowedTransitions.includes('cancelled')) {
-      alert(`Cannot cancel an order with status "${selectedOrder.status}". Only new or accepted orders can be cancelled.`);
+      showToast(`Cannot cancel an order with status "${selectedOrder.status}". Only new or accepted orders can be cancelled.`, "Invalid Action", "warning");
       return;
     }
 
+    const origOrder = orders.find(o => o.id === orderIdToCancel);
     processingOrderIdsRef.current.add(orderIdToCancel);
     setIsSubmittingCancellation(true);
-    setOrders(prev => prev.map(o => o.id === orderIdToCancel ? { ...o, status: 'cancelled' } : o));
+
+    // Immediate optimistic UI response: close modal instantly and update status in DOM (< 20ms)
+    setCancelModalOpen(false);
+    setOrders(prev => prev.map(o => o.id === orderIdToCancel ? {
+      ...o,
+      status: 'cancelled',
+      cancellation_reason: fullReason,
+      cancelled_by: profile?.full_name || activeRole || 'Staff Member',
+      cancelled_at: new Date().toISOString()
+    } : o));
+    showToast("Order cancelled and disposition logged.", "Order Cancelled", "info");
+    window.dispatchEvent(new Event('storage'));
 
     try {
       // 1. Cancel the order in database
@@ -708,29 +726,30 @@ export default function OrdersPage() {
           .eq('id', orderIdToCancel);
       }
 
-      // 3. Record Prepared Food Disposition for each active item
+      // 3. Record Prepared Food Disposition for all active items in parallel
       const { recordPreparedFoodDisposition } = await import('@/lib/inventoryEngine');
-      for (const item of (selectedOrder.items || [])) {
-        if (item.is_cancelled || item.status === 'cancelled') continue;
-
-        await recordPreparedFoodDisposition({
-          restaurantId: restaurant.id,
-          orderId: orderIdToCancel,
-          batchId: item.batch_id,
-          orderItemId: item.id,
-          menuItemId: item.menu_item_id,
-          menuItemName: item.menu_item_name,
-          variantName: item.variant_name,
-          quantity: item.quantity,
-          wasServed: Boolean(wasServed || item.is_served),
-          dispositionType,
-          destinationOrderId: destinationOrderId || undefined,
-          destinationOrderDisplayId: destinationOrderDisplayId || undefined,
-          wasteReason: dispositionType === 'waste' ? wasteReason : undefined,
-          notes: dispositionNotes || customCancellationNotes || undefined,
-          handledBy: profile?.full_name || activeRole || 'Staff Member',
-          restoreInventory: restoreInventoryStock
-        });
+      const activeItems = (selectedOrder.items || []).filter(i => !i.is_cancelled && i.status !== 'cancelled');
+      if (activeItems.length > 0) {
+        await Promise.all(activeItems.map(item =>
+          recordPreparedFoodDisposition({
+            restaurantId: restaurant.id,
+            orderId: orderIdToCancel,
+            batchId: item.batch_id,
+            orderItemId: item.id,
+            menuItemId: item.menu_item_id,
+            menuItemName: item.menu_item_name,
+            variantName: item.variant_name,
+            quantity: item.quantity,
+            wasServed: Boolean(wasServed || item.is_served),
+            dispositionType,
+            destinationOrderId: destinationOrderId || undefined,
+            destinationOrderDisplayId: destinationOrderDisplayId || undefined,
+            wasteReason: dispositionType === 'waste' ? wasteReason : undefined,
+            notes: dispositionNotes || customCancellationNotes || undefined,
+            handledBy: profile?.full_name || activeRole || 'Staff Member',
+            restoreInventory: restoreInventoryStock
+          })
+        ));
       }
 
       if (restoreInventoryStock) {
@@ -745,20 +764,15 @@ export default function OrdersPage() {
         );
       }
 
-      setCancelModalOpen(false);
-      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-
-      const allOrders = await db.getOrders(restaurant.id);
-      const filteredOrders = activeRole === 'waiter'
-        ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
-        : allOrders;
-      setOrders(filteredOrders);
+      if (updated) {
+        setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+      }
       window.dispatchEvent(new Event('storage'));
-      alert('Order cancelled and prepared food disposition logged successfully.');
     } catch (err: any) {
-      const allOrders = await db.getOrders(restaurant.id);
-      setOrders(allOrders);
-      alert(`Error during cancellation: ${err.message}`);
+      if (origOrder) {
+        setOrders(prev => prev.map(o => o.id === orderIdToCancel ? origOrder : o));
+      }
+      showToast(`Error during cancellation: ${err.message}`, "Error", "error");
     } finally {
       processingOrderIdsRef.current.delete(orderIdToCancel);
       setIsSubmittingCancellation(false);
@@ -941,35 +955,57 @@ export default function OrdersPage() {
     if (!selectedOrder || !restaurant) return;
     if (submittingPaymentRef.current || submittingPayment) return;
     if (selectedOrder.payment_status === 'paid') {
-      alert('This order has already been marked as paid.');
+      showToast('This order has already been marked as paid.', 'Payment Notice', 'info');
       setPaymentModalOpen(false);
       return;
     }
+
     submittingPaymentRef.current = true;
     setSubmittingPayment(true);
-    try {
-      const calcResult = calculateBillingTotals({
-        items: selectedOrder.items || [],
-        batches: selectedOrder.batches || [],
-        discountAmount: Number(selectedOrder.discount_amount || 0),
-        offerCode: selectedOrder.offer_code,
-        specialInstructions: selectedOrder.special_instructions,
-        offers: restaurant.settings.offers || [],
-        settings: restaurant.settings,
-        gstNumber: restaurant.gst_number,
-        gstEnabled: restaurant.settings.gst_enabled,
-        gstPercentage: restaurant.settings.gst_percentage || 0,
-        serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
-        serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-        customCharges: restaurant.settings.custom_charges || []
-      });
 
+    const targetOrderId = selectedOrder.id;
+    const origOrder = orders.find(o => o.id === targetOrderId);
+    const chosenMethod = paymentMethod;
+
+    const calcResult = calculateBillingTotals({
+      items: selectedOrder.items || [],
+      batches: selectedOrder.batches || [],
+      discountAmount: Number(selectedOrder.discount_amount || 0),
+      offerCode: selectedOrder.offer_code,
+      specialInstructions: selectedOrder.special_instructions,
+      offers: restaurant.settings.offers || [],
+      settings: restaurant.settings,
+      gstNumber: restaurant.gst_number,
+      gstEnabled: restaurant.settings.gst_enabled,
+      gstPercentage: restaurant.settings.gst_percentage || 0,
+      serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
+      serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
+      customCharges: restaurant.settings.custom_charges || []
+    });
+
+    // Immediate Optimistic UI update: Close modal & reflect Paid/Completed in DOM immediately (< 20ms)
+    setPaymentModalOpen(false);
+    setOrders(prev => prev.map(o => o.id === targetOrderId ? {
+      ...o,
+      payment_status: 'paid',
+      payment_method: chosenMethod,
+      paid_at: new Date().toISOString(),
+      status: 'completed',
+      subtotal: calcResult.validSubtotal,
+      gst: calcResult.gstAmount,
+      service_charge: calcResult.serviceChargeAmount,
+      total: calcResult.grandTotal
+    } : o));
+    showToast(`Payment of ${formatPrice(calcResult.grandTotal, restaurant.settings.currency)} recorded successfully!`, "Bill Settled", "success");
+    window.dispatchEvent(new Event('storage'));
+
+    try {
       // BUG-ORD-002: Atomic conditional database update - only set paid if not already paid
       const { data: updatedRows, error } = await supabase
         .from('orders')
         .update({
           payment_status: 'paid',
-          payment_method: paymentMethod,
+          payment_method: chosenMethod,
           paid_at: new Date().toISOString(),
           marked_paid_by: profile?.full_name || activeRole || 'Staff Member',
           subtotal: calcResult.validSubtotal,
@@ -978,7 +1014,7 @@ export default function OrdersPage() {
           custom_charges: calcResult.customChargesSnapshot,
           total: calcResult.grandTotal
         })
-        .eq('id', selectedOrder.id)
+        .eq('id', targetOrderId)
         .neq('payment_status', 'paid')
         .select();
 
@@ -986,16 +1022,13 @@ export default function OrdersPage() {
 
       // Idempotency check: If 0 rows were updated, this order was already paid concurrently (multi-tab or double click)
       if (!updatedRows || updatedRows.length === 0) {
-        alert('This order has already been marked as paid.');
-        setPaymentModalOpen(false);
-        const allOrders = await db.getOrders(restaurant.id);
-        setOrders(allOrders);
+        showToast('This order has already been marked as paid.', 'Payment Notice', 'info');
         return;
       }
 
       // Authoritative lifecycle completion: consumes any unconsumed inventory, syncs batches & items
       const updated = await db.updateOrderStatus(
-        selectedOrder.id, 
+        targetOrderId, 
         'completed', 
         profile?.full_name || activeRole || 'Staff Member'
       );
@@ -1003,25 +1036,26 @@ export default function OrdersPage() {
       // BUG-ORD-004: Instantly broadcast payment-updated across all tenant channels (Live Orders, KDS, Dashboard, Customer)
       await broadcastOrderRealtimeEvent({
         restaurantId: restaurant.id,
-        orderId: selectedOrder.id,
+        orderId: targetOrderId,
         eventType: 'payment-updated',
         payload: {
-          orderId: selectedOrder.id,
+          orderId: targetOrderId,
           paymentStatus: 'paid',
           status: 'completed',
           updatedOrder: updated
         }
       });
 
-      setPaymentModalOpen(false);
-      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-
-      const allOrders = await db.getOrders(restaurant.id);
-      setOrders(allOrders);
-
+      if (updated) {
+        setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+      }
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
-      alert(`Failed to complete payment: ${err.message}`);
+      // Roll back on failure
+      if (origOrder) {
+        setOrders(prev => prev.map(o => o.id === targetOrderId ? origOrder : o));
+      }
+      showToast(`Failed to complete payment: ${err.message}`, "Payment Error", "error");
     } finally {
       submittingPaymentRef.current = false;
       setSubmittingPayment(false);
@@ -1083,7 +1117,7 @@ export default function OrdersPage() {
                 </div>
               </div>
               <button
-                disabled={orders.find(o => o.status === 'ready') ? (processingOrderIds.includes(orders.find(o => o.status === 'ready')!.id) || processingOrderIdsRef.current.has(orders.find(o => o.status === 'ready')!.id)) : false}
+                disabled={orders.find(o => o.status === 'ready') ? processingOrderIdsRef.current.has(`${orders.find(o => o.status === 'ready')!.id}:served`) : false}
                 className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-1.5 rounded-lg text-xs cursor-pointer disabled:opacity-50 transition-all flex items-center gap-1.5"
                 onClick={async () => {
                   const firstReady = orders.find(o => o.status === 'ready');
@@ -1098,38 +1132,40 @@ export default function OrdersPage() {
                     return;
                   }
 
-                  if (processingOrderIdsRef.current.has(firstReady.id)) return;
-                  processingOrderIdsRef.current.add(firstReady.id);
+                  const actionKey = `${firstReady.id}:served`;
+                  if (processingOrderIdsRef.current.has(actionKey)) return;
+                  processingOrderIdsRef.current.add(actionKey);
 
-                  setProcessingOrderIds(prev => [...prev, firstReady.id]);
+                  // Snapshot original status for rollback
+                  const origOrder = orders.find(o => o.id === firstReady.id);
+                  setProcessingOrderIds(prev => [...prev, actionKey]);
                   setOrders(prev => prev.map(o => o.id === firstReady.id ? { ...o, status: 'served' } : o));
+                  window.dispatchEvent(new Event('stop-waiter-sound'));
+                  showToast(`Order for ${firstReady.table_name || 'Table'} marked as served.`, "Order Served", "success");
+
                   try {
-                    window.dispatchEvent(new Event('stop-waiter-sound'));
                     const updated = await db.updateOrderStatus(firstReady.id, 'served', profile?.full_name || activeRole || 'Staff Member');
-                    setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-                    const allOrders = await db.getOrders(restaurant.id);
-                    setOrders(allOrders);
+                    if (updated) {
+                      setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+                    }
                     window.dispatchEvent(new Event('storage'));
                   } catch (err: any) {
-                    const allOrders = await db.getOrders(restaurant.id);
-                    const filteredOrders = activeRole === 'waiter'
-                      ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
-                      : allOrders;
-                    setOrders(filteredOrders);
+                    if (origOrder) {
+                      setOrders(prev => prev.map(o => o.id === firstReady.id ? origOrder : o));
+                    }
 
                     if (err.code === 'ORDER_ALREADY_SERVED' || err.code === 'STALE_STATUS_CONFLICT' || err.message?.includes('already served')) {
-                      window.dispatchEvent(new Event('stop-waiter-sound'));
                       showToast("Order already served by another team member.", "Waiter Notice", "info");
                       return;
                     }
-                    alert(`Failed to serve order: ${err.message}`);
+                    showToast(`Failed to serve order: ${err.message}`, "Error", "error");
                   } finally {
-                    processingOrderIdsRef.current.delete(firstReady.id);
-                    setProcessingOrderIds(prev => prev.filter(id => id !== firstReady.id));
+                    processingOrderIdsRef.current.delete(actionKey);
+                    setProcessingOrderIds(prev => prev.filter(id => id !== actionKey));
                   }
                 }}
               >
-                {orders.find(o => o.status === 'ready') && processingOrderIds.includes(orders.find(o => o.status === 'ready')!.id) && (
+                {orders.find(o => o.status === 'ready') && processingOrderIds.includes(`${orders.find(o => o.status === 'ready')!.id}:served`) && (
                   <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 )}
                 Serve Order
@@ -1343,8 +1379,8 @@ export default function OrdersPage() {
                             <Button
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
-                              isLoading={processingOrderIds.includes(order.id) || processingOrderIdsRef.current.has(order.id)}
-                              disabled={processingOrderIds.includes(order.id) || processingOrderIdsRef.current.has(order.id)}
+                              isLoading={processingOrderIds.includes(`${order.id}:served`)}
+                              disabled={processingOrderIds.includes(`${order.id}:served`)}
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 if (order.status === 'served' || order.status === 'completed') {
@@ -1353,12 +1389,17 @@ export default function OrdersPage() {
                                   return;
                                 }
 
-                                if (processingOrderIdsRef.current.has(order.id)) return;
-                                processingOrderIdsRef.current.add(order.id);
+                                const actionKey = `${order.id}:served`;
+                                if (processingOrderIdsRef.current.has(actionKey)) return;
+                                processingOrderIdsRef.current.add(actionKey);
 
-                                setProcessingOrderIds(prev => [...prev, order.id]);
+                                const origOrder = orders.find(o => o.id === order.id);
+                                setProcessingOrderIds(prev => [...prev, actionKey]);
+                                setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'served' } : o));
+                                window.dispatchEvent(new Event('stop-waiter-sound'));
+                                showToast(`Order #${getFormattedOrderId(order.id)} marked as served.`, "Order Served", "success");
+
                                 try {
-                                  window.dispatchEvent(new Event('stop-waiter-sound'));
                                   const updated = await db.updateOrderStatus(order.id, 'served', profile?.full_name || 'Waiter');
                                   await broadcastOrderRealtimeEvent({
                                     restaurantId: restaurant.id,
@@ -1370,27 +1411,22 @@ export default function OrdersPage() {
                                       updatedOrder: updated
                                     }
                                   });
-                                  const allOrders = await db.getOrders(restaurant.id);
-                                  const filteredOrders = activeRole === 'waiter'
-                                    ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
-                                    : allOrders;
-                                  setOrders(filteredOrders);
+                                  if (updated) {
+                                    setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+                                  }
                                   window.dispatchEvent(new Event('storage'));
                                 } catch (err: any) {
+                                  if (origOrder) {
+                                    setOrders(prev => prev.map(o => o.id === order.id ? origOrder : o));
+                                  }
                                   if (err.code === 'ORDER_ALREADY_SERVED' || err.code === 'STALE_STATUS_CONFLICT' || err.message?.includes('already served')) {
-                                    window.dispatchEvent(new Event('stop-waiter-sound'));
                                     showToast("Order already served by another team member.", "Waiter Notice", "info");
-                                    const allOrders = await db.getOrders(restaurant.id);
-                                    const filteredOrders = activeRole === 'waiter'
-                                      ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
-                                      : allOrders;
-                                    setOrders(filteredOrders);
                                     return;
                                   }
-                                  alert(`Failed to serve order: ${err.message}`);
+                                  showToast(`Failed to serve order: ${err.message}`, "Error", "error");
                                 } finally {
-                                  processingOrderIdsRef.current.delete(order.id);
-                                  setProcessingOrderIds(prev => prev.filter(id => id !== order.id));
+                                  processingOrderIdsRef.current.delete(actionKey);
+                                  setProcessingOrderIds(prev => prev.filter(id => id !== actionKey));
                                 }
                               }}
                             >
@@ -1838,8 +1874,8 @@ export default function OrdersPage() {
                           size="sm" 
                           variant="primary" 
                           className="cursor-pointer" 
-                          isLoading={processingOrderIds.includes(selectedOrder.id)}
-                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          isLoading={processingOrderIds.includes(`${selectedOrder.id}:accepted`)}
+                          disabled={processingOrderIds.includes(`${selectedOrder.id}:accepted`)}
                           onClick={() => updateOrderStatus('accepted')}
                         >
                           Accept Order
@@ -1849,8 +1885,8 @@ export default function OrdersPage() {
                         <Button 
                           size="sm" 
                           className="bg-amber-500 hover:bg-amber-600 text-white cursor-pointer" 
-                          isLoading={processingOrderIds.includes(selectedOrder.id)}
-                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          isLoading={processingOrderIds.includes(`${selectedOrder.id}:preparing`)}
+                          disabled={processingOrderIds.includes(`${selectedOrder.id}:preparing`)}
                           onClick={() => updateOrderStatus('preparing')}
                         >
                           Start Preparing
@@ -1860,8 +1896,8 @@ export default function OrdersPage() {
                         <Button 
                           size="sm" 
                           className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" 
-                          isLoading={processingOrderIds.includes(selectedOrder.id)}
-                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          isLoading={processingOrderIds.includes(`${selectedOrder.id}:ready`)}
+                          disabled={processingOrderIds.includes(`${selectedOrder.id}:ready`)}
                           onClick={() => updateOrderStatus('ready')}
                         >
                           Mark Ready for Pickup
@@ -1871,8 +1907,8 @@ export default function OrdersPage() {
                         <Button 
                           size="sm" 
                           className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" 
-                          isLoading={processingOrderIds.includes(selectedOrder.id)}
-                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          isLoading={processingOrderIds.includes(`${selectedOrder.id}:served`)}
+                          disabled={processingOrderIds.includes(`${selectedOrder.id}:served`)}
                           onClick={() => updateOrderStatus('served')}
                         >
                           Serve Order
@@ -1882,11 +1918,11 @@ export default function OrdersPage() {
                         <Button 
                           size="sm" 
                           className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold shadow-md" 
-                          isLoading={processingOrderIds.includes(selectedOrder.id) || submittingPayment}
-                          disabled={processingOrderIds.includes(selectedOrder.id) || submittingPayment}
+                          isLoading={submittingPayment}
+                          disabled={submittingPayment}
                           onClick={() => {
                             if (selectedOrder.payment_status === 'paid') {
-                              alert('This order has already been marked as paid.');
+                              showToast('This order has already been marked as paid.', 'Payment Notice', 'info');
                               return;
                             }
                             setPaymentModalOpen(true);
@@ -2208,8 +2244,8 @@ export default function OrdersPage() {
                           size="sm" 
                           variant="danger" 
                           className="cursor-pointer" 
-                          isLoading={processingOrderIds.includes(selectedOrder.id)}
-                          disabled={processingOrderIds.includes(selectedOrder.id)}
+                          isLoading={isSubmittingCancellation}
+                          disabled={isSubmittingCancellation}
                           onClick={() => updateOrderStatus('cancelled')}
                         >
                           Cancel Order
@@ -2504,19 +2540,23 @@ export default function OrdersPage() {
       {/* Toast Notification */}
       {toast && toast.visible && (
         <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 border animate-pop animate-fade-in ${
-          toast.variant === 'info'
+          toast.variant === 'error'
+            ? 'bg-rose-600 text-white border-rose-500'
+            : toast.variant === 'info'
             ? 'bg-amber-600 text-white border-amber-500'
             : 'bg-emerald-600 text-white border-emerald-500'
         }`}>
           <div className="bg-white/20 p-2 rounded-lg">
-            {toast.variant === 'info' ? (
+            {toast.variant === 'error' ? (
+              <XCircle className="h-5 w-5 text-white animate-bounce" />
+            ) : toast.variant === 'info' ? (
               <AlertCircle className="h-5 w-5 text-white animate-bounce" />
             ) : (
               <Bell className="h-5 w-5 text-white animate-bounce" />
             )}
           </div>
           <div>
-            <p className="font-bold text-sm tracking-wide uppercase">{toast.title || (toast.variant === 'info' ? 'Notice' : 'New Order')}</p>
+            <p className="font-bold text-sm tracking-wide uppercase">{toast.title || (toast.variant === 'error' ? 'Error' : toast.variant === 'info' ? 'Notice' : 'New Order')}</p>
             <p className="text-xs text-white/95 font-medium">{toast.message}</p>
           </div>
           <button 
