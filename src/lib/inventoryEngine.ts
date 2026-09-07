@@ -2123,7 +2123,17 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
       }
     }
 
-    // 3. Sync Database State (Batches & Order)
+    // 3. Sync Database State (Batches & Order) with Concurrency Precedence Guard
+    const STATUS_PRECEDENCE: Record<string, number> = {
+      new: 0,
+      accepted: 1,
+      preparing: 2,
+      ready: 3,
+      served: 4,
+      completed: 5,
+      cancelled: 5
+    };
+
     if (batchId) {
       // Single Batch Transition
       const batchUpdate: any = { 
@@ -2147,7 +2157,12 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
         batchUpdate.special_instructions = `[CANCELLED] ${cancellationReason || 'Cancelled'}`;
       }
 
-      await supabase.from('order_batches').update(batchUpdate).eq('id', batchId);
+      const { data: curBatch } = await supabase.from('order_batches').select('status').eq('id', batchId).single();
+      const curBatchRank = STATUS_PRECEDENCE[curBatch?.status || 'new'] || 0;
+      const targetBatchRank = STATUS_PRECEDENCE[batchUpdate.status] || 0;
+      if (targetBatchRank >= curBatchRank) {
+        await supabase.from('order_batches').update(batchUpdate).eq('id', batchId);
+      }
 
       if (targetStatus === 'cancelled') {
         try {
@@ -2179,7 +2194,11 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
           bPayload.special_instructions = `[CANCELLED] ${cancellationReason || 'Order Cancelled'}`;
         }
 
-        await supabase.from('order_batches').update(bPayload).eq('id', b.id);
+        const curRank = STATUS_PRECEDENCE[b.status || 'new'] || 0;
+        const tgtRank = STATUS_PRECEDENCE[batchStatus] || 0;
+        if (tgtRank >= curRank) {
+          await supabase.from('order_batches').update(bPayload).eq('id', b.id);
+        }
       }
     }
 
@@ -2230,13 +2249,19 @@ export async function transitionOrderBatchLifecycle(params: LifecycleTransitionP
       orderPayload.cancellation_reason = cancellationReason || 'Cancelled';
     }
 
-    const { error: orderUpdateErr } = await supabase
-      .from('orders')
-      .update(orderPayload)
-      .eq('id', orderId);
+    const { data: curOrderRecord } = await supabase.from('orders').select('status').eq('id', orderId).single();
+    const curOrderRank = STATUS_PRECEDENCE[curOrderRecord?.status || 'new'] || 0;
+    const tgtOrderRank = STATUS_PRECEDENCE[parentStatus] || 0;
 
-    if (orderUpdateErr) {
-      console.warn('[InventoryEngine] Notice updating orders table status:', orderUpdateErr?.message || orderUpdateErr);
+    if (tgtOrderRank >= curOrderRank) {
+      const { error: orderUpdateErr } = await supabase
+        .from('orders')
+        .update(orderPayload)
+        .eq('id', orderId);
+
+      if (orderUpdateErr) {
+        console.warn('[InventoryEngine] Notice updating orders table status:', orderUpdateErr?.message || orderUpdateErr);
+      }
     }
 
     // 5. Sync Live Menu Stock Availability
