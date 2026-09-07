@@ -1122,18 +1122,6 @@ export default function OrdersPage() {
     }
   };
 
-  if (loading || !restaurant) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded" />
-        <div className="grid grid-cols-3 gap-6 h-[80vh]">
-          <div className="bg-slate-200 dark:bg-slate-800 rounded-xl" />
-          <div className="col-span-2 bg-slate-200 dark:bg-slate-800 rounded-xl" />
-        </div>
-      </div>
-    );
-  }
-
   // Filter orders
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -1150,6 +1138,18 @@ export default function OrdersPage() {
       return matchesSearch && matchesStatus;
     });
   }, [orders, restaurant?.name, searchQuery, statusFilter]);
+
+  if (loading || !restaurant) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 w-48 bg-slate-200 dark:bg-slate-800 rounded" />
+        <div className="grid grid-cols-3 gap-6 h-[80vh]">
+          <div className="bg-slate-200 dark:bg-slate-800 rounded-xl" />
+          <div className="col-span-2 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-12">
