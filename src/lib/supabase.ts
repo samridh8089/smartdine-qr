@@ -3,16 +3,19 @@ import { validateMagicBytes, MAX_FILE_SIZE_BYTES, sanitizeFilename } from './fil
 
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const isServer = typeof window === 'undefined';
+const rawKey = (isServer && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  ? process.env.SUPABASE_SERVICE_ROLE_KEY
+  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : (process.env.NODE_ENV === 'production' ? '' : 'https://placeholder.supabase.co');
 const supabaseAnonKey = rawKey || (process.env.NODE_ENV === 'production' ? '' : 'placeholder-anon-key');
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
+    persistSession: !isServer,
+    autoRefreshToken: !isServer,
+    detectSessionInUrl: !isServer,
     flowType: 'pkce',
     storageKey: 'smartdine_auth_token_v2'
   }
