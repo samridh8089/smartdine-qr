@@ -1002,7 +1002,6 @@ export default function OrdersPage() {
     }
 
     submittingPaymentRef.current = true;
-    setSubmittingPayment(true);
 
     const targetOrderId = selectedOrder.id;
     const origOrder = orders.find(o => o.id === targetOrderId);
