@@ -604,7 +604,6 @@ export default function OrdersPage() {
     const actionKey = `${orderIdToUpdate}:${status}`;
     if (processingOrderIdsRef.current.has(actionKey)) return;
     processingOrderIdsRef.current.add(actionKey);
-    setProcessingOrderIds(prev => [...prev, actionKey]);
 
     // Snapshot original status & batches for robust error rollback
     const origOrder = orders.find(o => o.id === orderIdToUpdate);
@@ -614,6 +613,7 @@ export default function OrdersPage() {
     // Immediate safe optimistic update (< 10ms visible DOM response)
     optimisticStatusMapRef.current[orderIdToUpdate] = status;
     setOptimisticStatusMap(prev => ({ ...prev, [orderIdToUpdate]: status }));
+    setProcessingOrderIds(prev => [...prev, actionKey]);
 
     try {
       if (status === 'served') {
@@ -1008,6 +1008,11 @@ export default function OrdersPage() {
     const origOrder = orders.find(o => o.id === targetOrderId);
     const chosenMethod = paymentMethod;
 
+    // Immediate Optimistic UI update: Close modal & reflect Paid/Completed in DOM immediately (< 20ms)
+    setPaymentModalOpen(false);
+    optimisticStatusMapRef.current[targetOrderId] = 'completed';
+    setOptimisticStatusMap(prev => ({ ...prev, [targetOrderId]: 'completed' }));
+
     const calcResult = calculateBillingTotals({
       items: selectedOrder.items || [],
       batches: selectedOrder.batches || [],
@@ -1023,11 +1028,6 @@ export default function OrdersPage() {
       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
       customCharges: restaurant.settings.custom_charges || []
     });
-
-    // Immediate Optimistic UI update: Close modal & reflect Paid/Completed in DOM immediately (< 20ms)
-    setPaymentModalOpen(false);
-    optimisticStatusMapRef.current[targetOrderId] = 'completed';
-    setOptimisticStatusMap(prev => ({ ...prev, [targetOrderId]: 'completed' }));
     setOrders(prev => prev.map(o => o.id === targetOrderId ? {
       ...o,
       payment_status: 'paid',
