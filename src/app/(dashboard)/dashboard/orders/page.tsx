@@ -12,13 +12,50 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard } from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { dashboardStore } from '@/lib/dashboardStore';
 
+/**
+ * BUG-OWNER-002 & BUG-OWNER-003: Table Number and Sequence Formatting
+ * Cleanly separates table identifier (Primary) from 4-digit sequence (Secondary).
+ */
+export function getOrderDisplayInfo(order: Order, restaurantName = '', allOrders: Order[] = []) {
+  // 1. Table Display (Primary Visual Element)
+  let tableDisplay = 'TABLE 1';
+  if (order.order_type === 'takeaway') {
+    tableDisplay = 'TAKEAWAY';
+  } else if (order.order_type === 'reservation') {
+    tableDisplay = 'RESERVATION';
+  } else if (order.table_name) {
+    const cleanName = order.table_name.trim();
+    const numMatch = cleanName.match(/\d+/);
+    tableDisplay = numMatch ? `TABLE ${numMatch[0]}` : cleanName.toUpperCase();
+  } else if ((order as any).table_number) {
+    tableDisplay = `TABLE ${(order as any).table_number}`;
+  }
+
+  // 2. Short Sequence Number (Secondary) e.g. #0030
+  let seqNumber = '';
+  if ((order as any).daily_sequence || (order as any).order_sequence) {
+    seqNumber = String((order as any).daily_sequence || (order as any).order_sequence).padStart(4, '0');
+  } else {
+    const formatted = getFormattedOrderId(order, restaurantName, allOrders);
+    const parts = formatted.split('-');
+    if (parts.length >= 4 && parts[3]) {
+      seqNumber = parts[3].slice(-4);
+    } else {
+      const numOnly = String(order.id).replace(/\D/g, '');
+      seqNumber = numOnly ? numOnly.slice(-4).padStart(4, '0') : order.id.slice(-4).toUpperCase();
+    }
+  }
+  const shortOrderId = `#${seqNumber}`;
+
+  return { tableDisplay, shortOrderId };
+}
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -29,6 +66,7 @@ export default function OrdersPage() {
   const restId = restaurant?.id || profile?.restaurant_id;
   const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
   const [orders, setOrders] = useState<Order[]>(() => initialCachedOrders || []);
+  const orderListContainerRef = useRef<HTMLDivElement>(null);
   const [optimisticStatusMap, setOptimisticStatusMap] = useState<Record<string, Order['status']>>({});
   const optimisticStatusMapRef = useRef<Record<string, Order['status']>>({});
   useEffect(() => {
@@ -299,7 +337,7 @@ export default function OrdersPage() {
     if (restaurant?.id) {
       loadInitialData(restaurant.id);
     }
-  }, [restaurant, orderIdParam]);
+  }, [restaurant?.id]);
 
   const safeReloadOrders = async (restId: string) => {
     if (isReloadingRef.current) {
@@ -435,6 +473,17 @@ export default function OrdersPage() {
 
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
+            // BUG-OWNER-005: Auto-scroll only for a brand-new order when user is already near the top (<100px)
+            const listEl = orderListContainerRef.current;
+            const isNearTop = listEl ? listEl.scrollTop < 100 : (typeof window !== 'undefined' && window.scrollY < 100);
+            if (isNearTop) {
+              if (listEl) {
+                listEl.scrollTo({ top: 0, behavior: 'smooth' });
+              } else if (typeof window !== 'undefined') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }
+
             if (!alertedOrderIds.current.has(newOrderPayload.id)) {
               alertedOrderIds.current.add(newOrderPayload.id);
               console.log(`New order detected! Playing chimes for order ID: ${newOrderPayload.id}`);
@@ -547,17 +596,9 @@ export default function OrdersPage() {
     };
   }, [restaurant?.id]);
 
+  // BUG-OWNER-005 & BUG-OWNER-006: Keep selection in local state with ZERO scroll jump and NO URL mutation
   const handleSelectOrder = (order: Order) => {
     setSelectedOrderId(order.id);
-    router.replace(`/dashboard/orders?id=${order.id}`);
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      setTimeout(() => {
-        const detailEl = document.getElementById('order-details-panel');
-        if (detailEl) {
-          detailEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }, 100);
-    }
   };
 
   // Cancellation & Food Disposition State
@@ -1151,112 +1192,6 @@ export default function OrdersPage() {
 
   return (
     <div className="flex flex-col gap-6 min-h-full pb-12">
-      {/* Alarm alerting cards for waiters */}
-      {(activeRole === 'waiter' || activeRole === 'owner' || activeRole === 'manager') && (
-        <div className="flex flex-col gap-4 shrink-0 animate-fade-in">
-          {orders.some(o => o.status === 'ready') && (
-            <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/50 text-orange-900 dark:text-orange-200 rounded-xl px-4 py-3 shadow-sm flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center shrink-0">
-                  <ChefHat className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-orange-800 dark:text-orange-300">Order Ready for Pickup</p>
-                  <p className="text-xs text-orange-600 dark:text-orange-400">Kitchen has finished. Deliver to table and mark as served.</p>
-                </div>
-              </div>
-              <button
-                disabled={orders.find(o => o.status === 'ready') ? processingOrderIdsRef.current.has(`${orders.find(o => o.status === 'ready')!.id}:served`) : false}
-                className="shrink-0 bg-orange-600 hover:bg-orange-700 text-white font-semibold px-4 py-1.5 rounded-lg text-xs cursor-pointer disabled:opacity-50 transition-all flex items-center gap-1.5"
-                onClick={async () => {
-                  const firstReady = orders.find(o => o.status === 'ready');
-                  if (!firstReady) {
-                    showToast("Order already served by another team member.", "Waiter Notice", "info");
-                    return;
-                  }
-
-                  if (firstReady.status === 'served' || firstReady.status === 'completed') {
-                    window.dispatchEvent(new Event('stop-waiter-sound'));
-                    showToast("Order already served by another team member.", "Waiter Notice", "info");
-                    return;
-                  }
-
-                  const actionKey = `${firstReady.id}:served`;
-                  if (processingOrderIdsRef.current.has(actionKey)) return;
-                  processingOrderIdsRef.current.add(actionKey);
-
-                  // Snapshot original status for rollback
-                  const origOrder = orders.find(o => o.id === firstReady.id);
-                  setProcessingOrderIds(prev => [...prev, actionKey]);
-                  setOrders(prev => prev.map(o => o.id === firstReady.id ? { ...o, status: 'served' } : o));
-                  window.dispatchEvent(new Event('stop-waiter-sound'));
-                  showToast(`Order for ${firstReady.table_name || 'Table'} marked as served.`, "Order Served", "success");
-
-                  try {
-                    const updated = await db.updateOrderStatus(firstReady.id, 'served', profile?.full_name || activeRole || 'Staff Member');
-                    if (updated) {
-                      setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
-                    }
-                    window.dispatchEvent(new Event('storage'));
-                  } catch (err: any) {
-                    if (origOrder) {
-                      setOrders(prev => prev.map(o => o.id === firstReady.id ? origOrder : o));
-                    }
-
-                    if (err.code === 'ORDER_ALREADY_SERVED' || err.code === 'STALE_STATUS_CONFLICT' || err.message?.includes('already served')) {
-                      showToast("Order already served by another team member.", "Waiter Notice", "info");
-                      return;
-                    }
-                    showToast(`Failed to serve order: ${err.message}`, "Error", "error");
-                  } finally {
-                    processingOrderIdsRef.current.delete(actionKey);
-                    setProcessingOrderIds(prev => prev.filter(id => id !== actionKey));
-                  }
-                }}
-              >
-                {orders.find(o => o.status === 'ready') && processingOrderIds.includes(`${orders.find(o => o.status === 'ready')!.id}:served`) && (
-                  <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                Serve Order
-              </button>
-            </div>
-          )}
-
-          {customerRequests.some(r => r.status === 'pending') && (
-            <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 text-blue-900 dark:text-blue-200 rounded-xl px-4 py-3 shadow-sm flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center shrink-0">
-                  <Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-blue-800 dark:text-blue-300">Customer Calling Waiter</p>
-                  <div className="text-xs text-blue-600 dark:text-blue-400 space-y-0.5 mt-0.5">
-                    {customerRequests.filter(r => r.status === 'pending').map(r => (
-                      <p key={r.id}>{r.table_name} — {r.type === 'call_waiter' ? 'Service Request' : 'Bill Request'}</p>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <button
-                disabled={customerRequests.find(r => r.status === 'pending') ? processingRequestIds.includes(customerRequests.find(r => r.status === 'pending')!.id) : false}
-                className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-1.5 rounded-lg text-xs cursor-pointer disabled:opacity-50 transition-all flex items-center gap-1.5"
-                onClick={async () => {
-                  const firstPending = customerRequests.find(r => r.status === 'pending');
-                  if (firstPending) {
-                    await handleAcceptRequest(firstPending.id);
-                  }
-                }}
-              >
-                {customerRequests.find(r => r.status === 'pending') && processingRequestIds.includes(customerRequests.find(r => r.status === 'pending')!.id) && (
-                  <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                )}
-                Accept
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Header section: title + actions + tabs all in one row */}
       <div className="shrink-0 flex items-center justify-between gap-4 flex-wrap">
         <div>
@@ -1306,8 +1241,11 @@ export default function OrdersPage() {
       {/* Orders Tab View */}
       {activeTab === 'orders' && (
         <div className="flex-1 flex flex-col md:flex-row gap-6 items-start">
-          {/* Left Side: Order List */}
-          <div className="w-full md:w-5/12 lg:w-4/12 flex flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs self-start md:sticky md:top-6">
+          {/* Left Side: Order List (Independent Scroll) */}
+          <div
+            ref={orderListContainerRef}
+            className="w-full md:w-5/12 lg:w-4/12 flex flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:max-h-[calc(100vh-140px)] md:overflow-y-auto"
+          >
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-slate-400" />
@@ -1344,49 +1282,64 @@ export default function OrdersPage() {
               ) : (
                 filteredOrders.map((order) => {
                   const isSelected = selectedOrder?.id === order.id;
+                  const { tableDisplay, shortOrderId } = getOrderDisplayInfo(order, restaurant?.name || '', orders);
+                  const displayTotal = order.grand_total != null ? order.grand_total : (order.total != null ? order.total : null);
+                  const itemCount = (order.items || []).reduce((s, i) => s + i.quantity, 0);
+
                   return (
                     <button
                       key={order.id}
                       id={`order-item-${order.id}`}
                       onClick={() => handleSelectOrder(order)}
-                      className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 flex items-center justify-between gap-3 cursor-pointer ${
+                      className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 cursor-pointer ${
                         isSelected 
                           ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-500/80 shadow-sm ring-2 ring-emerald-500/30 text-slate-900 dark:text-white' 
-                          : 'border border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                          : 'border border-slate-100 dark:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
                       }`}
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-950 dark:text-white">{getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
-                          {getStatusBadge(optimisticStatusMap[order.id] || order.status)}
-                          {order.payment_status === 'paid' ? (
-                            <Badge variant="success">Paid</Badge>
-                          ) : order.payment_status === 'customer_marked_paid' ? (
-                            <Badge variant="warning">Marked Paid</Badge>
-                          ) : null}
+                      <div className="w-full space-y-2">
+                        {/* Primary & Secondary: Table Number (Primary) & Sequence ID (#0030) */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <h4 className="text-base font-black tracking-tight text-slate-950 dark:text-white leading-tight">
+                              {tableDisplay}
+                            </h4>
+                            <p className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                              {shortOrderId}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            {displayTotal != null ? (
+                              <p className="font-black text-sm text-slate-900 dark:text-white">
+                                {formatPrice(displayTotal, restaurant?.settings?.currency)}
+                              </p>
+                            ) : null}
+                            <p className="text-[10px] text-slate-400 font-medium mt-0.5">
+                              {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1.5 flex-wrap">
-                          {order.order_type === 'takeaway' ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-semibold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase tracking-wide">
-                              Takeaway
-                            </span>
-                          ) : order.order_type === 'reservation' ? (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-semibold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 uppercase tracking-wide">
-                              Reservation
-                            </span>
-                          ) : (
-                            <span>{order.table_name || 'N/A'}</span>
-                          )}
-                          <span>· {order.items.reduce((s, i) => s + i.quantity, 0)} items</span>
-                          {order.order_type === 'takeaway' && (
-                            <span className="text-purple-600 dark:text-purple-400 text-[9px]">
-                              (Pickup {order.customer_arrival_minutes}m)
-                            </span>
-                          )}
+
+                        {/* Tertiary: Status Badges */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {getStatusBadge(optimisticStatusMap[order.id] || order.status)}
+                            {order.payment_status === 'paid' ? (
+                              <Badge variant="success">Paid</Badge>
+                            ) : order.payment_status === 'customer_marked_paid' ? (
+                              <Badge variant="warning">Marked Paid</Badge>
+                            ) : null}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {formatExactTimestamp(order.created_at)}
+                          </span>
+                        </div>
+
+                        {/* Dishes Snippet */}
+                        <p className="text-xs truncate text-slate-500 dark:text-slate-400">
+                          {(order.items || []).map(i => i.menu_item_name).join(', ')}
                         </p>
-                        <p className="text-xs truncate max-w-[200px] text-slate-500 dark:text-slate-400">
-                          {order.items.map(i => i.menu_item_name).join(', ')}
-                        </p>
+
                         {(() => {
                           const rawInst = order.special_instructions || (order.batches && order.batches[0]?.special_instructions) || '';
                           const cleanInst = rawInst
@@ -1395,40 +1348,16 @@ export default function OrdersPage() {
                             .trim();
                           if (cleanInst && !cleanInst.startsWith('[CANCELLED]')) {
                             return (
-                              <div className="mt-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 rounded-md inline-block max-w-[220px] truncate">
+                              <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 rounded-md inline-block max-w-full truncate">
                                 📝 Note: {cleanInst}
                               </div>
                             );
                           }
                           return null;
                         })()}
-                      </div>
-                      <div className="text-right space-y-1">
-                        {(() => {
-                          const displayTotal = order.grand_total != null ? order.grand_total : (order.total != null ? order.total : null);
-                          if (displayTotal != null) {
-                            return <p className="font-bold text-sm text-slate-900 dark:text-white">{formatPrice(displayTotal, restaurant?.settings?.currency)}</p>;
-                          }
-                          const cardCalc = calculateBillingTotals({
-                            items: order.items || [],
-                            batches: order.batches || [],
-                            discountAmount: Number(order.discount_amount || 0),
-                            offerCode: order.offer_code,
-                            specialInstructions: order.special_instructions,
-                            offers: restaurant?.settings?.offers || [],
-                            settings: restaurant?.settings,
-                            gstNumber: restaurant?.gst_number,
-                            gstEnabled: restaurant?.settings?.gst_enabled,
-                            gstPercentage: restaurant?.settings?.gst_percentage || 0,
-                            serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
-                            serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
-                            customCharges: restaurant?.settings?.custom_charges || []
-                          });
-                          return <p className="font-bold text-sm text-slate-900 dark:text-white">{formatPrice(cardCalc.grandTotal, restaurant?.settings?.currency)}</p>;
-                        })()}
-                        <p className="text-[10px] text-slate-400 font-medium">{formatExactTimestamp(order.created_at)}</p>
+
                         {order.status === 'ready' && (
-                          <div className="pt-1">
+                          <div className="pt-1 flex justify-end">
                             <Button
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
@@ -1450,7 +1379,7 @@ export default function OrdersPage() {
                                 setProcessingOrderIds(prev => [...prev, actionKey]);
                                 setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'served' } : o));
                                 window.dispatchEvent(new Event('stop-waiter-sound'));
-                                showToast(`Order #${getFormattedOrderId(order.id)} marked as served.`, "Order Served", "success");
+                                showToast(`Order for ${order.table_name || 'Table'} marked as served.`, "Order Served", "success");
 
                                 try {
                                   const updated = await db.updateOrderStatus(order.id, 'served', profile?.full_name || 'Waiter');
@@ -1495,10 +1424,10 @@ export default function OrdersPage() {
             </div>
           </div>
 
-          {/* Right Side: Order Detail & Billing panel */}
+          {/* Right Side: Order Detail & Billing panel (Sticky Bonus) */}
           <div
             id="order-details-panel"
-            className={`${orderIdParam ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm relative`}
+            className={`${selectedOrderId ? 'flex' : 'hidden md:flex'} w-full md:w-7/12 lg:w-8/12 flex-1 flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs relative md:sticky md:top-6 md:max-h-[calc(100vh-140px)] md:overflow-y-auto`}
           >
             {selectedOrder && mergedGroupDetails && viewMode === 'merged' ? (
               <div className="flex-1 flex flex-col bg-white dark:bg-slate-900">
@@ -1699,8 +1628,35 @@ export default function OrdersPage() {
               <div className="flex-1 flex flex-col">
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
                   <div className="space-y-1">
+                    {/* Mobile Back Button */}
+                    <div className="md:hidden pb-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1 text-xs text-slate-600 dark:text-slate-400 -ml-2 h-7 cursor-pointer"
+                        onClick={() => setSelectedOrderId(null)}
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" /> Back to Orders List
+                      </Button>
+                    </div>
+
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-950 dark:text-white text-lg">Order {getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}</h3>
+                      <h3 className="font-bold text-slate-950 dark:text-white text-lg">
+                        Order {getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}
+                      </h3>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                        onClick={() => {
+                          const fullId = getFormattedOrderId(selectedOrder, restaurant?.name || '', orders);
+                          navigator.clipboard.writeText(fullId);
+                          showToast(`Copied Order ID: ${fullId}`, "Copied", "success");
+                        }}
+                        title="Copy Full Order ID"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
                       {selectedOrder.merge_group_id && (
                         <Button size="sm" variant="outline" className="text-xs font-bold text-indigo-600 border-indigo-200" onClick={() => setViewMode('merged')}>
                           View Merged Session ({mergedGroupDetails?.group?.name || 'Group'})
