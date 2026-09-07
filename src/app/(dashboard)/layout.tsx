@@ -228,8 +228,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const checkActiveAlarmsGlobal = async (restId: string, role: string) => {
     try {
-      const allOrders = await db.getOrders(restId);
-      localOrderIdsRef.current = new Set(allOrders.map(o => o.id));
+      const cached = dashboardStore.getCachedOrders(restId);
+      if (cached) {
+        localOrderIdsRef.current = new Set(cached.map(o => o.id));
+        return;
+      }
+      const { data } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('restaurant_id', restId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (data) {
+        localOrderIdsRef.current = new Set(data.map(o => o.id));
+      }
     } catch (e) {
       console.warn('Error checking global order IDs:', e);
     }
