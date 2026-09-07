@@ -153,14 +153,43 @@ export default function SettingsPage() {
     }
   }, [restaurant]);
 
+  // Read URL query parameter for tab deep-linking (e.g. /dashboard/settings?tab=staff)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['profile', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
+        setActiveTab(tabParam as any);
+      }
+    }
+  }, []);
+
+  // Lazy-load audit logs only when the logs tab is activated
+  useEffect(() => {
+    if (activeTab === 'logs' && restaurant?.id && logs.length === 0) {
+      db.getAuditLogs(restaurant.id).then(auditLogs => {
+        if (auditLogs) setLogs(auditLogs);
+      });
+    }
+  }, [activeTab, restaurant?.id, logs.length]);
+
   const loadStaffAndLogs = async () => {
     if (!restaurant) return;
-    const staff = await db.getStaffProfiles(restaurant.id);
-    setStaffList(staff);
-    const tables = await db.getTables(restaurant.id);
-    setAllRestaurantTables(tables);
-    const auditLogs = await db.getAuditLogs(restaurant.id);
-    setLogs(auditLogs);
+    try {
+      const promises: Promise<any>[] = [
+        db.getStaffProfiles(restaurant.id),
+        db.getTables(restaurant.id)
+      ];
+      if (activeTab === 'logs') {
+        promises.push(db.getAuditLogs(restaurant.id));
+      }
+      const [staff, tables, auditLogs] = await Promise.all(promises);
+      if (staff) setStaffList(staff);
+      if (tables) setAllRestaurantTables(tables);
+      if (auditLogs) setLogs(auditLogs);
+    } catch (e) {
+      console.warn('Error loading staff/tables in settings:', e);
+    }
   };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {

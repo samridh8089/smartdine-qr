@@ -29,6 +29,14 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion']
   },
+  async rewrites() {
+    return [
+      {
+        source: '/dashboard/staff',
+        destination: '/dashboard/settings?tab=staff',
+      },
+    ];
+  },
   async headers() {
     return [
       {

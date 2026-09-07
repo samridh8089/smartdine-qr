@@ -48,13 +48,27 @@ export function useRestaurant() {
 }
 
 const ALLOWED_PATHS: Record<string, string[]> = {
-  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory'],
-  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory'],
+  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff'],
+  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff'],
   supervisor: ['/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu'],
   waiter: ['/dashboard/orders', '/dashboard/tables'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu'],
   cashier: ['/dashboard/orders', '/dashboard/tables']
 };
+
+const ALL_MENU_ITEMS = [
+  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
+  { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
+  { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'] },
+  { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
+  { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Tables & QRs', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
+  { name: 'Kitchen Display', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'kitchen'] },
+  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
+  { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
+  { name: 'Settings & Staff', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
+];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -304,6 +318,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [loading, profile, dbRole, pathname, router]);
 
+  const filteredMenuItems = ALL_MENU_ITEMS.filter(item => {
+    if (!item.roles.includes(activeRole)) return false;
+    if (activeRole === 'supervisor') {
+      const dept = (profile?.department || '').toLowerCase();
+      if (dept === 'kitchen' && (item.href === '/dashboard/orders' || item.href === '/dashboard/tables')) return false;
+      if (dept === 'waiter' && (item.href === '/dashboard/kds' || item.href === '/dashboard/inventory' || item.href === '/dashboard/menu')) return false;
+    }
+    return true;
+  });
+
+  // Eagerly prefetch core dashboard routes for instantaneous sub-100ms transitions
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const prefetchRoutes = () => {
+        filteredMenuItems.forEach(item => {
+          try {
+            router.prefetch(item.href);
+          } catch (e) {}
+        });
+        try {
+          router.prefetch('/dashboard/staff');
+        } catch (e) {}
+      };
+
+      if ('requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(prefetchRoutes);
+      } else {
+        setTimeout(prefetchRoutes, 300);
+      }
+    }
+  }, [filteredMenuItems, router]);
+
   const handleLogout = async () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('smartdine_impersonated_profile');
@@ -345,31 +391,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const matchingRouteKey = Object.keys(ROUTE_FEATURE_KEYS).find(k => pathname === k || pathname.startsWith(`${k}/`));
   const routeLockInfo = matchingRouteKey ? ROUTE_FEATURE_KEYS[matchingRouteKey] : undefined;
   const isCurrentRouteLocked = Boolean(routeLockInfo && planSpec.features[routeLockInfo.key] === false);
-
-  // Define sidebar menu items based on ACTIVE portal view (activeRole)
-  const allMenuItems = [
-    { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
-    { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
-    { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'] },
-    { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
-    { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
-    { name: 'Tables & QRs', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
-    { name: 'Kitchen Display', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'kitchen'] },
-    { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
-    { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
-    { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
-    { name: 'Settings & Staff', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
-  ];
-
-  const filteredMenuItems = allMenuItems.filter(item => {
-    if (!item.roles.includes(activeRole)) return false;
-    if (activeRole === 'supervisor') {
-      const dept = (profile?.department || '').toLowerCase();
-      if (dept === 'kitchen' && (item.href === '/dashboard/orders' || item.href === '/dashboard/tables')) return false;
-      if (dept === 'waiter' && (item.href === '/dashboard/kds' || item.href === '/dashboard/inventory' || item.href === '/dashboard/menu')) return false;
-    }
-    return true;
-  });
 
   const isExpired = restaurant ? isSubscriptionExpired(restaurant) : false;
 
@@ -470,6 +491,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link
                     key={item.name}
                     href={item.href}
+                    prefetch={true}
+                    onMouseEnter={() => {
+                      try { router.prefetch(item.href); } catch (e) {}
+                    }}
+                    onTouchStart={() => {
+                      try { router.prefetch(item.href); } catch (e) {}
+                    }}
+                    onClick={() => setSidebarOpen(false)}
                     className={`
                       flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all group
                       ${isActive 
