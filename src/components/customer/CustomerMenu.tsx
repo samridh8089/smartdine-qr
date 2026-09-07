@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { db, Restaurant, Category, MenuItem, Table, CustomerRequest, Offer, isSubscriptionExpired } from '@/lib/db';
@@ -123,6 +123,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const [cartOpen, setCartOpen] = useState(false);
   const [orderPlacing, setOrderPlacing] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState('');
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     if (!idempotencyKey) {
@@ -680,8 +681,15 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   };
 
   const handlePlaceOrder = async () => {
-    if (!restaurant) return;
+    if (isSubmittingRef.current || orderPlacing) return;
+    isSubmittingRef.current = true;
+
+    if (!restaurant) {
+      isSubmittingRef.current = false;
+      return;
+    }
     if (!table) {
+      isSubmittingRef.current = false;
       showToast('This QR code is invalid or missing a Table association. Please ask staff for assistance.');
       return;
     }
@@ -693,16 +701,22 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       !activeOrderId
     );
     if (isQRDisabled) {
+      isSubmittingRef.current = false;
       showToast('This table is temporarily unavailable. Please contact the staff.');
       return;
     }
-    if (cart.length === 0) return;
+    if (cart.length === 0) {
+      isSubmittingRef.current = false;
+      return;
+    }
 
     if (isTakeaway && !takeawayPaymentCompleted) {
+      isSubmittingRef.current = false;
       showToast('Please complete the UPI payment before placing a takeaway order.');
       return;
     }
     if (isReservation && !reservationPaymentCompleted) {
+      isSubmittingRef.current = false;
       showToast('Please complete the UPI payment to confirm your table reservation.');
       return;
     }
@@ -749,6 +763,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     }
 
     if (cartChanged) {
+      isSubmittingRef.current = false;
       saveCart(validCart);
       if (validCart.length === 0) {
         setStaleCartNotice("Your cart items are no longer available. Please add items from the current menu.");
@@ -764,10 +779,12 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     for (const c of validCart) {
       const sInfo = stockMap[c.menuItem.id];
       if (sInfo && (!sInfo.isAvailable || sInfo.maxServings <= 0)) {
+        isSubmittingRef.current = false;
         showToast(`Item "${c.menuItem.name}" is out of stock. Please remove it from your cart.`);
         return;
       }
       if (sInfo && c.quantity > sInfo.maxServings) {
+        isSubmittingRef.current = false;
         showToast(`Only ${sInfo.maxServings} available for "${c.menuItem.name}". Please reduce quantity.`);
         return;
       }
@@ -885,6 +902,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       setCartOpen(true);
       showToast(e.message || 'Failed to place order. Please try again.');
     } finally {
+      isSubmittingRef.current = false;
       setOrderPlacing(false);
     }
   };
@@ -2059,7 +2077,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                   }`}
                   onClick={handlePlaceOrder}
                   isLoading={orderPlacing}
-                  disabled={(isTakeaway && !takeawayPaymentCompleted) || isQRDisabled}
+                  disabled={orderPlacing || (isTakeaway && !takeawayPaymentCompleted) || isQRDisabled}
                 >
                   {isQRDisabled
                     ? 'Table Temporarily Unavailable'

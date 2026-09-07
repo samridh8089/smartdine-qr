@@ -35,6 +35,47 @@ export async function POST(req: Request) {
       timer.end('auth');
       return NextResponse.json({ error: 'restaurantId and items are required' }, { status: 400 });
     }
+
+    // Idempotency check: prevent duplicate submissions, retries, and double reservations
+    if (idempotencyKey && typeof idempotencyKey === 'string' && idempotencyKey.trim().length > 0) {
+      const cleanKey = idempotencyKey.trim();
+
+      const { data: existingOrder } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .eq('idempotency_key', cleanKey)
+        .maybeSingle();
+
+      if (existingOrder) {
+        timer.end('auth');
+        const res = NextResponse.json({
+          success: true,
+          order: existingOrder,
+          isDuplicate: true
+        });
+        res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+        return res;
+      }
+
+      const { data: existingBatch } = await supabase
+        .from('order_batches')
+        .select('*, order:orders(*)')
+        .eq('idempotency_key', cleanKey)
+        .maybeSingle();
+
+      if (existingBatch && existingBatch.order) {
+        timer.end('auth');
+        const res = NextResponse.json({
+          success: true,
+          order: existingBatch.order,
+          batch: existingBatch,
+          isDuplicate: true
+        });
+        res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+        return res;
+      }
+    }
     timer.end('auth');
 
     // 2. INVENTORY & MENU ITEM PARALLEL VALIDATION PHASE
@@ -133,14 +174,36 @@ export async function POST(req: Request) {
     if (activeOrder) {
       // Append new batch to existing active order
       const newBatchIndex = (activeOrder.batches || []).length + 1;
+      const cleanKey = idempotencyKey ? String(idempotencyKey).trim() : null;
+
       const { data: newBatchData, error: batchErr } = await supabase.from('order_batches').insert([{
         order_id: activeOrder.id,
         batch_number: newBatchIndex,
         status: 'new',
-        special_instructions: specialInstructions || null
+        special_instructions: specialInstructions || null,
+        idempotency_key: cleanKey
       }]).select().single();
 
       if (batchErr) {
+        if (cleanKey && (batchErr.code === '23505' || batchErr.message?.includes('unique constraint') || batchErr.message?.includes('idempotency_key'))) {
+          const { data: existingBatch } = await supabase
+            .from('order_batches')
+            .select('*, order:orders(*)')
+            .eq('idempotency_key', cleanKey)
+            .maybeSingle();
+
+          if (existingBatch && existingBatch.order) {
+            timer.end('order_insert');
+            const res = NextResponse.json({
+              success: true,
+              order: existingBatch.order,
+              batch: existingBatch,
+              isDuplicate: true
+            });
+            res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+            return res;
+          }
+        }
         console.error('Batch append error:', batchErr);
       }
 
@@ -173,16 +236,18 @@ export async function POST(req: Request) {
           variantName: item.variant_name || undefined,
           quantity: item.quantity
         }));
-        reserveInventoryForOrderBatch(
-          restaurantId,
-          activeOrder.id,
-          newBatchData.id,
-          reservationItems,
-          undefined,
-          'Customer QR Add-On'
-        ).catch(err => {
+        try {
+          await reserveInventoryForOrderBatch(
+            restaurantId,
+            activeOrder.id,
+            newBatchData.id,
+            reservationItems,
+            undefined,
+            'Customer QR Add-On'
+          );
+        } catch (err) {
           console.error('[CustomerOrder] Failed to reserve inventory for add-on batch:', err);
-        });
+        }
       }
 
       const newSubtotal = parseFloat(((activeOrder.subtotal || 0) + subtotal).toFixed(2));
@@ -204,7 +269,8 @@ export async function POST(req: Request) {
 
       createdOrder = updatedOrderData || activeOrder;
     } else {
-      // Create new order matching PostgreSQL relational schema with exact tax split
+      const cleanKey = idempotencyKey ? String(idempotencyKey).trim() : null;
+
       const orderPayload = {
         restaurant_id: restaurantId,
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
@@ -213,6 +279,7 @@ export async function POST(req: Request) {
         order_type: orderType,
         payment_status: paymentStatus,
         special_instructions: specialInstructions || null,
+        idempotency_key: cleanKey,
         subtotal: parseFloat(subtotal.toFixed(2)),
         discount_total: taxCalc.discountTotal,
         cgst_amount: taxCalc.cgstAmount,
@@ -236,6 +303,25 @@ export async function POST(req: Request) {
         .single();
 
       if (orderInsertErr) {
+        if (cleanKey && (orderInsertErr.code === '23505' || orderInsertErr.message?.includes('unique constraint') || orderInsertErr.message?.includes('idempotency_key'))) {
+          const { data: existingOrder } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .eq('idempotency_key', cleanKey)
+            .maybeSingle();
+
+          if (existingOrder) {
+            timer.end('order_insert');
+            const res = NextResponse.json({
+              success: true,
+              order: existingOrder,
+              isDuplicate: true
+            });
+            res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+            return res;
+          }
+        }
         timer.end('order_insert');
         return NextResponse.json({ error: orderInsertErr.message }, { status: 500 });
       }
@@ -247,7 +333,8 @@ export async function POST(req: Request) {
         order_id: createdOrder.id,
         batch_number: 1,
         status: 'new',
-        special_instructions: specialInstructions || null
+        special_instructions: specialInstructions || null,
+        idempotency_key: cleanKey ? `${cleanKey}-batch1` : null
       }]).select().single();
 
       // Insert items into relational order_items table
@@ -279,16 +366,18 @@ export async function POST(req: Request) {
           variantName: item.variant_name || undefined,
           quantity: item.quantity
         }));
-        reserveInventoryForOrderBatch(
-          restaurantId,
-          createdOrder.id,
-          initialBatchData.id,
-          reservationItems,
-          undefined,
-          'Customer QR Order'
-        ).catch(err => {
+        try {
+          await reserveInventoryForOrderBatch(
+            restaurantId,
+            createdOrder.id,
+            initialBatchData.id,
+            reservationItems,
+            undefined,
+            'Customer QR Order'
+          );
+        } catch (err) {
           console.error('[CustomerOrder] Failed to reserve inventory for initial batch:', err);
-        });
+        }
       }
     }
     timer.end('order_insert');
