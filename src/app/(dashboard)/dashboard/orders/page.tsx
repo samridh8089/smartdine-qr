@@ -73,7 +73,7 @@ export default function OrdersPage() {
     optimisticStatusMapRef.current = optimisticStatusMap;
   }, [optimisticStatusMap]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(orderIdParam || null);
-  const rawSelectedOrder = (selectedOrderId ? orders.find(o => o.id === selectedOrderId) : null) || (orders.length > 0 ? orders[0] : null);
+  const rawSelectedOrder = (selectedOrderId ? orders.find(o => o.id === selectedOrderId || getFormattedOrderId(o, restaurant?.name || '', orders) === selectedOrderId) : null) || (orders.length > 0 ? orders[0] : null);
   const selectedOrder = useMemo(() => {
     if (!rawSelectedOrder) return null;
     const optStatus = optimisticStatusMap[rawSelectedOrder.id];
@@ -302,15 +302,20 @@ export default function OrdersPage() {
   useEffect(() => {
     if (hasHandledDeepLinkRef.current || loading || !orderIdParam || orders.length === 0) return;
     
-    setSelectedOrderId(orderIdParam);
-    const targetOrder = orders.find(o => o.id === orderIdParam);
-    if (targetOrder && statusFilter !== 'all' && targetOrder.status !== statusFilter) {
-      setStatusFilter('all');
+    const targetOrder = orders.find(o => o.id === orderIdParam || getFormattedOrderId(o, restaurant?.name || '', orders) === orderIdParam);
+    if (targetOrder) {
+      setSelectedOrderId(targetOrder.id);
+      if (statusFilter !== 'all' && targetOrder.status !== statusFilter) {
+        setStatusFilter('all');
+      }
+    } else {
+      setSelectedOrderId(orderIdParam);
     }
     hasHandledDeepLinkRef.current = true;
 
     const timer = setTimeout(() => {
-      const el = document.getElementById(`order-item-${orderIdParam}`);
+      const targetId = targetOrder ? targetOrder.id : orderIdParam;
+      const el = document.getElementById(`order-item-${targetId}`);
       if (el) {
         el.focus();
       }
