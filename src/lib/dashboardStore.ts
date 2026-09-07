@@ -14,6 +14,57 @@ class DashboardStore {
   private menuCache = new Map<string, CacheEntry<{ categories: Category[]; menuItems: MenuItem[] }>>();
   private billingCache = new Map<string, CacheEntry<{ tablesCount: number; itemsCount: number; staffCount: number; invCount: number; plans: PricingPlan[] }>>();
   private overviewCache = new Map<string, CacheEntry<any>>();
+  private inFlightTables = new Map<string, Promise<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[] }>>();
+  private qrCache = new Map<string, string>();
+
+  // QR Code Cache
+  getCachedQR(key: string): string | undefined {
+    return this.qrCache.get(key);
+  }
+
+  setCachedQR(key: string, dataUrl: string) {
+    this.qrCache.set(key, dataUrl);
+  }
+
+  getCachedTableQRs(): Record<string, string> {
+    const map: Record<string, string> = {};
+    for (const [k, v] of this.qrCache.entries()) {
+      if (k.startsWith('table:')) {
+        map[k.substring(6)] = v;
+      }
+    }
+    return map;
+  }
+
+  // Deduplicated tables fetching
+  fetchTablesDeduplicated(restId: string, force: boolean = false): Promise<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[] }> {
+    if (!force && this.inFlightTables.has(restId)) {
+      return this.inFlightTables.get(restId)!;
+    }
+
+    const promise = (async () => {
+      try {
+        const [live, groups] = await Promise.all([
+          db.getTablesWithLiveStatus(restId),
+          db.getMergeGroups(restId, 'active')
+        ]);
+        const assignments = live?.assignments || [];
+        const result = {
+          tables: live?.tables || [],
+          stats: live?.stats || { total: 0, available: 0, occupied: 0, inactive: 0, occupancyRate: 0 },
+          mergeGroups: groups || [],
+          assignments
+        };
+        this.setCachedTables(restId, result);
+        return result;
+      } finally {
+        this.inFlightTables.delete(restId);
+      }
+    })();
+
+    this.inFlightTables.set(restId, promise);
+    return promise;
+  }
 
   // Orders
   getCachedOrders(restId: string): Order[] | null {
@@ -118,20 +169,7 @@ class DashboardStore {
         }
       } else if (routePath.includes('/tables')) {
         if (!this.getCachedTables(restId)) {
-          Promise.all([
-            db.getTablesWithLiveStatus(restId),
-            db.getMergeGroups(restId, 'active'),
-            db.getTableAssignments(restId)
-          ]).then(([live, groups, assigns]) => {
-            if (live) {
-              this.setCachedTables(restId, {
-                tables: live.tables,
-                stats: live.stats,
-                mergeGroups: groups || [],
-                assignments: assigns || []
-              });
-            }
-          }).catch(() => {});
+          this.fetchTablesDeduplicated(restId).catch(() => {});
         }
       } else if (routePath.includes('/menu')) {
         if (!this.getCachedMenu(restId)) {

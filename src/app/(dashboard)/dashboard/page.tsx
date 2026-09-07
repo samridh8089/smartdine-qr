@@ -79,6 +79,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(() => !hasCachedData);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const backgroundTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
 
@@ -187,7 +188,8 @@ export default function DashboardPage() {
       setLoading(false);
 
       // Phase 2: Deferred Background Load for Dispositions & Stock Alerts
-      setTimeout(async () => {
+      if (backgroundTimerRef.current) clearTimeout(backgroundTimerRef.current);
+      backgroundTimerRef.current = setTimeout(async () => {
         try {
           const { data: dispData } = await supabase
             .from('prepared_food_dispositions')
@@ -426,6 +428,7 @@ export default function DashboardPage() {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('force-resync', handleForceResync);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (backgroundTimerRef.current) clearTimeout(backgroundTimerRef.current);
       if (channel) supabase.removeChannel(channel);
     };
   }, []);
