@@ -24,6 +24,7 @@ export default function KitchenDisplayPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingBatchIds, setProcessingBatchIds] = useState<string[]>([]);
+  const processingBatchIdsRef = useRef<Set<string>>(new Set());
 
   // sound toggle mapped to global layout alarm state
   const soundEnabled = !alarmMuted;
@@ -398,7 +399,8 @@ export default function KitchenDisplayPage() {
   }, [restaurantId]);
 
   const updateBatchStatus = async (batchId: string, nextStatus: OrderBatch['status']) => {
-    if (processingBatchIds.includes(batchId)) return;
+    if (processingBatchIds.includes(batchId) || processingBatchIdsRef.current.has(batchId)) return;
+    processingBatchIdsRef.current.add(batchId);
     setProcessingBatchIds(prev => [...prev, batchId]);
 
     // Find original status for ID-based patch rollback
@@ -421,7 +423,7 @@ export default function KitchenDisplayPage() {
       if (nextStatus === 'accepted') {
         window.dispatchEvent(new Event('stop-kitchen-sound'));
       }
-      fetch('/api/staff/update-order-status', {
+      const res = await fetch('/api/staff/update-order-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -429,15 +431,19 @@ export default function KitchenDisplayPage() {
           newStatus: nextStatus,
           staffName: profile?.full_name || 'Kitchen Staff'
         })
-      }).then(async res => {
-        if (!res.ok) {
-          console.warn('API status update returned status', res.status, 'falling back to db.updateBatchStatus');
-          await db.updateBatchStatus(batchId, nextStatus, profile?.full_name || 'Kitchen Staff');
-        }
-      }).catch(err => {
-        console.warn('API status update fallback to db.updateBatchStatus:', err);
-        db.updateBatchStatus(batchId, nextStatus, profile?.full_name || 'Kitchen Staff');
       });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          console.warn('API status conflict:', errJson);
+          setErrorMessage(errJson.error || 'Ticket was already updated by another staff member.');
+          setTimeout(() => setErrorMessage(''), 5000);
+          if (restaurantId) await safeReloadKdsData(restaurantId);
+          return;
+        }
+        throw new Error(errJson.error || `Failed with HTTP ${res.status}`);
+      }
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
       // Functional ID-based patch rollback (preserves concurrent realtime updates on other orders)
@@ -452,7 +458,9 @@ export default function KitchenDisplayPage() {
       }));
       setErrorMessage(`Failed to update status: ${err.message || 'Network error'}`);
       setTimeout(() => setErrorMessage(''), 5000);
+      if (restaurantId) await safeReloadKdsData(restaurantId);
     } finally {
+      processingBatchIdsRef.current.delete(batchId);
       setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
     }
   };
