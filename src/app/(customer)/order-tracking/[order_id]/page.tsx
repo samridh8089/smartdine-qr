@@ -43,6 +43,8 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const [callLoading, setCallLoading] = useState(false);
   const [callSent, setCallSent] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
+  const [etaRemainingSeconds, setEtaRemainingSeconds] = useState<number | null>(null);
 
   const handleCallWaiter = async () => {
     if (!order || !restaurant || !order.table_id) return;
@@ -71,6 +73,9 @@ export default function OrderTrackingPage({ params }: PageProps) {
         return;
       }
       setOrder(o);
+      try {
+        sessionStorage.setItem(`smartdine_order_cache_${orderId}`, JSON.stringify(o));
+      } catch (e) {}
 
       // Resolve restaurant branding before ending loading state to prevent flash
       const rest = await db.getRestaurantById(o.restaurant_id);
@@ -117,12 +122,71 @@ export default function OrderTrackingPage({ params }: PageProps) {
     loadOrderData();
   }, [orderId]);
 
+  // BUG-ORD-005: Dynamic Preparation ETA Engine
+  useEffect(() => {
+    if (!order) {
+      setEtaRemainingSeconds(null);
+      return;
+    }
+
+    // Hide ETA if order is finalized, served, ready, or cancelled
+    if (['ready', 'served', 'completed', 'cancelled'].includes(order.status)) {
+      setEtaRemainingSeconds(null);
+      return;
+    }
+
+    // Calculate baseline preparation window (in minutes)
+    // Dine-in defaults to 15-20 minutes; takeaway uses customer_arrival_minutes if set
+    const prepMinutes = order.customer_arrival_minutes && order.customer_arrival_minutes > 0
+      ? order.customer_arrival_minutes
+      : Math.min(30, Math.max(15, (order.items?.length || 1) * 6));
+
+    const orderTime = new Date(order.created_at).getTime();
+    const targetTime = orderTime + prepMinutes * 60 * 1000;
+
+    const updateEta = () => {
+      const now = Date.now();
+      const diff = Math.floor((targetTime - now) / 1000);
+      setEtaRemainingSeconds(Math.max(0, diff)); // Never negative countdown!
+    };
+
+    updateEta();
+    const timer = setInterval(updateEta, 1000);
+    return () => clearInterval(timer);
+  }, [order?.status, order?.created_at, order?.customer_arrival_minutes, order?.items?.length]);
+
+  // BUG-ORD-005: Network Online/Offline status listeners & auto-reconnect
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('[Customer Tracking] Network back online - reconnecting');
+      setSyncStatus('reconnecting');
+      loadOrderData()
+        .then(() => setSyncStatus('connected'))
+        .catch(() => setSyncStatus('connected'));
+    };
+    const handleOffline = () => {
+      console.log('[Customer Tracking] Network offline');
+      setSyncStatus('offline');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [orderId]);
+
   // BUG-ORD-004: Instantly reconcile state whenever phone is unlocked or browser tab is foregrounded
   useEffect(() => {
     const handleActive = () => {
       if (document.visibilityState === 'visible') {
         console.log('[Customer Tracking] Tab foregrounded / device unlocked - refreshing order data');
-        loadOrderData();
+        setSyncStatus('reconnecting');
+        loadOrderData()
+          .then(() => setSyncStatus('connected'))
+          .catch(() => setSyncStatus('connected'));
       }
     };
 
@@ -214,7 +278,13 @@ export default function OrderTrackingPage({ params }: PageProps) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setSyncStatus(typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'connected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setSyncStatus('reconnecting');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -305,15 +375,39 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
   if (!order || !restaurant) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
-        <div className="max-w-md text-center space-y-4">
-          <div className="h-16 w-16 bg-rose-50 dark:bg-rose-950/20 text-rose-500 rounded-full flex items-center justify-center mx-auto border border-rose-100 dark:border-rose-900/30 shadow-md">
-            <AlertTriangle className="h-8 w-8" />
+      <div id="customer-order-not-found" className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
+        <div className="max-w-md w-full text-center space-y-5 bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl">
+          <div className="h-16 w-16 bg-amber-50 dark:bg-amber-950/30 text-amber-500 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 dark:border-amber-900/40 shadow-sm">
+            <AlertTriangle className="h-8 w-8 text-amber-500" />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">Order Not Found</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">We couldn't locate this order ticket. Please ask staff for assistance.</p>
-          <div className="pt-4">
-            <Button onClick={() => router.push('/')} variant="secondary" className="cursor-pointer">Go to Homepage</Button>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">Order Not Found or Link Expired</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              We couldn't locate active ticket #{orderId?.slice(0, 8) || 'unknown'}. The order may have been settled, archived, or the link is expired.
+            </p>
+          </div>
+          <div className="pt-3 flex flex-col gap-2">
+            <Button
+              onClick={() => {
+                const slug = typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_active_restaurant_slug') : null;
+                if (slug) {
+                  router.push(`/menu/${slug}`);
+                } else {
+                  router.push('/');
+                }
+              }}
+              variant="primary"
+              className="w-full py-3 rounded-xl text-xs font-black cursor-pointer shadow-md"
+            >
+              Return to Digital Menu
+            </Button>
+            <Button
+              onClick={() => router.push('/')}
+              variant="ghost"
+              className="w-full py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 cursor-pointer"
+            >
+              Go to Homepage
+            </Button>
           </div>
         </div>
       </div>
@@ -392,22 +486,25 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
   // Define status steps first so getStepTimestamp can reference steps safely
   const steps = [
-    { key: 'new', label: 'Order Sent', desc: 'Sent to kitchen' },
+    { key: 'new', label: 'Order Received', desc: 'Sent to kitchen' },
     { key: 'accepted', label: 'Accepted', desc: 'Confirmed by staff' },
     { key: 'preparing', label: 'Preparing', desc: 'Chef is cooking' },
     { key: 'ready', label: 'Ready', desc: order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Food is ready' },
-    { key: 'served', label: 'Served', desc: order.order_type === 'takeaway' ? 'Picked Up' : 'Brought to table' }
+    { key: 'served', label: 'Served', desc: order.order_type === 'takeaway' ? 'Picked Up' : 'Brought to table' },
+    { key: 'completed', label: 'Completed', desc: 'Order settled & closed' }
   ];
 
   const getStatusIndex = (status: Order['status']) => {
     if (status === 'cancelled') return -1;
-    if (status === 'completed') return 4;
     return steps.findIndex(s => s.key === status);
   };
 
   const currentStepIndex = getStatusIndex(order.status);
 
   const getStepTimestamp = (stepKey: string): string | null => {
+    if (stepKey === 'completed') {
+      return order.completed_at || order.paid_at || (order.status === 'completed' ? (order.updated_at || order.created_at) : null);
+    }
     if (!order.batches || order.batches.length === 0) {
       if (stepKey === 'new') return order.created_at;
       if (stepKey === 'served' && (order.status === 'served' || order.status === 'completed')) return order.updated_at || order.created_at;
@@ -492,13 +589,15 @@ export default function OrderTrackingPage({ params }: PageProps) {
             )}
             <span>• Receipt #{getFormattedOrderId(order, restaurant.name)}</span>
           </p>
-          <div className="pt-2 text-center">
+          <div className="pt-2 flex flex-col items-center gap-1.5">
             <span
               id="live-order-status-badge"
               data-status={order.status}
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs ${
-                order.status === 'completed' || order.status === 'served'
+                order.status === 'completed'
                   ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                  : order.status === 'served'
+                  ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
                   : order.status === 'ready'
                   ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 dark:border-purple-800 animate-pulse'
                   : order.status === 'preparing'
@@ -513,8 +612,63 @@ export default function OrderTrackingPage({ params }: PageProps) {
               <span className={`h-2 w-2 rounded-full ${['preparing', 'ready'].includes(order.status) ? 'bg-amber-500 animate-ping' : 'bg-current'}`} />
               <span>Status: {order.status}</span>
             </span>
+
+            {/* Live Sync Status Indicator */}
+            <span
+              id="live-sync-indicator"
+              data-sync-status={syncStatus}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
+                syncStatus === 'connected'
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
+                  : syncStatus === 'reconnecting'
+                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 animate-pulse'
+                  : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 animate-bounce'
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${
+                syncStatus === 'connected' ? 'bg-emerald-500' : syncStatus === 'reconnecting' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
+              }`} />
+              <span>{syncStatus === 'connected' ? 'Live Sync Active' : syncStatus === 'reconnecting' ? 'Reconnecting...' : 'Offline (Check Internet)'}</span>
+            </span>
           </div>
         </div>
+
+        {/* Dynamic Kitchen Preparation ETA Card */}
+        {etaRemainingSeconds !== null && !['ready', 'served', 'completed', 'cancelled'].includes(order.status) && (
+          <Card id="customer-eta-card" className="shadow-md border-2 border-amber-500/30 bg-linear-to-br from-amber-50/80 to-white dark:from-amber-950/20 dark:to-slate-900 overflow-hidden animate-pop">
+            <CardContent className="p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <Clock className="h-5 w-5 animate-spin" style={{ animationDuration: '6s' }} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 block">
+                    Estimated Kitchen Prep Time
+                  </span>
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {order.status === 'preparing' ? 'Chef is actively cooking your meal' : 'Preparing to cook your dishes'}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                {etaRemainingSeconds === 0 ? (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse border border-amber-300">
+                    Almost Ready!
+                  </span>
+                ) : (
+                  <div>
+                    <span className="text-lg font-black font-mono text-amber-900 dark:text-amber-200">
+                      {Math.floor(etaRemainingSeconds / 60)}:{(etaRemainingSeconds % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-extrabold block">
+                      mins remaining
+                    </span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* MERGED GROUP SESSION BANNER — Shown when this order belongs to a merged session */}
         {mergedGroupDetails && (
@@ -885,25 +1039,51 @@ export default function OrderTrackingPage({ params }: PageProps) {
           </Card>
         ) : (
           /* Live Batch-wise Timeline State Cards for Dine-in & Takeaway */
-          order.status === 'cancelled' && (!order.batches || order.batches.length === 0) ? (
-            <Card className="shadow-md dark:border-slate-800 animate-pop">
+          order.status === 'cancelled' ? (
+            <Card id="customer-cancelled-card" className="shadow-md border-2 border-rose-500/30 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 animate-pop overflow-hidden">
               <CardContent className="p-6 space-y-4">
-                <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-400 rounded-xl p-4 space-y-3 text-sm">
-                  <div className="flex items-center gap-3 font-bold">
-                    <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0" />
-                    <span>Order Cancelled: This order was declined by kitchen staff.</span>
+                <div className="flex items-start gap-3.5">
+                  <div className="h-12 w-12 rounded-2xl bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-800">
+                    <AlertTriangle className="h-6 w-6 text-rose-500" />
                   </div>
-                  {order.cancellation_reason && (
-                    <div className="text-xs border-t border-rose-100 dark:border-rose-900/20 pt-2 font-semibold">
-                      <span className="text-rose-900 dark:text-rose-300 uppercase tracking-wider text-[10px] font-bold block mb-1">Reason:</span>
-                      <p className="bg-white dark:bg-slate-900/50 p-2.5 rounded-xl border border-rose-100 dark:border-rose-900/20 italic">
-                        "{order.cancellation_reason}"
-                      </p>
-                      {order.cancelled_by && (
-                        <span className="text-[10px] text-slate-400 block mt-1">Declined by: {order.cancelled_by}</span>
-                      )}
-                    </div>
-                  )}
+                  <div className="space-y-1 flex-1">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300">
+                      Order Cancelled
+                    </span>
+                    <h3 className="text-base font-black text-rose-950 dark:text-rose-100 pt-0.5">
+                      This order was cancelled
+                    </h3>
+                    <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">
+                      This order ticket has been cancelled by restaurant staff and will not be prepared.
+                    </p>
+                  </div>
+                </div>
+
+                {order.cancellation_reason && (
+                  <div className="bg-white/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/40 text-xs space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
+                      Reason for Cancellation:
+                    </span>
+                    <p className="italic font-semibold text-slate-800 dark:text-slate-200">
+                      "{order.cancellation_reason}"
+                    </p>
+                    {order.cancelled_by && (
+                      <span className="text-[10px] text-slate-400 block pt-0.5 font-medium">
+                        Declined by: {order.cancelled_by}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-2">
+                  <Link
+                    href={order.order_type === 'takeaway' ? `/menu/${restaurant.slug}/takeaway` : `/menu/${restaurant.slug}/table/${order.table_id}`}
+                    className="w-full"
+                  >
+                    <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md">
+                      <RotateCcw className="h-4 w-4" /> Place a New Order
+                    </Button>
+                  </Link>
                 </div>
               </CardContent>
             </Card>
@@ -1064,6 +1244,22 @@ export default function OrderTrackingPage({ params }: PageProps) {
                                 </span>
                               </div>
                               <span className="text-[10px] text-slate-400 block font-semibold">Brought to table{batch.served_by ? ` by ${batch.served_by}` : ''}</span>
+                            </div>
+                          )}
+
+                          {/* Completed */}
+                          {(order.status === 'completed' || (batch.status as string) === 'completed') && (
+                            <div className="relative pl-6">
+                              <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-emerald-600 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                                <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
+                              </span>
+                              <div className="flex justify-between items-baseline">
+                                <span className="font-bold text-emerald-800 dark:text-emerald-300">Completed</span>
+                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
+                                  {formatExactTimestamp(order.completed_at || order.paid_at || order.updated_at || batch.updated_at)}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 block font-semibold">Order finalized & bill settled</span>
                             </div>
                           )}
                         </div>
