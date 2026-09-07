@@ -172,9 +172,44 @@ export async function POST(req: Request) {
     let createdOrder: any = null;
 
     if (activeOrder) {
+      const cleanKey = idempotencyKey ? String(idempotencyKey).trim() : null;
+
+      // 1. If active order on table was created with this same idempotencyKey, this is a concurrent duplicate of initial order
+      if (cleanKey && activeOrder.idempotency_key === cleanKey) {
+        timer.end('order_insert');
+        const res = NextResponse.json({
+          success: true,
+          order: activeOrder,
+          isDuplicate: true
+        });
+        res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+        return res;
+      }
+
+      // 2. If an order batch on this table was already created with this idempotencyKey, return existing batch/order
+      if (cleanKey) {
+        const { data: existingBatch } = await supabase
+          .from('order_batches')
+          .select('*, order:orders(*)')
+          .eq('order_id', activeOrder.id)
+          .eq('idempotency_key', cleanKey)
+          .maybeSingle();
+
+        if (existingBatch) {
+          timer.end('order_insert');
+          const res = NextResponse.json({
+            success: true,
+            order: existingBatch.order || activeOrder,
+            batch: existingBatch,
+            isDuplicate: true
+          });
+          res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+          return res;
+        }
+      }
+
       // Append new batch to existing active order
       const newBatchIndex = (activeOrder.batches || []).length + 1;
-      const cleanKey = idempotencyKey ? String(idempotencyKey).trim() : null;
 
       const { data: newBatchData, error: batchErr } = await supabase.from('order_batches').insert([{
         order_id: activeOrder.id,
@@ -334,7 +369,7 @@ export async function POST(req: Request) {
         batch_number: 1,
         status: 'new',
         special_instructions: specialInstructions || null,
-        idempotency_key: cleanKey ? `${cleanKey}-batch1` : null
+        idempotency_key: cleanKey
       }]).select().single();
 
       // Insert items into relational order_items table
