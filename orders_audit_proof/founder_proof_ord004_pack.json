@@ -1,0 +1,55 @@
+{
+  "deploymentId": "dpl_tSAsQ9PMKmHUmZ1KR6eW9fV4RLek",
+  "productionUrl": "https://www.cleverops.in",
+  "timestamp": "2026-09-07T10:48:44.111Z",
+  "testA_CustomerToOwner": {
+    "orderId": "b9201206-f8f9-4f85-841f-31bcb1e1af49",
+    "liveOrdersUpdated": true,
+    "kdsUpdated": true,
+    "passed": true
+  },
+  "testB_OwnerToCustomer": {
+    "orderId": "b9201206-f8f9-4f85-841f-31bcb1e1af49",
+    "steps": [
+      {
+        "status": "accepted",
+        "liveSync": true
+      },
+      {
+        "status": "preparing",
+        "liveSync": true
+      },
+      {
+        "status": "ready",
+        "liveSync": true
+      },
+      {
+        "status": "served",
+        "liveSync": true
+      }
+    ],
+    "passed": true
+  },
+  "testC_KDSToLiveOrders": {
+    "orderId": "fa514cab-3bee-4b12-8867-54a44e3d0203",
+    "liveOrdersUpdated": true,
+    "passed": true
+  },
+  "testD_TwoBrowserTabs": {
+    "orderId": "fa514cab-3bee-4b12-8867-54a44e3d0203",
+    "tabBSynced": true,
+    "passed": true
+  },
+  "testE_BackgroundTabResume": {
+    "orderId": "fa514cab-3bee-4b12-8867-54a44e3d0203",
+    "resumedSync": true,
+    "passed": true
+  },
+  "inventoryCrossCheck": {
+    "inventoryHealth": true,
+    "sampleItem": "मसाला चाय पत्ती (प्रीमियम)",
+    "stock": 3,
+    "passed": true
+  },
+  "allPassed": true
+}

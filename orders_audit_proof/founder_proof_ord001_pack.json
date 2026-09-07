@@ -1,0 +1,115 @@
+{
+  "testA": {
+    "passed": true,
+    "orderId": "5b696f19-1572-49d8-88eb-546536a70b82",
+    "batchId": "18e045a7-943a-441d-8d78-71b2ae09f1e6",
+    "idempotencyKey": "TEST_ORD001_A_1788766388688",
+    "reservationsCount": 5,
+    "paneerBeforeReserved": 0.25,
+    "paneerAfterReserved": 0.375,
+    "reservations": [
+      {
+        "id": "d6cb4708-4ed5-4c3c-8292-e83d890b5bac",
+        "raw_id": "f8ef7aa6-84f8-481a-92be-3b284c490b04",
+        "qty": 0.125,
+        "unit": "kg",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "f29cd4c9-f4c7-472e-976e-d1566d72bae4",
+        "raw_id": "ecbfb6da-240b-4297-888b-13240d2912b7",
+        "qty": 0.06,
+        "unit": "kg",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "0fb71971-fdc0-4567-a121-32e886a3d8d2",
+        "raw_id": "dc5c0354-adc0-4953-86cc-b581f8e7da0c",
+        "qty": 0.01,
+        "unit": "kg",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "c927756e-7145-4e4c-aaa7-bef202a44a93",
+        "raw_id": "c1cdf132-0a78-41b2-bf14-9279165b9f5f",
+        "qty": 0.015,
+        "unit": "l",
+        "status": "ACTIVE"
+      },
+      {
+        "id": "21d1ba8d-1b96-40d6-a7cd-08da612750dc",
+        "raw_id": "4d986059-17ed-4df9-bced-5eb414a5056e",
+        "qty": 0.0075,
+        "unit": "l",
+        "status": "ACTIVE"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "bf01d0a4-065a-47c4-9ffe-63541fb9daf8",
+        "type": "RESERVATION_CREATED",
+        "raw_id": "f8ef7aa6-84f8-481a-92be-3b284c490b04",
+        "qty": 0.125
+      },
+      {
+        "id": "3d8a0fbe-b26c-483c-99c1-943404c2b45a",
+        "type": "RESERVATION_CREATED",
+        "raw_id": "ecbfb6da-240b-4297-888b-13240d2912b7",
+        "qty": 0.06
+      },
+      {
+        "id": "7226c396-7c4e-4b9d-8377-08b1e5279098",
+        "type": "RESERVATION_CREATED",
+        "raw_id": "dc5c0354-adc0-4953-86cc-b581f8e7da0c",
+        "qty": 0.01
+      },
+      {
+        "id": "211da7a9-3f28-46bf-a6a0-faf44704c511",
+        "type": "RESERVATION_CREATED",
+        "raw_id": "c1cdf132-0a78-41b2-bf14-9279165b9f5f",
+        "qty": 0.015
+      },
+      {
+        "id": "805ad9d5-8c6a-485e-a494-06d97dab49f7",
+        "type": "RESERVATION_CREATED",
+        "raw_id": "4d986059-17ed-4df9-bced-5eb414a5056e",
+        "qty": 0.0075
+      }
+    ]
+  },
+  "testB": {
+    "passed": true,
+    "orderId": "c2df1228-54e0-4fbf-8b73-6a4fab4b7453",
+    "batchId": "9e935d14-c991-4b07-a6b8-ff0a8622e00f",
+    "idempotencyKey": "TEST_ORD001_B_1788766405124",
+    "sameOrderId": true,
+    "oneMarkedDuplicate": true,
+    "ordersCountInDb": 1,
+    "batchesCountInDb": 1,
+    "reservationsCountInDb": 5,
+    "transactionsCountInDb": 5
+  },
+  "testC": {
+    "passed": true,
+    "orderId": "c2df1228-54e0-4fbf-8b73-6a4fab4b7453",
+    "retryIsDuplicate": true,
+    "reservationsCountStill5": true,
+    "transactionsCountStill5": true
+  },
+  "testD": {
+    "passed": true,
+    "orderId": "5b696f19-1572-49d8-88eb-546536a70b82",
+    "batchId": "18e045a7-943a-441d-8d78-71b2ae09f1e6",
+    "orderStatus": "cancelled",
+    "batchStatus": "cancelled",
+    "releasedReservationsCount": 5,
+    "releaseTransactionsCount": 5,
+    "paneerStockRestored": true,
+    "paneerInitialReserved": 0.25,
+    "paneerFinalReserved": 0.25
+  },
+  "deploymentId": "dpl_56jGUJTZdBQqxaW1kFeegWSjVCy3",
+  "passed": true,
+  "errors": [],
+  "allPassed": true
+}

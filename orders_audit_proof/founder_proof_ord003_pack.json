@@ -1,0 +1,246 @@
+{
+  "deploymentId": "dpl_CntmdnqHwXQsEzj7ratE2c2JeSvn",
+  "productionUrl": "https://www.cleverops.in",
+  "timestamp": "2026-09-07T09:05:20.154Z",
+  "testA_NormalLifecycle": {
+    "orderId": "4601eb92-9440-4602-bed3-791cbcbd778c",
+    "batchId": "6d86efcb-feb2-46bc-976b-40b977008952",
+    "steps": [
+      {
+        "target": "accepted",
+        "httpStatus": 200,
+        "dbOrderStatus": "accepted",
+        "dbBatchStatus": "accepted",
+        "success": true
+      },
+      {
+        "target": "preparing",
+        "httpStatus": 200,
+        "dbOrderStatus": "preparing",
+        "dbBatchStatus": "preparing",
+        "success": true
+      },
+      {
+        "target": "ready",
+        "httpStatus": 200,
+        "dbOrderStatus": "ready",
+        "dbBatchStatus": "ready",
+        "success": true
+      },
+      {
+        "target": "served",
+        "httpStatus": 200,
+        "dbOrderStatus": "served",
+        "dbBatchStatus": "served",
+        "success": true
+      },
+      {
+        "target": "completed",
+        "httpStatus": 200,
+        "dbOrderStatus": "completed",
+        "dbBatchStatus": "served",
+        "success": true
+      }
+    ],
+    "passed": true
+  },
+  "testB_StaleStateRejection": {
+    "orderId": "3b6da88e-961e-432d-b050-e9bfae175b6d",
+    "tabAStatus": 200,
+    "tabBJumpStatus": 409,
+    "tabBJumpCode": "INVALID_STATUS_TRANSITION",
+    "tabBBackwardStatus": 400,
+    "finalDbStatus": "accepted",
+    "passed": true
+  },
+  "testC_ConcurrentRaceProtection": {
+    "orderId": "2c8c1647-a7f4-428d-8839-691c22377a6e",
+    "raceResults": [
+      {
+        "target": "accepted",
+        "status": 200,
+        "body": {
+          "success": true,
+          "batch": {
+            "id": "b6586270-0be3-4f82-a2b0-2eb25da5ae60",
+            "order_id": "2c8c1647-a7f4-428d-8839-691c22377a6e",
+            "batch_number": 1,
+            "status": "accepted",
+            "special_instructions": null,
+            "created_at": "2026-09-07T09:06:34.200824+00:00",
+            "updated_at": "2026-09-07T09:06:40.076+00:00",
+            "accepted_at": "2026-09-07T09:06:40.076+00:00",
+            "preparing_at": null,
+            "ready_at": null,
+            "served_at": null,
+            "accepted_by": "Concurrent Worker #1",
+            "preparing_by": null,
+            "ready_by": null,
+            "served_by": null,
+            "idempotency_key": "ORD003_1788771993204_7ulgf"
+          },
+          "order": {
+            "id": "2c8c1647-a7f4-428d-8839-691c22377a6e",
+            "restaurant_id": "81fa8201-51d7-4da5-98f5-a52dbff4e6ae",
+            "table_id": "6c81195f-bdc8-4013-86e0-dc2e72fb3e84",
+            "table_name": "Table 11",
+            "status": "accepted",
+            "special_instructions": null,
+            "subtotal": 180,
+            "discount_total": 0,
+            "cgst_amount": 4.5,
+            "sgst_amount": 4.5,
+            "igst_amount": 0,
+            "tax_total": 9,
+            "grand_total": 189,
+            "tax_rate_snapshot": 5,
+            "tax_type_snapshot": "cgst_sgst",
+            "gst": 9,
+            "service_charge": 0,
+            "total": 189,
+            "created_at": "2026-09-07T09:06:33.834+00:00",
+            "completed_at": null,
+            "completed_by": null,
+            "cancelled_at": null,
+            "cancelled_by": null,
+            "cancellation_reason": null,
+            "custom_charges": [],
+            "payment_status": "pending",
+            "payment_method": null,
+            "payment_reference": null,
+            "paid_at": null,
+            "marked_paid_by": null,
+            "order_type": "dine_in",
+            "customer_arrival_minutes": null,
+            "takeaway_notes": null,
+            "items": [
+              {
+                "id": "efccd36a-42f8-4991-b416-bd6531c3dccc",
+                "order_id": "2c8c1647-a7f4-428d-8839-691c22377a6e",
+                "menu_item_id": "e3626e22-d5f7-485d-a8ed-5e3506baa0b2",
+                "menu_item_name": "Paneer Butter Masala",
+                "variant_id": null,
+                "variant_name": null,
+                "quantity": 1,
+                "price": 180,
+                "notes": "Test C Concurrent Race",
+                "batch_id": "b6586270-0be3-4f82-a2b0-2eb25da5ae60",
+                "is_cancelled": false,
+                "is_served": false
+              }
+            ],
+            "batches": [
+              {
+                "id": "b6586270-0be3-4f82-a2b0-2eb25da5ae60",
+                "order_id": "2c8c1647-a7f4-428d-8839-691c22377a6e",
+                "batch_number": 1,
+                "status": "accepted",
+                "special_instructions": null,
+                "created_at": "2026-09-07T09:06:34.200824+00:00",
+                "updated_at": "2026-09-07T09:06:40.076+00:00",
+                "accepted_at": "2026-09-07T09:06:40.076+00:00",
+                "preparing_at": null,
+                "ready_at": null,
+                "served_at": null,
+                "accepted_by": "Concurrent Worker #1",
+                "preparing_by": null,
+                "ready_by": null,
+                "served_by": null,
+                "items": [
+                  {
+                    "id": "efccd36a-42f8-4991-b416-bd6531c3dccc",
+                    "order_id": "2c8c1647-a7f4-428d-8839-691c22377a6e",
+                    "menu_item_id": "e3626e22-d5f7-485d-a8ed-5e3506baa0b2",
+                    "menu_item_name": "Paneer Butter Masala",
+                    "variant_id": null,
+                    "variant_name": null,
+                    "quantity": 1,
+                    "price": 180,
+                    "notes": "Test C Concurrent Race",
+                    "batch_id": "b6586270-0be3-4f82-a2b0-2eb25da5ae60",
+                    "is_cancelled": false,
+                    "is_served": false
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "target": "preparing",
+        "status": 409,
+        "body": {
+          "error": "Invalid batch status transition from \"new\" to \"preparing\".",
+          "code": "INVALID_STATUS_TRANSITION"
+        }
+      },
+      {
+        "target": "ready",
+        "status": 409,
+        "body": {
+          "error": "Invalid batch status transition from \"new\" to \"ready\".",
+          "code": "INVALID_STATUS_TRANSITION"
+        }
+      },
+      {
+        "target": "served",
+        "status": 409,
+        "body": {
+          "error": "Invalid batch status transition from \"new\" to \"served\".",
+          "code": "INVALID_STATUS_TRANSITION"
+        }
+      },
+      {
+        "target": "completed",
+        "status": 409,
+        "body": {
+          "error": "Invalid order status transition from \"new\" to \"completed\".",
+          "code": "INVALID_STATUS_TRANSITION"
+        }
+      }
+    ],
+    "finalDbStatus": "accepted",
+    "passed": true
+  },
+  "testD_IllegalTransitions": {
+    "checks": [
+      {
+        "transition": "new -> served",
+        "httpStatus": 409,
+        "code": "INVALID_STATUS_TRANSITION",
+        "blocked": true
+      },
+      {
+        "transition": "ready -> accepted",
+        "httpStatus": 409,
+        "code": "INVALID_STATUS_TRANSITION",
+        "blocked": true
+      },
+      {
+        "transition": "completed -> preparing",
+        "httpStatus": 409,
+        "code": "INVALID_STATUS_TRANSITION",
+        "blocked": true
+      },
+      {
+        "transition": "cancelled -> accepted",
+        "httpStatus": 409,
+        "code": "INVALID_STATUS_TRANSITION",
+        "blocked": true
+      }
+    ],
+    "passed": true
+  },
+  "testE_RefreshSafety": {
+    "visualOrderId": "2c8c1647-a7f4-428d-8839-691c22377a6e",
+    "screenshots": [
+      "proof_01_kds_status.png",
+      "proof_02_kds_after_refresh.png",
+      "proof_03_live_orders_state.png",
+      "proof_04_customer_tracking_lifecycle.png"
+    ],
+    "passed": true
+  },
+  "allPassed": true
+}

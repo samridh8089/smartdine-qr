@@ -1,0 +1,68 @@
+{
+  "deploymentId": "dpl_AZQZaTE1kJoiinoWtezUuJ9dYb73",
+  "productionUrl": "https://www.cleverops.in",
+  "timestamp": "2026-09-07T16:16:01.095Z",
+  "beforeTimings": {
+    "accept": 340,
+    "preparing": 1450,
+    "ready": 1380,
+    "served": 1520,
+    "paid": 1850,
+    "completed": 1850,
+    "cancel": 1211,
+    "kds_accept": 36
+  },
+  "afterTimings": {
+    "accept": 227,
+    "preparing": 190,
+    "ready": 158,
+    "served": 167,
+    "paid": 286,
+    "completed": 286,
+    "cancel": 291
+  },
+  "results": {
+    "testA_Lifecycle": {
+      "orderId": "5efe969b-c70a-48a0-b977-40ebd628dd22",
+      "acceptLatency": 227,
+      "prepLatency": 190,
+      "readyLatency": 158,
+      "servedLatency": 167,
+      "passed": true
+    },
+    "testB_Payment": {
+      "orderId": "5efe969b-c70a-48a0-b977-40ebd628dd22",
+      "paidLatency": 286,
+      "paymentPersisted": true,
+      "total": 189,
+      "passed": true
+    },
+    "testC_Cancel": {
+      "orderId": "7edd7319-8448-448d-83f6-a16ebfe5812b",
+      "cancelLatency": 291,
+      "cancelPersisted": true,
+      "passed": true
+    },
+    "kdsComparison": {
+      "kdsBaseline": 15,
+      "ownerAccept": 227,
+      "target": "< 300 ms",
+      "passed": true
+    },
+    "responsive": {
+      "desktop": {
+        "width": 1440,
+        "height": 900,
+        "clean": true
+      },
+      "mobile": {
+        "width": 390,
+        "height": 844,
+        "clean": true
+      },
+      "passed": true
+    },
+    "consoleErrors": [],
+    "allPassed": true
+  }
+}
