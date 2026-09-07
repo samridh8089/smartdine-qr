@@ -38,11 +38,106 @@ export async function POST(req: Request) {
     let updatedBatch: any = null;
 
     if (batchId) {
-      updatedOrder = await db.updateBatchStatus(batchId, newStatus, staffName, cancellationReason);
-      const { data: bRes } = await supabaseAdmin.from('order_batches').select('*').eq('id', batchId).single();
+      const nowIso = new Date().toISOString();
+      const batchUpdate: any = { 
+        status: newStatus === 'completed' ? 'served' : newStatus, 
+        updated_at: nowIso 
+      };
+
+      if (newStatus === 'accepted') {
+        batchUpdate.accepted_at = nowIso;
+        batchUpdate.accepted_by = staffName;
+      } else if (newStatus === 'preparing') {
+        batchUpdate.preparing_at = nowIso;
+        batchUpdate.preparing_by = staffName;
+      } else if (newStatus === 'ready') {
+        batchUpdate.ready_at = nowIso;
+        batchUpdate.ready_by = staffName;
+      } else if (newStatus === 'served' || newStatus === 'completed') {
+        batchUpdate.served_at = nowIso;
+        batchUpdate.served_by = staffName;
+      } else if (newStatus === 'cancelled') {
+        batchUpdate.special_instructions = `[CANCELLED] ${cancellationReason || 'Cancelled'}`;
+      }
+
+      const { data: bRes } = await supabaseAdmin
+        .from('order_batches')
+        .update(batchUpdate)
+        .eq('id', batchId)
+        .select()
+        .single();
       updatedBatch = bRes;
+
+      // Invoke db side-effects (inventory reservations, logs)
+      try {
+        updatedOrder = await db.updateBatchStatus(batchId, newStatus, staffName, cancellationReason);
+      } catch (dbErr) {
+        console.warn('db.updateBatchStatus side-effect notice:', dbErr);
+      }
+
+      // Authoritatively update parent order status based on all batches
+      const parentOrderId = orderId || updatedBatch?.order_id || updatedOrder?.id;
+      if (parentOrderId) {
+        const { data: allBatches } = await supabaseAdmin
+          .from('order_batches')
+          .select('id, status, special_instructions')
+          .eq('order_id', parentOrderId);
+
+        const activeBatches = (allBatches || []).filter(b => 
+          ['new', 'accepted', 'preparing', 'ready'].includes(b.status) && 
+          !b.special_instructions?.includes('[CANCELLED]')
+        );
+
+        let parentStatus = newStatus;
+        if (activeBatches.length > 0) {
+          if (activeBatches.some(b => b.status === 'ready')) {
+            parentStatus = 'ready';
+          } else if (activeBatches.some(b => b.status === 'preparing')) {
+            parentStatus = 'preparing';
+          } else if (activeBatches.some(b => b.status === 'accepted')) {
+            parentStatus = 'accepted';
+          } else {
+            parentStatus = 'new';
+          }
+        } else if ((allBatches || []).some(b => b.status === 'served' || b.status === 'completed')) {
+          parentStatus = 'served';
+        }
+
+        const orderUpdate: any = { status: parentStatus, updated_at: nowIso };
+        if (parentStatus === 'served') {
+          orderUpdate.completed_at = nowIso;
+          orderUpdate.completed_by = staffName;
+        }
+
+        const { data: ordData } = await supabaseAdmin
+          .from('orders')
+          .update(orderUpdate)
+          .eq('id', parentOrderId)
+          .select()
+          .single();
+
+        if (ordData) updatedOrder = ordData;
+      }
     } else if (orderId) {
-      updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
+      const nowIso = new Date().toISOString();
+      const orderUpdate: any = { status: newStatus, updated_at: nowIso };
+      if (newStatus === 'served' || newStatus === 'completed') {
+        orderUpdate.completed_at = nowIso;
+        orderUpdate.completed_by = staffName;
+      }
+      const { data: ordData } = await supabaseAdmin
+        .from('orders')
+        .update(orderUpdate)
+        .eq('id', orderId)
+        .select()
+        .single();
+
+      try {
+        updatedOrder = await db.updateOrderStatus(orderId, newStatus, staffName, cancellationReason);
+      } catch (dbErr) {
+        console.warn('db.updateOrderStatus side-effect notice:', dbErr);
+      }
+      if (ordData) updatedOrder = ordData;
     }
     const t_db = performance.now();
 
