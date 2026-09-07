@@ -17,6 +17,7 @@ import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
+import { dashboardStore } from '@/lib/dashboardStore';
 
 
 export default function OrdersPage() {
@@ -25,7 +26,9 @@ export default function OrdersPage() {
   const orderIdParam = searchParams.get('id');
 
   const { restaurant, activeRole, profile } = useRestaurant();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const restId = restaurant?.id || profile?.restaurant_id;
+  const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
+  const [orders, setOrders] = useState<Order[]>(() => initialCachedOrders || []);
   const [optimisticStatusMap, setOptimisticStatusMap] = useState<Record<string, Order['status']>>({});
   const optimisticStatusMapRef = useRef<Record<string, Order['status']>>({});
   useEffect(() => {
@@ -49,7 +52,7 @@ export default function OrdersPage() {
   const effectiveStatus = (selectedOrder ? optimisticStatusMap[selectedOrder.id] : null) || selectedOrder?.status;
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !initialCachedOrders);
 
   // Tab state: 'orders' or 'requests'
   const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
@@ -230,27 +233,21 @@ export default function OrdersPage() {
   };
 
   const loadInitialData = async (restId: string) => {
-    const allOrders = await db.getOrders(restId);
+    const [allOrders, reqs] = await Promise.all([
+      db.getOrders(restId),
+      db.getCustomerRequests(restId)
+    ]);
     const filteredForRole = activeRole === 'waiter'
       ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
       : allOrders;
     setOrders(filteredForRole);
+    dashboardStore.setCachedOrders(restId, allOrders);
 
     // Cache existing order IDs on initial load so we don't chime for them
     allOrders.forEach(o => alertedOrderIds.current.add(o.id));
 
     // Load pending & active requests
-    let reqs = await db.getCustomerRequests(restId);
-    let activeReqs = reqs.filter(r => r.status === 'pending');
-    if (activeReqs.length === 0) {
-      try {
-        const tables = await db.getTables(restId);
-        const tableId = tables.length > 0 ? tables[0].id : 'takeaway';
-        await db.createCustomerRequest(restId, tableId, 'call_waiter');
-        reqs = await db.getCustomerRequests(restId);
-        activeReqs = reqs.filter(r => r.status === 'pending');
-      } catch (e) {}
-    }
+    const activeReqs = (reqs || []).filter(r => r.status === 'pending');
     setCustomerRequests(activeReqs);
 
     if (orderIdParam) {
@@ -312,6 +309,7 @@ export default function OrdersPage() {
     isReloadingRef.current = true;
     try {
       const allOrders = await db.getOrders(restId);
+      dashboardStore.setCachedOrders(restId, allOrders);
       const filteredOrders = activeRole === 'waiter'
         ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
         : allOrders;

@@ -9,6 +9,7 @@ import { DEFAULT_PLAN_SPECS, parsePlanSpec, PlanEntitlementSpec } from '@/lib/en
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import MockBanner from '@/components/shared/MockBanner';
 import buildInfo from '@/lib/build-info.json';
+import { dashboardStore } from '@/lib/dashboardStore';
 
 import { 
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
@@ -494,10 +495,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     href={item.href}
                     prefetch={true}
                     onMouseEnter={() => {
-                      try { router.prefetch(item.href); } catch (e) {}
+                      try {
+                        router.prefetch(item.href);
+                        if (restaurant?.id) dashboardStore.prewarmRoute(item.href, restaurant.id);
+                      } catch (e) {}
                     }}
                     onTouchStart={() => {
-                      try { router.prefetch(item.href); } catch (e) {}
+                      try {
+                        router.prefetch(item.href);
+                        if (restaurant?.id) dashboardStore.prewarmRoute(item.href, restaurant.id);
+                      } catch (e) {}
                     }}
                     onClick={() => setSidebarOpen(false)}
                     className={`

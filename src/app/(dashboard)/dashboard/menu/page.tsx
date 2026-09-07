@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
+import { dashboardStore } from '@/lib/dashboardStore';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -150,13 +151,15 @@ function MenuItemCard({ item, onToggleAvailability, onEdit, onDelete }: MenuItem
 }
 
 export default function MenuManagementPage() {
-  const { restaurant, activeRole, planSpec } = useRestaurant();
-  const [restaurantId, setRestaurantId] = useState('');
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const { restaurant, activeRole, planSpec, profile } = useRestaurant();
+  const restId = restaurant?.id || profile?.restaurant_id;
+  const initialCachedMenu = restId ? dashboardStore.getCachedMenu(restId) : null;
+  const [restaurantId, setRestaurantId] = useState(restId || '');
+  const [categories, setCategories] = useState<Category[]>(() => initialCachedMenu?.categories || []);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => initialCachedMenu?.menuItems || []);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
-  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>('starter');
-  const [loading, setLoading] = useState(true);
+  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>(restaurant?.subscription_plan || 'starter');
+  const [loading, setLoading] = useState(() => !initialCachedMenu);
 
   // AI Scanner Modal State
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -261,25 +264,27 @@ export default function MenuManagementPage() {
   useEffect(() => {
     async function loadMenu() {
       try {
-        const user = await getActiveUser();
-        const restId = restaurant?.id || user?.restaurant_id;
-        if (!restId) {
+        const targetRestId = restaurant?.id || profile?.restaurant_id;
+        if (!targetRestId) {
           setLoading(false);
           return;
         }
-        setRestaurantId(restId);
+        setRestaurantId(targetRestId);
 
-        const rest = restaurant || (await db.getRestaurantById(restId));
-        if (rest) {
-          setActivePlan(rest.subscription_plan);
+        if (restaurant) {
+          setActivePlan(restaurant.subscription_plan);
+        } else {
+          const rest = await db.getRestaurantById(targetRestId);
+          if (rest) setActivePlan(rest.subscription_plan);
         }
 
         const [cats, items] = await Promise.all([
-          db.getCategories(restId),
-          db.getMenuItems(restId)
+          db.getCategories(targetRestId),
+          db.getMenuItems(targetRestId)
         ]);
         setCategories(cats);
         setMenuItems(items);
+        dashboardStore.setCachedMenu(targetRestId, { categories: cats, menuItems: items });
       } catch (err) {
         console.error('[MenuManagement] loadMenu error:', err);
       } finally {
@@ -287,7 +292,7 @@ export default function MenuManagementPage() {
       }
     }
     loadMenu();
-  }, [restaurant?.id]);
+  }, [restaurant?.id, profile?.restaurant_id]);
 
   const refreshMenu = async () => {
     if (!restaurantId) return;
@@ -295,6 +300,7 @@ export default function MenuManagementPage() {
     const items = await db.getMenuItems(restaurantId);
     setCategories(cats);
     setMenuItems(items);
+    dashboardStore.setCachedMenu(restaurantId, { categories: cats, menuItems: items });
   };
 
   // --- Category Handlers ---
