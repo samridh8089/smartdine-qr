@@ -26,16 +26,19 @@ export default function OrdersPage() {
 
   const { restaurant, activeRole, profile } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [optimisticStatusMap, setOptimisticStatusMap] = useState<Record<string, Order['status']>>({});
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(orderIdParam || null);
   const rawSelectedOrder = (selectedOrderId ? orders.find(o => o.id === selectedOrderId) : null) || (orders.length > 0 ? orders[0] : null);
   const selectedOrder = useMemo(() => {
     if (!rawSelectedOrder) return null;
-    const canonicalStatus = db.calculateAggregateOrderStatus(rawSelectedOrder.status, rawSelectedOrder.batches);
+    const optStatus = optimisticStatusMap[rawSelectedOrder.id];
+    const canonicalStatus = optStatus || db.calculateAggregateOrderStatus(rawSelectedOrder.status, rawSelectedOrder.batches);
     return {
       ...rawSelectedOrder,
       status: canonicalStatus
     };
-  }, [rawSelectedOrder]);
+  }, [rawSelectedOrder, optimisticStatusMap]);
+  const effectiveStatus = (selectedOrder ? optimisticStatusMap[selectedOrder.id] : null) || selectedOrder?.status;
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
@@ -97,7 +100,7 @@ export default function OrdersPage() {
       setMergedGroupDetails(null);
     }
     loadMergedGroup();
-  }, [selectedOrder, mergeGroupIdParam, restaurant]);
+  }, [selectedOrder?.id, selectedOrder?.table_id, selectedOrder?.merge_group_id, mergeGroupIdParam, restaurant?.id]);
 
   const [payMergedModalOpen, setPayMergedModalOpen] = useState(false);
   const [paymentMethodChoice, setPaymentMethodChoice] = useState<'cash' | 'online_upi'>('cash');
@@ -302,7 +305,19 @@ export default function OrdersPage() {
       const filteredOrders = activeRole === 'waiter'
         ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
         : allOrders;
-      setOrders(filteredOrders);
+      setOrders(filteredOrders.map(o => {
+        const inFlight = Array.from(processingOrderIdsRef.current).find(k => k.startsWith(`${o.id}:`));
+        const inFlightStatus = inFlight ? (inFlight.split(':')[1] as Order['status']) : undefined;
+        const optStatus = inFlightStatus || optimisticStatusMap[o.id];
+        if (optStatus) {
+          return {
+            ...o,
+            status: optStatus,
+            batches: (o.batches || []).map((b: any) => ({ ...b, status: optStatus }))
+          };
+        }
+        return o;
+      }));
 
       let reqs = await db.getCustomerRequests(restId);
       let activeReqs = reqs.filter(r => r.status === 'pending');
@@ -401,7 +416,17 @@ export default function OrdersPage() {
           console.log('Realtime Live Orders order change payload received:', payload);
           if (payload.eventType === 'UPDATE') {
             const updated = payload.new as Order;
-            setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+            setOrders(prev => prev.map(o => {
+              if (o.id === updated.id) {
+                const inFlight = Array.from(processingOrderIdsRef.current).some(k => k.startsWith(`${o.id}:`));
+                const optStatus = optimisticStatusMap[o.id];
+                if (inFlight || optStatus) {
+                  return { ...o, ...updated, status: o.status, batches: o.batches };
+                }
+                return { ...o, ...updated };
+              }
+              return o;
+            }));
           }
           await reloadFnRef.current(restId);
 
@@ -582,6 +607,7 @@ export default function OrdersPage() {
     const origBatches = origOrder?.batches || selectedOrder.batches;
     
     // Immediate safe optimistic update (< 10ms visible DOM response)
+    setOptimisticStatusMap(prev => ({ ...prev, [orderIdToUpdate]: status }));
     setOrders(prev => prev.map(o => {
       if (o.id === orderIdToUpdate) {
         const updatedBatches = (o.batches || []).map((b: any) => ({ ...b, status }));
@@ -622,12 +648,22 @@ export default function OrdersPage() {
       const resData = await res.json();
       const updated = resData.order;
       if (updated) {
+        setOptimisticStatusMap(prev => {
+          const next = { ...prev };
+          delete next[orderIdToUpdate];
+          return next;
+        });
         setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
       }
       
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
       // Functional rollback on failure
+      setOptimisticStatusMap(prev => {
+        const next = { ...prev };
+        delete next[orderIdToUpdate];
+        return next;
+      });
       setOrders(prev => prev.map(o => {
         if (o.id === orderIdToUpdate) {
           return {
@@ -699,6 +735,7 @@ export default function OrdersPage() {
 
     // Immediate optimistic UI response: close modal instantly and update status in DOM (< 20ms)
     setCancelModalOpen(false);
+    setOptimisticStatusMap(prev => ({ ...prev, [orderIdToCancel]: 'cancelled' }));
     setOrders(prev => prev.map(o => o.id === orderIdToCancel ? {
       ...o,
       status: 'cancelled',
@@ -765,10 +802,20 @@ export default function OrdersPage() {
       }
 
       if (updated) {
+        setOptimisticStatusMap(prev => {
+          const next = { ...prev };
+          delete next[orderIdToCancel];
+          return next;
+        });
         setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
       }
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
+      setOptimisticStatusMap(prev => {
+        const next = { ...prev };
+        delete next[orderIdToCancel];
+        return next;
+      });
       if (origOrder) {
         setOrders(prev => prev.map(o => o.id === orderIdToCancel ? origOrder : o));
       }
@@ -985,6 +1032,7 @@ export default function OrdersPage() {
 
     // Immediate Optimistic UI update: Close modal & reflect Paid/Completed in DOM immediately (< 20ms)
     setPaymentModalOpen(false);
+    setOptimisticStatusMap(prev => ({ ...prev, [targetOrderId]: 'completed' }));
     setOrders(prev => prev.map(o => o.id === targetOrderId ? {
       ...o,
       payment_status: 'paid',
@@ -1047,10 +1095,20 @@ export default function OrdersPage() {
       });
 
       if (updated) {
+        setOptimisticStatusMap(prev => {
+          const next = { ...prev };
+          delete next[targetOrderId];
+          return next;
+        });
         setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
       }
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
+      setOptimisticStatusMap(prev => {
+        const next = { ...prev };
+        delete next[targetOrderId];
+        return next;
+      });
       // Roll back on failure
       if (origOrder) {
         setOrders(prev => prev.map(o => o.id === targetOrderId ? origOrder : o));
@@ -1309,7 +1367,7 @@ export default function OrdersPage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm text-slate-950 dark:text-white">{getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
-                          {getStatusBadge(order.status)}
+                          {getStatusBadge(optimisticStatusMap[order.id] || order.status)}
                           {order.payment_status === 'paid' ? (
                             <Badge variant="success">Paid</Badge>
                           ) : order.payment_status === 'customer_marked_paid' ? (
@@ -1658,12 +1716,12 @@ export default function OrdersPage() {
                           Takeaway
                         </span>
                       )}
-                      {getStatusBadge(selectedOrder.status)}
+                      {getStatusBadge(effectiveStatus || selectedOrder.status)}
                       {selectedOrder.payment_status === 'paid' ? (
                         <Badge variant="success">Paid Verified</Badge>
                       ) : selectedOrder.payment_status === 'customer_marked_paid' ? (
                         <Badge variant="warning">Customer Marked Paid</Badge>
-                      ) : selectedOrder.status === 'cancelled' ? null : (
+                      ) : (effectiveStatus === 'cancelled' || selectedOrder.status === 'cancelled') ? null : (
                         <Badge variant="error">Payment Pending</Badge>
                       )}
                     </div>
@@ -1685,7 +1743,7 @@ export default function OrdersPage() {
                 </div>
 
                 <div className="p-6 space-y-6">
-                  {selectedOrder.status === 'cancelled' && (
+                  {(effectiveStatus === 'cancelled' || selectedOrder.status === 'cancelled') && (
                     <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl p-4 flex flex-col gap-1.5 text-rose-900 dark:text-rose-200 shadow-sm animate-fade-in">
                       <div className="flex items-center gap-2 font-bold text-sm text-rose-700 dark:text-rose-400">
                         <XCircle className="h-5 w-5 shrink-0" />
@@ -1869,7 +1927,7 @@ export default function OrdersPage() {
                   <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-3">
                     <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
                     <div className="flex flex-wrap gap-2">
-                      {activeRole !== 'waiter' && selectedOrder.status === 'new' && (
+                      {activeRole !== 'waiter' && effectiveStatus === 'new' && (
                         <Button 
                           size="sm" 
                           variant="primary" 
@@ -1881,7 +1939,7 @@ export default function OrdersPage() {
                           Accept Order
                         </Button>
                       )}
-                      {activeRole !== 'waiter' && selectedOrder.status === 'accepted' && (
+                      {activeRole !== 'waiter' && effectiveStatus === 'accepted' && (
                         <Button 
                           size="sm" 
                           className="bg-amber-500 hover:bg-amber-600 text-white cursor-pointer" 
@@ -1892,7 +1950,7 @@ export default function OrdersPage() {
                           Start Preparing
                         </Button>
                       )}
-                      {activeRole !== 'waiter' && selectedOrder.status === 'preparing' && (
+                      {activeRole !== 'waiter' && effectiveStatus === 'preparing' && (
                         <Button 
                           size="sm" 
                           className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" 
@@ -1903,7 +1961,7 @@ export default function OrdersPage() {
                           Mark Ready for Pickup
                         </Button>
                       )}
-                      {selectedOrder.status === 'ready' && (
+                      {effectiveStatus === 'ready' && (
                         <Button 
                           size="sm" 
                           className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" 
@@ -1914,7 +1972,7 @@ export default function OrdersPage() {
                           Serve Order
                         </Button>
                       )}
-                      {selectedOrder.status === 'served' && selectedOrder.payment_status !== 'paid' && (
+                      {effectiveStatus === 'served' && selectedOrder.payment_status !== 'paid' && (
                         <Button 
                           size="sm" 
                           className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold shadow-md" 
@@ -1931,7 +1989,7 @@ export default function OrdersPage() {
                           Complete Bill & Pay
                         </Button>
                       )}
-                      {selectedOrder.payment_status === 'paid' && (
+                      {(selectedOrder.payment_status === 'paid' || effectiveStatus === 'completed') && (
                         <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold text-xs rounded-xl border border-emerald-200 dark:border-emerald-800">
                           <Check className="h-3.5 w-3.5 text-emerald-600" />
                           <span>Paid ({selectedOrder.payment_method?.toUpperCase() || 'PAID'})</span>
@@ -2239,7 +2297,7 @@ export default function OrdersPage() {
         </Dialog>
       )}
 
-                      {activeRole !== 'waiter' && selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
+                      {activeRole !== 'waiter' && effectiveStatus !== 'completed' && effectiveStatus !== 'cancelled' && (
                         <Button 
                           size="sm" 
                           variant="danger" 
@@ -2253,7 +2311,7 @@ export default function OrdersPage() {
                       )}
 
                       {/* Manual Restore Button for post-prep cancelled orders */}
-                      {selectedOrder.status === 'cancelled' && selectedOrder.inventory_consumed && !selectedOrder.inventory_restored && (
+                      {effectiveStatus === 'cancelled' && selectedOrder.inventory_consumed && !selectedOrder.inventory_restored && (
                         <Button
                           size="sm"
                           className="bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
@@ -2263,9 +2321,9 @@ export default function OrdersPage() {
                         </Button>
                       )}
 
-                      {(selectedOrder.status === 'completed' || selectedOrder.status === 'cancelled') && (
+                      {(effectiveStatus === 'completed' || effectiveStatus === 'cancelled') && (
                         <span className="text-xs text-slate-400 font-semibold flex items-center gap-1.5 py-1">
-                          <AlertCircle className="h-4 w-4" /> {selectedOrder.status === 'cancelled' ? `Order cancelled (${selectedOrder.cancellation_reason || 'No reason specified'})` : 'This order has been finalized and cannot be edited.'}
+                          <AlertCircle className="h-4 w-4" /> {effectiveStatus === 'cancelled' ? `Order cancelled (${selectedOrder.cancellation_reason || 'No reason specified'})` : 'This order has been finalized and cannot be edited.'}
                         </span>
                       )}
                     </div>
