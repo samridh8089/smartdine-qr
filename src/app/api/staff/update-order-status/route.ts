@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { healUnconsumedActiveReservations } from '@/lib/inventoryEngine';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
+import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -87,45 +88,37 @@ export async function POST(req: Request) {
     const targetOrderId = orderId || updatedBatch?.order_id || updatedOrder?.id;
 
     if (restId) {
-      const kdsChannel = `kds_${restId}`;
-      const dashboardChannel = `overview_dashboard_${restId}`;
-      const trackingChannel = targetOrderId ? `order_tracking_${targetOrderId}` : null;
-      const custTrackingChannel = targetOrderId ? `customer_order_tracking_${targetOrderId}` : null;
+      // Instant Parallel Broadcast across Live Orders, KDS, Dashboard, & Customer Tracking UI
+      await broadcastOrderRealtimeEvent({
+        restaurantId: restId,
+        orderId: targetOrderId,
+        batchId,
+        eventType: 'order-status-updated',
+        payload: {
+          orderId: targetOrderId,
+          batchId,
+          newStatus: effectiveStatus,
+          updatedOrder,
+          updatedBatch
+        },
+        client: supabaseAdmin
+      });
 
-      // Instant Parallel Broadcast across KDS, Dashboard, & Customer Tracking UI
-      const broadcastPromises: Promise<any>[] = [
-        supabaseAdmin.channel(kdsChannel).send({
-          type: 'broadcast',
-          event: 'order-status-updated',
-          payload: { orderId: targetOrderId, batchId, newStatus, updatedOrder, updatedBatch }
-        }),
-        supabaseAdmin.channel(dashboardChannel).send({
-          type: 'broadcast',
-          event: 'order-status-updated',
-          payload: { orderId: targetOrderId, batchId, newStatus, updatedOrder }
-        })
-      ];
-
-      if (trackingChannel) {
-        broadcastPromises.push(
-          supabaseAdmin.channel(trackingChannel).send({
-            type: 'broadcast',
-            event: 'status-update',
-            payload: { orderId: targetOrderId, newStatus, updatedOrder }
-          })
-        );
+      if (effectiveStatus === 'completed' || updatedOrder?.payment_status === 'paid') {
+        await broadcastOrderRealtimeEvent({
+          restaurantId: restId,
+          orderId: targetOrderId,
+          batchId,
+          eventType: 'payment-updated',
+          payload: {
+            orderId: targetOrderId,
+            paymentStatus: updatedOrder?.payment_status || 'paid',
+            status: 'completed',
+            updatedOrder
+          },
+          client: supabaseAdmin
+        });
       }
-      if (custTrackingChannel) {
-        broadcastPromises.push(
-          supabaseAdmin.channel(custTrackingChannel).send({
-            type: 'broadcast',
-            event: 'order-status-updated',
-            payload: { orderId: targetOrderId, newStatus, updatedOrder }
-          })
-        );
-      }
-
-      await Promise.all(broadcastPromises).catch(e => console.error('WebSocket broadcast status update failed:', e));
 
       // Background reservation healing (non-blocking)
       healUnconsumedActiveReservations(restId).catch(() => {});

@@ -352,6 +352,13 @@ export default function InventoryDashboardPage() {
   // Realtime Subscriptions for Inventory Ledger
   useEffect(() => {
     if (!restaurantId) return;
+
+    const handleResync = () => {
+      console.log('[Inventory] Force resync event received. Reloading inventory data...');
+      loadData();
+    };
+    window.addEventListener('force-resync', handleResync);
+
     const channel = supabase
       .channel(`inventory_${restaurantId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
@@ -361,7 +368,10 @@ export default function InventoryDashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_purchases', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { 
+      supabase.removeChannel(channel); 
+      window.removeEventListener('force-resync', handleResync);
+    };
   }, [restaurantId]);
 
   // Calculated Summary Metrics (Using canonical getItemStockStatus: BUG-INV-009)

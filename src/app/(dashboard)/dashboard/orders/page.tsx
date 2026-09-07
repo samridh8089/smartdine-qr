@@ -16,6 +16,7 @@ import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardLis
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
+import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 
 
 export default function OrdersPage() {
@@ -341,7 +342,53 @@ export default function OrdersPage() {
 
     console.log(`Subscribing to live orders, requests & batches updates for restaurant: ${restId}`);
     const channel = supabase
-      .channel('live_orders_requests')
+      .channel(`live_orders_${restId}`, {
+        config: {
+          broadcast: { self: true }
+        }
+      })
+      .on(
+        'broadcast',
+        { event: 'new-order' },
+        async (payload) => {
+          console.log('Realtime broadcast live orders new-order received:', payload);
+          const newOrderPayload = payload.payload?.new || payload.payload?.updatedOrder;
+          if (newOrderPayload && !alertedOrderIds.current.has(newOrderPayload.id)) {
+            alertedOrderIds.current.add(newOrderPayload.id);
+            playLoudBell('waiter');
+            setToast({ message: `New Order Received - ${newOrderPayload.table_name || 'Table'}`, visible: true });
+            setTimeout(() => {
+              setToast(prev => prev && prev.message.includes(newOrderPayload.table_name || 'Table') ? { ...prev, visible: false } : prev);
+            }, 5000);
+          }
+          await reloadFnRef.current(restId);
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'order-status-updated' },
+        async (payload) => {
+          console.log('Realtime broadcast live orders order-status-updated received:', payload);
+          const updated = payload.payload?.updatedOrder;
+          if (updated) {
+            setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+          }
+          await reloadFnRef.current(restId);
+        }
+      )
+      .on(
+        'broadcast',
+        { event: 'payment-updated' },
+        async (payload) => {
+          console.log('Realtime broadcast live orders payment-updated received:', payload);
+          const pOrderId = payload.payload?.orderId;
+          const pStatus = payload.payload?.paymentStatus || 'paid';
+          if (pOrderId) {
+            setOrders(prev => prev.map(o => o.id === pOrderId ? { ...o, payment_status: pStatus, status: 'completed' } : o));
+          }
+          await reloadFnRef.current(restId);
+        }
+      )
       .on(
         'postgres_changes',
         {
@@ -470,7 +517,7 @@ export default function OrdersPage() {
       supabase.removeChannel(channel);
       window.removeEventListener('force-resync', handleResync);
     };
-  }, [restaurant]);
+  }, [restaurant?.id]);
 
   const handleSelectOrder = (order: Order) => {
     setSelectedOrderId(order.id);
@@ -545,13 +592,32 @@ export default function OrdersPage() {
       if (status === 'served') {
         window.dispatchEvent(new Event('stop-waiter-sound'));
       }
-      const updated = await db.updateOrderStatus(
-        orderIdToUpdate, 
-        status, 
-        profile?.full_name || activeRole || 'Staff Member', 
-        cancellationReason
-      );
-      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+      const res = await fetch('/api/staff/update-order-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: orderIdToUpdate,
+          newStatus: status,
+          staffName: profile?.full_name || activeRole || 'Staff Member',
+          cancellationReason
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          const conflictErr: any = new Error(errJson.error || 'Status conflict');
+          conflictErr.code = errJson.code || 'STALE_STATUS_CONFLICT';
+          throw conflictErr;
+        }
+        throw new Error(errJson.error || `Failed to update order status: HTTP ${res.status}`);
+      }
+
+      const resData = await res.json();
+      const updated = resData.order || (await db.getOrderById(orderIdToUpdate));
+      if (updated) {
+        setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+      }
       
       const allOrders = await db.getOrders(restaurant.id);
       const filteredOrders = activeRole === 'waiter'
@@ -934,6 +1000,19 @@ export default function OrdersPage() {
         profile?.full_name || activeRole || 'Staff Member'
       );
 
+      // BUG-ORD-004: Instantly broadcast payment-updated across all tenant channels (Live Orders, KDS, Dashboard, Customer)
+      await broadcastOrderRealtimeEvent({
+        restaurantId: restaurant.id,
+        orderId: selectedOrder.id,
+        eventType: 'payment-updated',
+        payload: {
+          orderId: selectedOrder.id,
+          paymentStatus: 'paid',
+          status: 'completed',
+          updatedOrder: updated
+        }
+      });
+
       setPaymentModalOpen(false);
       setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
 
@@ -1280,7 +1359,17 @@ export default function OrdersPage() {
                                 setProcessingOrderIds(prev => [...prev, order.id]);
                                 try {
                                   window.dispatchEvent(new Event('stop-waiter-sound'));
-                                  await db.updateOrderStatus(order.id, 'served', profile?.full_name || 'Waiter');
+                                  const updated = await db.updateOrderStatus(order.id, 'served', profile?.full_name || 'Waiter');
+                                  await broadcastOrderRealtimeEvent({
+                                    restaurantId: restaurant.id,
+                                    orderId: order.id,
+                                    eventType: 'order-status-updated',
+                                    payload: {
+                                      orderId: order.id,
+                                      newStatus: 'served',
+                                      updatedOrder: updated
+                                    }
+                                  });
                                   const allOrders = await db.getOrders(restaurant.id);
                                   const filteredOrders = activeRole === 'waiter'
                                     ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))

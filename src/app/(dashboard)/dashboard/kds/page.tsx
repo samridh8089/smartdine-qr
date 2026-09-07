@@ -270,6 +270,18 @@ export default function KitchenDisplayPage() {
         }
       )
       .on(
+        'broadcast',
+        { event: 'payment-updated' },
+        async (payload) => {
+          console.log('Realtime broadcast KDS payment-updated received:', payload);
+          const completedOrderId = payload.payload?.orderId;
+          if (completedOrderId) {
+            setOrders(prev => prev.filter(o => o.id !== completedOrderId));
+          }
+          await reloadFnRef.current(restaurantId);
+        }
+      )
+      .on(
         'postgres_changes',
         {
           event: '*',

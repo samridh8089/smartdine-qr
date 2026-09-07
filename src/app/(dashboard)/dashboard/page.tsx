@@ -297,6 +297,11 @@ export default function DashboardPage() {
             () => debouncedReload(restId)
           )
           .on(
+            'broadcast',
+            { event: 'payment-updated' },
+            () => debouncedReload(restId)
+          )
+          .on(
             'postgres_changes',
             {
               event: '*',
@@ -360,8 +365,16 @@ export default function DashboardPage() {
     };
     window.addEventListener('storage', handleStorage);
 
+    // BUG-ORD-004: Fast recovery when tab regains focus or wakes up from background
+    const handleForceResync = () => {
+      console.log('[Dashboard] Force resync event received. Reloading dashboard data...');
+      if (activeRestId) debouncedReload(activeRestId);
+    };
+    window.addEventListener('force-resync', handleForceResync);
+
     return () => {
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('force-resync', handleForceResync);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (channel) supabase.removeChannel(channel);
     };
