@@ -35,6 +35,8 @@ import {
 import { createPortal } from 'react-dom';
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
+import { usePreviewMode } from '@/context/PreviewModeContext';
+import { DEMO_INVENTORY_ITEMS, DEMO_PURCHASE_HISTORY, DEMO_STOCK_MOVEMENTS } from '@/lib/demoPreviewData';
 
 function ModalPortal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -160,6 +162,7 @@ function formatTransactionMeta(tx: any) {
 
 export default function InventoryDashboardPage() {
   const { restaurant, activeRole, planSpec } = useRestaurant();
+  const { isPreviewMode } = usePreviewMode();
   const restaurantId = restaurant?.id || '';
   const [aiRecipeUsage, setAiRecipeUsage] = useState<{ used: number; limit: number | null; remaining: number | null }>({
     used: 0,
@@ -364,8 +367,13 @@ export default function InventoryDashboardPage() {
     };
   }, [restaurantId]);
 
+  // Preview mode fallback data (only activates when DB data is empty)
+  const effectiveItems = items.length === 0 && isPreviewMode ? DEMO_INVENTORY_ITEMS : items;
+  const effectivePurchases = purchases.length === 0 && isPreviewMode ? DEMO_PURCHASE_HISTORY : purchases;
+  const effectiveTransactions = transactions.length === 0 && isPreviewMode ? DEMO_STOCK_MOVEMENTS : transactions;
+
   // Calculated Summary Metrics (Using canonical getItemStockStatus: BUG-INV-009)
-  const activeItems = items.filter(i => i.is_active !== false);
+  const activeItems = effectiveItems.filter(i => i.is_active !== false);
   const totalItemsCount = activeItems.length;
   const totalStockValue = activeItems.reduce((sum, item) => sum + (Number(item.current_stock || 0) * Number(item.cost_per_unit || 0)), 0);
   const lowStockCount = activeItems.filter(i => getItemStockStatus(i).isLow).length;
@@ -375,18 +383,18 @@ export default function InventoryDashboardPage() {
   todayStart.setHours(0,0,0,0);
   const todayIso = todayStart.toISOString();
 
-  const todayConsumptionTxs = transactions.filter(t => t.transaction_type === 'ORDER_CONSUMPTION' && t.created_at >= todayIso);
+  const todayConsumptionTxs = effectiveTransactions.filter(t => t.transaction_type === 'ORDER_CONSUMPTION' && t.created_at >= todayIso);
   const todayConsumptionValue = todayConsumptionTxs.reduce((sum, t) => {
-    const item = items.find(i => i.id === t.inventory_item_id);
+    const item = effectiveItems.find(i => i.id === t.inventory_item_id);
     const cost = item ? Number(item.cost_per_unit || 0) : 0;
     return sum + (Math.abs(Number(t.quantity || 0)) * cost);
   }, 0);
 
   const todayWasteValue = wasteLogs.filter(w => w.created_at >= todayIso).reduce((sum, w) => sum + Number(w.cost_impact || 0), 0);
-  const todayPurchaseValue = purchases.filter(p => p.created_at >= todayIso).reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
+  const todayPurchaseValue = effectivePurchases.filter(p => p.created_at >= todayIso).reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
 
   // Purchase Modal Calculation & Live Preview
-  const selectedPurchaseItem = items.find(i => i.id === purchaseForm.inventory_item_id);
+  const selectedPurchaseItem = effectiveItems.find(i => i.id === purchaseForm.inventory_item_id);
   const purchaseCompatibleUnits = selectedPurchaseItem
     ? getCompatibleUnits(selectedPurchaseItem.unit)
     : [
@@ -437,7 +445,7 @@ export default function InventoryDashboardPage() {
 
     let totalCost = 0;
     recipe.inventory_recipe_ingredients.forEach((ing: any) => {
-      const item = items.find(i => i.id === ing.inventory_item_id);
+      const item = effectiveItems.find(i => i.id === ing.inventory_item_id);
       if (item) {
         let ingQtyInItemUnit = Number(ing.quantity || 0);
         if (normalizeUnit(ing.unit) !== normalizeUnit(item.unit) && areUnitsCompatible(ing.unit, item.unit)) {
@@ -1905,7 +1913,7 @@ export default function InventoryDashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
-                {transactions.map(tx => {
+                {effectiveTransactions.map(tx => {
                   const meta = formatTransactionMeta(tx);
                   const qtySign = meta.isNegative ? '-' : '+';
                   const absQty = Math.abs(meta.effectiveQty);
@@ -1994,7 +2002,7 @@ export default function InventoryDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
-                  {purchases.map(p => (
+                  {effectivePurchases.map(p => (
                     <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                       <td className="py-3 px-4 text-slate-500">{new Date(p.created_at).toLocaleDateString('en-IN')}</td>
                       <td className="py-3 px-4 font-black">{p.supplier_name || 'Vendor'}</td>
@@ -2543,7 +2551,7 @@ export default function InventoryDashboardPage() {
                 {/* Recipe Costing Summary Card */}
                 {(() => {
                   const modalTotalCost = recipeIngredients.reduce((acc, ing) => {
-                    const selItem = items.find(i => i.id === ing.inventory_item_id);
+                    const selItem = effectiveItems.find(i => i.id === ing.inventory_item_id);
                     if (!selItem) return acc;
                     let qtyInItemUnit = Number(ing.quantity || 0);
                     if (normalizeUnit(ing.unit) !== normalizeUnit(selItem.unit) && areUnitsCompatible(ing.unit, selItem.unit)) {
@@ -2586,7 +2594,7 @@ export default function InventoryDashboardPage() {
 
                   <div className="space-y-2">
                     {recipeIngredients.map((ing, idx) => {
-                      const selItem = items.find(i => i.id === ing.inventory_item_id);
+                      const selItem = effectiveItems.find(i => i.id === ing.inventory_item_id);
                       let ingCost = 0;
                       if (selItem) {
                         let ingQtyInItemUnit = Number(ing.quantity || 0);
@@ -2603,7 +2611,7 @@ export default function InventoryDashboardPage() {
                             onChange={e => {
                               const newIngs = [...recipeIngredients];
                               newIngs[idx].inventory_item_id = e.target.value;
-                              const targetItem = items.find(i => i.id === e.target.value);
+                              const targetItem = effectiveItems.find(i => i.id === e.target.value);
                               if (targetItem) {
                                 newIngs[idx].unit = targetItem.unit;
                               }
@@ -3088,7 +3096,7 @@ export default function InventoryDashboardPage() {
                       value={purchaseForm.inventory_item_id}
                       onChange={e => {
                         const selId = e.target.value;
-                        const sel = items.find(i => i.id === selId);
+                        const sel = effectiveItems.find(i => i.id === selId);
                         let defaultUnit = 'kg';
                         if (sel) {
                           const norm = normalizeUnit(sel.unit);
