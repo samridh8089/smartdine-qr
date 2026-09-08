@@ -270,7 +270,7 @@ export default function KitchenDisplayPage() {
           console.log('Realtime broadcast KDS order-status-updated received:', payload);
           if (payload.payload?.updatedOrder) {
             const u = payload.payload.updatedOrder;
-            if (u.order_type === 'reservation') {
+            if (u.order_type === 'reservation' || u.table_name === 'Reservation' || u.special_instructions?.includes('TABLE RESERVATION')) {
               setOrders(prev => prev.filter(o => o.id !== u.id));
               return;
             }
@@ -315,7 +315,7 @@ export default function KitchenDisplayPage() {
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
             // BUG-RES-001: Reservation orders must NEVER trigger KDS alerts or bells
-            if (newOrderPayload.order_type === 'reservation') {
+            if (newOrderPayload.order_type === 'reservation' || newOrderPayload.table_name === 'Reservation' || newOrderPayload.special_instructions?.includes('TABLE RESERVATION')) {
               console.log(`Reservation order ignored in KDS: ${newOrderPayload.id}`);
               return;
             }
