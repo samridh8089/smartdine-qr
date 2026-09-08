@@ -14,7 +14,7 @@ import { formatPrice } from '@/lib/utils';
 import { 
   Settings, Users, History, Download, Upload, 
   Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard, Volume2, Copy, RefreshCw,
-  Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor
+  Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -96,8 +96,18 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [staffPhone, setStaffPhone] = useState('');
   const [staffRole, setStaffRole] = useState<'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier'>('waiter');
   const [staffDepartment, setStaffDepartment] = useState<'waiter' | 'kitchen' | 'cashier' | 'service' | 'general'>('waiter');
-  const [staffLoading, setStaffLoading] = useState(false);
   const [staffError, setStaffError] = useState('');
+  const [staffLoading, setStaffLoading] = useState(false);
+
+  // Edit Staff Modal State
+  const [editStaffModalOpen, setEditStaffModalOpen] = useState(false);
+  const [editStaffTarget, setEditStaffTarget] = useState<Profile | null>(null);
+  const [editStaffName, setEditStaffName] = useState('');
+  const [editStaffPhone, setEditStaffPhone] = useState('');
+  const [editStaffRole, setEditStaffRole] = useState<'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier'>('waiter');
+  const [editStaffDepartment, setEditStaffDepartment] = useState<'waiter' | 'kitchen' | 'cashier' | 'service' | 'general'>('waiter');
+  const [editStaffLoading, setEditStaffLoading] = useState(false);
+  const [editStaffError, setEditStaffError] = useState('');
 
   // Table Assignment Modal State
   const [tableAssignTarget, setTableAssignTarget] = useState<Profile | null>(null);
@@ -387,11 +397,49 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       setStaffLoading(false);
       return;
     }
-    if (!staffEmail.trim() || !staffEmail.includes('@')) {
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const cleanEmail = staffEmail.trim().toLowerCase();
+    if (!cleanEmail || !emailRegex.test(cleanEmail)) {
       setStaffError('Please enter a valid email address.');
       setStaffLoading(false);
       return;
     }
+
+    // Block Owner Email
+    const ownerEmail = profile?.email?.trim().toLowerCase() || (restaurant?.settings as any)?.owner_email?.trim().toLowerCase();
+    if (ownerEmail && cleanEmail === ownerEmail) {
+      setStaffError('The restaurant owner email cannot be registered as a staff account.');
+      setStaffLoading(false);
+      return;
+    }
+
+    // Block Duplicate Staff Email
+    if (staffList.some(s => s.email?.trim().toLowerCase() === cleanEmail)) {
+      setStaffError('A staff account with this email address already exists.');
+      setStaffLoading(false);
+      return;
+    }
+
+    // Validate and Block Duplicate Mobile Number
+    const cleanPhone = staffPhone.trim().replace(/\D/g, '');
+    if (cleanPhone) {
+      if (cleanPhone.length < 10) {
+        setStaffError('Please enter a valid 10-digit mobile number.');
+        setStaffLoading(false);
+        return;
+      }
+      const isPhoneDuplicate = staffList.some(s => {
+        const sPhone = (s.phone || '').replace(/\D/g, '');
+        return sPhone && sPhone.slice(-10) === cleanPhone.slice(-10);
+      });
+      if (isPhoneDuplicate) {
+        setStaffError('A staff account with this mobile number already exists.');
+        setStaffLoading(false);
+        return;
+      }
+    }
+
     if (staffPassword.length < 6) {
       setStaffError('Password must be at least 6 characters long.');
       setStaffLoading(false);
@@ -589,9 +637,20 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
 
   const handleToggleStaffActive = async (st: Profile) => {
     if (!restaurant) return;
+    if (st.role === 'owner') {
+      alert('The restaurant owner account cannot be deactivated.');
+      return;
+    }
     const newStatus = st.is_active === false ? true : false;
     try {
       await db.toggleStaffActiveStatus(restaurant.id, st.id, newStatus);
+      await db.createAuditLog(
+        restaurant.id,
+        profile?.id || null,
+        profile?.email || 'Owner',
+        'toggle_staff_status',
+        `Changed active status for staff ${st.full_name || st.email} to ${newStatus ? 'ACTIVE' : 'INACTIVE'}`
+      );
       await loadStaffAndLogs();
     } catch (err: any) {
       alert(`Failed to update staff status: ${err.message}`);
@@ -625,17 +684,78 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
     }
   };
 
-  const handleDeleteStaff = async (staffId: string) => {
-    if (!confirm('Are you sure you want to delete this staff member? They will lose all access.')) return;
+  const handleDeleteStaff = async (st: Profile) => {
+    if (!restaurant) return;
+    if (st.role === 'owner') {
+      alert('Forbidden: Cannot delete the restaurant owner account.');
+      return;
+    }
+    if (!confirm(`Are you sure you want to delete staff member "${st.full_name || st.email}"? They will lose all access.`)) return;
     try {
       setLoading(true);
-      await db.deleteStaffProfile(staffId);
+      await db.deleteStaffProfile(st.id);
+      await db.createAuditLog(
+        restaurant.id,
+        profile?.id || null,
+        profile?.email || 'Owner',
+        'delete_staff',
+        `Deleted staff account ${st.full_name || st.email} (${st.email})`
+      );
       await loadStaffAndLogs();
       alert('Staff account deleted successfully.');
     } catch (err: any) {
       alert(`Failed to delete staff: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenEditModal = (st: Profile) => {
+    setEditStaffTarget(st);
+    setEditStaffName(st.full_name || '');
+    setEditStaffPhone(st.phone || '');
+    setEditStaffRole((['manager', 'supervisor', 'waiter', 'kitchen', 'cashier'].includes(st.role) ? st.role : 'waiter') as any);
+    setEditStaffDepartment((st.department || 'waiter') as any);
+    setEditStaffError('');
+    setEditStaffModalOpen(true);
+  };
+
+  const handleSaveStaffEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurant || !editStaffTarget) return;
+    setEditStaffLoading(true);
+    setEditStaffError('');
+
+    if (!editStaffName.trim()) {
+      setEditStaffError('Staff Full Name is required.');
+      setEditStaffLoading(false);
+      return;
+    }
+
+    try {
+      await db.updateStaffProfile(restaurant.id, editStaffTarget.id, {
+        fullName: editStaffName.trim(),
+        phone: editStaffPhone.trim(),
+        role: editStaffRole,
+        department: editStaffRole === 'supervisor' ? editStaffDepartment : (editStaffRole === 'waiter' ? 'waiter' : editStaffRole === 'kitchen' ? 'kitchen' : 'general')
+      });
+
+      await db.createAuditLog(
+        restaurant.id,
+        profile?.id || null,
+        profile?.email || 'Owner',
+        'update_staff_profile',
+        `Updated staff details for ${editStaffName.trim()} (Role: ${editStaffRole}${editStaffRole === 'supervisor' ? ` - ${editStaffDepartment}` : ''})`
+      );
+
+      alert(`Staff details updated successfully for ${editStaffName}!`);
+      setEditStaffModalOpen(false);
+      setEditStaffTarget(null);
+      await loadStaffAndLogs();
+    } catch (err: any) {
+      setEditStaffError(err?.message || 'Failed to update staff member');
+    } finally {
+      setEditStaffLoading(false);
     }
   };
 
@@ -673,9 +793,17 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       return;
     }
 
+    if (!restaurant) return;
     try {
       setResetPassSubmitting(true);
       await db.updateStaffPassword(resetPassTarget.id, newPassVal);
+      await db.createAuditLog(
+        restaurant.id,
+        profile?.id || null,
+        profile?.email || 'Owner',
+        'reset_staff_password',
+        `Reset access password for staff member ${resetPassTarget.name} (${resetPassTarget.email})`
+      );
       await loadStaffAndLogs();
       alert(`Password updated successfully for ${resetPassTarget.name}!`);
       setResetPassTarget(null);
@@ -1321,8 +1449,8 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
             <div className="max-w-md">
               <ResourceUsageCard
                 title="Staff Logins & Accounts"
-                used={staffList.length}
-                limit={planSpec?.limits?.staff_accounts ?? 5}
+                used={staffList.filter(s => s.role !== 'owner').length}
+                limit={planSpec?.limits?.staff_accounts === null ? null : (planSpec?.limits?.staff_accounts ?? 5)}
                 unitLabel="used"
               />
             </div>
@@ -1439,15 +1567,24 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/40">
-                          {staffList.map((st) => (
+                          {staffList.map((st) => {
+                            const isOwner = st.role === 'owner';
+                            return (
                             <tr key={st.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
                               <td className="px-5 py-3">
-                                <div className="font-extrabold text-slate-900 dark:text-white">{st.full_name}</div>
+                                <div className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                                  <span>{st.full_name}</span>
+                                  {isOwner && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                                      Owner
+                                    </span>
+                                  )}
+                                </div>
                                 {st.phone && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{st.phone}</div>}
                               </td>
                               <td className="px-5 py-3 font-mono text-xs">
                                 <div>{st.email}</div>
-                                {st.plain_password ? (
+                                {st.plain_password && !isOwner ? (
                                   <div className="flex items-center gap-1.5 mt-1 text-[11px]">
                                     <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded select-all font-mono">{st.plain_password}</span>
                                     <button 
@@ -1464,6 +1601,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                               <td className="px-5 py-3">
                                 <div className="flex flex-col gap-1">
                                   <Badge variant={
+                                    st.role === 'owner' ? 'success' :
                                     st.role === 'manager' ? 'info' :
                                     st.role === 'supervisor' ? 'success' :
                                     st.role === 'kitchen' ? 'warning' :
@@ -1471,7 +1609,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                                   }>
                                     {st.role}
                                   </Badge>
-                                  {st.department && (
+                                  {st.department && !isOwner && (
                                     <span className="text-[10px] text-slate-500 dark:text-slate-400 capitalize">
                                       Dept: {st.department}
                                     </span>
@@ -1479,7 +1617,11 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                                 </div>
                               </td>
                               <td className="px-5 py-3 text-center">
-                                {st.is_verified === false || st.verification_status === 'pending_verification' ? (
+                                {isOwner ? (
+                                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                    Protected
+                                  </span>
+                                ) : st.is_verified === false || st.verification_status === 'pending_verification' ? (
                                   <div className="flex flex-col items-center gap-1">
                                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 animate-pulse">
                                       Pending Verification
@@ -1516,37 +1658,50 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                                 )}
                               </td>
                               <td className="px-5 py-3 text-right">
-                                <div className="flex justify-end gap-1.5">
-                                  {(st.role === 'waiter' || (st.role === 'supervisor' && st.department === 'waiter')) && (
+                                {isOwner ? (
+                                  <span className="text-[11px] font-semibold text-slate-400 italic">Owner Account</span>
+                                ) : (
+                                  <div className="flex justify-end gap-1.5">
                                     <button
                                       type="button"
-                                      onClick={() => handleOpenAssignModal(st)}
-                                      className="px-2 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800"
-                                      title="Assign Tables"
+                                      onClick={() => handleOpenEditModal(st)}
+                                      className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors cursor-pointer"
+                                      title="Edit Staff Details"
                                     >
-                                      Tables
+                                      <Pencil className="h-4 w-4" />
                                     </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenResetModal(st)}
-                                    className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                                    title="Reset Password"
-                                  >
-                                    <RefreshCw className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteStaff(st.id)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors"
-                                    title="Delete Staff"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
+                                    {(st.role === 'waiter' || (st.role === 'supervisor' && st.department === 'waiter')) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenAssignModal(st)}
+                                        className="px-2 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-lg transition-colors border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                                        title="Assign Tables"
+                                      >
+                                        Tables
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenResetModal(st)}
+                                      className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors cursor-pointer"
+                                      title="Reset Password"
+                                    >
+                                      <RefreshCw className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteStaff(st)}
+                                      className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors cursor-pointer"
+                                      title="Delete Staff"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             </tr>
-                          ))}
+                          );
+                        })}
                         </tbody>
                       </table>
                     </div>
@@ -1983,6 +2138,92 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
             </CardContent>
           </Card>
         )}
+
+        {/* EDIT STAFF MODAL */}
+        <Dialog
+          isOpen={editStaffModalOpen}
+          onClose={() => { setEditStaffModalOpen(false); setEditStaffTarget(null); }}
+          title={`Edit Staff: ${editStaffTarget?.full_name || editStaffTarget?.email || ''}`}
+        >
+          <form onSubmit={handleSaveStaffEdit} className="space-y-4 pt-2">
+            {editStaffError && (
+              <div className="bg-rose-50 border border-rose-100 text-rose-700 px-3 py-2 rounded-lg text-xs font-semibold">
+                {editStaffError}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Staff Full Name</label>
+              <input
+                type="text"
+                value={editStaffName}
+                onChange={(e) => setEditStaffName(e.target.value)}
+                required
+                placeholder="Full name"
+                className="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 rounded-xl text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Mobile Number</label>
+              <input
+                type="tel"
+                value={editStaffPhone}
+                onChange={(e) => setEditStaffPhone(e.target.value)}
+                placeholder="+91 9876543210"
+                className="w-full px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 rounded-xl text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Staff Role Permissions</label>
+              <select
+                value={editStaffRole}
+                onChange={(e) => setEditStaffRole(e.target.value as any)}
+                className="block w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
+              >
+                <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
+                <option value="supervisor">Supervisor (Department-Scoped)</option>
+                <option value="waiter">Waiter (Tables, Orders, Calls, requests)</option>
+                <option value="kitchen">Kitchen Staff (KDS, Kitchen settings)</option>
+                <option value="cashier">Cashier (Orders check, Table checkout)</option>
+              </select>
+            </div>
+
+            {editStaffRole === 'supervisor' && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Supervisor Department Scope</label>
+                <select
+                  value={editStaffDepartment}
+                  onChange={(e) => setEditStaffDepartment(e.target.value as any)}
+                  className="block w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
+                >
+                  <option value="waiter">Waiter / Service Department</option>
+                  <option value="kitchen">Kitchen / KDS Department</option>
+                  <option value="cashier">Cashier / Billing Department</option>
+                  <option value="general">General Operations</option>
+                </select>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => { setEditStaffModalOpen(false); setEditStaffTarget(null); }}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={editStaffLoading}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold px-5 py-2 rounded-xl text-xs shadow-md transition-all cursor-pointer"
+              >
+                {editStaffLoading ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </Dialog>
 
         {/* STAFF PASSWORD RESET MODAL */}
         <Dialog isOpen={Boolean(resetPassTarget)} onClose={() => setResetPassTarget(null)} title={`Reset Password: ${resetPassTarget?.name || ''}`}>
