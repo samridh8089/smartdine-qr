@@ -70,6 +70,24 @@ export async function GET(req: Request) {
       };
     });
 
+    const authHeader = req.headers.get('Authorization') || '';
+    const token = authHeader.replace('Bearer ', '').trim();
+
+    if (token) {
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+      if (user) {
+        const { data: callerProf } = await supabaseAdmin
+          .from('profiles')
+          .select('restaurant_id, role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (callerProf && callerProf.role !== 'super_admin' && callerProf.restaurant_id !== restaurantId) {
+          return NextResponse.json({ error: 'FORBIDDEN', message: 'Access denied: You cannot view staff from other restaurants.' }, { status: 403 });
+        }
+      }
+    }
+
     const seenEmails = new Set(mergedProfiles.map(p => p.email.trim().toLowerCase()));
 
     // 4. Also include any virtual staff members stored in staff_metadata if not in profiles yet
@@ -97,9 +115,12 @@ export async function GET(req: Request) {
       }
     });
 
+    // Sanitize output to prevent plain_password leakage
+    const sanitizedProfiles = mergedProfiles.map(({ plain_password, ...rest }: any) => rest);
+
     return NextResponse.json({
       success: true,
-      staff: mergedProfiles
+      staff: sanitizedProfiles
     });
   } catch (err: any) {
     console.error('[API Staff List] Server Exception:', err);

@@ -158,15 +158,17 @@ export async function POST(req: Request) {
     }
 
     // ─── 4. DETERMINE SUBSCRIPTION END DATE & SETTINGS ──────────────────────────
-    const durationDays = billingInterval === 'yearly' ? 365 : 30;
+    const isTrialRegistration = Boolean(body.isTrial || plan === 'trial' || realPaymentId.startsWith('trial_'));
+    const durationDays = isTrialRegistration ? 3 : (billingInterval === 'yearly' ? 365 : 30);
     const subscriptionEndsAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+    const initialStatus = isTrialRegistration ? 'trial' : 'active';
 
     const planAmounts: Record<string, { monthly: number; yearly: number }> = {
       starter: { monthly: 499, yearly: 4990 },
       pro: { monthly: 999, yearly: 9990 },
       premium: { monthly: 1999, yearly: 19990 }
     };
-    paidAmount = paymentDetails?.amount || (billingInterval === 'yearly' ? planAmounts[normalizedPlan]?.yearly : planAmounts[normalizedPlan]?.monthly) || 999;
+    paidAmount = isTrialRegistration ? 0 : (paymentDetails?.amount || (billingInterval === 'yearly' ? planAmounts[normalizedPlan]?.yearly : planAmounts[normalizedPlan]?.monthly) || 999);
 
     const paymentDetailsRecord = {
       payment_id: realPaymentId,
@@ -251,7 +253,7 @@ export async function POST(req: Request) {
       .from('restaurants')
       .update({
         subscription_plan: normalizedPlan,
-        subscription_status: 'active',
+        subscription_status: initialStatus,
         billing_interval: billingInterval,
         trial_ends_at: subscriptionEndsAt,
         owner_id: userId,

@@ -2651,17 +2651,21 @@ export const db = {
 
     const pricingPlans = await this.getPricingPlans();
     const planPrices = pricingPlans.reduce((acc, plan) => {
-      acc[plan.id] = { monthly: plan.price_monthly, yearly: plan.price_yearly };
+      acc[plan.id.toLowerCase()] = { monthly: Number(plan.price_monthly || 0), yearly: Number(plan.price_yearly || 0) };
       return acc;
     }, {} as Record<string, { monthly: number; yearly: number }>);
 
-    // Fallbacks if pricing plans database is not loaded yet
-    const getPlanPrice = (plan: 'starter' | 'pro' | 'premium', interval: 'monthly' | 'yearly') => {
-      const prices = planPrices[plan] || {
-        starter: { monthly: 299, yearly: 2990 },
-        pro: { monthly: 799, yearly: 7990 },
-        premium: { monthly: 1499, yearly: 14990 }
-      }[plan];
+    // Fallbacks if pricing plans database is not loaded yet or for custom/non-standard plans
+    const defaultPrices: Record<string, { monthly: number; yearly: number }> = {
+      starter: { monthly: 499, yearly: 4990 },
+      pro: { monthly: 999, yearly: 9990 },
+      premium: { monthly: 1999, yearly: 19990 },
+      custom: { monthly: 0, yearly: 0 }
+    };
+
+    const getPlanPrice = (plan: string, interval: 'monthly' | 'yearly') => {
+      const key = (plan || 'starter').toLowerCase();
+      const prices = planPrices[key] || defaultPrices[key] || { monthly: 0, yearly: 0 };
       return interval === 'yearly' ? prices.yearly : prices.monthly;
     };
 
@@ -2669,18 +2673,14 @@ export const db = {
     let totalPaidCustomers = 0;
     let trialUsers = 0;
     let expiredLicenses = 0;
-    let activeLicenses = 0;
-
-    const now = new Date();
 
     rests.forEach(r => {
-      const plan = (r.subscription_plan || 'starter') as 'starter' | 'pro' | 'premium';
+      const plan = (r.subscription_plan || 'starter').toLowerCase();
       const effectiveStatus = getEffectiveSubscriptionStatus(r);
       const interval = (r.billing_interval || 'monthly') as 'monthly' | 'yearly';
 
       if (effectiveStatus === 'active') {
         totalPaidCustomers += 1;
-        activeLicenses += 1;
         const price = getPlanPrice(plan, interval);
         if (interval === 'yearly') {
           mrr += price / 12;
@@ -2689,7 +2689,6 @@ export const db = {
         }
       } else if (effectiveStatus === 'trial') {
         trialUsers += 1;
-        activeLicenses += 1;
       } else {
         expiredLicenses += 1;
       }
@@ -2699,18 +2698,29 @@ export const db = {
 
     return {
       totalRestaurants: rests.length,
-      totalRevenue: mrr, // Display MRR in the card
-      activeSubscriptions: activeLicenses,
+      totalRevenue: Math.round(mrr), // Exact MRR
+      activeSubscriptions: totalPaidCustomers, // Only paid active subscriptions (trials excluded)
       mrr: Math.round(mrr),
       arr: Math.round(arr),
       totalPaidCustomers,
       trialUsers,
       expiredLicenses,
-      activeLicenses
+      activeLicenses: totalPaidCustomers + trialUsers
     };
   },
 
+  clearRestaurantCache(id?: string | null) {
+    if (id) {
+      restaurantMemoryCache.delete(id);
+    } else {
+      restaurantMemoryCache.clear();
+    }
+  },
+
   async updateRestaurantPlan(id: string, plan: 'starter' | 'pro' | 'premium', status: Restaurant['subscription_status'], trialEndsAt?: string): Promise<Restaurant> {
+    // Invalidate local in-memory cache immediately for real-time propagation
+    restaurantMemoryCache.delete(id);
+
     // Centralized Server Authorization Check
     try {
       await supabase.rpc('verify_super_admin');
@@ -2753,6 +2763,9 @@ export const db = {
     if (error || !updated || updated.length === 0) {
       throw new Error(error?.message || 'Failed to update restaurant plan in database');
     }
+
+    // Refresh memory cache with the newly updated record
+    restaurantMemoryCache.set(id, { data: updated[0] as Restaurant, timestamp: Date.now() });
 
     // AUDIT LOG ENHANCEMENT
     await this.createAuditLog(
@@ -3099,7 +3112,10 @@ export const db = {
   async getStaffProfiles(restaurantId: string): Promise<Profile[]> {
     try {
       const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
-      const res = await fetch(`${baseUrl}/api/staff/list?restaurantId=${restaurantId}`);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+      const res = await fetch(`${baseUrl}/api/staff/list?restaurantId=${restaurantId}`, { headers });
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.staff)) {
@@ -3119,7 +3135,7 @@ export const db = {
       .eq('restaurant_id', restaurantId)
       .neq('role', 'super_admin');
     
-    const dbProfiles = data || [];
+    const dbProfiles = (data || []).map(({ plain_password, ...sanitized }: any) => sanitized);
     const foundIds = new Set(dbProfiles.map(p => p.id));
 
     const merged = dbProfiles.map(p => {

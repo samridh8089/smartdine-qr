@@ -1452,12 +1452,24 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         {activeTab === 'staff' && (
           <div className="space-y-6">
             <div className="max-w-md">
-              <ResourceUsageCard
-                title="Staff Logins & Accounts"
-                used={staffList.filter(s => s.role !== 'owner').length}
-                limit={planSpec?.limits?.staff_accounts === null ? null : (planSpec?.limits?.staff_accounts ?? 5)}
-                unitLabel="used"
-              />
+              {(() => {
+                const planStr = (restaurant?.subscription_plan || '') as string;
+                const isPlanUnlimited = 
+                  planStr === 'premium' || 
+                  planStr === 'custom' || 
+                  planStr === 'unlimited' ||
+                  planSpec?.limits?.staff_accounts === null;
+                const staffLimit = isPlanUnlimited ? null : (planSpec?.limits?.staff_accounts ?? (restaurant?.subscription_plan === 'pro' ? 10 : 5));
+
+                return (
+                  <ResourceUsageCard
+                    title="Staff Logins & Accounts"
+                    used={staffList.filter(s => s.role !== 'owner').length}
+                    limit={staffLimit}
+                    unitLabel="used"
+                  />
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

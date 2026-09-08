@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { db, Restaurant, PricingPlan, getEffectiveSubscriptionStatus } from '@/lib/db';
 import { parsePlanSpec } from '@/lib/entitlements';
@@ -15,7 +15,7 @@ import SaaSPlanBuilder from '@/components/admin/SaaSPlanBuilder';
 import { 
   ShieldAlert, Users, Database, DollarSign, LogOut, 
   Settings, Check, Edit2, AlertCircle, TrendingUp, Clock, Trash2, Mail,
-  Key, Eye, EyeOff, Copy, ExternalLink, LogIn, CheckCircle2
+  Key, Eye, EyeOff, Copy, ExternalLink, LogIn, CheckCircle2, Search
 } from 'lucide-react';
 
 export default function SuperAdminPage() {
@@ -35,6 +35,18 @@ export default function SuperAdminPage() {
   });
   const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
   const [editingPlanPrices, setEditingPlanPrices] = useState<Record<string, { monthly: number, yearly: number }>>({});
+  const [editingPlanSpecs, setEditingPlanSpecs] = useState<Record<string, {
+    monthly: number;
+    yearly: number;
+    maxTables: number;
+    maxItems: number;
+    allowWaiter: boolean;
+    allowAnalytics: boolean;
+    allowBranding: boolean;
+    kdsType: 'standard' | 'premium';
+  }>>({});
+  const [purgingExpired, setPurgingExpired] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [reminderSending, setReminderSending] = useState<string | null>(null);
 
@@ -58,6 +70,16 @@ export default function SuperAdminPage() {
   const [deletingRest, setDeletingRest] = useState<Restaurant | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteImpactStats, setDeleteImpactStats] = useState({ ordersCount: 0, totalRevenue: 0 });
+
+  const filteredRestaurants = useMemo(() => {
+    if (!searchQuery.trim()) return restaurants;
+    const q = searchQuery.toLowerCase().trim();
+    return restaurants.filter(r => 
+      r.name.toLowerCase().includes(q) || 
+      r.slug.toLowerCase().includes(q) || 
+      (r.subscription_plan && r.subscription_plan.toLowerCase().includes(q))
+    );
+  }, [restaurants, searchQuery]);
 
   useEffect(() => {
     async function checkAdminAuth() {
@@ -222,27 +244,25 @@ export default function SuperAdminPage() {
     const expiry = new Date(trialEndsAtStr);
     const now = new Date();
     const diffMs = expiry.getTime() - now.getTime();
-    const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const rawDaysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    const daysLeft = Math.max(0, rawDaysLeft);
+    const isExpired = rawDaysLeft <= 0;
+
+    const istDateStr = expiry.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
     
-    if (daysLeft < 0) {
-      return { daysLeft, label: `Expired ${Math.abs(daysLeft)} days ago`, isExpiringSoon: false, isExpired: true };
+    if (isExpired) {
+      return { daysLeft: 0, label: `Expired (${istDateStr})`, isExpiringSoon: false, isExpired: true };
     } else if (daysLeft <= 3) {
       return { daysLeft, label: `Expires in ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}!`, isExpiringSoon: true, isExpired: false };
     } else {
-      return { daysLeft, label: `Expires ${expiry.toLocaleDateString()}`, isExpiringSoon: false, isExpired: false };
+      return { daysLeft, label: `Expires ${istDateStr}`, isExpiringSoon: false, isExpired: false };
     }
   };
-
-  const [editingPlanSpecs, setEditingPlanSpecs] = useState<Record<string, {
-    monthly: number;
-    yearly: number;
-    maxTables: number;
-    maxItems: number;
-    allowWaiter: boolean;
-    allowAnalytics: boolean;
-    allowBranding: boolean;
-    kdsType: 'standard' | 'premium';
-  }>>({});
 
   const handleSpecChange = (planId: string, field: string, val: any) => {
     setEditingPlanSpecs(prev => {
@@ -299,8 +319,6 @@ export default function SuperAdminPage() {
       alert(`Failed to save plan specifications: ${err.message}`);
     }
   };
-
-  const [purgingExpired, setPurgingExpired] = useState(false);
 
   const handlePurgeExpired = async () => {
     const now = new Date();
@@ -416,7 +434,7 @@ export default function SuperAdminPage() {
         </div>
 
         {/* Global SaaS Revenue Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           <Card className="hover:shadow-md transition-shadow dark:bg-slate-900 dark:border-slate-800">
             <CardContent className="flex flex-col gap-2 py-5 px-4">
               <div className="h-9 w-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -424,7 +442,7 @@ export default function SuperAdminPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</p>
-                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1">{formatPrice(adminStats.mrr)}</h3>
+                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1 truncate">{formatPrice(adminStats.mrr)}</h3>
               </div>
             </CardContent>
           </Card>
@@ -436,7 +454,7 @@ export default function SuperAdminPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Annual Revenue</p>
-                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1">{formatPrice(adminStats.arr)}</h3>
+                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1 truncate">{formatPrice(adminStats.arr)}</h3>
               </div>
             </CardContent>
           </Card>
@@ -448,7 +466,7 @@ export default function SuperAdminPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Paid Customers</p>
-                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1">{adminStats.totalPaidCustomers}</h3>
+                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1 truncate">{adminStats.totalPaidCustomers}</h3>
               </div>
             </CardContent>
           </Card>
@@ -460,7 +478,7 @@ export default function SuperAdminPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Active Licenses</p>
-                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1">{adminStats.activeLicenses}</h3>
+                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1 truncate">{adminStats.activeLicenses}</h3>
               </div>
             </CardContent>
           </Card>
@@ -472,7 +490,7 @@ export default function SuperAdminPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Trial Users</p>
-                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1">{adminStats.trialUsers}</h3>
+                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1 truncate">{adminStats.trialUsers}</h3>
               </div>
             </CardContent>
           </Card>
@@ -497,7 +515,7 @@ export default function SuperAdminPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Expired Licenses</p>
-                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1">{adminStats.expiredLicenses}</h3>
+                <h3 className="text-lg font-extrabold text-slate-950 dark:text-white mt-1 truncate">{adminStats.expiredLicenses}</h3>
               </div>
             </CardContent>
           </Card>
@@ -508,7 +526,19 @@ export default function SuperAdminPage() {
 
         {/* Tenants List Table */}
         <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tenant Restaurant Listings</h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tenant Restaurant Listings</h3>
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name, slug, or plan..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+              />
+            </div>
+          </div>
           <Card className="dark:bg-slate-900 dark:border-slate-800">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-slate-100 dark:divide-slate-800 text-sm">
@@ -523,7 +553,14 @@ export default function SuperAdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900">
-                  {restaurants.map((rest) => {
+                  {filteredRestaurants.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-8 text-center text-xs text-slate-400">
+                        No matching restaurants found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRestaurants.map((rest) => {
                     const expiry = getExpiryInfo(rest.trial_ends_at);
                     const matchedPlan = pricingPlans.find(p => p.id === rest.subscription_plan);
                     const planPrice = matchedPlan 
@@ -620,7 +657,7 @@ export default function SuperAdminPage() {
                         </td>
                       </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
             </div>

@@ -119,12 +119,14 @@ export default function BillingPage() {
     const targetMaxItems = targetSpec.limits.menu_items;
 
     if (targetMaxTables !== null && tablesCount > targetMaxTables) {
-      alert(`Cannot downgrade to ${targetSpec.name}: You have ${tablesCount} tables, which exceeds the limit of ${targetMaxTables}. Delete tables before downgrading.`);
-      return;
+      if (!confirm(`Notice: You have ${tablesCount} tables, which exceeds ${targetSpec.name}'s limit of ${targetMaxTables}. If you downgrade, additional tables will be locked. Proceed with downgrade?`)) {
+        return;
+      }
     }
     if (targetMaxItems !== null && itemsCount > targetMaxItems) {
-      alert(`Cannot downgrade to ${targetSpec.name}: You have ${itemsCount} menu items, which exceeds the limit of ${targetMaxItems}. Delete menu items before downgrading.`);
-      return;
+      if (!confirm(`Notice: You have ${itemsCount} menu items, which exceeds ${targetSpec.name}'s limit of ${targetMaxItems}. If you downgrade, extra menu items will be disabled. Proceed with downgrade?`)) {
+        return;
+      }
     }
 
     const defaultPrices: Record<string, { monthly: number; yearly: number }> = {
@@ -151,6 +153,7 @@ export default function BillingPage() {
     // Free plan upgrade only if explicitly 0
     if (amount <= 0) {
       try {
+        db.clearRestaurantCache(restaurant.id);
         await db.updateRestaurantPlan(restaurant.id, planId, 'active');
         await db.updateRestaurant(restaurant.id, { billing_interval: billingInterval });
         await refresh();
@@ -224,6 +227,7 @@ export default function BillingPage() {
 
             const verifyData = await verifyRes.json();
             if (verifyData.verified) {
+              db.clearRestaurantCache(restaurant.id);
               await db.updateRestaurantPlan(restaurant.id, planId, 'active');
               await db.updateRestaurant(restaurant.id, { billing_interval: billingInterval });
               await db.createAuditLog(
@@ -440,10 +444,10 @@ export default function BillingPage() {
           </h3>
 
           {/* Monthly / Yearly Switch Toggle */}
-          <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 self-start sm:self-auto">
+          <div className="flex items-center gap-1 sm:gap-3 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 w-full sm:w-auto justify-center">
             <button
               onClick={() => setBillingInterval('monthly')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
                 billingInterval === 'monthly'
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
@@ -453,7 +457,7 @@ export default function BillingPage() {
             </button>
             <button
               onClick={() => setBillingInterval('yearly')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`flex-1 sm:flex-initial px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
                 billingInterval === 'yearly'
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
