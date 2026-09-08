@@ -46,23 +46,41 @@ export const MergePromptModal: React.FC<MergePromptModalProps> = ({
         </div>
 
         {/* Details Card */}
-        <div className="bg-[#F8F8F6] border border-[#E7E5E4] rounded-lg p-3 my-4 space-y-2">
+        <div className="bg-[#F8F8F6] border border-[#E7E5E4] rounded-lg p-3.5 my-4 space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="text-[#737373]">Tables to merge:</span>
             <span className="font-bold text-[#171717]">
-              Table {tableA.tableNumber} & Table {tableB.tableNumber}
+              Table {tableA.display_number || tableA.tableNumber} & Table {tableB.display_number || tableB.tableNumber}
             </span>
           </div>
+
+          {/* Merge Capacity Preview */}
+          <div className="p-2.5 bg-white border border-[#E7E5E4] rounded-lg">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-[#737373] block mb-1.5">
+              Merge Capacity Preview
+            </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-1.5 text-xs">
+                <span className="px-2 py-0.5 bg-stone-100 rounded text-stone-800 font-semibold">
+                  T{tableA.display_number || tableA.tableNumber}: {tableA.seats || 4}s
+                </span>
+                <span className="text-stone-400 font-bold">+</span>
+                <span className="px-2 py-0.5 bg-stone-100 rounded text-stone-800 font-semibold">
+                  T{tableB.display_number || tableB.tableNumber}: {tableB.seats || 4}s
+                </span>
+              </div>
+              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-900 rounded-md font-bold text-xs">
+                = {totalSeats} Seats
+              </span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between text-xs">
             <span className="text-[#737373]">Combined Entity:</span>
             <span className="font-bold text-[#171717]">Table {combinedName}</span>
           </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-[#737373]">Total Seating:</span>
-            <span className="font-bold text-[#171717]">{totalSeats} Seats</span>
-          </div>
           <div className="text-[11px] text-[#737373] pt-1 border-t border-[#E7E5E4]">
-            Both tables can be split back into individual tables at any time.
+            Permanent QR codes remain unchanged. Split back into individual tables anytime.
           </div>
         </div>
 

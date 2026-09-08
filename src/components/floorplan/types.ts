@@ -52,6 +52,19 @@ export interface FloorPlanItem {
   isMerged?: boolean;
   mergedWithIds?: string[]; // IDs of the constituent tables
   originalSeats?: number;
+
+  // Phase-18.17A-R2 Table Identity & Sections
+  table_uuid?: string;
+  display_number?: string;
+  zone_id?: string;
+  zone_name?: string;
+  assigned_waiter_id?: string | null;
+  assigned_waiter_name?: string | null;
+  assignment_source?: 'manual' | 'zone' | 'unassigned';
+  distance_from_kitchen?: number;
+  is_archived?: boolean;
+  service_badges?: Array<'W' | 'B' | 'R' | 'T' | 'VIP'>;
+  payment_pending?: boolean;
 }
 
 export interface FloorPlanBlueprint {

@@ -404,8 +404,18 @@ export default function OrdersPage() {
       db.getTables(restId)
     ]);
     setAllTables(tbls || []);
+
+    const waiterTableIds = new Set(
+      (tbls || [])
+        .filter(t => t.assigned_waiter_id === profile?.id)
+        .map(t => t.id)
+    );
+
     const filteredForRole = activeRole === 'waiter'
-      ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+      ? allOrders.filter(o => {
+          if (!['ready', 'served', 'completed', 'accepted', 'preparing'].includes(o.status)) return false;
+          return o.table_id ? waiterTableIds.has(o.table_id) : true;
+        })
       : allOrders;
     setOrders(filteredForRole);
     dashboardStore.setCachedOrders(restId, allOrders);
@@ -413,8 +423,14 @@ export default function OrdersPage() {
     // Cache existing order IDs on initial load so we don't chime for them
     allOrders.forEach(o => alertedOrderIds.current.add(o.id));
 
-    // Load pending & active requests
-    const activeReqs = (reqs || []).filter(r => r.status === 'pending');
+    // Load pending & active requests - filtered for waiter
+    const activeReqs = (reqs || []).filter(r => {
+      if (r.status !== 'pending') return false;
+      if (activeRole === 'waiter' && r.table_id) {
+        return waiterTableIds.has(r.table_id);
+      }
+      return true;
+    });
     setCustomerRequests(activeReqs);
 
     if (orderIdParam) {
@@ -542,8 +558,18 @@ export default function OrdersPage() {
       ]);
       setAllTables(tbls || []);
       dashboardStore.setCachedOrders(restId, allOrders);
+
+      const waiterTableIds = new Set(
+        (tbls || [])
+          .filter(t => t.assigned_waiter_id === profile?.id)
+          .map(t => t.id)
+      );
+
       const filteredOrders = activeRole === 'waiter'
-        ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
+        ? allOrders.filter(o => {
+            if (!['ready', 'served', 'completed', 'accepted', 'preparing'].includes(o.status)) return false;
+            return o.table_id ? waiterTableIds.has(o.table_id) : true;
+          })
         : allOrders;
       setOrders(filteredOrders.map(o => {
         const inFlight = Array.from(processingOrderIdsRef.current).find(k => k.startsWith(`${o.id}:`));
@@ -560,7 +586,13 @@ export default function OrdersPage() {
       }));
 
       let reqs = await db.getCustomerRequests(restId);
-      let activeReqs = reqs.filter(r => r.status === 'pending');
+      let activeReqs = (reqs || []).filter(r => {
+        if (r.status !== 'pending') return false;
+        if (activeRole === 'waiter' && r.table_id) {
+          return waiterTableIds.has(r.table_id);
+        }
+        return true;
+      });
       setCustomerRequests(activeReqs);
     } catch (e) {
       console.error('Failed to reload orders:', e);
@@ -3333,30 +3365,72 @@ export default function OrdersPage() {
               })()}
 
               <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
                   Select Physical Table to Assign *
                 </label>
-                <select
-                  id="seat-guest-modal-table-select"
-                  value={selectedTableForSeat}
-                  onChange={e => setSelectedTableForSeat(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white"
-                >
-                  <option value="">-- Choose a physical table --</option>
-                  {allTables
-                    .filter(t => t.name?.toLowerCase() !== 'takeaway')
-                    .map(t => {
-                      const isOccupied = t.is_occupied || t.occupancy_status === 'occupied';
-                      const isReserved = t.occupancy_status === 'reserved';
-                      const label = `${t.name || `Table ${t.table_number}`} (${t.capacity || 4} seats) - ${isOccupied ? 'Currently Occupied' : isReserved ? 'Reserved' : 'Available'}`;
-                      return (
-                        <option key={t.id} value={t.id} disabled={isOccupied}>
-                          {label}
-                        </option>
-                      );
-                    })}
-                </select>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                <div className="border border-stone-200 dark:border-stone-800 rounded-xl overflow-hidden divide-y divide-stone-100 dark:divide-stone-800">
+                  <div className="grid grid-cols-12 bg-stone-50 dark:bg-stone-900/50 px-3 py-2 text-xs font-semibold text-stone-600 dark:text-stone-400">
+                    <span className="col-span-5">Table</span>
+                    <span className="col-span-2 text-center">Seats</span>
+                    <span className="col-span-3 text-center">Zone</span>
+                    <span className="col-span-2 text-right">Status</span>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800">
+                    {allTables
+                      .filter(t => !t.is_archived && t.name?.toLowerCase() !== 'takeaway')
+                      .map(t => {
+                        const isOccupied = t.is_occupied || t.occupancy_status === 'occupied';
+                        const isReserved = t.occupancy_status === 'reserved';
+                        const resDetails = parseReservationDetails(reservationToSeat);
+                        const guestCountNum = parseInt(resDetails.guests || '1', 10) || 1;
+                        const tSeats = t.seats || t.capacity || 4;
+                        const isBestFit = !isOccupied && !isReserved && tSeats >= guestCountNum && tSeats <= guestCountNum + 2;
+
+                        return (
+                          <div
+                            key={t.id}
+                            onClick={() => !isOccupied && setSelectedTableForSeat(t.id)}
+                            className={`grid grid-cols-12 px-3 py-2 text-xs items-center cursor-pointer transition-colors ${
+                              selectedTableForSeat === t.id
+                                ? 'bg-stone-100 dark:bg-stone-800 font-semibold border-l-2 border-stone-900'
+                                : 'hover:bg-stone-50 dark:hover:bg-stone-850'
+                            } ${isOccupied ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <span className="col-span-5 flex items-center gap-1.5 font-medium text-stone-900 dark:text-stone-100">
+                              <span
+                                className="w-2 h-2 rounded-full"
+                                style={{
+                                  backgroundColor: isOccupied ? '#f43f5e' : isReserved ? '#a8a29e' : '#10b981'
+                                }}
+                              />
+                              {t.display_number || t.name}
+                              {isBestFit && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 rounded font-medium">
+                                  Best Fit
+                                </span>
+                              )}
+                            </span>
+                            <span className="col-span-2 text-center font-mono text-stone-600 dark:text-stone-400">{tSeats}</span>
+                            <span className="col-span-3 text-center text-[11px] text-stone-500 truncate">{t.zone_name || 'General'}</span>
+                            <span className="col-span-2 text-right">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                  isOccupied
+                                    ? 'bg-stone-50 text-stone-700 border-stone-300'
+                                    : isReserved
+                                    ? 'bg-stone-50 text-stone-600 border-stone-200'
+                                    : 'bg-stone-50 text-stone-900 border-stone-300'
+                                }`}
+                              >
+                                {isOccupied ? 'Occupied' : isReserved ? 'Reserved' : 'Available'}
+                              </span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+                <p className="text-[11px] text-stone-500 dark:text-stone-400">
                   Seating the guest will mark the table as Occupied and release pre-ordered dishes to the Kitchen Display System (KDS).
                 </p>
               </div>

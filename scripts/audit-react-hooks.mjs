@@ -1,4 +1,4 @@
-﻿import ts from 'typescript';
+import ts from 'typescript';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
@@ -144,9 +144,11 @@ export function getTargetFiles() {
     return all;
   }
 
+  const gitBin = fs.existsSync('C:\\Program Files\\Git\\cmd\\git.exe') ? '"C:\\Program Files\\Git\\cmd\\git.exe"' : 'git';
+
   if (isStagedOnly) {
     try {
-      const out = execSync('git diff --cached --name-only --diff-filter=ACMR', { encoding: 'utf8' });
+      const out = execSync(`${gitBin} diff --cached --name-only --diff-filter=ACMR`, { encoding: 'utf8' });
       return out.split('\n').map(s => s.trim()).filter(f => (f.endsWith('.tsx') || f.endsWith('.jsx')) && fs.existsSync(f));
     } catch {
       return [];
@@ -155,11 +157,11 @@ export function getTargetFiles() {
 
   // Default: check staged files first, then unstaged modified files, then default core files
   try {
-    const staged = execSync('git diff --cached --name-only --diff-filter=ACMR', { encoding: 'utf8' })
+    const staged = execSync(`${gitBin} diff --cached --name-only --diff-filter=ACMR`, { encoding: 'utf8' })
       .split('\n').map(s => s.trim()).filter(f => (f.endsWith('.tsx') || f.endsWith('.jsx')) && fs.existsSync(f));
     if (staged.length > 0) return staged;
 
-    const modified = execSync('git diff --name-only --diff-filter=ACMR', { encoding: 'utf8' })
+    const modified = execSync(`${gitBin} diff --name-only --diff-filter=ACMR`, { encoding: 'utf8' })
       .split('\n').map(s => s.trim()).filter(f => (f.endsWith('.tsx') || f.endsWith('.jsx')) && fs.existsSync(f));
     if (modified.length > 0) return modified;
   } catch {}

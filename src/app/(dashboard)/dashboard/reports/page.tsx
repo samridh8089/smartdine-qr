@@ -13,7 +13,7 @@ import {
   Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle,
   ShoppingBag, ClipboardList, Lock, Banknote, Download, FileText, Filter, ArrowUpDown,
   Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight,
-  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb
+  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers
 } from 'lucide-react';
 import { isRevenueOrder } from '@/lib/billingEngine';
 import { usePreviewMode } from '@/context/PreviewModeContext';
@@ -137,6 +137,7 @@ export default function ReportsPage() {
 
   const [waiterLeaderboard, setWaiterLeaderboard] = useState<any[]>([]);
   const [tableTurnoverList, setTableTurnoverList] = useState<any[]>([]);
+  const [zoneAnalyticsList, setZoneAnalyticsList] = useState<any[]>([]);
   const [hourlyHeatmap, setHourlyHeatmap] = useState<any[]>([]);
   const [peakHourSummary, setPeakHourSummary] = useState({
     peakHour: '8:00 PM',
@@ -619,6 +620,52 @@ export default function ReportsPage() {
     }).sort((a, b) => b.turnoverCount - a.turnoverCount);
 
     setTableTurnoverList(turnoverRows);
+
+    // 3b. Zone Analytics (Revenue, Order volume, and stay duration by dining zone)
+    const zoneStatsMap: Record<string, { count: number; stayDurations: number[]; revenue: number }> = {};
+    const settingsZones = (restaurant as any)?.settings?.zones || [];
+    const tableStates = (restaurant as any)?.settings?.table_states || {};
+
+    const tableToZoneName: Record<string, string> = {};
+    Object.entries(tableStates).forEach(([tblId, st]: [string, any]) => {
+      const zId = st.zone_id || 'general';
+      const zObj = settingsZones.find((z: any) => z.id === zId);
+      const zName = zObj?.name || (zId === 'general' ? 'General Dining' : zId);
+      if (st.display_number) tableToZoneName[`Table ${st.display_number}`] = zName;
+      if (st.name) tableToZoneName[st.name] = zName;
+    });
+
+    validOrders.forEach(o => {
+      const tName = o.table_name || (o.order_type === 'takeaway' ? 'Takeaway' : 'Table 1');
+      const zName = o.order_type === 'takeaway' ? 'Takeaway Lane' : (tableToZoneName[tName] || 'General Dining');
+      if (!zoneStatsMap[zName]) {
+        zoneStatsMap[zName] = { count: 0, stayDurations: [], revenue: 0 };
+      }
+      zoneStatsMap[zName].count += 1;
+      zoneStatsMap[zName].revenue += Number(o.grand_total || o.total || 0);
+
+      const start = new Date(o.created_at).getTime();
+      const end = o.completed_at ? new Date(o.completed_at).getTime() : (o.paid_at ? new Date(o.paid_at).getTime() : new Date(o.updated_at || o.created_at).getTime());
+      const stayMin = Math.max(5, Math.round((end - start) / 60000));
+      zoneStatsMap[zName].stayDurations.push(stayMin);
+    });
+
+    const totalZoneRevenue = Object.values(zoneStatsMap).reduce((acc, z) => acc + z.revenue, 0);
+    const zoneRows = Object.entries(zoneStatsMap).map(([zName, data]) => {
+      const avgStay = data.stayDurations.length > 0 ? Math.round(data.stayDurations.reduce((a, b) => a + b, 0) / data.stayDurations.length) : 0;
+      const avgAOV = data.count > 0 ? Math.round(data.revenue / data.count) : 0;
+      const revSharePct = totalZoneRevenue > 0 ? Math.round((data.revenue / totalZoneRevenue) * 100) : 0;
+      return {
+        zoneName: zName,
+        orderCount: data.count,
+        revenue: data.revenue,
+        avgStayDurationMin: avgStay,
+        avgAOV,
+        revSharePct
+      };
+    }).sort((a, b) => b.revenue - a.revenue);
+
+    setZoneAnalyticsList(zoneRows);
 
     // 4. Peak Hour Heatmap (BUG-AN-001 Fix: Only valid revenue orders counted for parity)
     const hoursArr = Array.from({ length: 24 }, (_, i) => {
@@ -1626,6 +1673,72 @@ export default function ReportsPage() {
                       <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white">{formatPrice(t.totalRevenue, restaurant?.settings?.currency || 'INR')}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Zone Performance & Revenue Distribution Card */}
+        <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
+                <Layers className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Zone Performance & Distribution</h3>
+                <p className="text-xs text-slate-400 font-medium">Order volume, revenue share, and table stay duration by dining zone.</p>
+              </div>
+            </div>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700">
+              {zoneAnalyticsList.length} Active Zones
+            </span>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider font-bold">
+                  <tr>
+                    <th className="py-3 px-4">Zone</th>
+                    <th className="py-3 px-4 text-center">Orders</th>
+                    <th className="py-3 px-4 text-center">Avg Stay</th>
+                    <th className="py-3 px-4 text-center">Avg Spend (AOV)</th>
+                    <th className="py-3 px-4 text-center">Revenue Share</th>
+                    <th className="py-3 px-4 text-right">Total Revenue</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
+                  {zoneAnalyticsList.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-slate-400 font-normal">
+                        No zone orders recorded in selected period.
+                      </td>
+                    </tr>
+                  ) : (
+                    zoneAnalyticsList.map((z) => (
+                      <tr key={z.zoneName} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center space-x-2">
+                          <span className="w-2 h-2 rounded-full bg-stone-900 dark:bg-white" />
+                          <span>{z.zoneName}</span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{z.orderCount}</td>
+                        <td className="py-3 px-4 text-center font-semibold">{z.avgStayDurationMin}m</td>
+                        <td className="py-3 px-4 text-center font-semibold">{formatPrice(z.avgAOV, restaurant?.settings?.currency || 'INR')}</td>
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center space-x-1.5">
+                            <div className="w-14 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                              <div className="bg-stone-900 dark:bg-white h-full rounded-full" style={{ width: `${z.revSharePct}%` }} />
+                            </div>
+                            <span className="text-[10px] font-bold">{z.revSharePct}%</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white">
+                          {formatPrice(z.revenue, restaurant?.settings?.currency || 'INR')}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
