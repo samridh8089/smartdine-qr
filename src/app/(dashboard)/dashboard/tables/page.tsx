@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { db, Table } from '@/lib/db';
+import { db, Table, checkTableHasActiveUnpaidOrders } from '@/lib/db';
 import { useRestaurant } from '../../layout';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { generateQRDataURL } from '@/lib/qr';
@@ -311,6 +311,15 @@ export default function TablesPage() {
   const handleToggleOccupancy = async (tableId: string, currentStatus: string) => {
     try {
       const isOccupied = currentStatus !== 'occupied';
+      // BUG-TABLE-003: Mark Available Safety Lock
+      if (!isOccupied) {
+        const allOrders = await db.getOrders(restaurantId);
+        const lockCheck = checkTableHasActiveUnpaidOrders(tableId, allOrders);
+        if (lockCheck.blocked) {
+          alert(`⚠️ Action Blocked by Safety Lock!\n\n${lockCheck.reason}\n\nPlease complete payment or settle the order before marking this table as available.`);
+          return;
+        }
+      }
       await db.toggleTableOccupancy(restaurantId, tableId, isOccupied);
       await fetchTablesData(restaurantId, true);
     } catch (err: any) {
@@ -559,7 +568,7 @@ export default function TablesPage() {
       </div>
 
       {/* Live Occupancy Header Widget */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Tables</p>
           <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.total}</p>
@@ -567,6 +576,10 @@ export default function TablesPage() {
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Available</p>
           <p className="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 leading-tight">{tableStats.available}</p>
+        </div>
+        <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Reserved</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 mt-1 leading-tight">{tableStats.reserved || 0}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Occupied</p>
@@ -904,6 +917,14 @@ export default function TablesPage() {
                   🔴 Breached ({elapsedStr})
                 </span>
               );
+            } else if (table.occupancy_status === 'reserved') {
+              borderClass = 'border-2 border-purple-500 shadow-md shadow-purple-50 dark:shadow-none bg-purple-50/10 dark:bg-purple-950/20';
+              slaBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+                  <span className="h-2 w-2 rounded-full bg-purple-600 animate-pulse" />
+                  🟣 Reserved ({table.reservation_time || 'Upcoming'}{table.reservation_party_name ? ` • ${table.reservation_party_name}` : ''})
+                </span>
+              );
             } else if (!isOccupied) {
               borderClass = 'border-slate-200 dark:border-slate-800';
               slaBadge = (
@@ -996,17 +1017,41 @@ export default function TablesPage() {
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleOccupancy(table.id, table.occupancy_status || 'available')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                          table.occupancy_status === 'occupied'
-                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                            : 'bg-rose-600 hover:bg-rose-700 text-white'
-                        }`}
-                      >
-                        {table.occupancy_status === 'occupied' ? 'Mark Available' : 'Mark Occupied'}
-                      </button>
+                      {table.occupancy_status === 'reserved' ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleOccupancy(table.id, 'reserved')}
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            Seat Guest
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (confirm(`Release reserved table "${table.name}"?`)) {
+                                await db.setTableReservationState(restaurantId, table.id, false);
+                                await refreshTables();
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                          >
+                            Release
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleOccupancy(table.id, table.occupancy_status || 'available')}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                            table.occupancy_status === 'occupied'
+                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                              : 'bg-rose-600 hover:bg-rose-700 text-white'
+                          }`}
+                        >
+                          {table.occupancy_status === 'occupied' ? 'Mark Available' : 'Mark Occupied'}
+                        </button>
+                      )}
 
                       <button
                         type="button"

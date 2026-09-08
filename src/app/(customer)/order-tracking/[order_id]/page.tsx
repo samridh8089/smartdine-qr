@@ -979,7 +979,11 @@ export default function OrderTrackingPage({ params }: PageProps) {
                     ) : (
                       <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs rounded-xl font-semibold flex items-center gap-2">
                         <Clock className="h-4 w-4 shrink-0 animate-pulse" />
-                        <span>Payment link will activate once your order is served.</span>
+                        <span>
+                          {order.order_type === 'takeaway' 
+                            ? 'Payment link will activate once your order is ready for pickup.'
+                            : 'Payment link will activate once your order is served.'}
+                        </span>
                       </div>
                     );
                   })()}
@@ -1005,7 +1009,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
                   Reservation Ticket #{order.id.slice(-6).toUpperCase()}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto leading-relaxed">
-                  Your table reservation has been sent to the owner and kitchen. We look forward to serving you!
+                  Your table reservation has been confirmed. Our host will welcome you and hold your table for 15 minutes past your booking time.
                 </p>
               </div>
 
@@ -1128,9 +1132,9 @@ export default function OrderTrackingPage({ params }: PageProps) {
                             {isCancelled ? (
                               <Badge variant="error">Cancelled</Badge>
                             ) : batch.status === 'served' || (batch.status as string) === 'completed' ? (
-                              <Badge variant="success">Served</Badge>
+                              <Badge variant="success">{order.order_type === 'takeaway' ? 'Handed Over' : 'Served'}</Badge>
                             ) : batch.status === 'ready' ? (
-                              <Badge variant="info">Ready to Serve</Badge>
+                              <Badge variant="info">{order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Ready to Serve'}</Badge>
                             ) : batch.status === 'preparing' ? (
                               <Badge variant="warning">Cooking</Badge>
                             ) : (
@@ -1222,28 +1226,40 @@ export default function OrderTrackingPage({ params }: PageProps) {
                                 <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
                               </span>
                               <div className="flex justify-between items-baseline">
-                                <span className="font-bold text-purple-700 dark:text-purple-400">Ready</span>
+                                <span className="font-bold text-purple-700 dark:text-purple-400">
+                                  {order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Ready'}
+                                </span>
                                 <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
                                   {batch.ready_at ? formatExactTimestamp(batch.ready_at) : 'Timestamp unavailable'}
                                 </span>
                               </div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">Food ready{batch.ready_by ? ` by ${batch.ready_by}` : ''}</span>
+                              <span className="text-[10px] text-slate-400 block font-semibold">
+                                {order.order_type === 'takeaway' 
+                                  ? `Food packed and ready at counter${batch.ready_by ? ` • Packed by ${batch.ready_by}` : ''}`
+                                  : `Food ready${batch.ready_by ? ` by ${batch.ready_by}` : ''}`}
+                              </span>
                             </div>
                           )}
 
-                          {/* Served */}
+                          {/* Served / Handed Over */}
                           {isServed && (
                             <div className="relative pl-6">
                               <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
                                 <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
                               </span>
                               <div className="flex justify-between items-baseline">
-                                <span className="font-bold text-blue-700 dark:text-blue-400">Served</span>
+                                <span className="font-bold text-blue-700 dark:text-blue-400">
+                                  {order.order_type === 'takeaway' ? 'Handed Over' : 'Served'}
+                                </span>
                                 <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
                                   {batch.served_at ? formatExactTimestamp(batch.served_at) : 'Timestamp unavailable'}
                                 </span>
                               </div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">Brought to table{batch.served_by ? ` by ${batch.served_by}` : ''}</span>
+                              <span className="text-[10px] text-slate-400 block font-semibold">
+                                {order.order_type === 'takeaway' 
+                                  ? `Collected at pickup counter${batch.served_by ? ` • Handed over by ${batch.served_by}` : ''}`
+                                  : `Brought to table${batch.served_by ? ` by ${batch.served_by}` : ''}`}
+                              </span>
                             </div>
                           )}
 

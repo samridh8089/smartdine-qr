@@ -12,12 +12,69 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft } from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { dashboardStore } from '@/lib/dashboardStore';
+
+export interface ParsedReservation {
+  date: string;
+  time: string;
+  guests: string;
+  name: string;
+  phone: string;
+  notes: string;
+  targetDateTime: Date | null;
+}
+
+export function parseReservationDetails(order: Order): ParsedReservation {
+  const text = order.special_instructions || (order.batches && order.batches[0]?.special_instructions) || '';
+  const result: ParsedReservation = {
+    date: '',
+    time: '',
+    guests: '1',
+    name: '',
+    phone: '',
+    notes: '',
+    targetDateTime: null
+  };
+
+  const dateMatch = text.match(/Date:\s*([^|]+)/i);
+  if (dateMatch) result.date = dateMatch[1].trim();
+
+  const timeMatch = text.match(/Time:\s*([^|]+)/i);
+  if (timeMatch) result.time = timeMatch[1].trim();
+
+  const guestsMatch = text.match(/Guests:\s*([^|]+)/i);
+  if (guestsMatch) result.guests = guestsMatch[1].trim();
+
+  const nameMatch = text.match(/Name:\s*([^|]+)/i);
+  if (nameMatch) result.name = nameMatch[1].trim();
+
+  const phoneMatch = text.match(/Contact:\s*([^|]+)/i);
+  if (phoneMatch) result.phone = phoneMatch[1].trim();
+
+  const notesMatch = text.match(/Notes:\s*(.+)$/i);
+  if (notesMatch) result.notes = notesMatch[1].trim();
+
+  if (result.date && result.time) {
+    try {
+      const d = new Date(`${result.date} ${result.time}`);
+      if (!isNaN(d.getTime())) {
+        result.targetDateTime = d;
+      }
+    } catch (_) {}
+  }
+
+  if (!result.targetDateTime && order.created_at) {
+    const created = new Date(order.created_at);
+    result.targetDateTime = new Date(created.getTime() + 60 * 60 * 1000);
+  }
+
+  return result;
+}
 
 /**
  * BUG-OWNER-002 & BUG-OWNER-003: Table Number and Sequence Formatting
@@ -95,6 +152,16 @@ export default function OrdersPage() {
   // Tab state: 'orders' or 'requests'
   const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
+
+  // P0 Order Queues & Reservation Management
+  const [orderQueue, setOrderQueue] = useState<'dine_in' | 'takeaway' | 'reservations'>('dine_in');
+  const [seatGuestModalOpen, setSeatGuestModalOpen] = useState(false);
+  const [reservationToSeat, setReservationToSeat] = useState<Order | null>(null);
+  const [selectedTableForSeat, setSelectedTableForSeat] = useState<string>('');
+  const [isSeatingGuest, setIsSeatingGuest] = useState(false);
+  const [allTables, setAllTables] = useState<any[]>([]);
+  const [currentTime, setCurrentTime] = useState<number>(() => Date.now());
+  const notifiedReservationStagesRef = useRef<Map<string, Set<string>>>(new Map());
 
   // Real-time toast state
   const [toast, setToast] = useState<{ message: string; visible: boolean; title?: string; variant?: 'success' | 'info' | 'warning' | 'error' } | null>(null);
@@ -271,10 +338,12 @@ export default function OrdersPage() {
   };
 
   const loadInitialData = async (restId: string) => {
-    const [allOrders, reqs] = await Promise.all([
+    const [allOrders, reqs, tbls] = await Promise.all([
       db.getOrders(restId),
-      db.getCustomerRequests(restId)
+      db.getCustomerRequests(restId),
+      db.getTables(restId)
     ]);
+    setAllTables(tbls || []);
     const filteredForRole = activeRole === 'waiter'
       ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
       : allOrders;
@@ -296,6 +365,62 @@ export default function OrdersPage() {
 
     setLoading(false);
   };
+
+  // Clock interval for ETA and reservation countdowns
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Reservation reminders & notification engine (BUG-RES-004)
+  useEffect(() => {
+    const activeReservations = orders.filter(o => o.order_type === 'reservation' && o.status !== 'cancelled' && o.status !== 'completed');
+    activeReservations.forEach(resOrder => {
+      const parsed = parseReservationDetails(resOrder);
+      if (!parsed.targetDateTime) return;
+      const diffMins = Math.round((parsed.targetDateTime.getTime() - currentTime) / (60 * 1000));
+
+      let stages = notifiedReservationStagesRef.current.get(resOrder.id);
+      if (!stages) {
+        stages = new Set<string>();
+        notifiedReservationStagesRef.current.set(resOrder.id, stages);
+      }
+
+      // 30 min reminder
+      if (diffMins <= 30 && diffMins > 15 && !stages.has('30m')) {
+        stages.add('30m');
+        playLoudBell('waiter');
+        showToast(
+          `Reservation Reminder: ${parsed.name || 'Guest'} party of ${parsed.guests} arrives in ~${diffMins} mins (${parsed.time})`,
+          '30m Reminder',
+          'warning'
+        );
+      }
+
+      // 15 min reserve table alert
+      if (diffMins <= 15 && diffMins >= -15 && !stages.has('15m')) {
+        stages.add('15m');
+        playLoudBell('waiter');
+        showToast(
+          `Table Reserved: ${parsed.name || 'Guest'} due in 15 mins (${parsed.time}). Table ready for seating.`,
+          '15m Reserve Table Alert',
+          'info'
+        );
+      }
+
+      // 15 min past booking time no-show alert
+      if (diffMins < -15 && !stages.has('no_show')) {
+        stages.add('no_show');
+        showToast(
+          `No-Show Alert: Reservation for ${parsed.name || 'Guest'} is ${Math.abs(diffMins)} minutes overdue.`,
+          'Reservation No-Show',
+          'error'
+        );
+      }
+    });
+  }, [orders, currentTime]);
 
   const hasHandledDeepLinkRef = useRef(false);
   // Priority 9 (Phase-20E): Open Order deep-linking with auto-scroll, statusFilter unblocking, and focus
@@ -351,7 +476,11 @@ export default function OrdersPage() {
     }
     isReloadingRef.current = true;
     try {
-      const allOrders = await db.getOrders(restId);
+      const [allOrders, tbls] = await Promise.all([
+        db.getOrders(restId),
+        db.getTables(restId)
+      ]);
+      setAllTables(tbls || []);
       dashboardStore.setCachedOrders(restId, allOrders);
       const filteredOrders = activeRole === 'waiter'
         ? allOrders.filter(o => ['ready', 'served', 'completed'].includes(o.status))
@@ -1154,15 +1283,78 @@ export default function OrdersPage() {
     }
   };
 
-  const getStatusBadge = (status: Order['status']) => {
+  const getStatusBadge = (status: Order['status'], orderType?: Order['order_type']) => {
     switch (status) {
       case 'new': return <Badge variant="info">New</Badge>;
       case 'accepted': return <Badge variant="neutral">Accepted</Badge>;
       case 'preparing': return <Badge variant="warning">Preparing</Badge>;
-      case 'ready': return <Badge variant="purple">Ready</Badge>;
-      case 'served': return <Badge variant="success">Served</Badge>;
+      case 'ready': return <Badge variant="purple">{orderType === 'takeaway' ? 'Ready for Pickup' : 'Ready'}</Badge>;
+      case 'served': return <Badge variant="success">{orderType === 'takeaway' ? 'Handed Over' : 'Served'}</Badge>;
       case 'completed': return <Badge variant="success">Completed</Badge>;
       case 'cancelled': return <Badge variant="error">Cancelled</Badge>;
+    }
+  };
+
+  const activeDineInCount = useMemo(() => {
+    return orders.filter(o => o.order_type !== 'takeaway' && o.order_type !== 'reservation' && o.status !== 'cancelled' && o.status !== 'completed').length;
+  }, [orders]);
+
+  const activeTakeawayCount = useMemo(() => {
+    return orders.filter(o => o.order_type === 'takeaway' && o.status !== 'cancelled' && o.status !== 'completed').length;
+  }, [orders]);
+
+  const activeReservationsCount = useMemo(() => {
+    return orders.filter(o => o.order_type === 'reservation' && o.status !== 'cancelled' && o.status !== 'completed').length;
+  }, [orders]);
+
+  const handleSeatReservation = async () => {
+    if (!reservationToSeat || !selectedTableForSeat || !restaurant) return;
+    setIsSeatingGuest(true);
+    try {
+      const targetTable = allTables.find(t => t.id === selectedTableForSeat);
+      const targetTableName = targetTable ? (targetTable.table_number ? `Table ${targetTable.table_number}` : targetTable.name) : 'Table';
+
+      // 1. Mark physical table as occupied
+      await db.toggleTableOccupancy(restaurant.id, selectedTableForSeat, true);
+
+      // 2. Update order: assign physical table and transition to active dine_in dining session
+      const { data: updatedOrder, error } = await supabase
+        .from('orders')
+        .update({
+          table_id: selectedTableForSeat,
+          table_name: targetTableName,
+          order_type: 'dine_in'
+        })
+        .eq('id', reservationToSeat.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // 3. Broadcast realtime event so KDS and dashboard pick up the seated dining session & pre-ordered items
+      await broadcastOrderRealtimeEvent({
+        restaurantId: restaurant.id,
+        orderId: reservationToSeat.id,
+        eventType: 'new-order',
+        payload: {
+          updatedOrder: {
+            ...reservationToSeat,
+            table_id: selectedTableForSeat,
+            table_name: targetTableName,
+            order_type: 'dine_in'
+          }
+        }
+      });
+
+      showToast(`Guest seated at ${targetTableName}! Pre-ordered ticket sent to kitchen.`, "Guest Seated", "success");
+      setSeatGuestModalOpen(false);
+      setReservationToSeat(null);
+      setSelectedTableForSeat('');
+      await safeReloadOrders(restaurant.id);
+    } catch (err: any) {
+      alert('Failed to seat guest: ' + err.message);
+    } finally {
+      setIsSeatingGuest(false);
     }
   };
 
@@ -1170,6 +1362,15 @@ export default function OrdersPage() {
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return orders.filter(order => {
+      // Isolate by active order queue (BUG-RES-002 & BUG-TAKE-002)
+      if (orderQueue === 'dine_in') {
+        if (order.order_type === 'takeaway' || order.order_type === 'reservation') return false;
+      } else if (orderQueue === 'takeaway') {
+        if (order.order_type !== 'takeaway') return false;
+      } else if (orderQueue === 'reservations') {
+        if (order.order_type !== 'reservation') return false;
+      }
+
       const formattedId = getFormattedOrderId(order, restaurant?.name || '');
       const matchesSearch = !q ||
         order.id.toLowerCase().includes(q) ||
@@ -1181,7 +1382,7 @@ export default function OrdersPage() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [orders, restaurant?.name, searchQuery, statusFilter]);
+  }, [orders, restaurant?.name, searchQuery, statusFilter, orderQueue]);
 
   if (loading || !restaurant) {
     return (
@@ -1251,6 +1452,87 @@ export default function OrdersPage() {
             ref={orderListContainerRef}
             className="w-full md:w-5/12 lg:w-4/12 flex flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:max-h-[calc(100vh-140px)] md:overflow-y-auto"
           >
+            {/* 3 Dedicated Queues Tabs (BUG-RES-002 & BUG-TAKE-002) */}
+            <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderQueue('dine_in');
+                  const nextOrders = orders.filter(o => o.order_type !== 'takeaway' && o.order_type !== 'reservation');
+                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                    setSelectedOrderId(nextOrders[0].id);
+                  }
+                }}
+                className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 px-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                  orderQueue === 'dine_in'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <ChefHat className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Dine-In</span>
+                </div>
+                {activeDineInCount > 0 && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                    {activeDineInCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderQueue('takeaway');
+                  const nextOrders = orders.filter(o => o.order_type === 'takeaway');
+                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                    setSelectedOrderId(nextOrders[0].id);
+                  }
+                }}
+                className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 px-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                  orderQueue === 'takeaway'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <ShoppingBag className="h-3.5 w-3.5 text-purple-600" />
+                  <span>Takeaway</span>
+                </div>
+                {activeTakeawayCount > 0 && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                    {activeTakeawayCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderQueue('reservations');
+                  const nextOrders = orders.filter(o => o.order_type === 'reservation');
+                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                    setSelectedOrderId(nextOrders[0].id);
+                  }
+                }}
+                className={`flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 px-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                  orderQueue === 'reservations'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                  <span>Booking</span>
+                </div>
+                {activeReservationsCount > 0 && (
+                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                    {activeReservationsCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-slate-400" />
@@ -1272,7 +1554,7 @@ export default function OrdersPage() {
                 <option value="accepted">Accepted</option>
                 <option value="preparing">Preparing</option>
                 <option value="ready">Ready</option>
-                <option value="served">Served</option>
+                <option value="served">{orderQueue === 'takeaway' ? 'Handed Over' : 'Served'}</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
@@ -1282,7 +1564,7 @@ export default function OrdersPage() {
               {filteredOrders.length === 0 ? (
                 <div className="flex items-center justify-center text-center text-slate-400 text-sm py-12 flex-col gap-2">
                   <ClipboardList className="h-8 w-8 text-slate-300" />
-                  <span>No orders match this query.</span>
+                  <span>No {orderQueue === 'takeaway' ? 'takeaway orders' : orderQueue === 'reservations' ? 'reservations' : 'dine-in orders'} match this query.</span>
                 </div>
               ) : (
                 filteredOrders.map((order) => {
@@ -1290,6 +1572,18 @@ export default function OrdersPage() {
                   const { tableDisplay, shortOrderId } = getOrderDisplayInfo(order, restaurant?.name || '', orders);
                   const displayTotal = order.grand_total != null ? order.grand_total : (order.total != null ? order.total : null);
                   const itemCount = (order.items || []).reduce((s, i) => s + i.quantity, 0);
+
+                  // Takeaway ETA calculations
+                  const isTakeaway = order.order_type === 'takeaway';
+                  const isReservation = order.order_type === 'reservation';
+                  const createdMs = new Date(order.created_at).getTime();
+                  const elapsedMins = Math.floor((currentTime - createdMs) / 60000);
+                  const arrivalMins = order.customer_arrival_minutes || 20;
+                  const remainingMins = arrivalMins - elapsedMins;
+
+                  // Reservation calculations
+                  const parsedRes = isReservation ? parseReservationDetails(order) : null;
+                  const diffMins = parsedRes?.targetDateTime ? Math.round((parsedRes.targetDateTime.getTime() - currentTime) / 60000) : null;
 
                   return (
                     <button
@@ -1303,11 +1597,11 @@ export default function OrdersPage() {
                       }`}
                     >
                       <div className="w-full space-y-2">
-                        {/* Primary & Secondary: Table Number (Primary) & Sequence ID (#0030) */}
+                        {/* Primary & Secondary: Identifier & Sequence ID */}
                         <div className="flex items-start justify-between gap-2">
                           <div>
                             <h4 className="text-base font-black tracking-tight text-slate-950 dark:text-white leading-tight">
-                              {tableDisplay}
+                              {isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RESERVATION: ${parsedRes.name}` : 'RESERVATION') : tableDisplay}
                             </h4>
                             <p className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 mt-0.5">
                               {shortOrderId}
@@ -1325,10 +1619,59 @@ export default function OrdersPage() {
                           </div>
                         </div>
 
+                        {/* Special ETA / Reservation Badges */}
+                        {isTakeaway && (
+                          <div className="flex items-center gap-2 flex-wrap text-xs">
+                            <span className="font-semibold text-purple-700 dark:text-purple-300">
+                              {order.takeaway_notes ? `Note: ${order.takeaway_notes}` : 'Counter Pickup'}
+                            </span>
+                            {order.status === 'ready' ? (
+                              <Badge variant="purple">Ready for Pickup</Badge>
+                            ) : order.status === 'served' ? (
+                              <Badge variant="success">Handed Over</Badge>
+                            ) : remainingMins > 0 ? (
+                              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-900/40">
+                                ⏱ Pickup in ~{remainingMins}m
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-900/40">
+                                ⏱ Overdue ({Math.abs(remainingMins)}m)
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {isReservation && parsedRes && (
+                          <div className="space-y-1 text-xs">
+                            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-semibold flex-wrap">
+                              <span>📅 {parsedRes.date || 'Today'} {parsedRes.time}</span>
+                              <span>• 👥 {parsedRes.guests} Guests</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {diffMins !== null && (
+                                diffMins > 30 ? (
+                                  <Badge variant="neutral">Starts in ~{diffMins}m</Badge>
+                                ) : diffMins <= 30 && diffMins > 15 ? (
+                                  <Badge variant="warning">🔔 Due in ~{diffMins}m (Reminder)</Badge>
+                                ) : diffMins <= 15 && diffMins >= -15 ? (
+                                  <Badge variant="purple">🟣 Table Reserved ({diffMins >= 0 ? `${diffMins}m` : `${Math.abs(diffMins)}m ago`})</Badge>
+                                ) : (
+                                  <Badge variant="error">⚠ No-Show ({Math.abs(diffMins)}m late)</Badge>
+                                )
+                              )}
+                              {order.table_name && order.table_name !== 'Reservation' ? (
+                                <Badge variant="neutral">Table: {order.table_name}</Badge>
+                              ) : (
+                                <span className="text-[10px] text-amber-600 font-bold">Table Unassigned</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Tertiary: Status Badges */}
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {getStatusBadge(optimisticStatusMap[order.id] || order.status)}
+                            {getStatusBadge(optimisticStatusMap[order.id] || order.status, order.order_type)}
                             {order.payment_status === 'paid' ? (
                               <Badge variant="success">Paid</Badge>
                             ) : order.payment_status === 'customer_marked_paid' ? (
@@ -1361,8 +1704,25 @@ export default function OrdersPage() {
                           return null;
                         })()}
 
-                        {order.status === 'ready' && (
-                          <div className="pt-1 flex justify-end">
+                        {/* Quick action buttons */}
+                        <div className="pt-1 flex items-center justify-end gap-2">
+                          {isReservation && order.status !== 'cancelled' && order.status !== 'completed' && (
+                            <Button
+                              size="sm"
+                              className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer gap-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReservationToSeat(order);
+                                const avail = allTables.find(t => !t.is_occupied && t.occupancy_status !== 'occupied');
+                                setSelectedTableForSeat(avail?.id || '');
+                                setSeatGuestModalOpen(true);
+                              }}
+                            >
+                              <UserCheck className="h-3.5 w-3.5" /> Seat Guest
+                            </Button>
+                          )}
+
+                          {order.status === 'ready' && (
                             <Button
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
@@ -1372,7 +1732,7 @@ export default function OrdersPage() {
                                 e.stopPropagation();
                                 if (order.status === 'served' || order.status === 'completed') {
                                   window.dispatchEvent(new Event('stop-waiter-sound'));
-                                  showToast("Order already served by another team member.", "Waiter Notice", "info");
+                                  showToast("Order already updated.", "Notice", "info");
                                   return;
                                 }
 
@@ -1384,10 +1744,10 @@ export default function OrdersPage() {
                                 setProcessingOrderIds(prev => [...prev, actionKey]);
                                 setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'served' } : o));
                                 window.dispatchEvent(new Event('stop-waiter-sound'));
-                                showToast(`Order for ${order.table_name || 'Table'} marked as served.`, "Order Served", "success");
+                                showToast(isTakeaway ? "Order handed over to customer." : `Order for ${order.table_name || 'Table'} marked as served.`, "Success", "success");
 
                                 try {
-                                  const updated = await db.updateOrderStatus(order.id, 'served', profile?.full_name || 'Waiter');
+                                  const updated = await db.updateOrderStatus(order.id, 'served', profile?.full_name || 'Staff');
                                   await broadcastOrderRealtimeEvent({
                                     restaurantId: restaurant.id,
                                     orderId: order.id,
@@ -1406,21 +1766,17 @@ export default function OrdersPage() {
                                   if (origOrder) {
                                     setOrders(prev => prev.map(o => o.id === order.id ? origOrder : o));
                                   }
-                                  if (err.code === 'ORDER_ALREADY_SERVED' || err.code === 'STALE_STATUS_CONFLICT' || err.message?.includes('already served')) {
-                                    showToast("Order already served by another team member.", "Waiter Notice", "info");
-                                    return;
-                                  }
-                                  showToast(`Failed to serve order: ${err.message}`, "Error", "error");
+                                  showToast(`Failed to update order: ${err.message}`, "Error", "error");
                                 } finally {
                                   processingOrderIdsRef.current.delete(actionKey);
                                   setProcessingOrderIds(prev => prev.filter(id => id !== actionKey));
                                 }
                               }}
                             >
-                              Serve
+                              {isTakeaway ? 'Hand Over Order' : 'Serve'}
                             </Button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     </button>
                   );
@@ -1669,10 +2025,15 @@ export default function OrdersPage() {
                       )}
                       {selectedOrder.order_type === 'takeaway' && (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase tracking-wide">
-                          Takeaway
+                          <ShoppingBag className="h-3 w-3" /> Takeaway
                         </span>
                       )}
-                      {getStatusBadge(effectiveStatus || selectedOrder.status)}
+                      {selectedOrder.order_type === 'reservation' && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 uppercase tracking-wide">
+                          <Calendar className="h-3 w-3" /> Reservation
+                        </span>
+                      )}
+                      {getStatusBadge(effectiveStatus || selectedOrder.status, selectedOrder.order_type)}
                       {selectedOrder.payment_status === 'paid' ? (
                         <Badge variant="success">Paid Verified</Badge>
                       ) : selectedOrder.payment_status === 'customer_marked_paid' ? (
@@ -1683,7 +2044,9 @@ export default function OrdersPage() {
                     </div>
                     <p className="text-xs text-slate-400 font-semibold uppercase flex items-center gap-1.5 flex-wrap">
                       {selectedOrder.order_type === 'takeaway' ? (
-                        <span className="text-purple-600 dark:text-purple-400 font-bold">Pickup Customer (Arrives in {selectedOrder.customer_arrival_minutes} mins)</span>
+                        <span className="text-purple-600 dark:text-purple-400 font-bold">Pickup Counter (ETA: {selectedOrder.customer_arrival_minutes || 20} mins)</span>
+                      ) : selectedOrder.order_type === 'reservation' ? (
+                        <span className="text-indigo-600 dark:text-indigo-400 font-bold">Table Booking ({selectedOrder.table_name || 'Unassigned'})</span>
                       ) : (
                         <span>{selectedOrder.table_name || 'N/A'}</span>
                       )}
@@ -1699,6 +2062,119 @@ export default function OrdersPage() {
                 </div>
 
                 <div className="p-6 space-y-6">
+                  {/* Reservation Details Banner */}
+                  {selectedOrder.order_type === 'reservation' && (() => {
+                    const parsed = parseReservationDetails(selectedOrder);
+                    const diffMins = parsed.targetDateTime ? Math.round((parsed.targetDateTime.getTime() - currentTime) / 60000) : null;
+                    return (
+                      <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/50 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                            <h4 className="text-sm font-bold text-indigo-950 dark:text-indigo-200">Table Reservation Details</h4>
+                          </div>
+                          {diffMins !== null && (
+                            diffMins > 30 ? (
+                              <Badge variant="neutral">Starts in ~{diffMins}m</Badge>
+                            ) : diffMins <= 30 && diffMins > 15 ? (
+                              <Badge variant="warning">🔔 Due in ~{diffMins}m (Reminder)</Badge>
+                            ) : diffMins <= 15 && diffMins >= -15 ? (
+                              <Badge variant="purple">🟣 Table Reserved ({diffMins >= 0 ? `in ${diffMins}m` : `${Math.abs(diffMins)}m ago`})</Badge>
+                            ) : (
+                              <Badge variant="error">⚠ No-Show ({Math.abs(diffMins)}m overdue)</Badge>
+                            )
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Guest Name</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{parsed.name || 'Not provided'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Booking Time</span>
+                            <span className="font-bold font-mono text-slate-800 dark:text-slate-200">{parsed.date} {parsed.time}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Party Size</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{parsed.guests} Guests</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Contact</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{parsed.phone || 'N/A'}</span>
+                          </div>
+                        </div>
+
+                        {parsed.notes && (
+                          <div className="text-xs bg-white/70 dark:bg-slate-900/50 p-2.5 rounded-lg border border-indigo-100 dark:border-indigo-900/30">
+                            <span className="font-bold text-slate-500">Special Notes: </span>
+                            <span className="text-slate-800 dark:text-slate-200">{parsed.notes}</span>
+                          </div>
+                        )}
+
+                        {selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'completed' && (
+                          <div className="pt-1 flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5 cursor-pointer shadow-sm"
+                              onClick={() => {
+                                setReservationToSeat(selectedOrder);
+                                const avail = allTables.find(t => !t.is_occupied && t.occupancy_status !== 'occupied');
+                                setSelectedTableForSeat(avail?.id || '');
+                                setSeatGuestModalOpen(true);
+                              }}
+                            >
+                              <UserCheck className="h-4 w-4" /> Customer Arrived — Seat Table &amp; Release to Kitchen
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Takeaway Details Banner */}
+                  {selectedOrder.order_type === 'takeaway' && (() => {
+                    const createdMs = new Date(selectedOrder.created_at).getTime();
+                    const elapsedMins = Math.floor((currentTime - createdMs) / 60000);
+                    const arrivalMins = selectedOrder.customer_arrival_minutes || 20;
+                    const remainingMins = arrivalMins - elapsedMins;
+                    return (
+                      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50 rounded-2xl p-4 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <ShoppingBag className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                            <h4 className="text-sm font-bold text-purple-950 dark:text-purple-200">Takeaway Pickup Details</h4>
+                          </div>
+                          {effectiveStatus === 'ready' ? (
+                            <Badge variant="purple">Ready for Pickup at Counter</Badge>
+                          ) : effectiveStatus === 'served' ? (
+                            <Badge variant="success">Handed Over to Customer</Badge>
+                          ) : remainingMins > 0 ? (
+                            <Badge variant="warning">Customer Arriving in ~{remainingMins}m</Badge>
+                          ) : (
+                            <Badge variant="error">ETA Overdue ({Math.abs(remainingMins)}m)</Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Pickup ETA Window</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{arrivalMins} minutes</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 block text-[10px] font-bold uppercase">Time Elapsed</span>
+                            <span className="font-bold font-mono text-slate-800 dark:text-slate-200">{elapsedMins} mins ago</span>
+                          </div>
+                          {selectedOrder.takeaway_notes && (
+                            <div>
+                              <span className="text-slate-400 block text-[10px] font-bold uppercase">Pickup Notes</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{selectedOrder.takeaway_notes}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {(effectiveStatus === 'cancelled' || selectedOrder.status === 'cancelled') && (
                     <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 rounded-xl p-4 flex flex-col gap-1.5 text-rose-900 dark:text-rose-200 shadow-sm animate-fade-in">
                       <div className="flex items-center gap-2 font-bold text-sm text-rose-700 dark:text-rose-400">
@@ -1883,6 +2359,20 @@ export default function OrdersPage() {
                   <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-3">
                     <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
                     <div className="flex flex-wrap gap-2">
+                      {selectedOrder.order_type === 'reservation' && selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'completed' && (
+                        <Button
+                          size="sm"
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer gap-1.5 shadow-sm"
+                          onClick={() => {
+                            setReservationToSeat(selectedOrder);
+                            const avail = allTables.find(t => !t.is_occupied && t.occupancy_status !== 'occupied');
+                            setSelectedTableForSeat(avail?.id || '');
+                            setSeatGuestModalOpen(true);
+                          }}
+                        >
+                          <UserCheck className="h-4 w-4" /> Customer Arrived — Seat Table
+                        </Button>
+                      )}
                       {activeRole !== 'waiter' && effectiveStatus === 'new' && (
                         <Button 
                           size="sm" 
@@ -1920,12 +2410,12 @@ export default function OrdersPage() {
                       {effectiveStatus === 'ready' && (
                         <Button 
                           size="sm" 
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer" 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:served`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:served`)}
                           onClick={() => updateOrderStatus('served')}
                         >
-                          Serve Order
+                          {selectedOrder.order_type === 'takeaway' ? 'Hand Over Order' : 'Serve Order'}
                         </Button>
                       )}
                       {effectiveStatus === 'served' && selectedOrder.payment_status !== 'paid' && (
@@ -1942,7 +2432,7 @@ export default function OrdersPage() {
                             setPaymentModalOpen(true);
                           }}
                         >
-                          Complete Bill & Pay
+                          {selectedOrder.order_type === 'takeaway' ? 'Settle & Complete Takeaway' : 'Complete Bill & Pay'}
                         </Button>
                       )}
                       {(selectedOrder.payment_status === 'paid' || effectiveStatus === 'completed') && (
@@ -2741,6 +3231,75 @@ export default function OrdersPage() {
               <div className="text-center text-[10px] text-slate-400 pt-3 border-t border-dashed border-slate-300">
                 <p>Thank you for dining with us!</p>
                 <p>Powered by CleverOps · cleverops.in</p>
+              </div>
+            </div>
+          </Dialog>
+        )}
+
+        {/* Seat Guest & Start Session Modal (BUG-RES-001 & BUG-RES-003) */}
+        {seatGuestModalOpen && reservationToSeat && (
+          <Dialog isOpen={seatGuestModalOpen} onClose={() => setSeatGuestModalOpen(false)} title="Seat Guest & Start Dining Session">
+            <div className="space-y-4 p-2">
+              {(() => {
+                const parsed = parseReservationDetails(reservationToSeat);
+                return (
+                  <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-purple-900 dark:text-purple-200">
+                        {parsed.name || 'Guest Reservation'}
+                      </span>
+                      <Badge variant="purple">
+                        {parsed.guests} Guests
+                      </Badge>
+                    </div>
+                    <div className="text-xs text-purple-700 dark:text-purple-300 space-y-1">
+                      <p>• Booking Time: <span className="font-bold font-mono">{parsed.date} {parsed.time}</span></p>
+                      {parsed.phone && <p>• Contact: <span className="font-bold">{parsed.phone}</span></p>}
+                      {parsed.notes && <p>• Notes: <span>{parsed.notes}</span></p>}
+                      <p>• Pre-ordered Items: <span className="font-bold">{(reservationToSeat.items || []).length} item(s)</span></p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                  Select Physical Table to Assign *
+                </label>
+                <select
+                  value={selectedTableForSeat}
+                  onChange={e => setSelectedTableForSeat(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white"
+                >
+                  <option value="">-- Choose a physical table --</option>
+                  {allTables.map(t => {
+                    const isFree = !t.is_occupied && t.occupancy_status !== 'occupied';
+                    const isReserved = t.occupancy_status === 'reserved';
+                    const label = `${t.name || `Table ${t.table_number}`} (${t.capacity || 4} seats) - ${isFree ? (isReserved ? 'Reserved' : 'Available') : 'Currently Occupied'}`;
+                    return (
+                      <option key={t.id} value={t.id} disabled={!isFree && !isReserved}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Seating the guest will mark the table as Occupied and release pre-ordered dishes to the Kitchen Display System (KDS).
+                </p>
+              </div>
+
+              <div className="pt-3 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                <Button variant="ghost" onClick={() => setSeatGuestModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5"
+                  disabled={!selectedTableForSeat || isSeatingGuest}
+                  isLoading={isSeatingGuest}
+                  onClick={handleSeatReservation}
+                >
+                  Seat Guest &amp; Start Session
+                </Button>
               </div>
             </div>
           </Dialog>
