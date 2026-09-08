@@ -30,6 +30,8 @@ export default async function CustomerMenuCatchAllPage({ params, searchParams }:
     isTakeaway = true;
   } else if (slugParts[1] === 'reservation') {
     isReservation = true;
+  } else if (slugParts[1]) {
+    tableId = slugParts[1];
   }
 
   return (
