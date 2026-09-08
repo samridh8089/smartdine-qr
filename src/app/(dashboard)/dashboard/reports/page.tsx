@@ -16,6 +16,8 @@ import {
   Trophy, UtensilsCrossed, AlertTriangle, Lightbulb
 } from 'lucide-react';
 import { isRevenueOrder } from '@/lib/billingEngine';
+import { usePreviewMode } from '@/context/PreviewModeContext';
+import { DEMO_CATEGORIES, DEMO_MENU_ITEMS, generateDemoDbOrders } from '@/lib/demoPreviewData';
 
 interface ItemPerformanceRow {
   key: string;
@@ -70,6 +72,7 @@ function getISTHour(d: Date | string): number {
 
 export default function ReportsPage() {
   const { restaurant } = useRestaurant();
+  const { isPreviewMode } = usePreviewMode();
   const [orders, setOrders] = useState<Order[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -761,21 +764,25 @@ export default function ReportsPage() {
         db.getTablesWithLiveStatus(restId),
         db.getMenuItems(restId)
       ]);
-      setOrders(allOrders);
-      setCategories(cats);
-      setMenuItems(mItems || []);
+      const effectiveOrders = (allOrders || []).length === 0 && isPreviewMode ? generateDemoDbOrders(restId) : (allOrders || []);
+      const effectiveCats = (cats || []).length === 0 && isPreviewMode ? DEMO_CATEGORIES as any : (cats || []);
+      const effectiveMenuItems = (mItems || []).length === 0 && isPreviewMode ? DEMO_MENU_ITEMS as any : (mItems || []);
+
+      setOrders(effectiveOrders);
+      setCategories(effectiveCats);
+      setMenuItems(effectiveMenuItems);
       const invItems = invItemsRes?.data || [];
       const lowStock = invItems.filter((item: any) => Number(item.current_stock || 0) <= Number(item.minimum_stock || 5));
       setLowStockItems(lowStock);
       setDispositionsList(dispRes?.data || []);
-      const occ = liveTableData?.stats?.occupied || 0;
-      const fr = liveTableData?.stats?.available || 20;
+      const occ = liveTableData?.stats?.occupied || (isPreviewMode ? 4 : 0);
+      const fr = liveTableData?.stats?.available || (isPreviewMode ? 16 : 20);
       setLiveOccupancyMerge(prev => ({
         ...prev,
         occupied: occ,
         free: fr
       }));
-      computeStats(allOrders, cats, dispRes?.data || [], occ, fr, mItems || []);
+      computeStats(effectiveOrders, effectiveCats, dispRes?.data || [], occ, fr, effectiveMenuItems);
       setLoading(false);
     } catch (err) {
       console.error('Failed to load reports:', err);
@@ -795,7 +802,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReports();
-  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, restaurant?.id]);
+  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, restaurant?.id, isPreviewMode]);
 
   // Realtime Subscriptions for Reports Dashboard (Phase-18.8 Production Gate)
   useEffect(() => {

@@ -18,6 +18,8 @@ import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { dashboardStore } from '@/lib/dashboardStore';
+import { usePreviewMode } from '@/context/PreviewModeContext';
+import { DEMO_ORDERS } from '@/lib/demoPreviewData';
 
 export interface ParsedReservation {
   date: string;
@@ -119,18 +121,82 @@ export default function OrdersPage() {
   const searchParams = useSearchParams();
   const orderIdParam = searchParams.get('id');
 
-  const { restaurant, activeRole, profile } = useRestaurant();
+  const { restaurant, profile, activeRole } = useRestaurant();
+  const { isPreviewMode } = usePreviewMode();
   const restId = restaurant?.id || profile?.restaurant_id;
   const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
   const [orders, setOrders] = useState<Order[]>(() => initialCachedOrders || []);
-  const orderListContainerRef = useRef<HTMLDivElement>(null);
   const [optimisticStatusMap, setOptimisticStatusMap] = useState<Record<string, Order['status']>>({});
-  const optimisticStatusMapRef = useRef<Record<string, Order['status']>>({});
-  useEffect(() => {
-    optimisticStatusMapRef.current = optimisticStatusMap;
-  }, [optimisticStatusMap]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(orderIdParam || null);
-  const rawSelectedOrder = (selectedOrderId ? orders.find(o => o.id === selectedOrderId || getFormattedOrderId(o, restaurant?.name || '', orders) === selectedOrderId) : null) || (orders.length > 0 ? orders[0] : null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(() => !initialCachedOrders);
+  const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
+  const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
+  const [orderQueue, setOrderQueue] = useState<'dine_in' | 'takeaway' | 'reservations'>('dine_in');
+  const [seatGuestModalOpen, setSeatGuestModalOpen] = useState(false);
+
+  const orderListContainerRef = useRef<HTMLDivElement>(null);
+  const optimisticStatusMapRef = useRef<Record<string, Order['status']>>({});
+
+  const effectiveOrders = useMemo<Order[]>(() => {
+    if (orders && orders.length > 0) return orders;
+    if (isPreviewMode) {
+      return DEMO_ORDERS.map((d, i) => ({
+        id: d.id,
+        restaurant_id: restId || 'demo-rest',
+        table_id: `tbl-${i}`,
+        table_name: d.tableDisplay,
+        order_type: d.orderType as any,
+        status: d.status as any,
+        special_instructions: d.customerNote,
+        subtotal: d.subtotal,
+        gst: d.gst,
+        service_charge: 0,
+        total: d.total,
+        grand_total: d.total,
+        created_at: new Date(Date.now() - d.elapsedMinutes * 60000).toISOString(),
+        daily_sequence: 30 + i,
+        customer_arrival_minutes: 20,
+        items: [
+          {
+            id: `item-${d.id}-1`,
+            order_id: d.id,
+            menu_item_id: `mi-${i}`,
+            menu_item_name: d.itemsSummary,
+            quantity: d.itemsCount || 1,
+            price: d.subtotal,
+            status: d.status
+          }
+        ],
+        batches: [
+          {
+            id: `batch-${d.id}-1`,
+            order_id: d.id,
+            batch_number: 1,
+            status: d.status as any,
+            created_at: new Date(Date.now() - d.elapsedMinutes * 60000).toISOString(),
+            updated_at: new Date(Date.now() - d.elapsedMinutes * 60000).toISOString(),
+            special_instructions: d.customerNote,
+            items: [
+              {
+                id: `item-${d.id}-1`,
+                order_id: d.id,
+                menu_item_id: `mi-${i}`,
+                menu_item_name: d.itemsSummary,
+                quantity: d.itemsCount || 1,
+                price: d.subtotal,
+                status: d.status
+              }
+            ]
+          }
+        ]
+      }));
+    }
+    return [];
+  }, [orders, isPreviewMode, restId]);
+
+  const rawSelectedOrder = (selectedOrderId ? effectiveOrders.find(o => o.id === selectedOrderId || getFormattedOrderId(o, restaurant?.name || '', effectiveOrders) === selectedOrderId) : null) || (effectiveOrders.length > 0 ? effectiveOrders[0] : null);
   const selectedOrder = useMemo(() => {
     if (!rawSelectedOrder) return null;
     const optStatus = optimisticStatusMap[rawSelectedOrder.id];
@@ -144,18 +210,12 @@ export default function OrdersPage() {
       batches: updatedBatches
     };
   }, [rawSelectedOrder, optimisticStatusMap]);
+
   const effectiveStatus = (selectedOrder ? optimisticStatusMap[selectedOrder.id] : null) || selectedOrder?.status;
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [loading, setLoading] = useState(() => !initialCachedOrders);
 
-  // Tab state: 'orders' or 'requests'
-  const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
-  const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
-
-  // P0 Order Queues & Reservation Management
-  const [orderQueue, setOrderQueue] = useState<'dine_in' | 'takeaway' | 'reservations'>('dine_in');
-  const [seatGuestModalOpen, setSeatGuestModalOpen] = useState(false);
+  useEffect(() => {
+    optimisticStatusMapRef.current = optimisticStatusMap;
+  }, [optimisticStatusMap]);
   const [reservationToSeat, setReservationToSeat] = useState<Order | null>(null);
   const [selectedTableForSeat, setSelectedTableForSeat] = useState<string>('');
   const [isSeatingGuest, setIsSeatingGuest] = useState(false);
@@ -1296,16 +1356,16 @@ export default function OrdersPage() {
   };
 
   const activeDineInCount = useMemo(() => {
-    return orders.filter(o => o.order_type !== 'takeaway' && o.order_type !== 'reservation' && o.status !== 'cancelled' && o.status !== 'completed').length;
-  }, [orders]);
+    return effectiveOrders.filter(o => o.order_type !== 'takeaway' && o.order_type !== 'reservation' && o.status !== 'cancelled' && o.status !== 'completed').length;
+  }, [effectiveOrders]);
 
   const activeTakeawayCount = useMemo(() => {
-    return orders.filter(o => o.order_type === 'takeaway' && o.status !== 'cancelled' && o.status !== 'completed').length;
-  }, [orders]);
+    return effectiveOrders.filter(o => o.order_type === 'takeaway' && o.status !== 'cancelled' && o.status !== 'completed').length;
+  }, [effectiveOrders]);
 
   const activeReservationsCount = useMemo(() => {
-    return orders.filter(o => o.order_type === 'reservation' && o.status !== 'cancelled' && o.status !== 'completed').length;
-  }, [orders]);
+    return effectiveOrders.filter(o => o.order_type === 'reservation' && o.status !== 'cancelled' && o.status !== 'completed').length;
+  }, [effectiveOrders]);
 
   const handleSeatReservation = async () => {
     if (!reservationToSeat || !selectedTableForSeat || !restaurant) return;
@@ -1361,7 +1421,7 @@ export default function OrdersPage() {
   // Filter orders
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return orders.filter(order => {
+    return effectiveOrders.filter(order => {
       // Isolate by active order queue (BUG-RES-002 & BUG-TAKE-002)
       if (orderQueue === 'dine_in') {
         if (order.order_type === 'takeaway' || order.order_type === 'reservation') return false;
@@ -1382,7 +1442,7 @@ export default function OrdersPage() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [orders, restaurant?.name, searchQuery, statusFilter, orderQueue]);
+  }, [effectiveOrders, restaurant?.name, searchQuery, statusFilter, orderQueue]);
 
   if (loading || !restaurant) {
     return (
@@ -1470,11 +1530,11 @@ export default function OrdersPage() {
                 }`}
               >
                 <div className="flex items-center gap-1">
-                  <ChefHat className="h-3.5 w-3.5 text-emerald-600" />
+                  <ChefHat className="h-3.5 w-3.5 text-gray-900 dark:text-gray-100" />
                   <span>Dine-In</span>
                 </div>
                 {activeDineInCount > 0 && (
-                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
                     {activeDineInCount}
                   </span>
                 )}
@@ -1484,7 +1544,7 @@ export default function OrdersPage() {
                 type="button"
                 onClick={() => {
                   setOrderQueue('takeaway');
-                  const nextOrders = orders.filter(o => o.order_type === 'takeaway');
+                  const nextOrders = effectiveOrders.filter(o => o.order_type === 'takeaway');
                   if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
                     setSelectedOrderId(nextOrders[0].id);
                   }
@@ -1496,11 +1556,11 @@ export default function OrdersPage() {
                 }`}
               >
                 <div className="flex items-center gap-1">
-                  <ShoppingBag className="h-3.5 w-3.5 text-purple-600" />
+                  <ShoppingBag className="h-3.5 w-3.5 text-gray-900 dark:text-gray-100" />
                   <span>Takeaway</span>
                 </div>
                 {activeTakeawayCount > 0 && (
-                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
                     {activeTakeawayCount}
                   </span>
                 )}
@@ -1510,7 +1570,7 @@ export default function OrdersPage() {
                 type="button"
                 onClick={() => {
                   setOrderQueue('reservations');
-                  const nextOrders = orders.filter(o => o.order_type === 'reservation');
+                  const nextOrders = effectiveOrders.filter(o => o.order_type === 'reservation');
                   if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
                     setSelectedOrderId(nextOrders[0].id);
                   }
@@ -1522,11 +1582,11 @@ export default function OrdersPage() {
                 }`}
               >
                 <div className="flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5 text-indigo-600" />
+                  <Calendar className="h-3.5 w-3.5 text-gray-900 dark:text-gray-100" />
                   <span>Booking</span>
                 </div>
                 {activeReservationsCount > 0 && (
-                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                  <span className="px-1.5 py-0.2 text-[10px] font-black rounded-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
                     {activeReservationsCount}
                   </span>
                 )}
@@ -2857,9 +2917,9 @@ export default function OrdersPage() {
                   )}
 
                   {selectedOrder.special_instructions && (
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Chef Special Instructions</h4>
-                      <p className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/30 text-amber-800 dark:text-amber-400 text-sm rounded-xl p-4 leading-relaxed font-semibold">
+                    <div className="space-y-1.5 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-stone-400 rounded-xl shadow-2xs">
+                      <h4 className="text-xs font-bold text-slate-950 dark:text-white uppercase tracking-wider">Customer Note</h4>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
                         {selectedOrder.special_instructions}
                       </p>
                     </div>
