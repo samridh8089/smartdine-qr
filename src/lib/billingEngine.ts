@@ -148,7 +148,7 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
 
       // 1. Inspect batch.special_instructions
       const bInst = b.special_instructions || '';
-      const bCodeMatch = bInst.match(/PROMO OFFER (?:APPLIED: )?([A-Z0-9]+)/i) || bInst.match(/🏷️ PROMO OFFER: ([A-Z0-9]+)/i);
+      const bCodeMatch = bInst.match(/PROMO OFFER (?:APPLIED: )?([A-Z0-9]+)/i) || bInst.match(/PROMO OFFER: ([A-Z0-9]+)/i);
       if (bCodeMatch && bCodeMatch[1]) {
         bCode = bCodeMatch[1];
       }

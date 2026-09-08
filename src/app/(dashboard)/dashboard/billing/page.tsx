@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { 
   CreditCard, Check, AlertTriangle, Clock, 
-  Sparkles, Trash2, ShieldAlert
+  Sparkles, Trash2, ShieldAlert, Phone
 } from 'lucide-react';
 import { formatPrice } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -350,7 +350,7 @@ export default function BillingPage() {
             </div>
             
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 p-3 rounded-xl">
-              <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <Clock className="h-4 w-4 text-gray-700 dark:text-gray-300 shrink-0" />
               <span>
                 {(() => {
                   const status = getEffectiveSubscriptionStatus(restaurant);
@@ -493,7 +493,7 @@ export default function BillingPage() {
                 <Card 
                   key={plan.id} 
                   className={`flex flex-col justify-between transition-all duration-300 relative ${
-                    isCurrentlyActive ? 'ring-2 ring-emerald-500 shadow-xl shadow-emerald-500/10' : isExpiredCurrentPlan ? 'ring-2 ring-rose-500' : 'hover:shadow-md'
+                    isCurrentlyActive ? 'ring-2 ring-gray-950 dark:ring-white shadow-xl' : isExpiredCurrentPlan ? 'ring-2 ring-gray-400' : 'hover:shadow-md'
                   }`}
                 >
                   <CardContent className="p-6 space-y-6 flex-1 flex flex-col justify-between">
@@ -501,12 +501,12 @@ export default function BillingPage() {
                       <div className="flex items-center justify-between gap-2">
                         <h4 className="font-extrabold text-slate-900 dark:text-white text-xl capitalize">{plan.name}</h4>
                         {isCurrentlyActive && (
-                          <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 font-extrabold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full border border-emerald-300 dark:border-emerald-700 shrink-0">
+                          <span className="bg-gray-950 text-white dark:bg-white dark:text-gray-950 font-bold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full shrink-0">
                             Active Plan
                           </span>
                         )}
                         {isExpiredCurrentPlan && (
-                          <span className="bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 font-extrabold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full border border-rose-300 dark:border-rose-700 shrink-0">
+                          <span className="border border-gray-400 text-gray-700 dark:text-gray-300 font-bold text-[10px] tracking-wider uppercase px-2.5 py-1 rounded-full shrink-0">
                             Expired
                           </span>
                         )}
@@ -525,7 +525,7 @@ export default function BillingPage() {
                       <ul className="space-y-2.5 text-xs text-slate-600 dark:text-slate-400 pt-2">
                         {plan.features.map(f => (
                           <li key={f} className="flex items-center gap-2 font-semibold">
-                            <Check className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <Check className="h-4 w-4 text-gray-900 dark:text-gray-100 shrink-0" />
                             <span>{f}</span>
                           </li>
                         ))}
@@ -556,21 +556,21 @@ export default function BillingPage() {
         </div>
 
         {/* Enterprise Custom Plan Banner */}
-        <div className="mt-8 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-white rounded-2xl p-6 sm:p-8 shadow-xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="mt-8 bg-gray-950 dark:bg-gray-900 text-white rounded-2xl p-6 sm:p-8 shadow-xl border border-gray-800 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center md:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-sky-500/20 text-sky-400 rounded-full text-xs font-bold border border-sky-500/30 uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 text-white rounded-full text-xs font-bold border border-white/20 uppercase tracking-wider">
               Enterprise & Multi-Outlet
             </div>
             <h4 className="text-2xl font-black text-white">Custom Enterprise Plan</h4>
-            <p className="text-sm text-slate-300 max-w-2xl">
+            <p className="text-sm text-gray-300 max-w-2xl">
               Tailored menu AI credits, multi-location management, custom branding, and dedicated account management for large dining chains & franchises.
             </p>
           </div>
           <a
             href="tel:8949266064"
-            className="inline-flex items-center gap-2.5 px-6 py-3.5 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-sm rounded-xl shadow-lg transition-transform hover:scale-105 shrink-0"
+            className="inline-flex items-center gap-2.5 px-6 py-3.5 bg-white hover:bg-gray-100 text-gray-950 font-bold text-sm rounded-xl shadow-lg transition-colors shrink-0"
           >
-            📞 Talk to Sales — +91 89492 66064
+            <Phone className="w-4 h-4" /> Talk to Sales — +91 89492 66064
           </a>
         </div>
       </div>

@@ -316,7 +316,7 @@ export default function TablesPage() {
         const allOrders = await db.getOrders(restaurantId);
         const lockCheck = checkTableHasActiveUnpaidOrders(tableId, allOrders);
         if (lockCheck.blocked) {
-          alert(`⚠️ Action Blocked by Safety Lock!\n\n${lockCheck.reason}\n\nPlease complete payment or settle the order before marking this table as available.`);
+          alert(`Action Blocked by Safety Lock!\n\n${lockCheck.reason}\n\nPlease complete payment or settle the order before marking this table as available.`);
           return;
         }
       }
@@ -557,7 +557,7 @@ export default function TablesPage() {
         </div>
         <div className="flex items-center gap-2">
           {selectedTableIds.length >= 2 && (
-            <Button size="sm" variant="outline" className="bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100" onClick={handleOpenMergeModal}>
+            <Button size="sm" variant="outline" className="border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={handleOpenMergeModal}>
               Merge ({selectedTableIds.length}) Tables
             </Button>
           )}
@@ -574,16 +574,16 @@ export default function TablesPage() {
           <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.total}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Available</p>
-          <p className="text-xl sm:text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-1 leading-tight">{tableStats.available}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Available</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.available}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Reserved</p>
-          <p className="text-xl sm:text-2xl font-bold font-mono text-purple-600 dark:text-purple-400 mt-1 leading-tight">{tableStats.reserved || 0}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reserved</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.reserved || 0}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Occupied</p>
-          <p className="text-xl sm:text-2xl font-bold font-mono text-rose-600 dark:text-rose-400 mt-1 leading-tight">{tableStats.occupied}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Occupied</p>
+          <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.occupied}</p>
         </div>
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Inactive / QR Off</p>
@@ -601,17 +601,17 @@ export default function TablesPage() {
           <span>Table SLA Overlay:</span>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-semibold">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" /> 🟢 On Time (&lt; 10m)
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-900 dark:bg-gray-100" /> On Time (&lt; 10m)
           </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200">
-            <span className="h-2 w-2 rounded-full bg-amber-500" /> 🟡 Near SLA (10–15m)
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-600 dark:bg-gray-400" /> Near SLA (10–15m)
           </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200">
-            <span className="h-2 w-2 rounded-full bg-rose-500" /> 🔴 Breached (&gt; 15m)
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-200 text-gray-950 dark:bg-gray-800 dark:text-white border border-gray-400 dark:border-gray-600 font-bold">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-950 dark:bg-white" /> Breached (&gt; 15m)
           </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
-            <span className="h-2 w-2 rounded-full bg-slate-400" /> ⚪ Free
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-400" /> Free
           </span>
         </div>
         <div className="text-[11px] font-mono text-slate-400">
@@ -910,57 +910,57 @@ export default function TablesPage() {
             let borderClass = 'border-slate-200 dark:border-slate-800';
 
             if (table.payment_pending) {
-              borderClass = 'border-2 border-rose-500 shadow-md shadow-rose-100 dark:shadow-none';
+              borderClass = 'border-2 border-gray-950 dark:border-gray-100 shadow-sm';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
-                  <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
-                  🔴 Breached ({elapsedStr})
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-200 text-gray-950 dark:bg-gray-800 dark:text-white border border-gray-400 dark:border-gray-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-950 dark:bg-white" />
+                  Breached ({elapsedStr})
                 </span>
               );
             } else if (table.occupancy_status === 'reserved') {
-              borderClass = 'border-2 border-purple-500 shadow-md shadow-purple-50 dark:shadow-none bg-purple-50/10 dark:bg-purple-950/20';
+              borderClass = 'border border-gray-400 dark:border-gray-600 shadow-sm';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
-                  <span className="h-2 w-2 rounded-full bg-purple-600 animate-pulse" />
-                  🟣 Reserved ({table.reservation_time || 'Upcoming'}{table.reservation_party_name ? ` • ${table.reservation_party_name}` : ''})
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-700 dark:bg-gray-300" />
+                  Reserved ({table.reservation_time || 'Upcoming'}{table.reservation_party_name ? ` • ${table.reservation_party_name}` : ''})
                 </span>
               );
             } else if (!isOccupied) {
               borderClass = 'border-slate-200 dark:border-slate-800';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200">
-                  <span className="h-2 w-2 rounded-full bg-slate-400" />
-                  ⚪ Free
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                  Free
                 </span>
               );
             } else if (elapsedMin < 10) {
-              borderClass = 'border-2 border-emerald-500 shadow-md shadow-emerald-50 dark:shadow-none';
+              borderClass = 'border-2 border-gray-900 dark:border-gray-100 shadow-sm';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                  <span className="h-2 w-2 rounded-full bg-emerald-600" />
-                  🟢 On Time ({elapsedStr})
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-900 dark:bg-gray-100" />
+                  On Time ({elapsedStr})
                 </span>
               );
             } else if (elapsedMin <= 15) {
-              borderClass = 'border-2 border-amber-500 shadow-md shadow-amber-50 dark:shadow-none';
+              borderClass = 'border-2 border-gray-900 dark:border-gray-100 shadow-sm';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-                  <span className="h-2 w-2 rounded-full bg-amber-500" />
-                  🟡 Near SLA ({elapsedStr})
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-600 dark:bg-gray-400" />
+                  Near SLA ({elapsedStr})
                 </span>
               );
             } else {
-              borderClass = 'border-2 border-rose-500 shadow-md shadow-rose-100 dark:shadow-none';
+              borderClass = 'border-2 border-gray-950 dark:border-gray-100 shadow-sm';
               slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800 animate-pulse">
-                  <span className="h-2 w-2 rounded-full bg-rose-600 animate-ping" />
-                  🔴 Breached ({elapsedStr})
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-200 text-gray-950 dark:bg-gray-800 dark:text-white border border-gray-400 dark:border-gray-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-gray-950 dark:bg-white" />
+                  Breached ({elapsedStr})
                 </span>
               );
             }
 
             return (
-              <Card key={table.id} className={`hover:shadow-md transition-all duration-300 ${borderClass} ${selectedTableIds.includes(table.id) ? 'ring-2 ring-emerald-500 bg-emerald-50/10' : ''}`}>
+              <Card key={table.id} className={`hover:shadow-md transition-all duration-300 ${borderClass} ${selectedTableIds.includes(table.id) ? 'ring-2 ring-gray-900 dark:ring-gray-100 bg-gray-50/50 dark:bg-gray-800/30' : ''}`}>
                 <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
                   {/* Table Header */}
                   <div className="w-full flex items-center justify-between">
@@ -969,16 +969,16 @@ export default function TablesPage() {
                         type="checkbox"
                         checked={selectedTableIds.includes(table.id)}
                         onChange={() => toggleTableSelection(table.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        className="h-4 w-4 rounded border-slate-300 text-gray-900 focus:ring-gray-900 cursor-pointer"
                       />
                       <span className="font-bold text-slate-900 dark:text-white text-lg">{table.name}</span>
                       {activeGroupForTable && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
                           {activeGroupForTable.name}
                         </span>
                       )}
                       {assignedWaiters.length > 0 && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
                           {assignedWaiters.map(w => w.waiter_name).join(', ')}
                         </span>
                       )}
@@ -1022,7 +1022,7 @@ export default function TablesPage() {
                           <button
                             type="button"
                             onClick={() => handleToggleOccupancy(table.id, 'reserved')}
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs bg-gray-900 hover:bg-black text-white"
                           >
                             Seat Guest
                           </button>
@@ -1034,7 +1034,7 @@ export default function TablesPage() {
                                 await refreshTables();
                               }
                             }}
-                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                            className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs bg-gray-200 hover:bg-gray-300 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                           >
                             Release
                           </button>
@@ -1045,8 +1045,8 @@ export default function TablesPage() {
                           onClick={() => handleToggleOccupancy(table.id, table.occupancy_status || 'available')}
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs ${
                             table.occupancy_status === 'occupied'
-                              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                              : 'bg-rose-600 hover:bg-rose-700 text-white'
+                              ? 'bg-gray-900 hover:bg-black text-white'
+                              : 'bg-gray-800 hover:bg-gray-900 text-white'
                           }`}
                         >
                           {table.occupancy_status === 'occupied' ? 'Mark Available' : 'Mark Occupied'}
@@ -1058,8 +1058,8 @@ export default function TablesPage() {
                         onClick={() => handleToggleQR(table.id, table.qr_enabled !== false)}
                         className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           table.qr_enabled !== false
-                            ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                            : 'bg-gray-900 hover:bg-black text-white'
                         }`}
                       >
                         {table.qr_enabled !== false ? 'Disable QR' : 'Enable QR'}

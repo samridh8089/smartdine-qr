@@ -41,7 +41,7 @@ function buildOtpEmailHtml(otp: string, recipientName?: string): string {
         <table width="100%" max-width="560" border="0" cellspacing="0" cellpadding="0" style="max-width: 560px; background-color: #ffffff; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow: hidden; border: 1px solid #e2e8f0;">
           <tr>
             <td style="background-color: #0f172a; padding: 32px 30px; text-align: center;">
-              <div style="display: inline-block; background-color: #059669; border-radius: 12px; width: 44px; height: 44px; line-height: 44px; text-align: center; color: #ffffff; font-size: 22px; font-weight: bold; margin-bottom: 12px;">🍴</div>
+              <div style="display: inline-block; background-color: #059669; border-radius: 12px; width: 44px; height: 44px; line-height: 44px; text-align: center; color: #ffffff; font-size: 18px; font-weight: 800; margin-bottom: 12px; letter-spacing: 0.5px;">CO</div>
               <h1 style="color: #ffffff; font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.5px;">CleverOps</h1>
               <p style="color: #94a3b8; font-size: 13px; font-weight: 500; margin: 4px 0 0 0;">Smart Restaurant Operating System</p>
             </td>

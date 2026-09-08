@@ -25,24 +25,15 @@ export default function AiMenuPage() {
     remaining: planSpec?.ai_limits?.ai_menu_analysis ?? null
   });
 
-  if (planSpec?.features?.ai_menu === false) {
-    return (
-      <LockedFeatureView
-        featureName="Smart Menu by CleverOps"
-        featureDescription="AI Menu Analysis & OCR is not available on your current plan."
-        planName={planSpec.name}
-      />
-    );
-  }
-
   // Workflow steps: 'input' | 'review'
   const [step, setStep] = useState<'input' | 'review'>('input');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
-
   const [extractedCategories, setExtractedCategories] = useState<AiExtractedCategory[]>([]);
   const [totalFoundItems, setTotalFoundItems] = useState(0);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<Array<{ name: string; previewUrl: string }>>([]);
 
   const fetchAiUsage = async (restId: string) => {
     try {
@@ -68,8 +59,15 @@ export default function AiMenuPage() {
     initPage();
   }, []);
 
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [uploadedImages, setUploadedImages] = useState<Array<{ name: string; previewUrl: string }>>([]);
+  if (planSpec?.features?.ai_menu === false) {
+    return (
+      <LockedFeatureView
+        featureName="Smart Menu by CleverOps"
+        featureDescription="AI Menu Analysis & OCR is not available on your current plan."
+        planName={planSpec.name}
+      />
+    );
+  }
 
   const handleAnalyze = async (payload: { images: Array<{ base64: string; type: string; name: string }>; textContent: string }) => {
     if (!restaurantId) return;

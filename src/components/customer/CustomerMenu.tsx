@@ -1472,13 +1472,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                         setCartOpen(true);
                       }
                     }}
-                    className={`relative z-10 shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-black transition-all shadow-sm cursor-pointer flex items-center gap-1 ${
+                    className={`relative z-10 shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1 ${
                       appliedOffer?.id === off.id
-                        ? 'bg-emerald-400 text-slate-950 font-extrabold'
-                        : 'bg-amber-400 hover:bg-amber-300 text-slate-950 hover:scale-105'
+                        ? 'bg-gray-950 text-white dark:bg-white dark:text-gray-950'
+                        : 'bg-white hover:bg-gray-100 text-gray-950 border border-gray-200 shadow-xs'
                     }`}
                   >
-                    {appliedOffer?.id === off.id ? '✓ Applied' : 'Apply →'}
+                    {appliedOffer?.id === off.id ? 'Applied' : 'Apply'}
                   </button>
                 </div>
               ))}

@@ -2344,7 +2344,7 @@ export const db = {
       // Dispatch notification for new batch items added
       dispatchFCMNotification(
         activeOrder.restaurant_id,
-        '🚨 NEW ITEMS ADDED!',
+        'NEW ITEMS ADDED',
         `Additional items added for Table ${activeOrder.table_name || 'X'}`,
         ['kitchen', 'waiter', 'owner', 'manager'],
         { orderId: activeOrder.id, batchId: newBatch.id, tableId: activeOrder.table_id },

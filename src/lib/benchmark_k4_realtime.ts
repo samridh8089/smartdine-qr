@@ -54,7 +54,7 @@ async function runRealtimeBenchmark() {
     }
   };
 
-  console.log('✔ Total Events Processed:', iterations);
+  console.log('[PASS] Total Events Processed:', iterations);
   console.log('BEFORE BUG-K4 FIX:');
   console.log('  - Database Queries Executed:', beforeDbQueries);
   console.log('  - Execution Time:', (t1Before - t0Before).toFixed(3), 'ms');

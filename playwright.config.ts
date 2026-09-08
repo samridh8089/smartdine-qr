@@ -12,16 +12,16 @@
  * ─────────────────────────────────────────────────────────────────────────
  * VALIDATION CHECKLIST (Phase 7A.1 Verification)
  *
- *  ✅ Check 1  — Edge: channel 'msedge' explicitly set (not just browserName)
- *  ✅ Check 2  — WebKit 26.5 installed; Desktop Safari project defined
- *  ✅ Check 3  — All mobile/tablet presets use official devices[] names
- *  ✅ Check 4  — globalSetup: dir creation + env validation + health check only
- *  ✅ Check 5  — 6 separate storageState files, one per role
- *  ✅ Check 6  — All 4 reporters: list + html + junit + json (simultaneous)
- *  ✅ Check 7  — forbidOnly: !!process.env.CI (added in this pass)
- *  ✅ Check 8  — fullyParallel + workers both explicitly set
- *  ✅ Check 9  — expect.timeout: 10_000 explicitly set
- *  ✅ Check 10 — npx playwright test --list: 6 tests, 0 warnings, 0 errors
+ *  [x] Check 1  — Edge: channel 'msedge' explicitly set (not just browserName)
+ *  [x] Check 2  — WebKit 26.5 installed; Desktop Safari project defined
+ *  [x] Check 3  — All mobile/tablet presets use official devices[] names
+ *  [x] Check 4  — globalSetup: dir creation + env validation + health check only
+ *  [x] Check 5  — 6 separate storageState files, one per role
+ *  [x] Check 6  — All 4 reporters: list + html + junit + json (simultaneous)
+ *  [x] Check 7  — forbidOnly: !!process.env.CI (added in this pass)
+ *  [x] Check 8  — fullyParallel + workers both explicitly set
+ *  [x] Check 9  — expect.timeout: 10_000 explicitly set
+ *  [x] Check 10 — npx playwright test --list: 6 tests, 0 warnings, 0 errors
  * ─────────────────────────────────────────────────────────────────────────
  */
 

@@ -43,11 +43,11 @@ async function runRegressionSuite() {
     .eq('id', batchToCancel.id)
     .select();
 
-  console.log('✔ Direct Batch Update to cancelled result:', updatedBatch ? updatedBatch[0]?.status : updateErr?.message);
+  console.log('[PASS] Direct Batch Update to cancelled result:', updatedBatch ? updatedBatch[0]?.status : updateErr?.message);
 
   const updatedOrder = await db.getOrderById(order.id);
-  console.log('✔ Parent Order Status after decline:', updatedOrder?.status);
-  console.log('✔ Updated Order Subtotal (excluding cancelled batch):', updatedOrder?.subtotal);
+  console.log('[PASS] Parent Order Status after decline:', updatedOrder?.status);
+  console.log('[PASS] Updated Order Subtotal (excluding cancelled batch):', updatedOrder?.subtotal);
 
   // 2. TEST BUG-K3: RBAC ROUTE MATRIX VERIFICATION
   console.log('\n2️⃣ [TEST BUG-K3: RBAC ROUTE GUARD MATRIX]');
@@ -64,9 +64,9 @@ async function runRegressionSuite() {
   const kitchenCanAccessKDS = kitchenAllowed.includes('/dashboard/kds');
   const ownerCanAccessBilling = ALLOWED_PATHS['owner'].includes('/dashboard/billing');
 
-  console.log('✔ Kitchen access to /dashboard/billing:', kitchenCanAccessBilling ? 'ALLOWED (FAIL)' : 'DENIED (PASS)');
-  console.log('✔ Kitchen access to /dashboard/kds:', kitchenCanAccessKDS ? 'ALLOWED (PASS)' : 'DENIED (FAIL)');
-  console.log('✔ Owner access to /dashboard/billing:', ownerCanAccessBilling ? 'ALLOWED (PASS)' : 'DENIED (FAIL)');
+  console.log('[PASS] Kitchen access to /dashboard/billing:', kitchenCanAccessBilling ? 'ALLOWED (FAIL)' : 'DENIED (PASS)');
+  console.log('[PASS] Kitchen access to /dashboard/kds:', kitchenCanAccessKDS ? 'ALLOWED (PASS)' : 'DENIED (FAIL)');
+  console.log('[PASS] Owner access to /dashboard/billing:', ownerCanAccessBilling ? 'ALLOWED (PASS)' : 'DENIED (FAIL)');
 
   if (kitchenCanAccessBilling || !kitchenCanAccessKDS || !ownerCanAccessBilling) {
     throw new Error('FAIL: RBAC route matrix failed assertion');
@@ -77,7 +77,7 @@ async function runRegressionSuite() {
   const mockForeignBatch = { order_id: 'foreign-order-12345' };
   const localOrders = [order];
   const isLocalOrder = localOrders.some(o => o.id === mockForeignBatch.order_id);
-  console.log('✔ Foreign Batch Event Handled In Memory:', isLocalOrder ? 'LOCAL' : 'DROPPED INSTANTLY (0 DB Queries)');
+  console.log('[PASS] Foreign Batch Event Handled In Memory:', isLocalOrder ? 'LOCAL' : 'DROPPED INSTANTLY (0 DB Queries)');
 
   if (isLocalOrder) {
     throw new Error('FAIL: Foreign batch was misclassified as local');

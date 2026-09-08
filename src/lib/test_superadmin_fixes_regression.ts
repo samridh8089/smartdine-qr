@@ -14,21 +14,21 @@ async function runSuperAdminRegressionSuite() {
   // 1. TEST BUG-SA2: SAFE NULL TRIAL ENDS AT DATE PARSING
   console.log('1️⃣ [TEST BUG-SA2: NULL DATE PARSING IN SUPER ADMIN STATS]');
   const stats = await db.getSuperAdminStats();
-  console.log('✔ Total Restaurants:', stats.totalRestaurants);
-  console.log('✔ Active Licenses:', stats.activeLicenses);
-  console.log('✔ Expired Licenses:', stats.expiredLicenses);
-  console.log('✔ Monthly Revenue (MRR): ₹' + stats.mrr);
-  console.log('✔ Annual Revenue (ARR): ₹' + stats.arr);
-  console.log('✔ Super Admin Stats Null Date Protection PASSED 100%\n');
+  console.log('[PASS] Total Restaurants:', stats.totalRestaurants);
+  console.log('[PASS] Active Licenses:', stats.activeLicenses);
+  console.log('[PASS] Expired Licenses:', stats.expiredLicenses);
+  console.log('[PASS] Monthly Revenue (MRR): ₹' + stats.mrr);
+  console.log('[PASS] Annual Revenue (ARR): ₹' + stats.arr);
+  console.log('[PASS] Super Admin Stats Null Date Protection PASSED 100%\n');
 
   // 2. TEST BUG-SA4: PRICING AUTHORITY DATABASE SOVEREIGNTY
   console.log('2️⃣ [TEST BUG-SA4: DATABASE PRICING SOVEREIGNTY]');
   const plans = await db.getPricingPlans();
-  console.log('✔ Pricing Plans Loaded from Database:', plans.map(p => `${p.name} (Monthly: ₹${p.price_monthly}, Max Tables: ${p.max_tables})`).join(', '));
+  console.log('[PASS] Pricing Plans Loaded from Database:', plans.map(p => `${p.name} (Monthly: ₹${p.price_monthly}, Max Tables: ${p.max_tables})`).join(', '));
   if (plans.length === 0) {
     throw new Error('FAIL: BUG-SA4 Pricing plans database query returned empty!');
   }
-  console.log('✔ Database Pricing Authority PASSED 100%\n');
+  console.log('[PASS] Database Pricing Authority PASSED 100%\n');
 
   // 3. TEST BUG-SA3: 30-DAY EXPIRY GRACE PERIOD FILTER
   console.log('3️⃣ [TEST BUG-SA3: 30-DAY EXPIRY GRACE PERIOD]');
@@ -43,15 +43,15 @@ async function runSuperAdminRegressionSuite() {
     return isCancelledOrPastDue && expiry < thirtyDaysAgo;
   });
 
-  console.log('✔ Total Tenants:', rests?.length || 0);
-  console.log('✔ Tenants Expired > 30 Days Eligible for Purge:', eligibleForPurge.length);
-  console.log('✔ 30-Day Grace Period Protection PASSED 100%\n');
+  console.log('[PASS] Total Tenants:', rests?.length || 0);
+  console.log('[PASS] Tenants Expired > 30 Days Eligible for Purge:', eligibleForPurge.length);
+  console.log('[PASS] 30-Day Grace Period Protection PASSED 100%\n');
 
   // 4. TEST BUG-SA1: SERVER AUTHORIZATION & AUDIT LOGGING
   console.log('4️⃣ [TEST BUG-SA1: AUDIT LOGGING & AUTHORIZATION ENFORCEMENT]');
   const { data: auditLogs } = await supabase.from('audit_logs').select('*').limit(5);
-  console.log('✔ Existing Audit Logs Count:', auditLogs?.length || 0);
-  console.log('✔ Super Admin Audit Logging PASSED 100%\n');
+  console.log('[PASS] Existing Audit Logs Count:', auditLogs?.length || 0);
+  console.log('[PASS] Super Admin Audit Logging PASSED 100%\n');
 
   console.log('=== ALL PHASE 6 SUPER ADMIN REGRESSION TESTS PASSED 100% ===');
 }

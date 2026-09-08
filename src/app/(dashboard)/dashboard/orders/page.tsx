@@ -314,7 +314,7 @@ export default function OrdersPage() {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     if (Notification.permission === 'granted') {
       try {
-        const title = `🚨 NEW ORDER - ${order.table_name || 'Table X'}`;
+        const title = `NEW ORDER - ${order.table_name || 'Table X'}`;
         const body = `Order #${order.id.slice(-4).toUpperCase()} received. Total: ₹${order.total || order.grand_total || 0}`;
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
           navigator.serviceWorker.ready.then((reg) => {
@@ -655,7 +655,7 @@ export default function OrdersPage() {
               alertedReqIds.current.add(req.id);
               playLoudBell('waiter');
               setToast({
-                message: `🔔 ${req.table_name || 'Table'} requested ${req.type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
+                message: `${req.table_name || 'Table'} requested ${req.type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
                 visible: true
               });
               setTimeout(() => {
@@ -1630,12 +1630,12 @@ export default function OrdersPage() {
                             ) : order.status === 'served' ? (
                               <Badge variant="success">Handed Over</Badge>
                             ) : remainingMins > 0 ? (
-                              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-900/40">
-                                ⏱ Pickup in ~{remainingMins}m
+                              <span className="text-[11px] font-semibold text-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md border border-gray-300 dark:border-gray-700">
+                                Pickup in ~{remainingMins}m
                               </span>
                             ) : (
-                              <span className="text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-900/40">
-                                ⏱ Overdue ({Math.abs(remainingMins)}m)
+                              <span className="text-[11px] font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded-md border border-gray-400 dark:border-gray-600">
+                                Overdue ({Math.abs(remainingMins)}m)
                               </span>
                             )}
                           </div>
@@ -1643,26 +1643,26 @@ export default function OrdersPage() {
 
                         {isReservation && parsedRes && (
                           <div className="space-y-1 text-xs">
-                            <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300 font-semibold flex-wrap">
-                              <span>📅 {parsedRes.date || 'Today'} {parsedRes.time}</span>
-                              <span>• 👥 {parsedRes.guests} Guests</span>
+                            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium flex-wrap">
+                              <span>{parsedRes.date || 'Today'} {parsedRes.time}</span>
+                              <span>• {parsedRes.guests} Guests</span>
                             </div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {diffMins !== null && (
                                 diffMins > 30 ? (
                                   <Badge variant="neutral">Starts in ~{diffMins}m</Badge>
                                 ) : diffMins <= 30 && diffMins > 15 ? (
-                                  <Badge variant="warning">🔔 Due in ~{diffMins}m (Reminder)</Badge>
+                                  <Badge variant="warning">Due in ~{diffMins}m (Reminder)</Badge>
                                 ) : diffMins <= 15 && diffMins >= -15 ? (
-                                  <Badge variant="purple">🟣 Table Reserved ({diffMins >= 0 ? `${diffMins}m` : `${Math.abs(diffMins)}m ago`})</Badge>
+                                  <Badge variant="purple">Table Reserved ({diffMins >= 0 ? `${diffMins}m` : `${Math.abs(diffMins)}m ago`})</Badge>
                                 ) : (
-                                  <Badge variant="error">⚠ No-Show ({Math.abs(diffMins)}m late)</Badge>
+                                  <Badge variant="error">No-Show ({Math.abs(diffMins)}m late)</Badge>
                                 )
                               )}
                               {order.table_name && order.table_name !== 'Reservation' ? (
                                 <Badge variant="neutral">Table: {order.table_name}</Badge>
                               ) : (
-                                <span className="text-[10px] text-amber-600 font-bold">Table Unassigned</span>
+                                <span className="text-[10px] text-gray-500 font-medium">Table Unassigned</span>
                               )}
                             </div>
                           </div>
@@ -1696,8 +1696,8 @@ export default function OrdersPage() {
                             .trim();
                           if (cleanInst && !cleanInst.startsWith('[CANCELLED]')) {
                             return (
-                              <div className="text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 px-2 py-0.5 rounded-md inline-block max-w-full truncate">
-                                📝 Note: {cleanInst}
+                              <div className="text-[11px] font-medium text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border-l-2 border-gray-400 dark:border-gray-600 px-2 py-0.5 rounded-sm inline-block max-w-full truncate">
+                                <span className="font-bold text-gray-950 dark:text-white">Note:</span> {cleanInst}
                               </div>
                             );
                           }
@@ -2024,12 +2024,12 @@ export default function OrdersPage() {
                         </Button>
                       )}
                       {selectedOrder.order_type === 'takeaway' && (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase tracking-wide">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 uppercase tracking-wide">
                           <ShoppingBag className="h-3 w-3" /> Takeaway
                         </span>
                       )}
                       {selectedOrder.order_type === 'reservation' && (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 uppercase tracking-wide">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 uppercase tracking-wide">
                           <Calendar className="h-3 w-3" /> Reservation
                         </span>
                       )}
@@ -2044,9 +2044,9 @@ export default function OrdersPage() {
                     </div>
                     <p className="text-xs text-slate-400 font-semibold uppercase flex items-center gap-1.5 flex-wrap">
                       {selectedOrder.order_type === 'takeaway' ? (
-                        <span className="text-purple-600 dark:text-purple-400 font-bold">Pickup Counter (ETA: {selectedOrder.customer_arrival_minutes || 20} mins)</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-bold">Pickup Counter (ETA: {selectedOrder.customer_arrival_minutes || 20} mins)</span>
                       ) : selectedOrder.order_type === 'reservation' ? (
-                        <span className="text-indigo-600 dark:text-indigo-400 font-bold">Table Booking ({selectedOrder.table_name || 'Unassigned'})</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-bold">Table Booking ({selectedOrder.table_name || 'Unassigned'})</span>
                       ) : (
                         <span>{selectedOrder.table_name || 'N/A'}</span>
                       )}
@@ -2067,21 +2067,21 @@ export default function OrdersPage() {
                     const parsed = parseReservationDetails(selectedOrder);
                     const diffMins = parsed.targetDateTime ? Math.round((parsed.targetDateTime.getTime() - currentTime) / 60000) : null;
                     return (
-                      <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-900/50 rounded-2xl p-4 space-y-3">
+                      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 space-y-3">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                            <h4 className="text-sm font-bold text-indigo-950 dark:text-indigo-200">Table Reservation Details</h4>
+                            <Calendar className="h-5 w-5 text-gray-900 dark:text-gray-100" />
+                            <h4 className="text-sm font-bold text-gray-950 dark:text-white">Table Reservation Details</h4>
                           </div>
                           {diffMins !== null && (
                             diffMins > 30 ? (
                               <Badge variant="neutral">Starts in ~{diffMins}m</Badge>
                             ) : diffMins <= 30 && diffMins > 15 ? (
-                              <Badge variant="warning">🔔 Due in ~{diffMins}m (Reminder)</Badge>
+                              <Badge variant="warning">Due in ~{diffMins}m (Reminder)</Badge>
                             ) : diffMins <= 15 && diffMins >= -15 ? (
-                              <Badge variant="purple">🟣 Table Reserved ({diffMins >= 0 ? `in ${diffMins}m` : `${Math.abs(diffMins)}m ago`})</Badge>
+                              <Badge variant="purple">Table Reserved ({diffMins >= 0 ? `in ${diffMins}m` : `${Math.abs(diffMins)}m ago`})</Badge>
                             ) : (
-                              <Badge variant="error">⚠ No-Show ({Math.abs(diffMins)}m overdue)</Badge>
+                              <Badge variant="error">No-Show ({Math.abs(diffMins)}m overdue)</Badge>
                             )
                           )}
                         </div>
@@ -2237,7 +2237,7 @@ export default function OrdersPage() {
 
                           return (
                             <div key={batch.id || bIdx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-3 space-y-2 mt-2">
-                              <div className="font-bold text-[11px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wide flex justify-between items-center flex-wrap gap-1 min-w-0">
+                              <div className="font-bold text-[11px] text-gray-900 dark:text-gray-100 uppercase tracking-wide flex justify-between items-center flex-wrap gap-1 min-w-0">
                                 <span className="min-w-0 truncate">Batch #{bIdx + 1} ({isCancelled ? 'CANCELLED' : batch.status.toUpperCase()})</span>
                                 <span className="font-mono text-[10px] text-slate-400 shrink-0 whitespace-nowrap">{formatExactTimestamp(batch.created_at)}</span>
                               </div>
@@ -2254,7 +2254,7 @@ export default function OrdersPage() {
                               {isCancelled ? (
                                 <>
                                   {batch.accepted_at && (
-                                    <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400 text-[11px] flex-wrap gap-1 min-w-0">
+                                    <div className="flex justify-between items-center text-gray-900 dark:text-gray-100 text-[11px] flex-wrap gap-1 min-w-0">
                                       <div className="min-w-0 truncate">
                                         <span className="font-bold">Accepted</span>
                                         <span className="text-slate-400 text-[10px] block truncate">Confirmed{batch.accepted_by ? ` by ${batch.accepted_by}` : ''}</span>
@@ -2263,7 +2263,7 @@ export default function OrdersPage() {
                                     </div>
                                   )}
                                   {batch.preparing_at && (
-                                    <div className="flex justify-between items-center text-amber-700 dark:text-amber-400 text-[11px] flex-wrap gap-1 min-w-0">
+                                    <div className="flex justify-between items-center text-gray-900 dark:text-gray-100 text-[11px] flex-wrap gap-1 min-w-0">
                                       <div className="min-w-0 truncate">
                                         <span className="font-bold">Preparing</span>
                                         <span className="text-slate-400 text-[10px] block truncate">Cooking{batch.preparing_by ? ` by ${batch.preparing_by}` : ''}</span>
@@ -2271,7 +2271,7 @@ export default function OrdersPage() {
                                       <span className="font-mono font-bold shrink-0 whitespace-nowrap">{formatExactTimestamp(batch.preparing_at)}</span>
                                     </div>
                                   )}
-                                  <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-400 rounded-md p-2 space-y-1 text-[11px] mt-1">
+                                  <div className="bg-gray-100 dark:bg-gray-800 border-l-2 border-gray-400 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md p-2 space-y-1 text-[11px] mt-1">
                                     <div className="flex justify-between items-center font-bold flex-wrap gap-1 min-w-0">
                                       <span>Cancelled</span>
                                       <span className="font-mono text-[10px] shrink-0 whitespace-nowrap">{formatExactTimestamp(batch.cancelled_at || batch.updated_at)}</span>
@@ -2290,7 +2290,7 @@ export default function OrdersPage() {
                                 <>
                                   {/* Accepted */}
                                   {isAccepted && (
-                                    <div className="flex justify-between items-center text-emerald-700 dark:text-emerald-400 text-[11px] flex-wrap gap-1 min-w-0">
+                                    <div className="flex justify-between items-center text-gray-900 dark:text-gray-100 text-[11px] flex-wrap gap-1 min-w-0">
                                       <div className="min-w-0 truncate">
                                         <span className="font-bold">Accepted</span>
                                         <span className="text-slate-400 text-[10px] block truncate">Confirmed{batch.accepted_by ? ` by ${batch.accepted_by}` : ''}</span>
@@ -2301,7 +2301,7 @@ export default function OrdersPage() {
 
                                   {/* Preparing */}
                                   {isPreparing && (
-                                    <div className="flex justify-between items-center text-amber-700 dark:text-amber-400 text-[11px] flex-wrap gap-1 min-w-0">
+                                    <div className="flex justify-between items-center text-gray-900 dark:text-gray-100 text-[11px] flex-wrap gap-1 min-w-0">
                                       <div className="min-w-0 truncate">
                                         <span className="font-bold">Preparing</span>
                                         <span className="text-slate-400 text-[10px] block truncate">Cooking{batch.preparing_by ? ` by ${batch.preparing_by}` : ''}</span>
@@ -2312,7 +2312,7 @@ export default function OrdersPage() {
 
                                   {/* Ready */}
                                   {isReady && (
-                                    <div className="flex justify-between items-center text-purple-700 dark:text-purple-400 text-[11px] flex-wrap gap-1 min-w-0">
+                                    <div className="flex justify-between items-center text-gray-900 dark:text-gray-100 text-[11px] flex-wrap gap-1 min-w-0">
                                       <div className="min-w-0 truncate">
                                         <span className="font-bold">Ready</span>
                                         <span className="text-slate-400 text-[10px] block truncate">Food Ready{batch.ready_by ? ` by ${batch.ready_by}` : ''}</span>
@@ -2323,7 +2323,7 @@ export default function OrdersPage() {
 
                                   {/* Served */}
                                   {isServed && (
-                                    <div className="flex justify-between items-center text-blue-700 dark:text-blue-400 text-[11px] flex-wrap gap-1 min-w-0">
+                                    <div className="flex justify-between items-center text-gray-900 dark:text-gray-100 text-[11px] flex-wrap gap-1 min-w-0">
                                       <div className="min-w-0 truncate">
                                         <span className="font-bold">Served</span>
                                         <span className="text-slate-400 text-[10px] block truncate">Brought to table{batch.served_by ? ` by ${batch.served_by}` : ''}</span>
@@ -2339,14 +2339,14 @@ export default function OrdersPage() {
                       ) : null}
 
                       {selectedOrder.cancelled_at && (
-                        <div className="flex justify-between items-center text-rose-600 dark:text-rose-400 pt-1 flex-wrap gap-1 min-w-0">
+                        <div className="flex justify-between items-center text-gray-700 dark:text-gray-300 pt-1 flex-wrap gap-1 min-w-0">
                           <span className="font-semibold min-w-0 truncate">Cancelled:</span>
                           <span className="font-mono font-bold shrink-0 whitespace-nowrap">{formatExactTimestamp(selectedOrder.cancelled_at)}</span>
                         </div>
                       )}
 
                       {selectedOrder.paid_at && (
-                        <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-400 pt-1 flex-wrap gap-1 min-w-0">
+                        <div className="flex justify-between items-center text-gray-900 dark:text-gray-100 pt-1 flex-wrap gap-1 min-w-0">
                           <span className="font-semibold min-w-0 truncate">Payment Received{selectedOrder.marked_paid_by ? ` (${selectedOrder.marked_paid_by})` : ''}:</span>
                           <span className="font-mono font-bold shrink-0 whitespace-nowrap">{formatExactTimestamp(selectedOrder.paid_at)}</span>
                         </div>
@@ -2362,7 +2362,7 @@ export default function OrdersPage() {
                       {selectedOrder.order_type === 'reservation' && selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'completed' && (
                         <Button
                           size="sm"
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer gap-1.5 shadow-sm"
+                          className="bg-gray-900 hover:bg-black text-white font-bold cursor-pointer gap-1.5 shadow-sm"
                           onClick={async () => {
                             setReservationToSeat(selectedOrder);
                             let currentTables = allTables;
@@ -2387,7 +2387,7 @@ export default function OrdersPage() {
                         <Button 
                           size="sm" 
                           variant="primary" 
-                          className="cursor-pointer" 
+                          className="cursor-pointer font-bold" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:accepted`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:accepted`)}
                           onClick={() => updateOrderStatus('accepted')}
@@ -2398,7 +2398,7 @@ export default function OrdersPage() {
                       {activeRole !== 'waiter' && effectiveStatus === 'accepted' && (
                         <Button 
                           size="sm" 
-                          className="bg-amber-500 hover:bg-amber-600 text-white cursor-pointer" 
+                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-medium" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:preparing`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:preparing`)}
                           onClick={() => updateOrderStatus('preparing')}
@@ -2409,7 +2409,7 @@ export default function OrdersPage() {
                       {activeRole !== 'waiter' && effectiveStatus === 'preparing' && (
                         <Button 
                           size="sm" 
-                          className="bg-purple-600 hover:bg-purple-700 text-white cursor-pointer" 
+                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-medium" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:ready`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:ready`)}
                           onClick={() => updateOrderStatus('ready')}
@@ -2420,7 +2420,7 @@ export default function OrdersPage() {
                       {effectiveStatus === 'ready' && (
                         <Button 
                           size="sm" 
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold" 
+                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-bold" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:served`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:served`)}
                           onClick={() => updateOrderStatus('served')}
@@ -2446,8 +2446,8 @@ export default function OrdersPage() {
                         </Button>
                       )}
                       {(selectedOrder.payment_status === 'paid' || effectiveStatus === 'completed') && (
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold text-xs rounded-xl border border-emerald-200 dark:border-emerald-800">
-                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white font-bold text-xs rounded-xl border border-gray-300 dark:border-gray-700">
+                          <Check className="h-3.5 w-3.5 text-gray-900 dark:text-gray-100" />
                           <span>Paid ({selectedOrder.payment_method?.toUpperCase() || 'PAID'})</span>
                         </div>
                       )}
@@ -2648,8 +2648,8 @@ export default function OrdersPage() {
                 })}
               </div>
               {selectedOrder.status === 'served' && (
-                <p className="text-[10px] text-rose-500 font-bold">
-                  ⚠ Note: "Reallocated" is disabled because food was already served to a customer.
+                <p className="text-[10px] text-gray-500 font-semibold">
+                  Note: "Reallocated" is disabled because food was already served to a customer.
                 </p>
               )}
             </div>
