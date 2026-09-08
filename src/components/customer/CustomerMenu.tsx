@@ -435,9 +435,14 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           const targetId = tableId.trim();
           const targetLower = targetId.toLowerCase();
           const matchedTbl = tbls.find((t: Table) => t.id === targetId) ||
+                             tbls.find((t: Table) => (t as any).table_uuid === targetId) ||
                              tbls.find((t: Table) => (t as any).slug === targetId) ||
+                             tbls.find((t: Table) => t.display_number?.toLowerCase() === targetLower) ||
                              tbls.find((t: Table) => t.name?.toLowerCase() === targetLower) ||
-                             tbls.find((t: Table) => t.name?.toLowerCase().replace(/\s+/g, '-') === targetLower);
+                             tbls.find((t: Table) => t.name?.toLowerCase().replace(/\s+/g, '-') === targetLower) ||
+                             tbls.find((t: Table) => `table ${t.display_number || ''}`.toLowerCase() === targetLower) ||
+                             tbls.find((t: Table) => `table-${t.display_number || ''}`.toLowerCase() === targetLower) ||
+                             tbls.find((t: Table) => t.renumber_history?.some((h: any) => h.old_name?.toLowerCase() === targetLower || h.old_name?.toLowerCase().replace('table ', '') === targetLower));
           if (matchedTbl) {
             setTable(matchedTbl);
             setIsInvalidTable(false);

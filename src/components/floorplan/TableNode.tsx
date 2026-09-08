@@ -30,39 +30,39 @@ export const TableNode: React.FC<TableNodeProps> = ({
   const width = Math.max(50, item.width);
   const height = Math.max(50, item.height);
 
-  // Status-driven styling
+  // Status-driven styling (OpenTable + Toast POS Executive Colors)
   let fillColor = '#FFFFFF';
-  let strokeColor = '#D6D3D1';
-  let strokeWidth = 1.5;
+  let strokeColor = '#C6E7D2'; // Soft Sage for available
+  let strokeWidth = 2;
   let strokeDash: number[] | undefined = undefined;
 
   switch (status) {
     case 'occupied':
       fillColor = '#FFFFFF';
-      strokeColor = '#262626'; // Soft charcoal
+      strokeColor = '#FCA5A5'; // Soft Warm Red border
       strokeWidth = 2.5;
       break;
     case 'reserved':
-      fillColor = '#F5F0E6'; // Warm sand tint
-      strokeColor = '#C8BCAB';
-      strokeWidth = 1.8;
+      fillColor = '#FFFFFF';
+      strokeColor = '#D4D4D8'; // Soft Charcoal border
+      strokeWidth = 2;
       break;
     case 'cleaning':
-      fillColor = '#F3F4F6'; // Light gray
-      strokeColor = '#9CA3AF';
-      strokeWidth = 1.5;
+      fillColor = '#FAFAFA'; // Soft Neutral
+      strokeColor = '#E4E4E7';
+      strokeWidth = 1.8;
       break;
     case 'merged':
       fillColor = '#FFFFFF';
-      strokeColor = '#262626';
+      strokeColor = '#171717';
       strokeWidth = 2;
       strokeDash = [6, 4]; // Dashed border
       break;
     case 'available':
     default:
       fillColor = '#FFFFFF';
-      strokeColor = isSelected ? '#171717' : '#D6D3D1';
-      strokeWidth = isSelected ? 2 : 1.5;
+      strokeColor = '#C6E7D2'; // Soft Sage border
+      strokeWidth = 2;
       break;
   }
 
@@ -75,10 +75,24 @@ export const TableNode: React.FC<TableNodeProps> = ({
     strokeWidth = 2.5;
   }
 
+  // Timer ring calculation for occupied tables
+  const elapsedMinutes = item.elapsedMinutes || 0;
+  let timerRingColor = '#10B981'; // 0-45m: Calm Green
+  if (elapsedMinutes > 75) {
+    timerRingColor = '#EF4444'; // >75m: Soft Red (Overdue)
+  } else if (elapsedMinutes > 45) {
+    timerRingColor = '#F59E0B'; // 45-75m: Amber (Attention)
+  }
+
+  // Active Service Badges
+  const badges = item.service_badges || [];
+
+  // Single-source seat count
+  const seatCount = item.seats || 4;
+
   // Render perimeter seat markers
   const renderSeats = () => {
     const seatMarkers = [];
-    const seatCount = item.seats || 4;
     const seatRadius = 6;
     const seatOffset = 10;
 
@@ -95,7 +109,7 @@ export const TableNode: React.FC<TableNodeProps> = ({
             x={cx}
             y={cy}
             radius={seatRadius}
-            fill="#E7E5E4"
+            fill="#F5F5F4"
             stroke="#D6D3D1"
             strokeWidth={1}
             listening={false}
@@ -103,7 +117,7 @@ export const TableNode: React.FC<TableNodeProps> = ({
         );
       }
     } else {
-      // Rectangle/Square: distribute top, bottom, left, right
+      // Rectangle/Square: distribute top and bottom
       const seatsPerSide = Math.max(1, Math.floor(seatCount / 2));
       const topStep = width / (seatsPerSide + 1);
       
@@ -115,7 +129,7 @@ export const TableNode: React.FC<TableNodeProps> = ({
             x={i * topStep}
             y={-seatOffset}
             radius={seatRadius}
-            fill="#E7E5E4"
+            fill="#F5F5F4"
             stroke="#D6D3D1"
             strokeWidth={1}
             listening={false}
@@ -133,7 +147,7 @@ export const TableNode: React.FC<TableNodeProps> = ({
             x={i * bottomStep}
             y={height + seatOffset}
             radius={seatRadius}
-            fill="#E7E5E4"
+            fill="#F5F5F4"
             stroke="#D6D3D1"
             strokeWidth={1}
             listening={false}
@@ -153,6 +167,8 @@ export const TableNode: React.FC<TableNodeProps> = ({
     });
     if (onDragEnd) onDragEnd(e);
   };
+
+  const displayLabel = item.display_number || item.tableNumber || item.name?.replace(/^Table\s*/i, '') || 'T';
 
   return (
     <Group
@@ -177,7 +193,7 @@ export const TableNode: React.FC<TableNodeProps> = ({
           radius={width / 2}
           fill={fillColor}
           stroke={strokeColor}
-          strokeWidth={2.5}
+          strokeWidth={strokeWidth}
           dash={strokeDash}
           shadowColor="#000000"
           shadowBlur={isSelected ? 8 : 2}
@@ -206,8 +222,8 @@ export const TableNode: React.FC<TableNodeProps> = ({
             width={width + 12}
             height={height + 12}
             cornerRadius={8}
-            fill="#E7E5E4"
-            stroke="#D6D3D1"
+            fill="#F5F5F4"
+            stroke="#E7E5E4"
             strokeWidth={1.5}
           />
           {/* Inner table top */}
@@ -229,7 +245,7 @@ export const TableNode: React.FC<TableNodeProps> = ({
           y={0}
           width={width}
           height={height}
-          cornerRadius={6}
+          cornerRadius={8}
           fill={fillColor}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
@@ -240,36 +256,73 @@ export const TableNode: React.FC<TableNodeProps> = ({
         />
       )}
 
+      {/* Table Timer Indicator for Occupied Tables (Top-Left) */}
+      {status === 'occupied' && (
+        <Group x={12} y={12} listening={false}>
+          <Circle radius={5} fill="#FFFFFF" stroke={timerRingColor} strokeWidth={2} />
+          <Circle radius={2.5} fill={timerRingColor} />
+        </Group>
+      )}
+
+      {/* Service Priority Badges (Top-Right) */}
+      {badges.length > 0 && (
+        <Group x={width - 12} y={12} listening={false}>
+          {badges.slice(0, 2).map((badge, idx) => {
+            const badgeBg = 
+              badge === 'W' ? '#F59E0B' :
+              badge === 'B' ? '#3B82F6' :
+              badge === 'R' ? '#8B5CF6' :
+              badge === 'VIP' ? '#D97706' : '#10B981';
+            return (
+              <Group key={`b_${badge}_${idx}`} x={-idx * 16}>
+                <Circle radius={6} fill={badgeBg} />
+                <Text
+                  text={badge}
+                  x={-6}
+                  y={-4}
+                  width={12}
+                  align="center"
+                  fontFamily="sans-serif"
+                  fontSize={7}
+                  fontStyle="bold"
+                  fill="#FFFFFF"
+                />
+              </Group>
+            );
+          })}
+        </Group>
+      )}
+
       {/* Table Label & Capacity */}
       <Text
-        text={item.tableNumber || 'T'}
+        text={displayLabel}
         x={0}
-        y={height / 2 - 12}
+        y={height / 2 - 13}
         width={width}
         align="center"
         fontFamily="sans-serif"
-        fontSize={14}
-        fontStyle="600"
-        fill="#09090b"
+        fontSize={15}
+        fontStyle="700"
+        fill="#171717"
         listening={false}
       />
 
       <Text
         text={
           status === 'occupied'
-            ? `${item.elapsedMinutes || 24}m`
+            ? `${elapsedMinutes}m`
             : status === 'reserved'
             ? item.reservationTime?.split(',')[1]?.trim() || 'Res'
-            : `${item.seats || 2} seats`
+            : `${seatCount} seats`
         }
         x={0}
-        y={height / 2 + 3}
+        y={height / 2 + 4}
         width={width}
         align="center"
         fontFamily="sans-serif"
         fontSize={10}
         fontStyle="500"
-        fill={status === 'occupied' ? '#3f3f46' : '#a1a1aa'}
+        fill={status === 'occupied' ? '#525252' : '#737373'}
         listening={false}
       />
     </Group>

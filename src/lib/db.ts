@@ -178,6 +178,7 @@ export interface Restaurant {
     waiter_bell_url?: string;
     offers?: any[];
     table_assignments?: TableAssignment[];
+    zones?: RestaurantZone[];
     table_states?: Record<string, {
       qr_enabled?: boolean;
       occupancy_status?: 'available' | 'occupied' | 'inactive' | 'reserved';
@@ -188,6 +189,20 @@ export interface Restaurant {
       reservation_id?: string | null;
       current_session_id?: string | null;
       manual_occupied?: boolean;
+      display_number?: string;
+      seats?: number;
+      capacity?: number;
+      zone_id?: string;
+      assigned_waiter_id?: string | null;
+      assigned_waiter_name?: string | null;
+      assigned_at?: string | null;
+      assigned_by?: string;
+      is_archived?: boolean;
+      archived_at?: string | null;
+      restored_at?: string | null;
+      renumber_history?: Array<{ old_name: string; new_name: string; changed_at: string; changed_by?: string }>;
+      service_badges?: Array<'W' | 'B' | 'R' | 'T' | 'VIP'>;
+      distance_from_kitchen?: number;
     }>;
     staff_metadata?: Record<string, { 
       department?: string; 
@@ -383,10 +398,36 @@ export interface MenuItem {
   variants?: MenuItemVariant[];
 }
 
+export interface RestaurantZone {
+  id: string;
+  restaurant_id?: string;
+  name: string;
+  sort_order?: number;
+  waiter_id?: string | null;
+  waiter_name?: string | null;
+  default_waiter_id?: string | null;
+  created_at?: string;
+  color?: string;
+  collapsed?: boolean;
+}
+
 export interface Table {
   id: string;
   restaurant_id: string;
   name: string;
+  table_uuid?: string;
+  display_number?: string;
+  seats?: number;
+  capacity?: number;
+  zone_id?: string;
+  zone_name?: string;
+  assigned_waiter_id?: string | null;
+  assigned_waiter_name?: string | null;
+  assignment_source?: 'manual' | 'zone' | 'unassigned';
+  distance_from_kitchen?: number;
+  is_archived?: boolean;
+  renumber_history?: Array<{ old_name: string; new_name: string; changed_at: string; changed_by?: string }>;
+  service_badges?: Array<'W' | 'B' | 'R' | 'T' | 'VIP'>;
   occupancy_status?: 'available' | 'occupied' | 'inactive' | 'reserved';
   qr_enabled?: boolean;
   occupied_at?: string | null;
@@ -1302,6 +1343,7 @@ export const db = {
     tables: Table[];
     stats: { total: number; available: number; occupied: number; reserved?: number; inactive: number; occupancyRate: number };
     assignments?: TableAssignment[];
+    zones?: RestaurantZone[];
   }> {
     const fetchActiveOrders = async (): Promise<any[]> => {
       if (preloadedOrders && preloadedOrders.length > 0) {
@@ -1332,9 +1374,14 @@ export const db = {
     const tableStates = rest?.settings?.table_states || {};
     const assignments = rest?.settings?.table_assignments || [];
 
+    const zones: RestaurantZone[] = rest?.settings?.zones && rest.settings.zones.length > 0
+      ? rest.settings.zones
+      : [{ id: 'zone_general', name: 'General', sort_order: 1, created_at: new Date().toISOString() }];
+
     const enrichedTables: Table[] = rawTables.map(t => {
       const state = tableStates[t.id] || {};
       const qrEnabled = state.qr_enabled !== false;
+      const isArchived = state.is_archived === true;
 
       const tblOrders = activeOrders.filter(o => {
         // Exclude Takeaway orders from occupying dining tables
@@ -1348,7 +1395,7 @@ export const db = {
       const paymentPending = tblOrders.some(o => o.payment_status !== 'paid');
 
       let status: 'available' | 'occupied' | 'inactive' | 'reserved' = 'available';
-      if (!qrEnabled) {
+      if (!qrEnabled || isArchived) {
         status = 'inactive';
       } else if (activeCount > 0 || state.manual_occupied === true || state.occupancy_status === 'occupied') {
         status = 'occupied';
@@ -1358,12 +1405,67 @@ export const db = {
         status = 'available';
       }
 
-      const assigned = assignments
-        .filter((a: any) => a.table_id === t.id && a.active !== false)
-        .map((a: any) => ({ id: a.waiter_id, name: a.waiter_name || 'Waiter' }));
+      // Display number & Single source of truth for seats
+      const displayNumber = state.display_number || t.name;
+      const seats = typeof state.seats === 'number' ? state.seats : (typeof state.capacity === 'number' ? state.capacity : 4);
+
+      // Zone resolution
+      const zoneId = state.zone_id || 'zone_general';
+      const matchedZone = zones.find(z => z.id === zoneId) || zones[0];
+      const zoneName = matchedZone ? matchedZone.name : 'General';
+
+      // 3-Tier Waiter Priority Engine:
+      // Tier 1: Manual table assignment
+      const directAssignment = assignments.find((a: any) => a.table_id === t.id && a.active !== false);
+      const manualWaiterId = state.assigned_waiter_id || directAssignment?.waiter_id || null;
+      const manualWaiterName = state.assigned_waiter_name || directAssignment?.waiter_name || null;
+
+      let resolvedWaiterId: string | null = null;
+      let resolvedWaiterName: string | null = null;
+      let assignmentSource: 'manual' | 'zone' | 'unassigned' = 'unassigned';
+
+      if (manualWaiterId) {
+        resolvedWaiterId = manualWaiterId;
+        resolvedWaiterName = manualWaiterName || 'Waiter';
+        assignmentSource = 'manual';
+      } else if (matchedZone?.waiter_id) {
+        // Tier 2: Inherited from Zone
+        resolvedWaiterId = matchedZone.waiter_id;
+        resolvedWaiterName = matchedZone.waiter_name || 'Zone Waiter';
+        assignmentSource = 'zone';
+      } else {
+        // Tier 3: Unassigned
+        assignmentSource = 'unassigned';
+      }
+
+      const assigned = resolvedWaiterId
+        ? [{ id: resolvedWaiterId, name: resolvedWaiterName || 'Waiter' }]
+        : [];
+
+      // Service Priority Badges
+      const badges: Array<'W' | 'B' | 'R' | 'T' | 'VIP'> = [];
+      if (Array.isArray(state.service_badges)) {
+        badges.push(...state.service_badges);
+      }
+      if (paymentPending && !badges.includes('B')) badges.push('B');
+      if (status === 'reserved' && !badges.includes('R')) badges.push('R');
+      if (tblOrders.some(o => o.order_type === 'takeaway') && !badges.includes('T')) badges.push('T');
 
       return {
         ...t,
+        table_uuid: t.id,
+        display_number: displayNumber,
+        seats,
+        capacity: seats,
+        zone_id: zoneId,
+        zone_name: zoneName,
+        assigned_waiter_id: resolvedWaiterId,
+        assigned_waiter_name: resolvedWaiterName,
+        assignment_source: assignmentSource,
+        distance_from_kitchen: typeof state.distance_from_kitchen === 'number' ? state.distance_from_kitchen : 10,
+        is_archived: isArchived,
+        renumber_history: state.renumber_history || [],
+        service_badges: badges,
         qr_enabled: qrEnabled,
         occupancy_status: status,
         occupied_at: status === 'occupied' ? (state.occupied_at || tblOrders[0]?.created_at || new Date().toISOString()) : null,
@@ -1378,17 +1480,19 @@ export const db = {
       };
     });
 
-    const total = enrichedTables.length;
-    const occupied = enrichedTables.filter(t => t.occupancy_status === 'occupied').length;
-    const reserved = enrichedTables.filter(t => t.occupancy_status === 'reserved').length;
-    const inactive = enrichedTables.filter(t => t.occupancy_status === 'inactive').length;
-    const available = enrichedTables.filter(t => t.occupancy_status === 'available').length;
+    const activeTables = enrichedTables.filter(t => !t.is_archived);
+    const total = activeTables.length;
+    const occupied = activeTables.filter(t => t.occupancy_status === 'occupied').length;
+    const reserved = activeTables.filter(t => t.occupancy_status === 'reserved').length;
+    const inactive = activeTables.filter(t => t.occupancy_status === 'inactive').length;
+    const available = activeTables.filter(t => t.occupancy_status === 'available').length;
     const occupancyRate = total > 0 ? Math.round(((occupied + reserved) / total) * 100) : 0;
 
     return {
       tables: enrichedTables,
       stats: { total, available, occupied, reserved, inactive, occupancyRate },
-      assignments: (assignments || []).filter((a: any) => a.active !== false)
+      assignments: (assignments || []).filter((a: any) => a.active !== false),
+      zones
     };
   },
 
@@ -1536,6 +1640,18 @@ export const db = {
     await this.getPricingPlans();
 
     const currentTables = await this.getTables(restaurantId);
+    const cleanName = name.trim();
+    if (!cleanName) throw new Error('Table name cannot be empty');
+
+    // Uniqueness validation (P0-1)
+    const exists = currentTables.some(t => !t.is_archived && (
+      t.name.toLowerCase() === cleanName.toLowerCase() ||
+      t.display_number?.toLowerCase() === cleanName.toLowerCase()
+    ));
+    if (exists) {
+      throw new Error(`Table "${cleanName}" already exists in this restaurant. Duplicate table numbers are not allowed.`);
+    }
+
     const limitCheck = await checkResourceLimitForRestaurant(restaurantId, 'tables', currentTables.length);
     if (!limitCheck.allowed) {
       throw new Error(limitCheck.message || 'Table limit reached. Please upgrade your plan to add more tables.');
@@ -1543,15 +1659,329 @@ export const db = {
 
     const { data: inserted, error } = await supabase
       .from('tables')
-      .insert({ restaurant_id: restaurantId, name })
+      .insert({ restaurant_id: restaurantId, name: cleanName })
       .select();
     if (error || !inserted || inserted.length === 0) {
       throw new Error(error?.message || 'Failed to create table');
     }
-    return inserted[0] as Table;
+
+    const newTbl = inserted[0];
+    // Initialize default state with zone_general and 4 seats
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    tableStates[newTbl.id] = {
+      ...(tableStates[newTbl.id] || {}),
+      display_number: cleanName,
+      seats: 4,
+      capacity: 4,
+      zone_id: 'zone_general',
+      is_archived: false,
+      occupancy_status: 'available'
+    };
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    }).eq('id', restaurantId);
+
+    return {
+      ...newTbl,
+      table_uuid: newTbl.id,
+      display_number: cleanName,
+      seats: 4,
+      capacity: 4,
+      zone_id: 'zone_general',
+      zone_name: 'General',
+      is_archived: false,
+      occupancy_status: 'available'
+    } as Table;
+  },
+
+  async renameTable(restaurantId: string, tableId: string, newName: string, renamedBy: string = 'Owner'): Promise<{ success: boolean; newName: string }> {
+    const cleanName = newName.trim();
+    if (!cleanName) throw new Error('Table name cannot be empty');
+
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const liveTables = await this.getTables(restaurantId);
+    const duplicate = liveTables.find(t => t.id !== tableId && !t.is_archived && (
+      t.name.toLowerCase() === cleanName.toLowerCase() ||
+      t.display_number?.toLowerCase() === cleanName.toLowerCase()
+    ));
+    if (duplicate) {
+      throw new Error(`Table "${cleanName}" already exists in this restaurant. Duplicate table numbers are not allowed.`);
+    }
+
+    const currentTable = liveTables.find(t => t.id === tableId);
+
+    // 1. In-place Postgres update
+    const { error: tblErr } = await supabase.from('tables').update({ name: cleanName }).eq('id', tableId);
+    if (tblErr) throw new Error(tblErr.message);
+
+    // 2. Active Session Safety (P0-5): In-place update of running orders & customer requests
+    await supabase.from('orders').update({ table_name: cleanName }).eq('table_id', tableId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']);
+    await supabase.from('customer_requests').update({ table_name: cleanName }).eq('table_id', tableId).in('status', ['pending', 'accepted']);
+
+    // 3. Update table_states and renumber history in restaurant settings
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    const curState = tableStates[tableId] || {};
+    const history = curState.renumber_history || [];
+    history.push({
+      old_name: currentTable?.name || cleanName,
+      new_name: cleanName,
+      changed_at: new Date().toISOString(),
+      changed_by: renamedBy
+    });
+
+    tableStates[tableId] = {
+      ...curState,
+      display_number: cleanName,
+      renumber_history: history
+    };
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    }).eq('id', restaurantId);
+
+    return { success: true, newName: cleanName };
+  },
+
+  async updateTableSeats(restaurantId: string, tableId: string, seats: number): Promise<void> {
+    const seatNum = Math.max(1, Math.min(50, Number(seats) || 4));
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    tableStates[tableId] = {
+      ...(tableStates[tableId] || {}),
+      seats: seatNum,
+      capacity: seatNum
+    };
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    }).eq('id', restaurantId);
+  },
+
+  async softDeleteTable(restaurantId: string, tableId: string): Promise<void> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    tableStates[tableId] = {
+      ...(tableStates[tableId] || {}),
+      is_archived: true,
+      archived_at: new Date().toISOString()
+    };
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    }).eq('id', restaurantId);
+  },
+
+  async restoreTable(restaurantId: string, tableId: string): Promise<void> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    tableStates[tableId] = {
+      ...(tableStates[tableId] || {}),
+      is_archived: false,
+      restored_at: new Date().toISOString()
+    };
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    }).eq('id', restaurantId);
+  },
+
+  async assignTableZone(restaurantId: string, tableId: string, zoneId: string): Promise<void> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    tableStates[tableId] = {
+      ...(tableStates[tableId] || {}),
+      zone_id: zoneId
+    };
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    }).eq('id', restaurantId);
+  },
+
+  async assignTableWaiter(restaurantId: string, tableId: string, waiterId: string | null, waiterName?: string, assignedBy: string = 'Owner'): Promise<void> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    tableStates[tableId] = {
+      ...(tableStates[tableId] || {}),
+      assigned_waiter_id: waiterId,
+      assigned_waiter_name: waiterName || null,
+      assigned_at: waiterId ? new Date().toISOString() : null,
+      assigned_by: assignedBy
+    };
+
+    let assignments = (rest.settings?.table_assignments || []).filter((a: any) => a.table_id !== tableId);
+    if (waiterId) {
+      assignments.push({
+        id: `asgn_${Date.now()}_${tableId}`,
+        restaurant_id: restaurantId,
+        table_id: tableId,
+        waiter_id: waiterId,
+        waiter_name: waiterName || 'Waiter',
+        active: true,
+        assigned_at: new Date().toISOString()
+      });
+    }
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        table_states: tableStates,
+        table_assignments: assignments
+      }
+    }).eq('id', restaurantId);
+  },
+
+  async clearTableWaiter(restaurantId: string, tableId: string): Promise<void> {
+    await this.assignTableWaiter(restaurantId, tableId, null);
+  },
+
+  async ensureRestaurantZones(restaurantId: string): Promise<RestaurantZone[]> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) return [];
+    let zones: RestaurantZone[] = rest.settings?.zones || [];
+    let needsSave = false;
+
+    if (!zones || zones.length === 0) {
+      zones = [
+        { id: 'zone_general', name: 'General', sort_order: 1, created_at: new Date().toISOString() }
+      ];
+      needsSave = true;
+    }
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    const { data: rawTables } = await supabase.from('tables').select('id').eq('restaurant_id', restaurantId);
+    if (rawTables) {
+      rawTables.forEach(t => {
+        if (!tableStates[t.id]) {
+          tableStates[t.id] = { zone_id: 'zone_general', seats: 4, capacity: 4 };
+          needsSave = true;
+        } else if (!tableStates[t.id].zone_id) {
+          tableStates[t.id].zone_id = 'zone_general';
+          needsSave = true;
+        }
+      });
+    }
+
+    if (needsSave) {
+      await supabase.from('restaurants').update({
+        settings: {
+          ...rest.settings,
+          zones,
+          table_states: tableStates
+        }
+      }).eq('id', restaurantId);
+    }
+    return zones;
+  },
+
+  async getZones(restaurantId: string): Promise<RestaurantZone[]> {
+    return this.ensureRestaurantZones(restaurantId);
+  },
+
+  async createZone(restaurantId: string, name: string, waiterId?: string, waiterName?: string): Promise<RestaurantZone> {
+    const cleanName = name.trim();
+    if (!cleanName) throw new Error('Zone name cannot be empty');
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const zones: RestaurantZone[] = rest.settings?.zones && rest.settings.zones.length > 0
+      ? [...rest.settings.zones]
+      : [{ id: 'zone_general', name: 'General', sort_order: 1, created_at: new Date().toISOString() }];
+
+    const newZone: RestaurantZone = {
+      id: `zone_${Date.now()}`,
+      name: cleanName,
+      sort_order: zones.length + 1,
+      waiter_id: waiterId || null,
+      waiter_name: waiterName || null,
+      created_at: new Date().toISOString()
+    };
+    zones.push(newZone);
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        zones
+      }
+    }).eq('id', restaurantId);
+
+    return newZone;
+  },
+
+  async updateZone(restaurantId: string, zoneId: string, updates: Partial<RestaurantZone>): Promise<void> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const zones: RestaurantZone[] = (rest.settings?.zones || []).map((z: RestaurantZone) => {
+      if (z.id === zoneId) {
+        return { ...z, ...updates };
+      }
+      return z;
+    });
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        zones
+      }
+    }).eq('id', restaurantId);
+  },
+
+  async deleteZone(restaurantId: string, zoneId: string): Promise<void> {
+    if (zoneId === 'zone_general') throw new Error('Cannot delete default General zone');
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const zones: RestaurantZone[] = (rest.settings?.zones || []).filter((z: RestaurantZone) => z.id !== zoneId);
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+
+    Object.keys(tableStates).forEach(tid => {
+      if (tableStates[tid]?.zone_id === zoneId) {
+        tableStates[tid].zone_id = 'zone_general';
+      }
+    });
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        zones,
+        table_states: tableStates
+      }
+    }).eq('id', restaurantId);
   },
 
   async deleteTable(id: string): Promise<void> {
+    // Permanent delete fallback (soft delete preferred)
     const { error } = await supabase
       .from('tables')
       .delete()
