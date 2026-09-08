@@ -121,19 +121,36 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `Item "${menuItem?.name || 'Selected'}" is currently out of stock.` }, { status: 400 });
       }
       const qty = Number(entry.quantity || 1);
-      const price = Number(entry.price !== undefined ? entry.price : menuItem.price);
-      subtotal += price * qty;
 
       let safeVariantId: string | null = null;
       let safeVariantName: string | null = entry.variantName || null;
+      let verifiedPrice = Number(menuItem.price);
 
       if (entry.variantId && isValidUuid(entry.variantId)) {
         const vMatch = allVariants.find((v: any) => v.id === entry.variantId.trim() && v.menu_item_id === menuItem.id);
         if (vMatch) {
+          if (vMatch.is_available === false) {
+            timer.end('inventory');
+            return NextResponse.json({ error: `Portion "${vMatch.name}" of "${menuItem.name}" is currently out of stock.` }, { status: 400 });
+          }
           safeVariantId = vMatch.id;
           safeVariantName = vMatch.name || safeVariantName;
+          verifiedPrice = Number(vMatch.price);
+        }
+      } else if (entry.variantName && typeof entry.variantName === 'string' && entry.variantName.trim()) {
+        const vMatch = allVariants.find((v: any) => v.name.toLowerCase() === entry.variantName.trim().toLowerCase() && v.menu_item_id === menuItem.id);
+        if (vMatch) {
+          if (vMatch.is_available === false) {
+            timer.end('inventory');
+            return NextResponse.json({ error: `Portion "${vMatch.name}" of "${menuItem.name}" is currently out of stock.` }, { status: 400 });
+          }
+          safeVariantId = vMatch.id;
+          safeVariantName = vMatch.name;
+          verifiedPrice = Number(vMatch.price);
         }
       }
+
+      subtotal += verifiedPrice * qty;
 
       itemsPayload.push({
         menu_item_id: menuItem.id,
@@ -141,7 +158,7 @@ export async function POST(req: Request) {
         variant_id: safeVariantId,
         variant_name: safeVariantName,
         quantity: qty,
-        price,
+        price: verifiedPrice,
         notes: entry.notes || null
       });
     }

@@ -90,6 +90,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec | null>(null);
   const [table, setTable] = useState<Table | null>(null);
+  const [isInvalidTable, setIsInvalidTable] = useState<boolean>(false);
   const [activeMergeGroup, setActiveMergeGroup] = useState<any | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -407,28 +408,72 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
         // Table Resolution
         if (isReservation) {
-          let tbl = tbls.find((t: Table) => t.name === 'Reservation');
+          let tbl = tbls.find((t: Table) => t.name?.toLowerCase() === 'reservation');
           if (!tbl) {
-            try { tbl = await db.createTable(rest.id, 'Reservation'); } catch (e) {}
+            tbl = {
+              id: 'reservation',
+              restaurant_id: rest.id,
+              name: 'Reservation',
+              qr_enabled: true
+            } as Table;
           }
-          if (tbl) setTable(tbl);
+          setTable(tbl);
+          setIsInvalidTable(false);
         } else if (isTakeaway) {
-          let tbl = tbls.find((t: Table) => t.name === 'Takeaway');
+          let tbl = tbls.find((t: Table) => t.name?.toLowerCase() === 'takeaway');
           if (!tbl) {
-            try { tbl = await db.createTable(rest.id, 'Takeaway'); } catch (e) {}
+            tbl = {
+              id: 'takeaway',
+              restaurant_id: rest.id,
+              name: 'Takeaway Counter',
+              qr_enabled: true
+            } as Table;
           }
-          if (tbl) setTable(tbl);
+          setTable(tbl);
+          setIsInvalidTable(false);
         } else if (tableId) {
           const targetId = tableId.trim();
           const targetLower = targetId.toLowerCase();
           const matchedTbl = tbls.find((t: Table) => t.id === targetId) ||
                              tbls.find((t: Table) => (t as any).slug === targetId) ||
                              tbls.find((t: Table) => t.name?.toLowerCase() === targetLower) ||
-                             tbls.find((t: Table) => t.name?.toLowerCase().replace(/\s+/g, '-') === targetLower) ||
-                             tbls[0];
-          if (matchedTbl) setTable(matchedTbl);
-        } else if (tbls.length > 0) {
-          setTable(tbls[0]);
+                             tbls.find((t: Table) => t.name?.toLowerCase().replace(/\s+/g, '-') === targetLower);
+          if (matchedTbl) {
+            setTable(matchedTbl);
+            setIsInvalidTable(false);
+            if (typeof window !== 'undefined') {
+              try {
+                sessionStorage.setItem(`smartdine_active_table_${rest.id}`, matchedTbl.id);
+                localStorage.setItem(`smartdine_active_table_${rest.id}`, matchedTbl.id);
+              } catch (e) {}
+            }
+          } else {
+            // Invalid / deleted table QR - do not fall back to tbls[0]
+            setTable(null);
+            setIsInvalidTable(true);
+          }
+        } else {
+          // No tableId provided in URL: Check if customer previously scanned a table in this session
+          let savedTableId: string | null = null;
+          if (typeof window !== 'undefined') {
+            try {
+              savedTableId = sessionStorage.getItem(`smartdine_active_table_${rest.id}`) || localStorage.getItem(`smartdine_active_table_${rest.id}`);
+            } catch (e) {}
+          }
+          if (savedTableId) {
+            const rememberedTbl = tbls.find((t: Table) => t.id === savedTableId);
+            if (rememberedTbl) {
+              setTable(rememberedTbl);
+              setIsInvalidTable(false);
+            } else {
+              setTable(null);
+              setIsInvalidTable(false);
+            }
+          } else {
+            // View-Only mode: table is null!
+            setTable(null);
+            setIsInvalidTable(false);
+          }
         }
 
         setCategories(cats);
@@ -442,7 +487,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         setLoading(false);
 
         // Cart Sync
-        const savedCart = sessionStorage.getItem(`smartdine_cart_${rest.id}`);
+        const cartStorageKey = `smartdine_cart_${rest.id}`;
+        let savedCart: string | null = null;
+        if (typeof window !== 'undefined') {
+          try {
+            savedCart = sessionStorage.getItem(cartStorageKey) || localStorage.getItem(cartStorageKey);
+          } catch (e) {}
+        }
         if (savedCart) {
           try {
             const parsedCart = JSON.parse(savedCart);
@@ -489,7 +540,10 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
             setCart(validCart);
             if (typeof window !== 'undefined') {
-              sessionStorage.setItem(`smartdine_cart_${rest.id}`, JSON.stringify(validCart));
+              try {
+                sessionStorage.setItem(cartStorageKey, JSON.stringify(validCart));
+                localStorage.setItem(cartStorageKey, JSON.stringify(validCart));
+              } catch (e) {}
             }
 
             if (hasStaleItems) {
@@ -499,7 +553,10 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             }
           } catch (e) {
             if (typeof window !== 'undefined') {
-              sessionStorage.removeItem(`smartdine_cart_${rest.id}`);
+              try {
+                sessionStorage.removeItem(cartStorageKey);
+                localStorage.removeItem(cartStorageKey);
+              } catch (e) {}
             }
           }
         }
@@ -578,7 +635,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const saveCart = (newCart: CartItem[]) => {
     setCart(newCart);
     if (typeof window !== 'undefined' && restaurant) {
-      sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
+      const cartKey = `smartdine_cart_${restaurant.id}`;
+      try {
+        sessionStorage.setItem(cartKey, JSON.stringify(newCart));
+        localStorage.setItem(cartKey, JSON.stringify(newCart));
+      } catch (e) {}
     }
     // Trigger bounce animation
     setCartBouncing(true);
@@ -636,7 +697,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         newCart.push({ menuItem: item, quantity: qty, notes: cleanNotes, variantName, variantId, price: finalPrice });
       }
       if (typeof window !== 'undefined' && restaurant) {
-        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
+        const cartKey = `smartdine_cart_${restaurant.id}`;
+        try {
+          sessionStorage.setItem(cartKey, JSON.stringify(newCart));
+          localStorage.setItem(cartKey, JSON.stringify(newCart));
+        } catch (e) {}
       }
       return newCart;
     });
@@ -667,7 +732,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         newCart = newCart.filter((_, idx) => idx !== index);
       }
       if (typeof window !== 'undefined' && restaurant) {
-        sessionStorage.setItem(`smartdine_cart_${restaurant.id}`, JSON.stringify(newCart));
+        const cartKey = `smartdine_cart_${restaurant.id}`;
+        try {
+          sessionStorage.setItem(cartKey, JSON.stringify(newCart));
+          localStorage.setItem(cartKey, JSON.stringify(newCart));
+        } catch (e) {}
       }
       return newCart;
     });
@@ -683,14 +752,17 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const handlePlaceOrder = async () => {
     if (isSubmittingRef.current || orderPlacing) return;
     isSubmittingRef.current = true;
+    setOrderPlacing(true);
 
     if (!restaurant) {
       isSubmittingRef.current = false;
+      setOrderPlacing(false);
       return;
     }
     if (!table) {
       isSubmittingRef.current = false;
-      showToast('This QR code is invalid or missing a Table association. Please ask staff for assistance.');
+      setOrderPlacing(false);
+      showToast('Please scan a QR code on your dining table to place an order.');
       return;
     }
     const isQRDisabled = Boolean(
@@ -702,21 +774,25 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     );
     if (isQRDisabled) {
       isSubmittingRef.current = false;
+      setOrderPlacing(false);
       showToast('This table is temporarily unavailable. Please contact the staff.');
       return;
     }
     if (cart.length === 0) {
       isSubmittingRef.current = false;
+      setOrderPlacing(false);
       return;
     }
 
     if (isTakeaway && !takeawayPaymentCompleted) {
       isSubmittingRef.current = false;
+      setOrderPlacing(false);
       showToast('Please complete the UPI payment before placing a takeaway order.');
       return;
     }
     if (isReservation && !reservationPaymentCompleted) {
       isSubmittingRef.current = false;
+      setOrderPlacing(false);
       showToast('Please complete the UPI payment to confirm your table reservation.');
       return;
     }
@@ -764,6 +840,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
     if (cartChanged) {
       isSubmittingRef.current = false;
+      setOrderPlacing(false);
       saveCart(validCart);
       if (validCart.length === 0) {
         setStaleCartNotice("Your cart items are no longer available. Please add items from the current menu.");
@@ -780,11 +857,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       const sInfo = stockMap[c.menuItem.id];
       if (sInfo && (!sInfo.isAvailable || sInfo.maxServings <= 0)) {
         isSubmittingRef.current = false;
+        setOrderPlacing(false);
         showToast(`Item "${c.menuItem.name}" is out of stock. Please remove it from your cart.`);
         return;
       }
       if (sInfo && c.quantity > sInfo.maxServings) {
         isSubmittingRef.current = false;
+        setOrderPlacing(false);
         showToast(`Only ${sInfo.maxServings} available for "${c.menuItem.name}". Please reduce quantity.`);
         return;
       }
@@ -1104,12 +1183,38 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     );
   }
 
+  if (isInvalidTable) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
+        <div className="max-w-md text-center space-y-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl">
+          <div className="h-16 w-16 bg-rose-50 dark:bg-rose-950/20 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-100 dark:border-rose-900/30 shadow-md">
+            <AlertCircle className="h-8 w-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">Table QR Not Found or Expired</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              The QR code for this table is invalid or has been deactivated. Please scan the QR code on your table or ask staff for assistance.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsInvalidTable(false)}
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:opacity-90 transition-all cursor-pointer shadow-sm"
+          >
+            Browse Digital Menu
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Filters logic
+  const cleanSearch = searchQuery.trim().toLowerCase();
   const filteredItems = menuItems.filter(item => {
     const matchesCategory = selectedCatId === 'all' || item.category_id === selectedCatId;
-    const matchesSearch = 
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = !cleanSearch ||
+      item.name.toLowerCase().includes(cleanSearch) ||
+      (item.description || '').toLowerCase().includes(cleanSearch);
     const matchesVeg = !vegOnly || item.is_veg;
 
     return matchesCategory && matchesSearch && matchesVeg;
@@ -1174,7 +1279,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const cartTotal = billingResult.grandTotal;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50/50 dark:bg-slate-950/40 pb-24 transition-colors">
+    <div className="min-h-screen flex flex-col bg-slate-50/50 dark:bg-slate-950/40 pb-32 transition-colors">
       {/* Offline Network Banner */}
       {isOffline && (
         <div className="bg-amber-500 text-white text-xs font-semibold py-1.5 px-4 text-center sticky top-0 z-50 flex items-center justify-center gap-2 shadow">
@@ -1527,7 +1632,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         )}
 
         {/* Top Selling Items Section (Appears FIRST, above categories, open by default) */}
-        {topSellingItems.length > 0 && (
+        {topSellingItems.length > 0 && !cleanSearch && (
           <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1580,11 +1685,12 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                     </div>
 
                     <div className="p-3 pt-0">
-                      {(() => {
+                      {table && (() => {
                         const hasPortions = Boolean(item.has_variants && item.variants && item.variants.length > 0);
                         if (hasPortions) {
                           return (
                             <button
+                              type="button"
                               onClick={() => setDetailedItem(item)}
                               className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer active:scale-95"
                             >
@@ -1596,6 +1702,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                           return (
                             <div className="flex items-center justify-between bg-emerald-600 text-white rounded-xl p-1 px-2 font-bold text-xs">
                               <button
+                                type="button"
                                 onClick={() => {
                                   const idx = cart.findIndex(c => c.menuItem.id === item.id);
                                   if (idx > -1) updateCartQty(idx, -1);
@@ -1606,6 +1713,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                               </button>
                               <span>{inCartQty}</span>
                               <button
+                                type="button"
                                 onClick={() => handleAddToCart(item, 1)}
                                 className="p-1 hover:bg-white/20 rounded-lg cursor-pointer"
                               >
@@ -1617,6 +1725,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                         if (isTableDisabled) {
                           return (
                             <button
+                              type="button"
                               disabled
                               className="w-full py-2 bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-xl text-xs font-bold cursor-not-allowed"
                             >
@@ -1627,6 +1736,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
                         return (
                           <button
+                            type="button"
                             onClick={() => handleAddToCart(item, 1)}
                             className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer active:scale-95"
                           >
@@ -1669,9 +1779,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         </div>
 
         {/* Categories Bar */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none shrink-0 -mx-4 px-4">
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none shrink-0 -mx-4 px-4 scroll-smooth">
           <button
-            onClick={() => setSelectedCatId('all')}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              setSelectedCatId('all');
+            }}
             className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border cursor-pointer transition-all ${
               selectedCatId === 'all'
                 ? 'bg-slate-900 dark:bg-slate-100 border-slate-900 dark:border-slate-100 text-white dark:text-slate-900 shadow-sm'
@@ -1683,7 +1797,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           {categories.map(cat => (
             <button
               key={cat.id}
-              onClick={() => setSelectedCatId(cat.id)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setSelectedCatId(cat.id);
+              }}
               className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap border cursor-pointer transition-all ${
                 selectedCatId === cat.id
                   ? `${theme.bg} border-transparent text-white shadow-sm`
@@ -2071,13 +2189,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 )}
                 <Button 
                   className={`w-full py-3 text-base font-extrabold cursor-pointer ${
-                    (isTakeaway && !takeawayPaymentCompleted) || isQRDisabled
-                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed hover:bg-slate-200 dark:hover:bg-slate-800'
+                    orderPlacing || isSubmittingRef.current || (isTakeaway && !takeawayPaymentCompleted) || isQRDisabled
+                      ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed pointer-events-none hover:bg-slate-200 dark:hover:bg-slate-800'
                       : theme.bg + ' ' + theme.hoverBg + ' text-white'
                   }`}
                   onClick={handlePlaceOrder}
                   isLoading={orderPlacing}
-                  disabled={orderPlacing || (isTakeaway && !takeawayPaymentCompleted) || isQRDisabled}
+                  disabled={orderPlacing || isSubmittingRef.current || (isTakeaway && !takeawayPaymentCompleted) || isQRDisabled}
                 >
                   {isQRDisabled
                     ? 'Table Temporarily Unavailable'
