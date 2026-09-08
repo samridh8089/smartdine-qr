@@ -7,10 +7,12 @@ import { FloorPlanItem } from './types';
 interface FloorCanvasWrapperProps {
   restaurantId: string;
   restaurantName?: string;
+  restaurantSlug?: string;
   mode: 'view' | 'edit';
   onModeChange: (mode: 'view' | 'edit') => void;
   initialItems?: FloorPlanItem[];
   onViewQR?: (item: FloorPlanItem) => void;
+  onDataMutated?: () => void;
 }
 
 const DynamicFloorCanvas = dynamic(

@@ -5,7 +5,8 @@ import { Stage, Layer } from 'react-konva';
 import Konva from 'konva';
 import { 
   ZoomIn, ZoomOut, RotateCcw, Grid, Undo2, Redo2, 
-  Save, Eye, Edit3, Plus, Layers, AlertCircle, Compass, X
+  Save, Eye, Edit3, Plus, Layers, AlertCircle, Compass, X,
+  TrendingUp, Users, ChevronDown, ChevronRight
 } from 'lucide-react';
 
 import { FloorPlanItem, TableShape, FloorPlanBlueprint } from './types';
@@ -18,31 +19,40 @@ import { Toolbox } from './Toolbox';
 import { PropertyPanel } from './PropertyPanel';
 import { MergePromptModal } from './MergePromptModal';
 import { SeatGuestDrawer } from './SeatGuestDrawer';
+import { TableQuickActionPopover } from './TableQuickActionPopover';
+import { TableQRPopover } from './TableQRPopover';
+import { WaiterHeatmapModal } from './WaiterHeatmapModal';
+import { ZoneManagerModal } from './ZoneManagerModal';
 import { HistoryManager } from './HistoryManager';
 import { AutoSaveEngine } from './AutoSaveEngine';
 import { findCollidingTable, mergeTables, splitTable } from './CollisionEngine';
+import { db, RestaurantZone } from '@/lib/db';
+import { generateQRDataURL } from '@/lib/qr';
 
 interface FloorCanvasProps {
   restaurantId: string;
   restaurantName?: string;
+  restaurantSlug?: string;
   mode: 'view' | 'edit';
   onModeChange: (mode: 'view' | 'edit') => void;
   initialItems?: FloorPlanItem[];
   onViewQR?: (item: FloorPlanItem) => void;
+  onDataMutated?: () => void;
 }
 
 // Default initial layout for realistic restaurant floor
 export const DEFAULT_INITIAL_ITEMS: FloorPlanItem[] = [
   // Left Seating Zone: Booths & Dining
-  { id: 'tbl-1', tableNumber: '1', name: 'Table 1', kind: 'table', shape: 'square', x: 80, y: 80, width: 80, height: 80, rotation: 0, seats: 4, status: 'available' },
-  { id: 'tbl-2', tableNumber: '2', name: 'Table 2', kind: 'table', shape: 'square', x: 220, y: 80, width: 80, height: 80, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 28, currentGuests: 3, waiterName: 'Priya Sharma' },
-  { id: 'tbl-3', tableNumber: '3', name: 'Table 3', kind: 'table', shape: 'rectangle', x: 360, y: 80, width: 130, height: 80, rotation: 0, seats: 6, status: 'reserved', reservationPartyName: 'Sanjay Kapoor', reservationTime: '20:00', reservationPhone: '+91 98110 33481' },
-  { id: 'tbl-4', tableNumber: '4', name: 'Table 4', kind: 'table', shape: 'square', x: 80, y: 220, width: 80, height: 80, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 42, currentGuests: 4, waiterName: 'Rahul Verma' },
+  { id: 'tbl-1', tableNumber: '1', display_number: '1', name: 'Table 1', kind: 'table', shape: 'square', x: 80, y: 80, width: 80, height: 80, rotation: 0, seats: 4, status: 'available' },
+  { id: 'tbl-2', tableNumber: '2', display_number: '2', name: 'Table 2', kind: 'table', shape: 'square', x: 220, y: 80, width: 80, height: 80, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 28, currentGuests: 3, waiterName: 'Priya Sharma' },
+  { id: 'tbl-3', tableNumber: '3', display_number: '3', name: 'Table 3', kind: 'table', shape: 'rectangle', x: 360, y: 80, width: 130, height: 80, rotation: 0, seats: 6, status: 'reserved', reservationPartyName: 'Sanjay Kapoor', reservationTime: '20:00', reservationPhone: '+91 98110 33481' },
+  { id: 'tbl-4', tableNumber: '4', display_number: '4', name: 'Table 4', kind: 'table', shape: 'square', x: 80, y: 220, width: 80, height: 80, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 42, currentGuests: 4, waiterName: 'Rahul Verma' },
   
   // Center Merged Entity: Table 5 + 6
   { 
     id: 'tbl-5-6-merged', 
-    tableNumber: '5 + 6', 
+    tableNumber: '5 + 6',
+    display_number: '5 + 6',
     name: 'Table 5 + 6', 
     kind: 'table', 
     shape: 'rectangle', 
@@ -61,12 +71,12 @@ export const DEFAULT_INITIAL_ITEMS: FloorPlanItem[] = [
     waiterName: 'Priya Sharma'
   },
 
-  { id: 'tbl-7', tableNumber: '7', name: 'Table 7', kind: 'table', shape: 'circle', x: 440, y: 220, width: 85, height: 85, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 14, currentGuests: 4, waiterName: 'Amit Patel' },
-  { id: 'tbl-8', tableNumber: '8', name: 'Table 8', kind: 'table', shape: 'rectangle', x: 80, y: 360, width: 130, height: 80, rotation: 0, seats: 6, status: 'reserved', reservationPartyName: 'Dr. Ramesh Nair', reservationTime: '19:30', reservationPhone: '+91 97401 88921' },
-  { id: 'tbl-9', tableNumber: '9', name: 'Table 9', kind: 'table', shape: 'circle', x: 260, y: 360, width: 80, height: 80, rotation: 0, seats: 4, status: 'cleaning' },
-  { id: 'tbl-10', tableNumber: '10', name: 'Table 10', kind: 'table', shape: 'square', x: 380, y: 360, width: 80, height: 80, rotation: 0, seats: 4, status: 'available' },
-  { id: 'tbl-11', tableNumber: '11', name: 'Table 11', kind: 'table', shape: 'booth', x: 80, y: 490, width: 110, height: 85, rotation: 0, seats: 4, status: 'available' },
-  { id: 'tbl-12', tableNumber: '12', name: 'Table 12', kind: 'table', shape: 'booth', x: 230, y: 490, width: 110, height: 85, rotation: 0, seats: 4, status: 'available' },
+  { id: 'tbl-7', tableNumber: '7', display_number: '7', name: 'Table 7', kind: 'table', shape: 'circle', x: 440, y: 220, width: 85, height: 85, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 14, currentGuests: 4, waiterName: 'Amit Patel' },
+  { id: 'tbl-8', tableNumber: '8', display_number: '8', name: 'Table 8', kind: 'table', shape: 'rectangle', x: 80, y: 360, width: 130, height: 80, rotation: 0, seats: 6, status: 'reserved', reservationPartyName: 'Dr. Ramesh Nair', reservationTime: '19:30', reservationPhone: '+91 97401 88921' },
+  { id: 'tbl-9', tableNumber: '9', display_number: '9', name: 'Table 9', kind: 'table', shape: 'circle', x: 260, y: 360, width: 80, height: 80, rotation: 0, seats: 4, status: 'cleaning' },
+  { id: 'tbl-10', tableNumber: '10', display_number: '10', name: 'Table 10', kind: 'table', shape: 'square', x: 380, y: 360, width: 80, height: 80, rotation: 0, seats: 4, status: 'available' },
+  { id: 'tbl-11', tableNumber: '11', display_number: '11', name: 'Table 11', kind: 'table', shape: 'booth', x: 80, y: 490, width: 110, height: 85, rotation: 0, seats: 4, status: 'available' },
+  { id: 'tbl-12', tableNumber: '12', display_number: '12', name: 'Table 12', kind: 'table', shape: 'booth', x: 230, y: 490, width: 110, height: 85, rotation: 0, seats: 4, status: 'available' },
 
   // Right Service & Architectural Zone
   { id: 'furn-bar', tableNumber: '', name: 'Artisan Beverage Bar', kind: 'furniture', furnitureType: 'bar_seats', x: 620, y: 80, width: 180, height: 45, rotation: 0, seats: 5, status: 'available' },
@@ -80,10 +90,12 @@ export const DEFAULT_INITIAL_ITEMS: FloorPlanItem[] = [
 export default function FloorCanvas({
   restaurantId,
   restaurantName = 'The Foody Hub',
+  restaurantSlug = 'thefoodyhub',
   mode,
   onModeChange,
   initialItems,
-  onViewQR
+  onViewQR,
+  onDataMutated
 }: FloorCanvasProps) {
   // 1. useState declarations (Strict React Hook Order)
   const [items, setItems] = useState<FloorPlanItem[]>(() => {
@@ -95,6 +107,16 @@ export default function FloorCanvas({
   const [snapGrid, setSnapGrid] = useState<boolean>(true);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'dirty'>('saved');
   const [activeDrawerTable, setActiveDrawerTable] = useState<FloorPlanItem | null>(null);
+  const [activeQuickActionTable, setActiveQuickActionTable] = useState<FloorPlanItem | null>(null);
+  const [activeQRModalTable, setActiveQRModalTable] = useState<FloorPlanItem | null>(null);
+  const [activeQRDataUrl, setActiveQRDataUrl] = useState<string>('');
+  const [showHeatmapModal, setShowHeatmapModal] = useState<boolean>(false);
+  const [showZoneModal, setShowZoneModal] = useState<boolean>(false);
+  const [zones, setZones] = useState<RestaurantZone[]>([
+    { id: 'general', name: 'General', color: '#10B981' }
+  ]);
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('all');
+  const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({});
   const [mergeCandidatePair, setMergeCandidatePair] = useState<{ tableA: FloorPlanItem; tableB: FloorPlanItem } | null>(null);
   const [collidingId, setCollidingId] = useState<string | null>(null);
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
@@ -108,6 +130,7 @@ export default function FloorCanvas({
   const autoSaveEngineRef = useRef<AutoSaveEngine | null>(null);
   const originalTablesMapRef = useRef<Record<string, FloorPlanItem>>({});
   const hasUserPannedRef = useRef<boolean>(false);
+  const localDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // 3. useMemo declarations
   const selectedItem = useMemo(() => {
@@ -152,16 +175,54 @@ export default function FloorCanvas({
     return layoutBounds.lowestY + 40;
   }, [layoutBounds]);
 
-  // Dynamic container card height wrapping the toolbar (48px) + dynamic stage
+  // Dynamic container card height wrapping the toolbar (48px) + occupancy strip (38px) + dynamic stage
   const dynamicCardHeight = useMemo(() => {
-    return dynamicCanvasHeight + 48;
+    return dynamicCanvasHeight + 86;
   }, [dynamicCanvasHeight]);
+
+  // Executive Live Occupancy Calculations
+  const occupancyStats = useMemo(() => {
+    const tableItems = items.filter((it) => it.kind === 'table' && !it.is_archived);
+    const total = tableItems.length;
+    const occupied = tableItems.filter((it) => it.status === 'occupied').length;
+    const reserved = tableItems.filter((it) => it.status === 'reserved').length;
+    const available = tableItems.filter((it) => it.status === 'available').length;
+    const guests = tableItems
+      .filter((it) => it.status === 'occupied')
+      .reduce((acc, t) => acc + (t.currentGuests || t.seats || 2), 0);
+    const rate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+    return { total, occupied, reserved, available, guests, rate };
+  }, [items]);
+
+  // Filter items by selected zone
+  const visibleItems = useMemo(() => {
+    if (selectedZoneFilter === 'all') {
+      return items.filter((it) => {
+        if (it.kind !== 'table') return true;
+        if (it.is_archived) return false;
+        const zoneId = it.zone_id || 'general';
+        return !collapsedZones[zoneId];
+      });
+    }
+    return items.filter((it) => {
+      if (it.kind !== 'table') return true;
+      if (it.is_archived) return false;
+      const zoneId = it.zone_id || 'general';
+      if (collapsedZones[zoneId]) return false;
+      return zoneId === selectedZoneFilter;
+    });
+  }, [items, selectedZoneFilter, collapsedZones]);
 
   // 4. useCallback declarations
   const updateItemsWithHistory = useCallback((newItems: FloorPlanItem[]) => {
     setItems(newItems);
     historyManagerRef.current.push(newItems);
-    autoSaveEngineRef.current?.markDirty(newItems);
+    
+    // 300ms Debounced Local Save + 3s AutoSave
+    if (localDebounceTimerRef.current) clearTimeout(localDebounceTimerRef.current);
+    localDebounceTimerRef.current = setTimeout(() => {
+      autoSaveEngineRef.current?.markDirty(newItems);
+    }, 300);
   }, []);
 
   const handleSelectItem = useCallback((item: FloorPlanItem, e: any) => {
@@ -169,15 +230,15 @@ export default function FloorCanvas({
     setSelectedId(item.id);
 
     if (mode === 'view' && item.kind === 'table') {
-      setActiveDrawerTable(item);
+      setActiveQuickActionTable(item);
     }
   }, [mode]);
 
   const handleStageClick = useCallback((e: any) => {
-    // If clicked on stage background
     if (e.target === e.target.getStage()) {
       setSelectedId(null);
       setActiveDrawerTable(null);
+      setActiveQuickActionTable(null);
     }
   }, []);
 
@@ -198,6 +259,7 @@ export default function FloorCanvas({
     const newItem: FloorPlanItem = {
       id: `item_${Date.now()}`,
       tableNumber: isTable ? `${nextNum}` : '',
+      display_number: isTable ? `${nextNum}` : undefined,
       name: isTable ? `Table ${nextNum}` : (template.name || 'Fixture'),
       kind: template.kind || 'table',
       shape: template.shape || 'rectangle',
@@ -208,13 +270,14 @@ export default function FloorCanvas({
       height: template.height || 80,
       rotation: 0,
       seats: template.seats || 4,
+      zone_id: selectedZoneFilter !== 'all' ? selectedZoneFilter : 'general',
       status: 'available'
     };
 
     const updated = [...items, newItem];
     updateItemsWithHistory(updated);
     setSelectedId(newItem.id);
-  }, [items, stagePos, scale, updateItemsWithHistory]);
+  }, [items, stagePos, scale, selectedZoneFilter, updateItemsWithHistory]);
 
   const handleDuplicateItem = useCallback((item: FloorPlanItem) => {
     const isTable = item.kind === 'table';
@@ -223,6 +286,7 @@ export default function FloorCanvas({
       ...JSON.parse(JSON.stringify(item)),
       id: `item_${Date.now()}`,
       tableNumber: isTable ? `${nextNum}` : '',
+      display_number: isTable ? `${nextNum}` : undefined,
       name: isTable ? `Table ${nextNum}` : `${item.name} (Copy)`,
       x: item.x + 30,
       y: item.y + 30,
@@ -248,7 +312,6 @@ export default function FloorCanvas({
     let newX = node.x();
     let newY = node.y();
 
-    // Snap to 20px grid if enabled
     if (snapGrid) {
       newX = Math.round(newX / 20) * 20;
       newY = Math.round(newY / 20) * 20;
@@ -261,7 +324,6 @@ export default function FloorCanvas({
       y: newY
     };
 
-    // Check collision with other tables
     const collider = findCollidingTable(currentItemState, items, 15);
     if (collider) {
       setCollidingId(collider.id);
@@ -283,7 +345,6 @@ export default function FloorCanvas({
       y: newY
     };
 
-    // Check if dropped while colliding with another table for drag-to-merge
     const collider = findCollidingTable(updatedItemState, items, 20);
     if (collider && item.kind === 'table') {
       setCollidingId(null);
@@ -301,7 +362,6 @@ export default function FloorCanvas({
     if (!mergeCandidatePair) return;
     const { tableA, tableB } = mergeCandidatePair;
 
-    // Cache original tables for later split restoration
     originalTablesMapRef.current[tableA.id] = tableA;
     originalTablesMapRef.current[tableB.id] = tableB;
 
@@ -392,6 +452,96 @@ export default function FloorCanvas({
     setActiveDrawerTable(null);
   }, [items, updateItemsWithHistory]);
 
+  // Table Identity Mutation Operations
+  const handleRenameTable = useCallback(async (table: FloorPlanItem, newDisplayNumber: string) => {
+    const tableDbId = table.dbTableId || table.id;
+    await db.renameTable(restaurantId, tableDbId, newDisplayNumber);
+    const updated = items.map((it) => {
+      if (it.id === table.id) {
+        return {
+          ...it,
+          display_number: newDisplayNumber,
+          tableNumber: newDisplayNumber,
+          name: `Table ${newDisplayNumber}`
+        };
+      }
+      return it;
+    });
+    updateItemsWithHistory(updated);
+    onDataMutated?.();
+  }, [restaurantId, items, updateItemsWithHistory, onDataMutated]);
+
+  const handleChangeSeats = useCallback(async (table: FloorPlanItem, newSeats: number) => {
+    const tableDbId = table.dbTableId || table.id;
+    await db.updateTableSeats(restaurantId, tableDbId, newSeats);
+    const updated = items.map((it) => {
+      if (it.id === table.id) {
+        return {
+          ...it,
+          seats: newSeats
+        };
+      }
+      return it;
+    });
+    updateItemsWithHistory(updated);
+    onDataMutated?.();
+  }, [restaurantId, items, updateItemsWithHistory, onDataMutated]);
+
+  const handleAssignWaiter = useCallback(async (table: FloorPlanItem, waiterId: string | null) => {
+    const tableDbId = table.dbTableId || table.id;
+    await db.assignTableWaiter(restaurantId, tableDbId, waiterId);
+    const updated = items.map((it) => {
+      if (it.id === table.id) {
+        return {
+          ...it,
+          assigned_waiter_id: waiterId || undefined,
+          assignment_source: waiterId ? ('manual' as const) : ('zone' as const)
+        };
+      }
+      return it;
+    });
+    updateItemsWithHistory(updated);
+    onDataMutated?.();
+  }, [restaurantId, items, updateItemsWithHistory, onDataMutated]);
+
+  const handleArchiveTable = useCallback(async (table: FloorPlanItem) => {
+    const tableDbId = table.dbTableId || table.id;
+    await db.softDeleteTable(restaurantId, tableDbId);
+    const updated = items.filter((it) => it.id !== table.id);
+    updateItemsWithHistory(updated);
+    onDataMutated?.();
+  }, [restaurantId, items, updateItemsWithHistory, onDataMutated]);
+
+  const handleOpenQRModal = useCallback(async (table: FloorPlanItem) => {
+    setActiveQRModalTable(table);
+    const tableUuid = table.table_uuid || table.id;
+    const directUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/menu/${restaurantSlug}/tbl/${tableUuid}`
+      : `https://www.cleverops.in/menu/${restaurantSlug}/tbl/${tableUuid}`;
+    try {
+      const dataUrl = await generateQRDataURL(directUrl);
+      setActiveQRDataUrl(dataUrl);
+    } catch (err) {
+      console.error('Error generating QR data url:', err);
+    }
+  }, [restaurantSlug]);
+
+  const handleCreateZone = useCallback(async (name: string, defaultWaiterId?: string, color?: string) => {
+    const newZone = await db.createZone(restaurantId, name, defaultWaiterId, color);
+    setZones((prev) => [...prev, newZone]);
+  }, [restaurantId]);
+
+  const handleUpdateZone = useCallback(async (zoneId: string, updates: Partial<RestaurantZone>) => {
+    await db.updateZone(restaurantId, zoneId, updates);
+    setZones((prev) => prev.map((z) => (z.id === zoneId ? { ...z, ...updates } : z)));
+  }, [restaurantId]);
+
+  const handleDeleteZone = useCallback(async (zoneId: string) => {
+    await db.deleteZone(restaurantId, zoneId);
+    setZones((prev) => prev.filter((z) => z.id !== zoneId));
+    if (selectedZoneFilter === zoneId) setSelectedZoneFilter('all');
+  }, [restaurantId, selectedZoneFilter]);
+
   // 5. useEffect declarations
   // Initialize AutoSave Engine and check stored blueprint
   useEffect(() => {
@@ -401,7 +551,6 @@ export default function FloorCanvas({
 
     const storedBlueprint = autoSaveEngineRef.current.loadStoredBlueprint();
     if (storedBlueprint && storedBlueprint.items && storedBlueprint.items.length > 0) {
-      // Merge blueprint coordinates with live initialItems to guarantee zero stale statuses
       const liveItemsMap = new Map<string, FloorPlanItem>();
       (initialItems || []).forEach((it) => {
         liveItemsMap.set(it.id, it);
@@ -415,8 +564,14 @@ export default function FloorCanvas({
         if (live) {
           return {
             ...storedIt,
-            // Preserve blueprint layout (x, y, width, height, rotation, shape, seats)
-            // But ALWAYS take live operational status, QR, and guest metadata from DB
+            table_uuid: live.table_uuid || storedIt.table_uuid || live.id,
+            display_number: live.display_number || storedIt.display_number || live.tableNumber,
+            seats: live.seats || storedIt.seats || 4,
+            zone_id: live.zone_id || storedIt.zone_id,
+            zone_name: live.zone_name || storedIt.zone_name,
+            assigned_waiter_id: live.assigned_waiter_id || storedIt.assigned_waiter_id,
+            assignment_source: live.assignment_source || storedIt.assignment_source,
+            service_badges: live.service_badges || storedIt.service_badges,
             status: live.status,
             dbTableId: live.dbTableId || live.id,
             qrCodeUrl: live.qrCodeUrl || storedIt.qrCodeUrl,
@@ -431,7 +586,6 @@ export default function FloorCanvas({
         return storedIt;
       });
 
-      // Also ensure any newly added tables from DB that aren't yet in the blueprint are included
       (initialItems || []).forEach((liveIt) => {
         if (liveIt.kind === 'table') {
           const exists = merged.some((m) => m.id === liveIt.id || m.tableNumber === liveIt.tableNumber);
@@ -453,8 +607,29 @@ export default function FloorCanvas({
 
     return () => {
       autoSaveEngineRef.current?.destroy();
+      if (localDebounceTimerRef.current) clearTimeout(localDebounceTimerRef.current);
     };
   }, [restaurantId, initialItems]);
+
+  // Load Zones from DB
+  useEffect(() => {
+    let isMounted = true;
+    async function loadZones() {
+      if (!restaurantId) return;
+      try {
+        const zList = await db.ensureRestaurantZones(restaurantId);
+        if (isMounted && zList && zList.length > 0) {
+          setZones(zList);
+        }
+      } catch (err) {
+        console.error('Error loading restaurant zones:', err);
+      }
+    }
+    loadZones();
+    return () => {
+      isMounted = false;
+    };
+  }, [restaurantId]);
 
   // Track container sizing and dynamic height
   useEffect(() => {
@@ -496,7 +671,6 @@ export default function FloorCanvas({
         e.preventDefault();
         handleRedo();
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        // Only delete if canvas object is focused and not in input
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag !== 'INPUT' && tag !== 'TEXTAREA' && selectedId && isEditable) {
           handleDeleteItem(selectedId);
@@ -511,7 +685,7 @@ export default function FloorCanvas({
   return (
     <div
       className="flex flex-col bg-[#F8F8F6] rounded-xl border border-[#E7E5E4] overflow-hidden shadow-xs transition-all duration-300"
-      style={{ height: `${dynamicCardHeight}px`, minHeight: '480px' }}
+      style={{ height: `${dynamicCardHeight}px`, minHeight: '520px' }}
     >
       {/* Top Toolbar */}
       <div className="h-12 bg-white border-b border-[#E7E5E4] px-4 flex items-center justify-between select-none z-10 shrink-0">
@@ -564,31 +738,6 @@ export default function FloorCanvas({
                 ? 'Saving...'
                 : 'Unsaved'}
             </span>
-          </div>
-        </div>
-
-        {/* Center: Live Stats Summary */}
-        <div className="hidden md:flex items-center space-x-4 text-xs">
-          <div className="flex items-center space-x-1.5">
-            <span className="w-2.5 h-2.5 rounded-xs bg-white border border-[#D6D3D1]" />
-            <span className="text-[#737373]">Available:</span>
-            <strong className="text-[#171717]">
-              {items.filter((it) => it.kind === 'table' && it.status === 'available').length}
-            </strong>
-          </div>
-          <div className="flex items-center space-x-1.5">
-            <span className="w-2.5 h-2.5 rounded-xs bg-white border-2 border-[#262626]" />
-            <span className="text-[#737373]">Running:</span>
-            <strong className="text-[#171717]">
-              {items.filter((it) => it.kind === 'table' && it.status === 'occupied').length}
-            </strong>
-          </div>
-          <div className="flex items-center space-x-1.5">
-            <span className="w-2.5 h-2.5 rounded-xs bg-[#F5F0E6] border border-[#C8BCAB]" />
-            <span className="text-[#737373]">Reserved:</span>
-            <strong className="text-[#171717]">
-              {items.filter((it) => it.kind === 'table' && it.status === 'reserved').length}
-            </strong>
           </div>
         </div>
 
@@ -663,6 +812,91 @@ export default function FloorCanvas({
         </div>
       </div>
 
+      {/* Live Occupancy Strip & Zone Toolbar */}
+      <div className="bg-[#FAF9F6] border-b border-[#E7E5E4] px-4 py-2 flex flex-wrap items-center justify-between text-xs text-[#171717] select-none gap-2 shrink-0">
+        {/* Left: OpenTable Occupancy Breakdown */}
+        <div className="flex items-center space-x-3 text-xs">
+          <div className="flex items-center space-x-1.5">
+            <span className="font-bold text-[#171717]">{occupancyStats.total}</span>
+            <span className="text-[#737373]">Tables</span>
+          </div>
+          <span className="text-[#D6D3D1]">&bull;</span>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            <span className="font-bold text-[#171717]">{occupancyStats.occupied}</span>
+            <span className="text-[#737373]">Occupied ({occupancyStats.guests} guests)</span>
+          </div>
+          <span className="text-[#D6D3D1]">&bull;</span>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-400" />
+            <span className="font-bold text-[#171717]">{occupancyStats.reserved}</span>
+            <span className="text-[#737373]">Reserved</span>
+          </div>
+          <span className="text-[#D6D3D1]">&bull;</span>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="font-bold text-[#171717]">{occupancyStats.available}</span>
+            <span className="text-[#737373]">Available</span>
+          </div>
+          <span className="text-[#D6D3D1]">&bull;</span>
+          <div className="text-[11px] text-[#737373]">
+            Occupancy: <strong className="text-[#171717]">{occupancyStats.rate}%</strong>
+          </div>
+        </div>
+
+        {/* Right: Zone Filter Tabs & Waiter Heatmap Trigger */}
+        <div className="flex items-center space-x-2">
+          {/* Zone Filter Tabs */}
+          <div className="flex items-center bg-white p-0.5 rounded-lg border border-[#E7E5E4] text-[11px]">
+            <button
+              type="button"
+              onClick={() => setSelectedZoneFilter('all')}
+              className={`px-2.5 py-0.5 rounded font-semibold transition-all cursor-pointer ${
+                selectedZoneFilter === 'all'
+                  ? 'bg-[#171717] text-white shadow-2xs'
+                  : 'text-[#737373] hover:text-[#171717]'
+              }`}
+            >
+              All
+            </button>
+            {zones.map((z) => (
+              <button
+                key={z.id}
+                type="button"
+                onClick={() => setSelectedZoneFilter(z.id)}
+                className={`px-2 py-0.5 rounded font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+                  selectedZoneFilter === z.id
+                    ? 'bg-[#171717] text-white shadow-2xs'
+                    : 'text-[#737373] hover:text-[#171717]'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: z.color || '#10B981' }} />
+                <span>{z.name}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setShowZoneModal(true)}
+              className="px-2 py-0.5 text-stone-500 hover:text-stone-900 font-bold border-l border-stone-200 ml-1 cursor-pointer"
+              title="Manage Restaurant Zones"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Waiter Heatmap Button */}
+          <button
+            type="button"
+            onClick={() => setShowHeatmapModal(true)}
+            className="px-2.5 py-1 bg-white hover:bg-stone-50 border border-[#E7E5E4] rounded-lg text-[11px] font-semibold text-[#171717] flex items-center space-x-1 shadow-2xs cursor-pointer transition-colors"
+            title="Open Waiter Workload Heatmap"
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-[#171717]" />
+            <span>Heatmap</span>
+          </button>
+        </div>
+      </div>
+
       {/* Main Workspace Body */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Toolbox (Edit Mode Only) */}
@@ -705,7 +939,7 @@ export default function FloorCanvas({
             {/* 3. Items Layer: Furniture & Tables */}
             <Layer>
               {/* Furniture Fixtures */}
-              {items
+              {visibleItems
                 .filter((it) => it.kind === 'furniture')
                 .map((furn) => (
                   <FurnitureNode
@@ -725,7 +959,7 @@ export default function FloorCanvas({
                 ))}
 
               {/* Seating Tables */}
-              {items
+              {visibleItems
                 .filter((it) => it.kind === 'table')
                 .map((table) => (
                   <TableNode
@@ -755,7 +989,7 @@ export default function FloorCanvas({
             </Layer>
           </Stage>
 
-          {/* P1 Mini Map Navigator Architecture (Prepared for Large Restaurants) */}
+          {/* Mini Map Navigator */}
           <div className="absolute bottom-3 right-3 z-10 flex flex-col items-end">
             {showMiniMap ? (
               <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md border border-[#E7E5E4] dark:border-stone-800 rounded-lg shadow-md p-2 w-44 h-32 flex flex-col justify-between select-none">
@@ -819,7 +1053,7 @@ export default function FloorCanvas({
             onDelete={handleDeleteItem}
             onSplit={handleSplitTable}
             onClose={() => setSelectedId(null)}
-            onViewQR={onViewQR}
+            onViewQR={(t) => handleOpenQRModal(t)}
           />
         )}
       </div>
@@ -832,6 +1066,51 @@ export default function FloorCanvas({
         onCancel={() => setMergeCandidatePair(null)}
       />
 
+      {/* Table Quick Actions Popover (View Mode Instant Table Click) */}
+      <TableQuickActionPopover
+        table={activeQuickActionTable}
+        isOpen={Boolean(activeQuickActionTable && mode === 'view')}
+        onClose={() => setActiveQuickActionTable(null)}
+        onSeatGuest={(t) => setActiveDrawerTable(t)}
+        onViewQR={(t) => handleOpenQRModal(t)}
+        onPrintQR={(t) => handleOpenQRModal(t)}
+        onRenameTable={handleRenameTable}
+        onChangeSeats={handleChangeSeats}
+        onAssignWaiter={handleAssignWaiter}
+        onMergeTable={(t) => {
+          onModeChange('edit');
+          setSelectedId(t.id);
+        }}
+        onArchiveTable={handleArchiveTable}
+      />
+
+      {/* Permanent QR Modal Popover */}
+      <TableQRPopover
+        table={activeQRModalTable}
+        restaurantSlug={restaurantSlug}
+        restaurantName={restaurantName}
+        qrDataUrl={activeQRDataUrl}
+        isOpen={Boolean(activeQRModalTable)}
+        onClose={() => setActiveQRModalTable(null)}
+      />
+
+      {/* Waiter Workload Heatmap Modal */}
+      <WaiterHeatmapModal
+        isOpen={showHeatmapModal}
+        onClose={() => setShowHeatmapModal(false)}
+        items={items}
+      />
+
+      {/* Restaurant Zones Manager Modal */}
+      <ZoneManagerModal
+        isOpen={showZoneModal}
+        onClose={() => setShowZoneModal(false)}
+        zones={zones}
+        onCreateZone={handleCreateZone}
+        onUpdateZone={handleUpdateZone}
+        onDeleteZone={handleDeleteZone}
+      />
+
       {/* Operational Seat Guest Drawer (View Mode) */}
       <SeatGuestDrawer
         table={activeDrawerTable}
@@ -839,9 +1118,8 @@ export default function FloorCanvas({
         onClose={() => setActiveDrawerTable(null)}
         onSeatGuest={handleSeatGuest}
         onClearTable={handleClearTable}
-        onViewQR={(t) => onViewQR && onViewQR(t)}
+        onViewQR={(t) => handleOpenQRModal(t)}
         onOpenReservation={(t) => {
-          // Trigger reservation update
           const updated = items.map((it) =>
             it.id === t.id
               ? {
