@@ -52,21 +52,38 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // 2. Check Phone Uniqueness if supplied
+    // 2. Check Phone Uniqueness against canonical sources (staff_metadata, owner contact, and auth users)
     if (phone && String(phone).trim()) {
       const cleanPhone = String(phone).trim().replace(/\D/g, '');
       if (cleanPhone.length >= 10) {
-        const { data: existingPhoneProfiles } = await supabaseAdmin
-          .from('profiles')
-          .select('id, phone, email')
-          .eq('restaurant_id', restaurantId);
-
-        const phoneConflict = existingPhoneProfiles?.find(p => {
-          const pPhone = (p.phone || '').replace(/\D/g, '');
-          return pPhone && pPhone.slice(-10) === cleanPhone.slice(-10);
+        // 2a. Check staff_metadata in restaurant settings
+        const staffMeta = restRow?.settings?.staff_metadata || {};
+        const staffMetaValues = Object.values(staffMeta) as any[];
+        const metaPhoneConflict = staffMetaValues.find(m => {
+          const mPhone = (m?.phone || '').replace(/\D/g, '');
+          return mPhone && mPhone.slice(-10) === cleanPhone.slice(-10);
         });
 
-        if (phoneConflict) {
+        // 2b. Check restaurant owner contact phone
+        const ownerPhone = (restRow?.settings?.owner_phone || (restRow as any)?.phone || '').replace(/\D/g, '');
+        const isOwnerPhoneConflict = Boolean(ownerPhone && ownerPhone.slice(-10) === cleanPhone.slice(-10));
+
+        // 2c. Check auth users metadata for this restaurant
+        let authPhoneConflict = false;
+        try {
+          const { data: authUsersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+          const matchingAuthUser = (authUsersData?.users || []).find(u => {
+            const uRestId = u.user_metadata?.restaurant_id;
+            if (uRestId && uRestId !== restaurantId) return false;
+            const uPhone = (u.user_metadata?.phone || u.phone || '').replace(/\D/g, '');
+            return uPhone && uPhone.slice(-10) === cleanPhone.slice(-10);
+          });
+          if (matchingAuthUser) authPhoneConflict = true;
+        } catch (authListErr) {
+          console.warn('[create-invite] Phone auth lookup notice:', authListErr);
+        }
+
+        if (metaPhoneConflict || isOwnerPhoneConflict || authPhoneConflict) {
           return NextResponse.json({
             error: 'A staff member with this mobile number already exists.',
             code: 'DUPLICATE_PHONE_NUMBER'

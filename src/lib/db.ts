@@ -3251,26 +3251,28 @@ export const db = {
       isActive?: boolean;
     }
   ): Promise<void> {
-    // 1. Update profiles table
-    const profileUpdates: any = {};
+    // 1. Update profiles table - only valid canonical columns (full_name, role, updated_at)
+    const profileUpdates: any = {
+      updated_at: new Date().toISOString()
+    };
     if (updates.fullName !== undefined) profileUpdates.full_name = updates.fullName;
     if (updates.role !== undefined) profileUpdates.role = updates.role;
-    if (updates.department !== undefined) profileUpdates.department = updates.department;
-    if (updates.phone !== undefined) profileUpdates.phone = updates.phone;
-    if (updates.isActive !== undefined) profileUpdates.is_active = updates.isActive;
 
-    if (Object.keys(profileUpdates).length > 0) {
+    try {
       await supabase.from('profiles').update(profileUpdates).eq('id', staffId);
+    } catch (profErr) {
+      console.warn('[db.updateStaffProfile] profiles table update warning:', profErr);
     }
 
-    // 2. Persist in restaurant settings staff_metadata
+    // 2. Persist in restaurant settings staff_metadata (canonical store for department, phone, is_active)
     const rest = await this.getRestaurantById(restaurantId);
     if (rest) {
       const staffMeta = rest.settings?.staff_metadata || {};
       const currentMeta = staffMeta[staffId] || {};
       staffMeta[staffId] = {
-        department: updates.department !== undefined ? updates.department : currentMeta.department,
-        phone: updates.phone !== undefined ? updates.phone : currentMeta.phone,
+        ...currentMeta,
+        department: updates.department !== undefined ? updates.department : (currentMeta.department || 'general'),
+        phone: updates.phone !== undefined ? updates.phone : (currentMeta.phone || ''),
         is_active: updates.isActive !== undefined ? updates.isActive : (currentMeta.is_active !== false)
       };
       await this.updateRestaurant(restaurantId, {
