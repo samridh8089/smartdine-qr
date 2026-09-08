@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { 
   ChefHat, Clock, Check, ArrowRight, Play, CheckCircle2, 
-  X, AlertCircle, Volume2, Sparkles, Bell
+  X, AlertCircle, Volume2, Sparkles, Bell, ShoppingBag
 } from 'lucide-react';
 import { playLoudBell, unlockAudio, stopLoudBell } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
@@ -130,7 +130,11 @@ export default function KitchenDisplayPage() {
         supabase.from('inventory_transactions').select('*').eq('restaurant_id', restId).eq('transaction_type', 'ORDER_CONSUMPTION').order('created_at', { ascending: false }).limit(100)
       ]);
 
-      const activeOrders = (allOrders || []).filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
+      // BUG-RES-001: Reservations must NOT enter KDS until actual dining session / food order placed
+      const activeOrders = (allOrders || []).filter(o => 
+        !['completed', 'cancelled', 'served'].includes(o.status) &&
+        o.order_type !== 'reservation'
+      );
       setOrders(activeOrders);
       dashboardStore.setCachedOrders(restId, allOrders);
       
@@ -181,7 +185,11 @@ export default function KitchenDisplayPage() {
         supabase.from('inventory_transactions').select('*').eq('restaurant_id', restId).eq('transaction_type', 'ORDER_CONSUMPTION').order('created_at', { ascending: false }).limit(100)
       ]);
 
-      const activeOrders = (allOrders || []).filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
+      // BUG-RES-001: Reservations must NOT enter KDS until actual dining session / food order placed
+      const activeOrders = (allOrders || []).filter(o => 
+        !['completed', 'cancelled', 'served'].includes(o.status) &&
+        o.order_type !== 'reservation'
+      );
       setOrders(activeOrders);
       dashboardStore.setCachedOrders(restId, allOrders);
 
@@ -262,6 +270,10 @@ export default function KitchenDisplayPage() {
           console.log('Realtime broadcast KDS order-status-updated received:', payload);
           if (payload.payload?.updatedOrder) {
             const u = payload.payload.updatedOrder;
+            if (u.order_type === 'reservation') {
+              setOrders(prev => prev.filter(o => o.id !== u.id));
+              return;
+            }
             setOrders(prev => {
               const exists = prev.some(o => o.id === u.id);
               if (['completed', 'cancelled', 'served'].includes(u.status)) {
@@ -299,10 +311,15 @@ export default function KitchenDisplayPage() {
         },
         async (payload) => {
           console.log('Realtime KDS order change payload received:', payload);
-          await reloadFnRef.current(restaurantId);
 
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
+            // BUG-RES-001: Reservation orders must NEVER trigger KDS alerts or bells
+            if (newOrderPayload.order_type === 'reservation') {
+              console.log(`Reservation order ignored in KDS: ${newOrderPayload.id}`);
+              return;
+            }
+            await reloadFnRef.current(restaurantId);
             if (!alertedOrderIds.current.has(newOrderPayload.id)) {
               alertedOrderIds.current.add(newOrderPayload.id);
               console.log(`New order detected! Playing alarm for order ID: ${newOrderPayload.id}`);
@@ -548,8 +565,8 @@ export default function KitchenDisplayPage() {
     );
   }
 
-  // Extract active batches from active orders
-  const activeBatches = orders.reduce((acc: any[], order) => {
+  // Extract active batches from active orders (BUG-RES-001: reservations excluded)
+  const activeBatches = orders.filter(o => o.order_type !== 'reservation').reduce((acc: any[], order) => {
     if (order.batches) {
       order.batches.forEach(batch => {
         const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
@@ -963,9 +980,15 @@ export default function KitchenDisplayPage() {
                     )}
 
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-                      <span className="text-xs text-slate-400 font-semibold italic flex items-center justify-center gap-1.5 py-1">
-                        <Clock className="h-3.5 w-3.5 text-purple-500" /> Waiting for waiter pickup
-                      </span>
+                      {order.order_type === 'takeaway' ? (
+                        <span className="text-xs text-purple-600 dark:text-purple-400 font-bold flex items-center justify-center gap-1.5 py-1">
+                          <ShoppingBag className="h-3.5 w-3.5" /> Ready for Counter Pickup
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400 font-semibold italic flex items-center justify-center gap-1.5 py-1">
+                          <Clock className="h-3.5 w-3.5 text-purple-500" /> Waiting for waiter pickup
+                        </span>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

@@ -180,8 +180,12 @@ export interface Restaurant {
     table_assignments?: TableAssignment[];
     table_states?: Record<string, {
       qr_enabled?: boolean;
-      occupancy_status?: 'available' | 'occupied' | 'inactive';
+      occupancy_status?: 'available' | 'occupied' | 'inactive' | 'reserved';
       occupied_at?: string | null;
+      reserved_at?: string | null;
+      reservation_party_name?: string | null;
+      reservation_time?: string | null;
+      reservation_id?: string | null;
       current_session_id?: string | null;
       manual_occupied?: boolean;
     }>;
@@ -383,9 +387,13 @@ export interface Table {
   id: string;
   restaurant_id: string;
   name: string;
-  occupancy_status?: 'available' | 'occupied' | 'inactive';
+  occupancy_status?: 'available' | 'occupied' | 'inactive' | 'reserved';
   qr_enabled?: boolean;
   occupied_at?: string | null;
+  reserved_at?: string | null;
+  reservation_party_name?: string | null;
+  reservation_time?: string | null;
+  reservation_id?: string | null;
   current_session_id?: string | null;
   active_order_count?: number;
   payment_pending?: boolean;
@@ -494,6 +502,57 @@ export const ALLOWED_PRIOR_STATUSES: Record<Order['status'], Order['status'][]> 
   completed: ['served'],
   cancelled: ['new', 'accepted']
 };
+
+/**
+ * Resolves user-facing status label for an order or batch,
+ * strictly replacing 'Served' with 'Handed Over' for Takeaway orders.
+ */
+export function getOrderStatusLabel(status: Order['status'], orderType?: string): string {
+  if (orderType === 'takeaway') {
+    switch (status) {
+      case 'new': return 'New';
+      case 'accepted': return 'Accepted';
+      case 'preparing': return 'Preparing';
+      case 'ready': return 'Ready for Pickup';
+      case 'served': return 'Handed Over';
+      case 'completed': return 'Completed';
+      case 'cancelled': return 'Cancelled';
+      default: return status;
+    }
+  }
+  switch (status) {
+    case 'new': return 'New';
+    case 'accepted': return 'Accepted';
+    case 'preparing': return 'Preparing';
+    case 'ready': return 'Ready';
+    case 'served': return 'Served';
+    case 'completed': return 'Completed';
+    case 'cancelled': return 'Cancelled';
+    default: return status;
+  }
+}
+
+/**
+ * Safety lock check: Blocks marking a dining table available if it has active,
+ * preparing, served, or unpaid orders.
+ */
+export function checkTableHasActiveUnpaidOrders(tableId: string, orders: Order[]): { blocked: boolean; reason?: string; activeOrder?: Order } {
+  const tableOrders = orders.filter(o => o.table_id === tableId && o.status !== 'cancelled');
+  const activeUnpaid = tableOrders.find(o => {
+    const isUnpaid = o.payment_status !== 'paid';
+    const isActiveStatus = ['new', 'accepted', 'preparing', 'ready', 'served'].includes(o.status);
+    return isUnpaid || isActiveStatus;
+  });
+
+  if (activeUnpaid) {
+    const reason = activeUnpaid.payment_status !== 'paid'
+      ? `Active order #${activeUnpaid.id.slice(-4).toUpperCase()} (${activeUnpaid.status.toUpperCase()}) is currently unpaid.`
+      : `Order #${activeUnpaid.id.slice(-4).toUpperCase()} is currently in ${activeUnpaid.status.toUpperCase()} state.`;
+    return { blocked: true, reason, activeOrder: activeUnpaid };
+  }
+
+  return { blocked: false };
+}
 
 export interface InventoryReservation {
   id: string;
@@ -1178,7 +1237,7 @@ export const db = {
 
   async getTablesWithLiveStatus(restaurantId: string, preloadedOrders?: Order[]): Promise<{
     tables: Table[];
-    stats: { total: number; available: number; occupied: number; inactive: number; occupancyRate: number };
+    stats: { total: number; available: number; occupied: number; reserved?: number; inactive: number; occupancyRate: number };
     assignments?: TableAssignment[];
   }> {
     const fetchActiveOrders = async (): Promise<any[]> => {
@@ -1218,11 +1277,13 @@ export const db = {
       const activeCount = tblOrders.length;
       const paymentPending = tblOrders.some(o => o.payment_status !== 'paid');
 
-      let status: 'available' | 'occupied' | 'inactive' = 'available';
+      let status: 'available' | 'occupied' | 'inactive' | 'reserved' = 'available';
       if (!qrEnabled) {
         status = 'inactive';
       } else if (activeCount > 0 || state.manual_occupied === true || state.occupancy_status === 'occupied') {
         status = 'occupied';
+      } else if (state.occupancy_status === 'reserved') {
+        status = 'reserved';
       } else {
         status = 'available';
       }
@@ -1236,6 +1297,10 @@ export const db = {
         qr_enabled: qrEnabled,
         occupancy_status: status,
         occupied_at: status === 'occupied' ? (state.occupied_at || tblOrders[0]?.created_at || new Date().toISOString()) : null,
+        reserved_at: status === 'reserved' ? (state.reserved_at || null) : null,
+        reservation_party_name: status === 'reserved' ? (state.reservation_party_name || null) : null,
+        reservation_time: status === 'reserved' ? (state.reservation_time || null) : null,
+        reservation_id: status === 'reserved' ? (state.reservation_id || null) : null,
         current_session_id: state.current_session_id || null,
         active_order_count: activeCount,
         payment_pending: paymentPending,
@@ -1245,15 +1310,55 @@ export const db = {
 
     const total = enrichedTables.length;
     const occupied = enrichedTables.filter(t => t.occupancy_status === 'occupied').length;
+    const reserved = enrichedTables.filter(t => t.occupancy_status === 'reserved').length;
     const inactive = enrichedTables.filter(t => t.occupancy_status === 'inactive').length;
     const available = enrichedTables.filter(t => t.occupancy_status === 'available').length;
-    const occupancyRate = total > 0 ? Math.round((occupied / total) * 100) : 0;
+    const occupancyRate = total > 0 ? Math.round(((occupied + reserved) / total) * 100) : 0;
 
     return {
       tables: enrichedTables,
-      stats: { total, available, occupied, inactive, occupancyRate },
+      stats: { total, available, occupied, reserved, inactive, occupancyRate },
       assignments: (assignments || []).filter((a: any) => a.active !== false)
     };
+  },
+
+  async setTableReservationState(
+    restaurantId: string, 
+    tableId: string, 
+    isReserved: boolean, 
+    reservationInfo?: { partyName?: string; time?: string; reservationId?: string }
+  ): Promise<void> {
+    const rest = await this.getRestaurantById(restaurantId);
+    if (!rest) throw new Error('Restaurant not found');
+
+    const tableStates = { ...(rest.settings?.table_states || {}) };
+    if (isReserved) {
+      tableStates[tableId] = {
+        ...(tableStates[tableId] || {}),
+        occupancy_status: 'reserved',
+        reserved_at: new Date().toISOString(),
+        reservation_party_name: reservationInfo?.partyName || null,
+        reservation_time: reservationInfo?.time || null,
+        reservation_id: reservationInfo?.reservationId || null
+      };
+    } else {
+      const current = tableStates[tableId] || {};
+      tableStates[tableId] = {
+        ...current,
+        occupancy_status: current.manual_occupied ? 'occupied' : 'available',
+        reserved_at: null,
+        reservation_party_name: null,
+        reservation_time: null,
+        reservation_id: null
+      };
+    }
+
+    await this.updateRestaurant(restaurantId, {
+      settings: {
+        ...rest.settings,
+        table_states: tableStates
+      }
+    });
   },
 
   async toggleTableOccupancy(restaurantId: string, tableId: string, isOccupied: boolean): Promise<boolean> {
