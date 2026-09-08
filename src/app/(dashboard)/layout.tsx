@@ -97,7 +97,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const spec = parsePlanSpec(row || { id: pId });
       setPlanSpec(spec);
     } catch (e) {
-      setPlanSpec(DEFAULT_PLAN_SPECS.starter);
+      const pId = (planId || 'starter').toLowerCase();
+      setPlanSpec(DEFAULT_PLAN_SPECS[pId] || DEFAULT_PLAN_SPECS.starter);
     }
   };
 
@@ -114,6 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           setActiveRole(impProf.role || 'owner');
 
           if (impProf.restaurant_id) {
+            db.clearRestaurantCache(impProf.restaurant_id);
             const rest = await db.getRestaurantById(impProf.restaurant_id);
             if (rest) {
               setRestaurant(rest);
@@ -142,6 +144,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // Parallel fetch restaurant and plan spec
     if (user.restaurant_id) {
       try {
+        db.clearRestaurantCache(user.restaurant_id);
         const rest = await db.getRestaurantById(user.restaurant_id);
         if (rest) {
           setRestaurant(rest);
@@ -184,6 +187,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         },
         async (payload) => {
           const updatedRest = payload.new as Restaurant;
+          db.clearRestaurantCache(profile.restaurant_id);
           setRestaurant(updatedRest);
           if (updatedRest.subscription_plan) {
             await fetchPlanSpec(updatedRest.subscription_plan);

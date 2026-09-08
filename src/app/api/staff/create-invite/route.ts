@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkResourceLimitForRestaurant } from '@/lib/entitlements';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -24,6 +25,23 @@ export async function POST(req: Request) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       return NextResponse.json({ error: 'Valid email address is required', code: 'INVALID_EMAIL' }, { status: 400 });
+    }
+
+    // 0. Enforce Staff Resource Limit on Subscription Plan
+    const { count: currentStaffCount } = await supabaseAdmin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('restaurant_id', restaurantId)
+      .neq('role', 'owner');
+
+    const limitCheck = await checkResourceLimitForRestaurant(restaurantId, 'staff_accounts', currentStaffCount || 0);
+    if (!limitCheck.allowed) {
+      return NextResponse.json({
+        error: limitCheck.message || 'Staff limit reached for your current subscription plan. Upgrade your plan to add more staff.',
+        code: 'STAFF_LIMIT_EXCEEDED',
+        limit: limitCheck.limit,
+        count: limitCheck.count
+      }, { status: 403 });
     }
 
     // 1. Check if email belongs to Restaurant Owner

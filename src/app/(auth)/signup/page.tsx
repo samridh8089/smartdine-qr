@@ -88,6 +88,7 @@ function SignupForm() {
             restaurantName,
             slug,
             plan: 'starter',
+            isTrial: true,
             billingInterval,
             paymentDetails: { isDemo: true, razorpay_payment_id: `trial_${Date.now()}`, razorpay_order_id: `ord_trial_${Date.now()}`, amount: 0 }
           })
