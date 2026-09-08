@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, Table, checkTableHasActiveUnpaidOrders } from '@/lib/db';
 import { useRestaurant } from '../../layout';
 import { getActiveUser, supabase } from '@/lib/supabase';
@@ -12,11 +12,16 @@ import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
 import { 
   Plus, QrCode, Download, ExternalLink, Trash2, 
-  AlertTriangle, Printer, HelpCircle, Calendar, ShoppingBag
+  AlertTriangle, Printer, HelpCircle, Calendar, ShoppingBag,
+  Layers, LayoutGrid
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { dashboardStore } from '@/lib/dashboardStore';
+import { usePreviewMode } from '@/context/PreviewModeContext';
+import FloorCanvasWrapper from '@/components/floorplan/FloorCanvasWrapper';
+import { DEFAULT_INITIAL_ITEMS } from '@/components/floorplan/FloorCanvas';
+import { FloorPlanItem } from '@/components/floorplan/types';
 
 export default function TablesPage() {
   const { restaurant, profile, planSpec } = useRestaurant();
@@ -56,6 +61,36 @@ export default function TablesPage() {
   });
 
   const [nowTime, setNowTime] = useState(Date.now());
+  const { isPreviewMode } = usePreviewMode();
+  const [viewMode, setViewMode] = useState<'floorplan' | 'grid'>('floorplan');
+  const [floorPlanMode, setFloorPlanMode] = useState<'view' | 'edit'>('view');
+
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const floorPlanItems = useMemo<FloorPlanItem[]>(() => {
+    if (tables && tables.length > 0) {
+      return tables.map((t, idx) => ({
+        id: t.id,
+        tableNumber: t.name.replace(/^Table\s*/i, ''),
+        name: t.name,
+        kind: 'table' as const,
+        shape: 'square' as const,
+        x: 80 + (idx % 4) * 140,
+        y: 80 + Math.floor(idx / 4) * 140,
+        width: 80,
+        height: 80,
+        rotation: 0,
+        seats: 4,
+        status: (t.occupancy_status || 'available') as any,
+        dbTableId: t.id,
+        qrCodeUrl: qrCodes[t.id]
+      }));
+    }
+    if (isPreviewMode) {
+      return DEFAULT_INITIAL_ITEMS;
+    }
+    return [];
+  }, [tables, qrCodes, isPreviewMode]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -63,8 +98,6 @@ export default function TablesPage() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
-
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchTablesData = async (targetRestId: string, force: boolean = false) => {
     try {
@@ -548,15 +581,49 @@ export default function TablesPage() {
   const tablesUsed = tables.length;
 
   return (
-    <div className="space-y-8">
-      {/* Title Bar */}
+    <div className="space-y-6">
+      {/* Title Bar & View Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Table Management</h2>
-          <p className="text-xs text-slate-500 font-normal mt-0.5">Generate QR codes for tables, merge dining groups, and monitor order flows by location.</p>
+          <div className="flex items-center space-x-3">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+              {viewMode === 'floorplan' ? 'Restaurant Floor Plan' : 'Table Management'}
+            </h2>
+            <div className="flex items-center bg-[#F5F5F4] p-0.5 rounded-lg border border-[#E7E5E4]">
+              <button
+                type="button"
+                onClick={() => setViewMode('floorplan')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'floorplan'
+                    ? 'bg-white text-[#171717] shadow-xs'
+                    : 'text-[#737373] hover:text-[#171717]'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Floor Plan</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-[#171717] shadow-xs'
+                    : 'text-[#737373] hover:text-[#171717]'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Grid View</span>
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500 font-normal mt-0.5">
+            {viewMode === 'floorplan'
+              ? 'Interactive 2D Floor Plan with live table sessions, drag-to-merge, and blueprint builder.'
+              : 'Generate QR codes for tables, merge dining groups, and monitor order flows by location.'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {selectedTableIds.length >= 2 && (
+          {selectedTableIds.length >= 2 && viewMode === 'grid' && (
             <Button size="sm" variant="outline" className="border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={handleOpenMergeModal}>
               Merge ({selectedTableIds.length}) Tables
             </Button>
@@ -566,6 +633,25 @@ export default function TablesPage() {
           </Button>
         </div>
       </div>
+
+      {viewMode === 'floorplan' ? (
+        <FloorCanvasWrapper
+          restaurantId={restaurantId}
+          restaurantName={restaurant?.name || 'The Foody Hub'}
+          mode={floorPlanMode}
+          onModeChange={setFloorPlanMode}
+          initialItems={floorPlanItems}
+          onViewQR={(item) => {
+            const tbl = tables.find(t => t.id === item.id || t.name === item.name);
+            if (tbl) {
+              printTableQR(tbl);
+            } else {
+              alert(`Table ${item.tableNumber} QR: ${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${restaurantSlug}/table/${item.id}`);
+            }
+          }}
+        />
+      ) : (
+        <>
 
       {/* Live Occupancy Header Widget */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
@@ -1109,6 +1195,8 @@ export default function TablesPage() {
             );
           })}
         </div>
+      )}
+        </>
       )}
 
       {/* --- Create Table Modal --- */}
