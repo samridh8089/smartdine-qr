@@ -339,7 +339,7 @@ export async function POST(req: Request) {
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
         table_name: table.name || 'Table 1',
         status: 'new',
-        order_type: orderType,
+        order_type: (orderType === 'reservation') ? 'dine_in' : orderType,
         payment_status: paymentStatus,
         special_instructions: specialInstructions || null,
         idempotency_key: cleanKey,
@@ -389,7 +389,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: orderInsertErr.message }, { status: 500 });
       }
 
-      createdOrder = newOrderData;
+      createdOrder = {
+        ...newOrderData,
+        order_type: orderType
+      };
 
       // Insert initial batch
       const { data: initialBatchData } = await supabase.from('order_batches').insert([{
