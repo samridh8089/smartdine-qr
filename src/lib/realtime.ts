@@ -37,7 +37,8 @@ export async function broadcastOrderRealtimeEvent({
   const targetChannels: string[] = [
     `live_orders_${restaurantId}`,
     `kds_${restaurantId}`,
-    `overview_dashboard_${restaurantId}`
+    `overview_dashboard_${restaurantId}`,
+    `reports_${restaurantId}`
   ];
 
   if (resolvedOrderId) {
