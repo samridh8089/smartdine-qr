@@ -94,6 +94,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Target staff member profile not found' }, { status: 404 });
     }
 
+    // Explicit Owner Protection: Block resetting Owner or Super Admin accounts via staff management
+    const restIdForCheck = requesterProfile.restaurant_id || targetProfile.restaurant_id;
+    let restaurantOwnerId: string | null = null;
+    if (restIdForCheck) {
+      const { data: restRow } = await supabaseAdmin.from('restaurants').select('owner_id').eq('id', restIdForCheck).maybeSingle();
+      if (restRow?.owner_id) restaurantOwnerId = restRow.owner_id;
+    }
+
+    if (
+      targetProfile.role === 'owner' || 
+      targetProfile.role === 'super_admin' || 
+      (restaurantOwnerId && targetUserId === restaurantOwnerId)
+    ) {
+      return NextResponse.json({ error: 'Forbidden: Cannot reset the restaurant owner password via staff management' }, { status: 403 });
+    }
+
     // 4. STRICT TENANT ISOLATION (Independent of subscription status)
     if (requesterProfile.role === 'owner') {
       if (!requesterProfile.restaurant_id || (targetProfile.restaurant_id && requesterProfile.restaurant_id !== targetProfile.restaurant_id)) {

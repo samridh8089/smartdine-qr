@@ -388,6 +388,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restaurant || !profile) return;
+    if (staffLoading) return;
     setStaffLoading(true);
     setStaffError('');
 
@@ -774,6 +775,10 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [ownerPassSubmitting, setOwnerPassSubmitting] = useState(false);
 
   const handleOpenResetModal = (st: Profile) => {
+    if (st.role === 'owner' || (profile?.role === 'owner' && st.id === profile.id)) {
+      alert('Forbidden: The restaurant owner password cannot be reset from staff management.');
+      return;
+    }
     setResetPassTarget({ id: st.id, name: st.full_name, email: st.email });
     setNewPassVal('');
     setConfirmPassVal('');
@@ -1535,7 +1540,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                       </div>
                     )}
 
-                    <Button type="submit" className="w-full mt-2" isLoading={staffLoading}>
+                    <Button type="submit" className="w-full mt-2" isLoading={staffLoading} disabled={staffLoading}>
                       <Plus className="h-4 w-4 mr-1" /> Create Staff Profile
                     </Button>
                   </form>
