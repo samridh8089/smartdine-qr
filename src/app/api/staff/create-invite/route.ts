@@ -21,13 +21,89 @@ export async function POST(req: Request) {
     const cleanEmail = email.trim().toLowerCase();
     const resolvedDept = department || (role === 'waiter' ? 'waiter' : role === 'kitchen' ? 'kitchen' : 'general');
 
-    // 1. Search for existing profile or auth user by email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return NextResponse.json({ error: 'Valid email address is required', code: 'INVALID_EMAIL' }, { status: 400 });
+    }
+
+    // 1. Check if email belongs to Restaurant Owner
+    const { data: restRow } = await supabaseAdmin
+      .from('restaurants')
+      .select('owner_id, settings')
+      .eq('id', restaurantId)
+      .maybeSingle();
+
+    let ownerEmail: string | null = restRow?.settings?.owner_email?.toLowerCase() || null;
+    if (restRow?.owner_id) {
+      const { data: ownerProf } = await supabaseAdmin
+        .from('profiles')
+        .select('email')
+        .eq('id', restRow.owner_id)
+        .maybeSingle();
+      if (ownerProf?.email) {
+        ownerEmail = ownerProf.email.toLowerCase();
+      }
+    }
+
+    if (ownerEmail && cleanEmail === ownerEmail) {
+      return NextResponse.json({
+        error: 'The restaurant owner email cannot be registered as a staff account.',
+        code: 'OWNER_EMAIL_RESTRICTED'
+      }, { status: 400 });
+    }
+
+    // 2. Check Phone Uniqueness if supplied
+    if (phone && String(phone).trim()) {
+      const cleanPhone = String(phone).trim().replace(/\D/g, '');
+      if (cleanPhone.length >= 10) {
+        const { data: existingPhoneProfiles } = await supabaseAdmin
+          .from('profiles')
+          .select('id, phone, email')
+          .eq('restaurant_id', restaurantId);
+
+        const phoneConflict = existingPhoneProfiles?.find(p => {
+          const pPhone = (p.phone || '').replace(/\D/g, '');
+          return pPhone && pPhone.slice(-10) === cleanPhone.slice(-10);
+        });
+
+        if (phoneConflict) {
+          return NextResponse.json({
+            error: 'A staff member with this mobile number already exists.',
+            code: 'DUPLICATE_PHONE_NUMBER'
+          }, { status: 409 });
+        }
+      }
+    }
+
+    // 3. Search for existing profile by email
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('email', cleanEmail)
       .maybeSingle();
 
+    if (existingProfile) {
+      if (existingProfile.role === 'owner' || existingProfile.id === restRow?.owner_id) {
+        return NextResponse.json({
+          error: 'The restaurant owner email cannot be registered as a staff account.',
+          code: 'OWNER_EMAIL_RESTRICTED'
+        }, { status: 400 });
+      }
+      if (existingProfile.restaurant_id === restaurantId) {
+        return NextResponse.json({
+          error: 'A staff account with this email already exists in this restaurant.',
+          code: 'STAFF_EMAIL_ALREADY_EXISTS'
+        }, { status: 409 });
+      }
+      if (existingProfile.restaurant_id && existingProfile.restaurant_id !== restaurantId) {
+        return NextResponse.json({
+          error: 'This email is already registered to another restaurant.',
+          code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
+        }, { status: 409 });
+      }
+    }
+
+    // 4. Search auth user by email
     let existingAuthUser: any = null;
     if (existingProfile?.id) {
       const { data: uData } = await supabaseAdmin.auth.admin.getUserById(existingProfile.id);
@@ -35,84 +111,30 @@ export async function POST(req: Request) {
     }
 
     if (!existingAuthUser) {
-      // Fallback search in listUsers paginated
       const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
       existingAuthUser = users ? users.find(u => u.email?.toLowerCase() === cleanEmail) : null;
     }
 
     if (existingAuthUser) {
-      // Check existing profile
-      const { data: existingProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .eq('id', existingAuthUser.id)
-        .maybeSingle();
-
-      const existingRestId = existingProfile?.restaurant_id || existingAuthUser.user_metadata?.restaurant_id;
-
-      // Conflict Check: Registered to another restaurant
+      if (existingAuthUser.id === restRow?.owner_id || existingAuthUser.email?.toLowerCase() === ownerEmail) {
+        return NextResponse.json({
+          error: 'The restaurant owner email cannot be registered as a staff account.',
+          code: 'OWNER_EMAIL_RESTRICTED'
+        }, { status: 400 });
+      }
+      const existingRestId = existingAuthUser.user_metadata?.restaurant_id;
+      if (existingRestId === restaurantId) {
+        return NextResponse.json({
+          error: 'A staff account with this email already exists in this restaurant.',
+          code: 'STAFF_EMAIL_ALREADY_EXISTS'
+        }, { status: 409 });
+      }
       if (existingRestId && existingRestId !== restaurantId) {
         return NextResponse.json({
           error: 'This email is already registered to another restaurant.',
           code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
         }, { status: 409 });
       }
-
-      // User belongs to the same restaurant or has unmapped restaurant_id -> Resume & Resend Verification
-      const isUnverified = !existingAuthUser.email_confirmed_at;
-
-      // Update auth user metadata & profiles row with current restaurant_id
-      await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
-        password: password || undefined,
-        user_metadata: {
-          ...existingAuthUser.user_metadata,
-          fullName: name || existingAuthUser.user_metadata?.fullName || cleanEmail,
-          role: role || 'staff',
-          department: resolvedDept,
-          phone: phone || '',
-          restaurant_id: restaurantId,
-          verification_status: isUnverified ? 'pending_verification' : 'verified'
-        }
-      });
-
-      await supabaseAdmin.from('profiles').upsert({
-        id: existingAuthUser.id,
-        user_id: existingAuthUser.id,
-        email: cleanEmail,
-        full_name: name || cleanEmail,
-        role: role || 'staff',
-        restaurant_id: restaurantId,
-        plain_password: password || undefined,
-        updated_at: new Date().toISOString()
-      });
-
-      // Resend Verification Email / OTP if unverified
-      let resendSuccess = false;
-      if (isUnverified) {
-        try {
-          const { createAndDispatchOtp } = await import('@/lib/otpEngine');
-          await createAndDispatchOtp({
-            target: cleanEmail,
-            type: 'staff_email',
-            userId: existingAuthUser.id,
-            recipientName: name || cleanEmail,
-            restaurantName: 'SmartDine'
-          });
-          resendSuccess = true;
-        } catch (e) {
-          console.warn('createAndDispatchOtp resend error:', e);
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        user: existingAuthUser,
-        resent: isUnverified,
-        resumed: true,
-        message: isUnverified
-          ? 'Verification email resent.'
-          : 'Staff member onboarding resumed and profile updated.'
-      });
     }
 
     // 2. User does not exist -> Create user cleanly using admin API

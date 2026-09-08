@@ -3186,7 +3186,8 @@ export const db = {
     phone?: string
   ): Promise<Profile & { resent?: boolean; resumed?: boolean }> {
     const currentStaff = await this.getStaffProfiles(restaurantId);
-    const limitCheck = await checkResourceLimitForRestaurant(restaurantId, 'staff_accounts', currentStaff.length);
+    const nonOwnerStaff = currentStaff.filter(s => s.role !== 'owner');
+    const limitCheck = await checkResourceLimitForRestaurant(restaurantId, 'staff_accounts', nonOwnerStaff.length);
     if (!limitCheck.allowed) {
       throw new Error(limitCheck.message || 'Staff account limit reached. Upgrade your plan to create additional staff accounts.');
     }
