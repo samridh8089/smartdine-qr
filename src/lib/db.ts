@@ -486,8 +486,8 @@ export interface Order {
 export const VALID_ORDER_TRANSITIONS: Record<Order['status'], Order['status'][]> = {
   new: ['accepted', 'cancelled'],
   accepted: ['preparing', 'cancelled'],
-  preparing: ['ready'],
-  ready: ['served'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['served', 'cancelled'],
   served: ['completed'],
   completed: [],
   cancelled: []
@@ -500,7 +500,7 @@ export const ALLOWED_PRIOR_STATUSES: Record<Order['status'], Order['status'][]> 
   ready: ['preparing'],
   served: ['ready'],
   completed: ['served'],
-  cancelled: ['new', 'accepted']
+  cancelled: ['new', 'accepted', 'preparing', 'ready']
 };
 
 /**
@@ -656,6 +656,97 @@ export const DEFAULT_PRICING_PLANS: PricingPlan[] = [
 ];
 
 let cachedPricingPlans: PricingPlan[] | null = null;
+
+/**
+ * Automatically rolls back consumed raw inventory and ledger transactions
+ * when an order or batch in PREPARING / READY is cancelled.
+ * Strictly idempotent to prevent double-restoration.
+ */
+async function executeAutomaticCancellationRollback(
+  restaurantId: string,
+  orderId: string,
+  batchId?: string,
+  userName?: string,
+  cancellationReason?: string
+): Promise<number> {
+  let rolledBackCount = 0;
+  try {
+    let query = supabase
+      .from('inventory_transactions')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .eq('order_id', orderId)
+      .eq('transaction_type', 'ORDER_CONSUMPTION');
+
+    if (batchId) {
+      query = query.eq('batch_id', batchId);
+    }
+
+    const { data: consumptions } = await query;
+    if (!consumptions || consumptions.length === 0) return 0;
+
+    for (const tx of consumptions) {
+      const rollbackKey = `ORDER_ROLLBACK_${orderId}_${tx.batch_id || 'ALL'}_${tx.inventory_item_id}`;
+      const { data: existingRollback } = await supabase
+        .from('inventory_transactions')
+        .select('id')
+        .eq('restaurant_id', restaurantId)
+        .eq('idempotency_key', rollbackKey);
+
+      if (existingRollback && existingRollback.length > 0) continue;
+
+      const { data: freshItem } = await supabase
+        .from('inventory_items')
+        .select('*')
+        .eq('id', tx.inventory_item_id)
+        .eq('restaurant_id', restaurantId)
+        .single();
+
+      if (!freshItem) continue;
+
+      const qtyToRestore = Math.abs(Number(tx.quantity || 0));
+      const beforeStock = Number(freshItem.current_stock || 0);
+      const afterStock = Math.round((beforeStock + qtyToRestore) * 10000) / 10000;
+
+      await supabase
+        .from('inventory_items')
+        .update({ current_stock: afterStock, updated_at: new Date().toISOString() })
+        .eq('id', freshItem.id)
+        .eq('restaurant_id', restaurantId);
+
+      await supabase
+        .from('inventory_transactions')
+        .insert({
+          restaurant_id: restaurantId,
+          inventory_item_id: freshItem.id,
+          quantity: qtyToRestore,
+          unit: tx.unit || freshItem.unit,
+          before_stock: beforeStock,
+          after_stock: afterStock,
+          transaction_type: 'CANCELLATION_REVERSAL',
+          reference_type: 'order_cancellation',
+          reference_id: `${orderId}${tx.batch_id ? `:${tx.batch_id}` : ''}`,
+          order_id: orderId,
+          batch_id: tx.batch_id || null,
+          idempotency_key: rollbackKey,
+          user_name: userName || 'Automatic Cancellation Rollback',
+          notes: `Automatic inventory rollback on cancellation: ${cancellationReason || 'Order cancelled'}`
+        });
+
+      rolledBackCount++;
+    }
+
+    if (rolledBackCount > 0) {
+      await supabase
+        .from('orders')
+        .update({ inventory_restored: true })
+        .eq('id', orderId);
+    }
+  } catch (err: any) {
+    console.error('[AutomaticCancellationRollback] Error reversing inventory:', err?.message);
+  }
+  return rolledBackCount;
+}
 
 export const db = {
   // --- Offers Management ---
@@ -2371,6 +2462,14 @@ export const db = {
           .update({ is_cancelled: true })
           .eq('order_id', id);
       } catch (e) {}
+
+      await executeAutomaticCancellationRollback(
+        currentOrder.restaurant_id,
+        id,
+        undefined,
+        userName || 'Automatic Cancellation Rollback',
+        cancellationReason
+      );
     }
 
     const fullOrder = await this.getOrderById(id);
@@ -2561,6 +2660,16 @@ export const db = {
       actor: userName || 'Kitchen Staff',
       cancellationReason
     });
+
+    if (status === 'cancelled') {
+      await executeAutomaticCancellationRollback(
+        currentOrder.restaurant_id,
+        orderId,
+        batchId,
+        userName || 'Automatic Cancellation Rollback',
+        cancellationReason
+      );
+    }
 
     // Fetch all batches of this order to recalculate order status
     const { data: allBatches, error: allBatchesErr } = await supabase
