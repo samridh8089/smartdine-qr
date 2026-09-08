@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRestaurant } from '../../layout';
 import { db, Order, Category, MenuItem, getPlanFeatures } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
@@ -160,37 +160,6 @@ export default function ReportsPage() {
   });
   const [kitchenSlaSuccessPct, setKitchenSlaSuccessPct] = useState('96%');
 
-  useEffect(() => {
-    async function loadReports() {
-      const user = await getActiveUser();
-      if (!user || !user.restaurant_id) return;
-      const restId = user.restaurant_id;
-
-      const [allOrders, cats, invItemsRes, dispRes, liveTableData] = await Promise.all([
-        db.getOrders(restId),
-        db.getCategories(restId),
-        supabase.from('inventory_items').select('*').eq('restaurant_id', restId),
-        (supabase as any).from('prepared_food_dispositions').select('*').eq('restaurant_id', restId),
-        db.getTablesWithLiveStatus(restId)
-      ]);
-      setOrders(allOrders);
-      setCategories(cats);
-      const invItems = invItemsRes?.data || [];
-      const lowStock = invItems.filter((item: any) => Number(item.current_stock || 0) <= Number(item.minimum_stock || 5));
-      setLowStockItems(lowStock);
-      setDispositionsList(dispRes?.data || []);
-      const occ = liveTableData?.stats?.occupied || 0;
-      const fr = liveTableData?.stats?.available || 20;
-      setLiveOccupancyMerge(prev => ({
-        ...prev,
-        occupied: occ,
-        free: fr
-      }));
-      computeStats(allOrders, cats, dispRes?.data || [], occ, fr);
-      setLoading(false);
-    }
-    loadReports();
-  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate]);
 
   const handleApplyCustomDates = () => {
     if (customStartDate > customEndDate) {
@@ -665,6 +634,106 @@ export default function ReportsPage() {
     const successPct = totalFulfillmentSec > 0 ? Math.min(98, Math.max(88, Math.round((fulfillCount / Math.max(1, rangeOrders.length)) * 100))) : 96;
     setKitchenSlaSuccessPct(`${successPct}%`);
   };
+
+  const isReloadingReportsRef = useRef(false);
+  const pendingReportsReloadRef = useRef(false);
+
+  const loadReports = async () => {
+    if (isReloadingReportsRef.current) {
+      pendingReportsReloadRef.current = true;
+      return;
+    }
+    isReloadingReportsRef.current = true;
+
+    try {
+      const user = await getActiveUser();
+      const restId = restaurant?.id || user?.restaurant_id;
+      if (!restId) return;
+
+      const [allOrders, cats, invItemsRes, dispRes, liveTableData] = await Promise.all([
+        db.getOrders(restId),
+        db.getCategories(restId),
+        supabase.from('inventory_items').select('*').eq('restaurant_id', restId),
+        (supabase as any).from('prepared_food_dispositions').select('*').eq('restaurant_id', restId),
+        db.getTablesWithLiveStatus(restId)
+      ]);
+      setOrders(allOrders);
+      setCategories(cats);
+      const invItems = invItemsRes?.data || [];
+      const lowStock = invItems.filter((item: any) => Number(item.current_stock || 0) <= Number(item.minimum_stock || 5));
+      setLowStockItems(lowStock);
+      setDispositionsList(dispRes?.data || []);
+      const occ = liveTableData?.stats?.occupied || 0;
+      const fr = liveTableData?.stats?.available || 20;
+      setLiveOccupancyMerge(prev => ({
+        ...prev,
+        occupied: occ,
+        free: fr
+      }));
+      computeStats(allOrders, cats, dispRes?.data || [], occ, fr);
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to load reports:', err);
+    } finally {
+      isReloadingReportsRef.current = false;
+      if (pendingReportsReloadRef.current) {
+        pendingReportsReloadRef.current = false;
+        await loadReports();
+      }
+    }
+  };
+
+  const loadReportsRef = useRef(loadReports);
+  useEffect(() => {
+    loadReportsRef.current = loadReports;
+  });
+
+  useEffect(() => {
+    loadReports();
+  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, restaurant?.id]);
+
+  // Realtime Subscriptions for Reports Dashboard (Phase-18.8 Production Gate)
+  useEffect(() => {
+    const restId = restaurant?.id;
+    if (!restId) return;
+
+    const handleResync = () => {
+      loadReportsRef.current();
+    };
+    window.addEventListener('force-resync', handleResync);
+
+    const channel = supabase
+      .channel(`reports_${restId}`, {
+        config: { broadcast: { self: true } }
+      })
+      .on('broadcast', { event: 'new-order' }, () => {
+        loadReportsRef.current();
+      })
+      .on('broadcast', { event: 'order-status-updated' }, () => {
+        loadReportsRef.current();
+      })
+      .on('broadcast', { event: 'payment-updated' }, () => {
+        loadReportsRef.current();
+      })
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `restaurant_id=eq.${restId}`
+        },
+        () => {
+          loadReportsRef.current();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('force-resync', handleResync);
+    };
+  }, [restaurant?.id]);
 
   // Helper to trigger CSV file download
   const triggerDownload = (filename: string, csvData: string) => {
