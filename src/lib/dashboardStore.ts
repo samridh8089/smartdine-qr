@@ -45,7 +45,7 @@ class DashboardStore {
 
     const promise = (async () => {
       try {
-        const cachedOrders = this.getCachedOrders(restId) || undefined;
+        const cachedOrders = force ? undefined : (this.getCachedOrders(restId) || undefined);
         const [live, groups] = await Promise.all([
           db.getTablesWithLiveStatus(restId, cachedOrders),
           db.getMergeGroups(restId, 'active')

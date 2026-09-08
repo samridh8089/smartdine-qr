@@ -2363,9 +2363,19 @@ export default function OrdersPage() {
                         <Button
                           size="sm"
                           className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer gap-1.5 shadow-sm"
-                          onClick={() => {
+                          onClick={async () => {
                             setReservationToSeat(selectedOrder);
-                            const avail = allTables.find(t => !t.is_occupied && t.occupancy_status !== 'occupied');
+                            let currentTables = allTables;
+                            if (restaurant?.id) {
+                              try {
+                                const freshTables = await db.getTables(restaurant.id);
+                                if (freshTables && freshTables.length > 0) {
+                                  setAllTables(freshTables);
+                                  currentTables = freshTables;
+                                }
+                              } catch (_) {}
+                            }
+                            const avail = currentTables.find(t => t.name?.toLowerCase() !== 'takeaway' && !t.is_occupied && t.occupancy_status !== 'occupied');
                             setSelectedTableForSeat(avail?.id || '');
                             setSeatGuestModalOpen(true);
                           }}
@@ -3272,16 +3282,18 @@ export default function OrdersPage() {
                   className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white"
                 >
                   <option value="">-- Choose a physical table --</option>
-                  {allTables.map(t => {
-                    const isFree = !t.is_occupied && t.occupancy_status !== 'occupied';
-                    const isReserved = t.occupancy_status === 'reserved';
-                    const label = `${t.name || `Table ${t.table_number}`} (${t.capacity || 4} seats) - ${isFree ? (isReserved ? 'Reserved' : 'Available') : 'Currently Occupied'}`;
-                    return (
-                      <option key={t.id} value={t.id} disabled={!isFree && !isReserved}>
-                        {label}
-                      </option>
-                    );
-                  })}
+                  {allTables
+                    .filter(t => t.name?.toLowerCase() !== 'takeaway')
+                    .map(t => {
+                      const isOccupied = t.is_occupied || t.occupancy_status === 'occupied';
+                      const isReserved = t.occupancy_status === 'reserved';
+                      const label = `${t.name || `Table ${t.table_number}`} (${t.capacity || 4} seats) - ${isOccupied ? 'Currently Occupied' : isReserved ? 'Reserved' : 'Available'}`;
+                      return (
+                        <option key={t.id} value={t.id} disabled={isOccupied}>
+                          {label}
+                        </option>
+                      );
+                    })}
                 </select>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
                   Seating the guest will mark the table as Occupied and release pre-ordered dishes to the Kitchen Display System (KDS).
