@@ -3277,6 +3277,7 @@ export default function OrdersPage() {
                   Select Physical Table to Assign *
                 </label>
                 <select
+                  id="seat-guest-modal-table-select"
                   value={selectedTableForSeat}
                   onChange={e => setSelectedTableForSeat(e.target.value)}
                   className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-900 dark:text-white"
