@@ -167,16 +167,6 @@ export default function InventoryDashboardPage() {
     remaining: planSpec?.ai_limits?.ai_recipe_generation ?? null
   });
 
-  if (planSpec?.features?.inventory === false) {
-    return (
-      <LockedFeatureView
-        featureName="Inventory Management & Recipes"
-        featureDescription="Inventory Management & Recipe Costing is not available on your current plan."
-        planName={planSpec.name}
-      />
-    );
-  }
-
   const [activeTab, setActiveTab] = useState<'items' | 'recipes' | 'dispositions' | 'transactions' | 'purchases' | 'waste' | 'alerts' | 'analytics'>('items');
   const [loading, setLoading] = useState(true);
 
@@ -1282,6 +1272,16 @@ export default function InventoryDashboardPage() {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
+  if (planSpec?.features?.inventory === false) {
+    return (
+      <LockedFeatureView
+        featureName="Inventory Management & Recipes"
+        featureDescription="Inventory Management & Recipe Costing is not available on your current plan."
+        planName={planSpec.name}
+      />
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto min-h-screen">
       {/* Header & Title */}
@@ -1314,7 +1314,7 @@ export default function InventoryDashboardPage() {
               setAiDraftRecipe(null);
               setShowAiModal(true);
             }}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
+            className="flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
           >
             <Sparkles className="h-4 w-4" />
             <span>Generate AI Recipe</span>
@@ -1515,7 +1515,7 @@ export default function InventoryDashboardPage() {
                   setParsedRows([]);
                   setShowImportModal(true);
                 }}
-                className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer whitespace-nowrap"
+                className="flex items-center gap-1.5 bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700 px-3.5 py-2 rounded-xl text-xs font-bold cursor-pointer whitespace-nowrap hover:bg-gray-200"
               >
                 <FileSpreadsheet className="h-4 w-4" />
                 <span>Import CSV</span>
@@ -1543,8 +1543,28 @@ export default function InventoryDashboardPage() {
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
                   {filteredItems.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-400">
-                        No inventory items found matching filters.
+                      <td colSpan={10} className="py-16 text-center">
+                        <div className="flex flex-col items-center justify-center space-y-3">
+                          <div className="h-12 w-12 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center">
+                            <Boxes className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-950 dark:text-white">No inventory items found</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Add your raw ingredients or import from a CSV to begin tracking stock.</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setEditingItem(null);
+                              setItemUnitType('gram');
+                              setCustomUnitName('');
+                              setShowItemModal(true);
+                            }}
+                            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer mt-1"
+                          >
+                            <Plus className="h-4 w-4" />
+                            <span>Add First Item</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ) : (
@@ -1677,10 +1697,10 @@ export default function InventoryDashboardPage() {
                                 {item.variants.map((v: any) => {
                                   const vRecipe = recipes.find(r => r.menu_item_id === item.id && r.variant_id === v.id);
                                   return (
-                                    <span key={v.id} className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
-                                      vRecipe ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 border border-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 border border-slate-300'
+                                    <span key={v.id} className={`text-[10px] px-2 py-0.5 rounded-md font-medium inline-flex items-center gap-1 ${
+                                      vRecipe ? 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700' : 'bg-transparent text-gray-500 border border-gray-200 dark:border-gray-800'
                                     }`}>
-                                      {v.name} (₹{v.price}) {vRecipe ? '✓' : '•'}
+                                      {v.name} (₹{v.price}) {vRecipe ? <Check className="w-2.5 h-2.5 inline" /> : '•'}
                                     </span>
                                   );
                                 })}
@@ -1690,29 +1710,27 @@ export default function InventoryDashboardPage() {
                         </td>
                         <td className="py-3.5 px-4">
                           {metrics.isConfigured ? (
-                            <span className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 px-2.5 py-0.5 rounded-full text-[10px] font-black">
+                            <span className="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
                               Configured ({metrics.ingredientsCount} items)
                             </span>
                           ) : (
-                            <span className="bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 px-2.5 py-0.5 rounded-full text-[10px] font-black">
-                              ⚠ Not Configured
+                            <span className="border border-gray-200 dark:border-gray-700 text-gray-500 px-2.5 py-0.5 rounded-full text-[10px] font-medium">
+                              Not Configured
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-extrabold text-slate-700 dark:text-slate-300">
+                        <td className="py-3.5 px-4 font-bold text-gray-700 dark:text-gray-300">
                           {metrics.isConfigured ? `₹${metrics.recipeCost}` : '—'}
                         </td>
-                        <td className="py-3.5 px-4 font-extrabold text-slate-900 dark:text-white">
+                        <td className="py-3.5 px-4 font-bold text-gray-950 dark:text-white">
                           ₹{metrics.sellingPrice}
                         </td>
-                        <td className="py-3.5 px-4 font-black text-emerald-600 dark:text-emerald-400">
+                        <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-gray-100">
                           {metrics.isConfigured ? `₹${metrics.grossMargin}` : '—'}
                         </td>
-                        <td className="py-3.5 px-4 font-black">
+                        <td className="py-3.5 px-4 font-bold">
                           {metrics.isConfigured ? (
-                            <span className={`px-2 py-0.5 rounded-md text-[11px] ${
-                              metrics.marginPercentage >= 60 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                            }`}>
+                            <span className="px-2 py-0.5 rounded-md text-[11px] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 font-medium">
                               {metrics.marginPercentage}%
                             </span>
                           ) : '—'}
@@ -2049,19 +2067,19 @@ export default function InventoryDashboardPage() {
 
             <div className="space-y-2">
               {alerts.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs font-semibold">
-                  🎉 All stock levels are currently healthy! No active alerts.
+                <div className="p-6 text-center text-gray-400 text-xs font-medium">
+                  All stock levels are currently healthy. No active alerts.
                 </div>
               ) : (
                 alerts.map(al => (
-                  <div key={al.id} className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div key={al.id} className="flex items-center justify-between p-3.5 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
                     <div className="flex items-center gap-3">
-                      <AlertTriangle className={`h-5 w-5 ${al.alert_type === 'OUT_OF_STOCK' ? 'text-rose-600' : 'text-amber-600'}`} />
+                      <AlertTriangle className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                       <div>
-                        <p className="font-extrabold text-xs text-slate-900 dark:text-white">
-                          {al.inventory_items?.name || 'Item'} — <span className={al.alert_type === 'OUT_OF_STOCK' ? 'text-rose-600' : 'text-amber-600'}>{al.alert_type.replace('_', ' ')}</span>
+                        <p className="font-bold text-xs text-gray-950 dark:text-white">
+                          {al.inventory_items?.name || 'Item'} — <span className="text-gray-700 dark:text-gray-300 font-semibold">{al.alert_type.replace('_', ' ')}</span>
                         </p>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-[11px] text-gray-500">
                           Current: {al.current_stock} {al.unit} (Min: {al.minimum_stock} {al.unit})
                         </p>
                       </div>
@@ -2913,9 +2931,9 @@ export default function InventoryDashboardPage() {
                               <td className="p-2">{r.unit}</td>
                               <td className="p-2">₹{r.cost_per_unit}</td>
                               <td className="p-2">
-                                {r.status === 'valid' && <span className="text-emerald-600 font-bold">✓ Valid</span>}
-                                {r.status === 'warning' && <span className="text-amber-600 font-bold">⚠ Update</span>}
-                                {r.status === 'error' && <span className="text-rose-600 font-bold">✗ {r.errors.join(', ')}</span>}
+                                {r.status === 'valid' && <span className="text-gray-950 dark:text-white font-bold inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Valid</span>}
+                                {r.status === 'warning' && <span className="text-gray-700 dark:text-gray-300 font-semibold">Update</span>}
+                                {r.status === 'error' && <span className="text-gray-900 dark:text-gray-100 font-bold">Error: {r.errors.join(', ')}</span>}
                               </td>
                             </tr>
                           ))}
@@ -2926,8 +2944,8 @@ export default function InventoryDashboardPage() {
                 )}
 
                 {importSummary && (
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-800">
-                    🎉 {importSummary.success} items imported successfully! ({importSummary.skipped} skipped)
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 text-xs font-bold text-gray-900 dark:text-white">
+                    {importSummary.success} items imported successfully! ({importSummary.skipped} skipped)
                   </div>
                 )}
               </div>
@@ -2955,10 +2973,10 @@ export default function InventoryDashboardPage() {
             <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[88vh] overflow-hidden animate-pop z-10">
               <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-amber-500" />
+                  <Sparkles className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                   <h3 className="font-black text-base text-slate-900 dark:text-white">AI Recipe Generator (Draft Mode)</h3>
                 </div>
-                <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full">UNSAVED DRAFT</span>
+                <span className="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full">UNSAVED DRAFT</span>
               </div>
 
               <div className="p-4 md:p-6 space-y-4 flex-1 overflow-y-auto">
@@ -2973,7 +2991,7 @@ export default function InventoryDashboardPage() {
                   <button
                     onClick={handleGenerateAiRecipe}
                     disabled={aiGenerating}
-                    className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    className="bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
                   >
                     {aiGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Generate'}
                   </button>
@@ -2992,9 +3010,9 @@ export default function InventoryDashboardPage() {
                         <div key={idx} className="flex justify-between text-xs p-2 bg-white dark:bg-slate-800 rounded-lg border">
                           <span>{ing.name} ({ing.suggestedQuantity} {ing.suggestedUnit})</span>
                           {ing.isMatched ? (
-                            <span className="text-emerald-600 font-bold">✓ Matched: {ing.matchedInventoryItemName}</span>
+                            <span className="text-gray-950 dark:text-white font-bold inline-flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Matched: {ing.matchedInventoryItemName}</span>
                           ) : (
-                            <span className="text-amber-600 font-bold">⚠ Unmapped Inventory Item</span>
+                            <span className="text-gray-500 font-medium">Unmapped Inventory Item</span>
                           )}
                         </div>
                       ))}

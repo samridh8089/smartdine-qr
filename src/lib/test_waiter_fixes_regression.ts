@@ -23,19 +23,19 @@ async function runWaiterRegressionSuite() {
   console.log('1️⃣ [TEST BUG-W1: ANTI-SPAM REQUEST DEDUPLICATION]');
   const req1 = await db.createCustomerRequest(restId, realTable.id, 'call_waiter');
   const req2 = await db.createCustomerRequest(restId, realTable.id, 'call_waiter');
-  console.log('✔ First Request ID:', req1.id);
-  console.log('✔ Second Call Return ID:', req2.id);
+  console.log('[PASS] First Request ID:', req1.id);
+  console.log('[PASS] Second Call Return ID:', req2.id);
 
   if (req1.id !== req2.id) {
     throw new Error('FAIL: BUG-W1 Failed! Duplicate request row created for same active table call');
   }
-  console.log('✔ Anti-spam protection PASSED (Duplicate call returned existing active request ID)\n');
+  console.log('[PASS] Anti-spam protection PASSED (Duplicate call returned existing active request ID)\n');
 
   // 2. TEST BUG-W2: CUSTOMER REQUEST LIFECYCLE PARAMS
   console.log('2️⃣ [TEST BUG-W2: REQUEST LIFECYCLE LOGIC]');
-  console.log('✔ Verified db.acceptCustomerRequest accepts staff name & sets timestamp');
-  console.log('✔ Verified db.resolveCustomerRequest updates status to completed');
-  console.log('✔ Request lifecycle contract PASSED 100%\n');
+  console.log('[PASS] Verified db.acceptCustomerRequest accepts staff name & sets timestamp');
+  console.log('[PASS] Verified db.resolveCustomerRequest updates status to completed');
+  console.log('[PASS] Request lifecycle contract PASSED 100%\n');
 
   // 3. TEST BUG-W3: ATOMIC SERVING VIA RPC
   console.log('3️⃣ [TEST BUG-W3: ATOMIC SERVING MECHANISM]');
@@ -48,24 +48,24 @@ async function runWaiterRegressionSuite() {
   // Serve order using atomic function
   const servedOrder = await db.updateOrderStatus(order.id, 'served', 'Waitstaff Alex');
 
-  console.log('✔ Parent Order Status after Atomic Serve:', servedOrder.status);
+  console.log('[PASS] Parent Order Status after Atomic Serve:', servedOrder.status);
 
   if (servedOrder.status !== 'served') {
     throw new Error('FAIL: BUG-W3 Atomic Serving failed to mark order as served');
   }
-  console.log('✔ Atomic serving mechanism PASSED 100%\n');
+  console.log('[PASS] Atomic serving mechanism PASSED 100%\n');
 
   // 4. TEST BUG-W4: REALTIME TENANT FILTERING
   console.log('4️⃣ [TEST BUG-W4: REALTIME TENANT FILTERING]');
   const mockForeignBatch = { order_id: 'foreign-order-xyz-999' };
   const localOrders = [servedOrder];
   const isLocalOrder = localOrders.some(o => o.id === mockForeignBatch.order_id);
-  console.log('✔ Cross-Tenant Event Evaluation:', isLocalOrder ? 'LOCAL' : 'DROPPED IN-MEMORY (0 DB Queries)');
+  console.log('[PASS] Cross-Tenant Event Evaluation:', isLocalOrder ? 'LOCAL' : 'DROPPED IN-MEMORY (0 DB Queries)');
 
   if (isLocalOrder) {
     throw new Error('FAIL: BUG-W4 Foreign batch misclassified as local');
   }
-  console.log('✔ Realtime tenant filtering PASSED 100%\n');
+  console.log('[PASS] Realtime tenant filtering PASSED 100%\n');
 
   console.log('=== ALL WAITER MODULE REGRESSION TESTS PASSED 100% ===');
 }

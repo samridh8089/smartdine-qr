@@ -1244,8 +1244,8 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                             onChange={(e) => setSgstPercentage(Number(e.target.value))}
                             required
                           />
-                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold col-span-full">
-                            ✓ Active GST Rate: CGST ({cgstPercentage}%) + SGST ({sgstPercentage}%) = Total {(Number(cgstPercentage) + Number(sgstPercentage)).toFixed(2)}%
+                          <p className="text-[11px] text-gray-700 dark:text-gray-300 font-medium col-span-full">
+                            Active GST Rate: CGST ({cgstPercentage}%) + SGST ({sgstPercentage}%) = Total {(Number(cgstPercentage) + Number(sgstPercentage)).toFixed(2)}%
                           </p>
                         </div>
                       ) : (
@@ -1259,8 +1259,8 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                             onChange={(e) => setIgstPercentage(Number(e.target.value))}
                             required
                           />
-                          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
-                            ✓ Active GST Rate: Integrated IGST ({igstPercentage}%)
+                          <p className="text-[11px] text-gray-700 dark:text-gray-300 font-medium">
+                            Active GST Rate: Integrated IGST ({igstPercentage}%)
                           </p>
                         </div>
                       )}
@@ -2333,15 +2333,15 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                       }}
                       className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between ${
                         isChecked
-                          ? 'bg-emerald-50 border-emerald-500 text-emerald-950 dark:bg-emerald-950/40 dark:border-emerald-500 dark:text-emerald-200 shadow-sm'
-                          : 'bg-slate-50 border-slate-200 dark:bg-slate-800 dark:border-slate-700 text-slate-600 dark:text-slate-300'
+                          ? 'bg-gray-100 border-gray-950 text-gray-950 dark:bg-gray-800 dark:border-white dark:text-white shadow-sm'
+                          : 'bg-gray-50 border-gray-200 dark:bg-gray-800 dark:border-gray-700 text-gray-600 dark:text-gray-300'
                       }`}
                     >
                       <span className="font-bold text-xs">{tbl.name}</span>
                       <span className={`w-4 h-4 rounded flex items-center justify-center text-[10px] ${
-                        isChecked ? 'bg-emerald-600 text-white' : 'border border-slate-300 dark:border-slate-600'
+                        isChecked ? 'bg-gray-950 text-white dark:bg-white dark:text-gray-950' : 'border border-gray-300 dark:border-gray-600'
                       }`}>
-                        {isChecked && '✓'}
+                        {isChecked && <Check className="w-3 h-3" />}
                       </span>
                     </button>
                   );

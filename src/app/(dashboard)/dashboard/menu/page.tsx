@@ -14,7 +14,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
 import { 
   Plus, Edit2, Trash2, Check, X, Tag, ListFilter, 
-  HelpCircle, Eye, EyeOff, AlertTriangle, Coffee, Sparkles, Camera, CheckCircle2, Upload, UtensilsCrossed
+  HelpCircle, Eye, EyeOff, AlertTriangle, Coffee, Sparkles, Camera, CheckCircle2, Upload, UtensilsCrossed, ArrowRight
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -810,20 +810,20 @@ export default function MenuManagementPage() {
         <Dialog isOpen={aiModalOpen} onClose={() => setAiModalOpen(false)} title="AI Smart Menu Scanner & Builder">
           <div className="space-y-6 p-1">
             {/* Step indicator */}
-            <div className="flex items-center justify-between text-xs font-bold border-b border-slate-100 dark:border-slate-800 pb-3">
-              <span className={aiStep === 'scan' ? 'text-purple-600 font-extrabold' : 'text-slate-400'}>1. SCAN MENU</span>
-              <span className="text-slate-300">➔</span>
-              <span className={aiStep === 'extracting' ? 'text-purple-600 font-extrabold animate-pulse' : 'text-slate-400'}>2. EXTRACT</span>
-              <span className="text-slate-300">➔</span>
-              <span className={aiStep === 'review' ? 'text-purple-600 font-extrabold' : 'text-slate-400'}>3. REVIEW & EDIT</span>
-              <span className="text-slate-300">➔</span>
-              <span className="text-emerald-600 font-extrabold">4. CONFIRM & PUBLISH</span>
+            <div className="flex items-center justify-between text-xs font-bold border-b border-gray-100 dark:border-gray-800 pb-3">
+              <span className={aiStep === 'scan' ? 'text-gray-950 dark:text-white font-extrabold' : 'text-gray-400'}>1. SCAN MENU</span>
+              <ArrowRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className={aiStep === 'extracting' ? 'text-gray-950 dark:text-white font-extrabold animate-pulse' : 'text-gray-400'}>2. EXTRACT</span>
+              <ArrowRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className={aiStep === 'review' ? 'text-gray-950 dark:text-white font-extrabold' : 'text-gray-400'}>3. REVIEW & EDIT</span>
+              <ArrowRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <span className={aiStep === 'publishing' ? 'text-gray-950 dark:text-white font-extrabold' : 'text-gray-400'}>4. CONFIRM & PUBLISH</span>
             </div>
 
             {aiStep === 'scan' && (
               <div className="space-y-4 text-center">
-                <div className="border-2 border-dashed border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 rounded-3xl p-8 space-y-3 flex flex-col items-center justify-center">
-                  <div className="h-16 w-16 rounded-2xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 flex items-center justify-center">
+                <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 rounded-3xl p-8 space-y-3 flex flex-col items-center justify-center">
+                  <div className="h-16 w-16 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center">
                     <Camera className="h-8 w-8" />
                   </div>
                   <div>
@@ -834,7 +834,7 @@ export default function MenuManagementPage() {
 
                 <div className="flex justify-end gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setAiModalOpen(false)}>Cancel</Button>
-                  <Button className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold px-6" onClick={handleSimulateAiExtraction}>
+                  <Button className="bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white font-bold px-6" onClick={handleSimulateAiExtraction}>
                     <Sparkles className="h-4 w-4 mr-1.5" /> Start AI Extraction
                   </Button>
                 </div>
@@ -843,7 +843,7 @@ export default function MenuManagementPage() {
 
             {aiStep === 'extracting' && (
               <div className="py-12 text-center space-y-4">
-                <div className="h-16 w-16 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center mx-auto animate-spin">
+                <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center mx-auto animate-spin">
                   <Sparkles className="h-8 w-8" />
                 </div>
                 <div>
@@ -855,8 +855,8 @@ export default function MenuManagementPage() {
 
             {aiStep === 'review' && (
               <div className="space-y-4">
-                <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40 rounded-2xl p-3 text-xs text-purple-900 dark:text-purple-300 font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-purple-600 shrink-0" />
+                <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-2xl p-3 text-xs text-gray-900 dark:text-gray-100 font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-gray-700 dark:text-gray-300 shrink-0" />
                   <span>Review and edit the extracted items below before confirming and publishing to live menu.</span>
                 </div>
 

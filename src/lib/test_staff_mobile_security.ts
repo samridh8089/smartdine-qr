@@ -27,7 +27,7 @@ loadEnv('.env.local');
 
 async function runStaffSecurityTests() {
   console.log('====================================================');
-  console.log('🛡️ RUNNING STAFF MOBILE APP & ROLE SECURITY TEST SUITE');
+  console.log(' RUNNING STAFF MOBILE APP & ROLE SECURITY TEST SUITE');
   console.log('====================================================');
 
   let passed = 0;
@@ -35,10 +35,10 @@ async function runStaffSecurityTests() {
 
   function assert(condition: boolean, testName: string) {
     if (condition) {
-      console.log(`✅ [PASS] ${testName}`);
+      console.log(`[PASS] [PASS] ${testName}`);
       passed++;
     } else {
-      console.error(`❌ [FAIL] ${testName}`);
+      console.error(`[FAIL] [FAIL] ${testName}`);
       failed++;
     }
   }
@@ -52,12 +52,12 @@ async function runStaffSecurityTests() {
 
     const { data: rests } = await adminSupabase.from('restaurants').select('id, name, settings').limit(1);
     if (!rests || rests.length === 0) {
-      console.log('⚠️ No restaurants found in DB, skipping live db tests.');
+      console.log('[WARN] No restaurants found in DB, skipping live db tests.');
       return;
     }
     const testRest = rests[0];
     const testRestId = testRest.id;
-    console.log(`🏢 Testing with Restaurant: ${testRest.name} (${testRestId})`);
+    console.log(` Testing with Restaurant: ${testRest.name} (${testRestId})`);
 
     // TEST 1: Table assignment CRUD
     console.log('\n--- 1. Table Assignment Persistence ---');
@@ -201,10 +201,10 @@ async function runStaffSecurityTests() {
     }
 
     console.log('\n====================================================');
-    console.log(`🎉 TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`);
+    console.log(` TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`);
     console.log('====================================================');
   } catch (err: any) {
-    console.error('💥 Test execution error:', err?.message || err);
+    console.error('[ERROR] Test execution error:', err?.message || err);
   }
 }
 

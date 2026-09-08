@@ -44,11 +44,11 @@ async function runAllVerifications() {
   });
 
   if (createErr) {
-    console.error('❌ Failed to create auth user:', createErr.message);
+    console.error('[FAIL] Failed to create auth user:', createErr.message);
     return;
   }
   const userId = authUser.user.id;
-  console.log(`✅ Step 1: Created Auth User (${tempEmail}) -> User ID: ${userId}`);
+  console.log(`[PASS] Step 1: Created Auth User (${tempEmail}) -> User ID: ${userId}`);
 
   // 2. Update Profile (created automatically via trigger)
   const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
@@ -61,9 +61,9 @@ async function runAllVerifications() {
   });
 
   if (profErr) {
-    console.error('❌ Failed to update profile:', profErr.message);
+    console.error('[FAIL] Failed to update profile:', profErr.message);
   } else {
-    console.log('✅ Step 2: Configured Staff Profile (Role: Waiter, Restaurant: ' + restaurant.name + ')');
+    console.log('[PASS] Step 2: Configured Staff Profile (Role: Waiter, Restaurant: ' + restaurant.name + ')');
 
     // 3. Direct Password Reset by Owner without email link
     const { error: resetErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
@@ -71,9 +71,9 @@ async function runAllVerifications() {
     });
 
     if (resetErr) {
-      console.error('❌ Direct Password Reset Failed:', resetErr.message);
+      console.error('[FAIL] Direct Password Reset Failed:', resetErr.message);
     } else {
-      console.log(`✅ Step 3: Owner Directly Set Password to "${newDirectPassword}" (No email link required)`);
+      console.log(`[PASS] Step 3: Owner Directly Set Password to "${newDirectPassword}" (No email link required)`);
       await supabaseAdmin.from('profiles').update({ plain_password: newDirectPassword }).eq('id', userId);
 
       // 4. Test Immediate Login with new password
@@ -83,9 +83,9 @@ async function runAllVerifications() {
       });
 
       if (loginErr) {
-        console.error('❌ Login with new password failed:', loginErr.message);
+        console.error('[FAIL] Login with new password failed:', loginErr.message);
       } else {
-        console.log(`✅ Step 4: Login as Rahul with "${newDirectPassword}" SUCCESSFUL! (Session User: ${loginData.user.id})`);
+        console.log(`[PASS] Step 4: Login as Rahul with "${newDirectPassword}" SUCCESSFUL! (Session User: ${loginData.user.id})`);
         await supabaseClient.auth.signOut();
       }
     }
@@ -98,9 +98,9 @@ async function runAllVerifications() {
     const { error: delAuthErr } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (delAuthErr) {
-      console.error('❌ Failed to delete auth user:', delAuthErr.message);
+      console.error('[FAIL] Failed to delete auth user:', delAuthErr.message);
     } else {
-      console.log('✅ Step 5: Auth User & Profile permanently deleted from Supabase');
+      console.log('[PASS] Step 5: Auth User & Profile permanently deleted from Supabase');
 
       // 6. Verify login fails now
       const { error: afterDelLoginErr } = await supabaseClient.auth.signInWithPassword({
@@ -109,9 +109,9 @@ async function runAllVerifications() {
       });
 
       if (afterDelLoginErr) {
-        console.log(`✅ Step 6: Post-deletion login confirmed BLOCKED ("${afterDelLoginErr.message}")`);
+        console.log(`[PASS] Step 6: Post-deletion login confirmed BLOCKED ("${afterDelLoginErr.message}")`);
       } else {
-        console.error('❌ Security alert: User was still able to log in after deletion!');
+        console.error('[FAIL] Security alert: User was still able to log in after deletion!');
       }
     }
   }
@@ -131,18 +131,18 @@ async function runAllVerifications() {
   console.log(`Initial: Table 3 is assigned to Rahul (${waiterRahulId})`);
   const existingAssigned = assignments.find(a => a.table_id === table3Id && a.active !== false && a.waiter_id !== waiterMohitId);
   if (existingAssigned) {
-    console.log(`✅ Conflict Detected! Table 3 is currently held by ${existingAssigned.waiter_name}`);
+    console.log(`[PASS] Conflict Detected! Table 3 is currently held by ${existingAssigned.waiter_name}`);
 
     // Option 1: Assign to Both
     const both = [...assignments, { table_id: table3Id, table_name: 'Table 3', waiter_id: waiterMohitId, waiter_name: 'Mohit', active: true }];
-    console.log(`✅ Option 1 Verified: "Assign to Both" -> ${both.filter(a => a.table_id === table3Id).length} waiters on Table 3 (Rahul & Mohit)`);
+    console.log(`[PASS] Option 1 Verified: "Assign to Both" -> ${both.filter(a => a.table_id === table3Id).length} waiters on Table 3 (Rahul & Mohit)`);
 
     // Option 2: Replace Existing
     const replaced = assignments.map(a => a.table_id === table3Id ? { ...a, waiter_id: waiterMohitId, waiter_name: 'Mohit' } : a);
-    console.log(`✅ Option 2 Verified: "Replace Existing" -> Table 3 exclusively assigned to ${replaced.find(a => a.table_id === table3Id)?.waiter_name}`);
+    console.log(`[PASS] Option 2 Verified: "Replace Existing" -> Table 3 exclusively assigned to ${replaced.find(a => a.table_id === table3Id)?.waiter_name}`);
 
     // Option 3: Cancel
-    console.log(`✅ Option 3 Verified: "Cancel" keeps original assignment intact`);
+    console.log(`[PASS] Option 3 Verified: "Cancel" keeps original assignment intact`);
   }
 
   // ----------------------------------------------------------------
@@ -162,9 +162,9 @@ async function runAllVerifications() {
     .single();
 
   if (oErr || !testOrder) {
-    console.error('❌ Failed to insert test order:', oErr?.message);
+    console.error('[FAIL] Failed to insert test order:', oErr?.message);
   } else {
-    console.log(`✅ Created test order #${testOrder.id.slice(0, 8)} (Status: ${testOrder.status}, Payment: ${testOrder.payment_status})`);
+    console.log(`[PASS] Created test order #${testOrder.id.slice(0, 8)} (Status: ${testOrder.status}, Payment: ${testOrder.payment_status})`);
 
     const cancelReason = 'Customer changed mind / Left table';
     const { data: cancelledOrder, error: cErr } = await supabaseAdmin
@@ -181,9 +181,9 @@ async function runAllVerifications() {
       .single();
 
     if (cErr) {
-      console.error('❌ Cancel order failed:', cErr.message);
+      console.error('[FAIL] Cancel order failed:', cErr.message);
     } else {
-      console.log(`✅ Order Cancelled Successfully without schema error!`);
+      console.log(`[PASS] Order Cancelled Successfully without schema error!`);
       console.log(`   - Status: ${cancelledOrder.status}`);
       console.log(`   - Cancellation Reason: "${cancelledOrder.cancellation_reason}"`);
       console.log(`   - Cancelled By: "${cancelledOrder.cancelled_by}"`);
@@ -207,15 +207,15 @@ async function runAllVerifications() {
       .single();
 
     if (pErr) {
-      console.error('❌ Payment update failed:', pErr.message);
+      console.error('[FAIL] Payment update failed:', pErr.message);
     } else {
-      console.log(`✅ Payment updated to PAID!`);
+      console.log(`[PASS] Payment updated to PAID!`);
       console.log(`   - Payment Status: "${paidOrder.payment_status}" (Payment Pending badge removed, PAID badge active)`);
       console.log(`   - Payment Method: "${paidOrder.payment_method}"`);
     }
 
     await supabaseAdmin.from('orders').delete().eq('id', testOrder.id);
-    console.log('✅ Cleaned up temporary test order');
+    console.log('[PASS] Cleaned up temporary test order');
   }
 
   // ----------------------------------------------------------------
@@ -223,7 +223,7 @@ async function runAllVerifications() {
   // ----------------------------------------------------------------
   console.log('\n--- TEST 5: INVENTORY & RECIPE MANAGEMENT VERIFICATION ---');
   const { data: invSample } = await supabaseAdmin.from('inventory_items').select('*').limit(1);
-  console.log(`✅ inventory_items table verified.`);
+  console.log(`[PASS] inventory_items table verified.`);
   console.log(`   - Columns: ${Object.keys(invSample?.[0] || {}).join(', ')}`);
 
   console.log('\n====================================================');

@@ -273,10 +273,10 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
             const isSystemDefault = ['starter', 'pro', 'premium', 'custom'].includes(plan.id);
 
             return (
-              <Card key={plan.id} className={`relative flex flex-col justify-between transition-all dark:bg-slate-900 ${plan.is_popular ? 'border-2 border-indigo-500 shadow-lg' : 'border border-slate-200 dark:border-slate-800'}`}>
+              <Card key={plan.id} className={`relative flex flex-col justify-between transition-all dark:bg-slate-900 ${plan.is_popular ? 'border-2 border-gray-950 dark:border-white shadow-lg' : 'border border-slate-200 dark:border-slate-800'}`}>
                 {plan.is_popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-extrabold uppercase px-3 py-0.5 rounded-full shadow">
-                    ★ Most Popular
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-950 text-white dark:bg-white dark:text-gray-950 text-[10px] font-bold uppercase px-3 py-0.5 rounded-full shadow">
+                    Most Popular
                   </div>
                 )}
 

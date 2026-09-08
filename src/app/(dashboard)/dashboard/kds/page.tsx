@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { 
   ChefHat, Clock, Check, ArrowRight, Play, CheckCircle2, 
-  X, AlertCircle, Volume2, Sparkles, Bell, ShoppingBag
+  X, AlertCircle, Volume2, Sparkles, Bell, ShoppingBag, Search, FileText
 } from 'lucide-react';
 import { playLoudBell, unlockAudio, stopLoudBell } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
@@ -330,7 +330,7 @@ export default function KitchenDisplayPage() {
                 if (soundEnabled) {
                   playLoudBell('kitchen');
                 }
-                showDesktopNotification('🚨 NEW ORDER RECEIVED!', `New order on ${fullOrder.table_name || 'Table X'}`);
+                showDesktopNotification('NEW ORDER RECEIVED!', `New order on ${fullOrder.table_name || 'Table X'}`);
                 setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
                 
                 setTimeout(() => {
@@ -341,9 +341,9 @@ export default function KitchenDisplayPage() {
           } else if (payload.eventType === 'UPDATE') {
             const updated = payload.new as Order;
             if (updated.status === 'preparing') {
-              showDesktopNotification('👨‍🍳 Order Preparing', `Order on ${updated.table_name || 'Table'} is now preparing in kitchen.`);
+              showDesktopNotification('Order Preparing', `Order on ${updated.table_name || 'Table'} is now preparing in kitchen.`);
             } else if (updated.status === 'ready') {
-              showDesktopNotification('🔔 Order Ready for Pickup!', `Order on ${updated.table_name || 'Table'} is cooked and ready!`);
+              showDesktopNotification('Order Ready for Pickup!', `Order on ${updated.table_name || 'Table'} is cooked and ready!`);
             }
           }
         }
@@ -383,7 +383,7 @@ export default function KitchenDisplayPage() {
               if (soundEnabled) {
                 playLoudBell('kitchen');
               }
-              showDesktopNotification('🚨 NEW ITEMS ADDED!', `New items added for ${fullOrder.table_name || 'Table X'}`);
+              showDesktopNotification('NEW ITEMS ADDED!', `New items added for ${fullOrder.table_name || 'Table X'}`);
               setToast({ message: `New Items Added - ${fullOrder.table_name || 'Table X'}`, visible: true });
               
               setTimeout(() => {
@@ -687,12 +687,12 @@ export default function KitchenDisplayPage() {
                       const notesText = getCleanSpecialInstructions(order, order);
                       if (!notesText) return null;
                       return (
-                        <div className="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-700/60 rounded-xl p-3 my-2 text-amber-900 dark:text-amber-200">
-                          <div className="flex items-center gap-1.5 font-extrabold text-xs text-amber-800 dark:text-amber-300 uppercase tracking-wider">
-                            <span>📝</span>
+                        <div className="bg-white dark:bg-gray-900 border-l-2 border-gray-400 dark:border-gray-600 rounded-r-xl p-3 my-2 text-gray-900 dark:text-gray-100">
+                          <div className="flex items-center gap-1.5 font-bold text-xs text-gray-950 dark:text-white uppercase tracking-wider">
+                            <FileText className="h-3.5 w-3.5 text-gray-700 dark:text-gray-300" />
                             <span>Special Instructions</span>
                           </div>
-                          <p className="text-xs md:text-sm font-black text-amber-950 dark:text-amber-100 mt-1 whitespace-pre-wrap">
+                          <p className="text-xs md:text-sm font-semibold text-gray-800 dark:text-gray-200 mt-1 whitespace-pre-wrap">
                             {notesText}
                           </p>
                         </div>
@@ -700,9 +700,12 @@ export default function KitchenDisplayPage() {
                     })()}
 
                     <details className="text-[11px] font-semibold text-slate-500 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <summary className="cursor-pointer font-extrabold text-slate-700 dark:text-slate-300 hover:text-slate-900 flex items-center justify-between select-none">
-                        <span>🔍 Recipe Ingredients & Stock Impact</span>
-                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">Auto Stock Deducted</span>
+                      <summary className="cursor-pointer font-bold text-slate-700 dark:text-slate-300 hover:text-slate-900 flex items-center justify-between select-none">
+                        <span className="flex items-center gap-1.5">
+                          <Search className="h-3.5 w-3.5 text-gray-500" />
+                          <span>Recipe Ingredients & Stock Impact</span>
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-semibold">Auto Stock Deducted</span>
                       </summary>
 
                       <div className="mt-2 space-y-2 text-[10px] text-slate-600 dark:text-slate-400">
@@ -854,12 +857,12 @@ export default function KitchenDisplayPage() {
                       const notesText = getCleanSpecialInstructions(order, order);
                       if (!notesText) return null;
                       return (
-                        <div className="bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-700/60 rounded-xl p-3 my-2 text-amber-900 dark:text-amber-200">
-                          <div className="flex items-center gap-1.5 font-extrabold text-xs text-amber-800 dark:text-amber-300 uppercase tracking-wider">
-                            <span>📝</span>
+                        <div className="bg-white dark:bg-gray-900 border-l-2 border-gray-400 dark:border-gray-600 rounded-r-xl p-3 my-2 text-gray-900 dark:text-gray-100">
+                          <div className="flex items-center gap-1.5 font-bold text-xs text-gray-950 dark:text-white uppercase tracking-wider">
+                            <FileText className="h-3.5 w-3.5 text-gray-700 dark:text-gray-300" />
                             <span>Special Instructions</span>
                           </div>
-                          <p className="text-xs md:text-sm font-black text-amber-950 dark:text-amber-100 mt-1 whitespace-pre-wrap">
+                          <p className="text-xs md:text-sm font-semibold text-gray-800 dark:text-gray-200 mt-1 whitespace-pre-wrap">
                             {notesText}
                           </p>
                         </div>
@@ -877,7 +880,7 @@ export default function KitchenDisplayPage() {
                       {order.status === 'accepted' ? (
                         <button 
                           disabled={processingBatchIds.includes(order.id)}
-                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-all disabled:opacity-50 cursor-pointer"
+                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-gray-900 hover:bg-black text-white transition-all disabled:opacity-50 cursor-pointer"
                           onClick={() => updateBatchStatus(order.id, 'preparing')}
                         >
                           {processingBatchIds.includes(order.id) ? (
@@ -890,7 +893,7 @@ export default function KitchenDisplayPage() {
                       ) : (
                         <button 
                           disabled={processingBatchIds.includes(order.id)}
-                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all disabled:opacity-50 cursor-pointer"
+                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-gray-900 hover:bg-black text-white transition-all disabled:opacity-50 cursor-pointer"
                           onClick={() => updateBatchStatus(order.id, 'ready')}
                         >
                           {processingBatchIds.includes(order.id) ? (
@@ -1096,11 +1099,11 @@ export default function KitchenDisplayPage() {
               return (
                 <div className="space-y-3">
                   {isPostPrep && (
-                    <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl p-3 space-y-2">
-                      <p className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase">
-                        ⚠ Food was already {targetBatch?.status?.toUpperCase()}
+                    <div className="bg-white dark:bg-gray-900 border-l-2 border-gray-400 dark:border-gray-600 rounded-r-xl p-3 space-y-1">
+                      <p className="text-xs font-bold text-gray-950 dark:text-white uppercase">
+                        Food was already {targetBatch?.status?.toUpperCase()}
                       </p>
-                      <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      <p className="text-[11px] text-gray-600 dark:text-gray-400">
                         Raw inventory was already physically consumed. Select what was done with the cooked food:
                       </p>
                       <div className="grid grid-cols-2 gap-1.5">

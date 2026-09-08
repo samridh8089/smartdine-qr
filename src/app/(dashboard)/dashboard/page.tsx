@@ -334,7 +334,7 @@ export default function DashboardPage() {
             (payload) => {
               if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
                 try {
-                  new Notification('🚨 New Order Received!', {
+                  new Notification('New Order Received', {
                     body: `New order received on your dashboard!`,
                     icon: '/icon-192.png'
                   });
@@ -477,71 +477,71 @@ export default function DashboardPage() {
 
       {/* Top Row: Revenue & Core Stats (4 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+        <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Revenue Today</p>
-              <span className="text-emerald-500 text-xs font-bold">Today</span>
+              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Revenue Today</p>
+              <span className="text-gray-500 dark:text-gray-400 text-xs font-semibold">Today</span>
             </div>
-            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">{formatPrice(stats.revenue)}</h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{stats.totalOrders} valid orders</p>
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white mt-1 leading-tight whitespace-nowrap">{formatPrice(stats.revenue)}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.totalOrders} valid orders</p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+        <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Total Orders</p>
-              <span className="text-blue-500 text-xs font-bold">Today</span>
+              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Orders</p>
+              <span className="text-gray-500 dark:text-gray-400 text-xs font-semibold">Today</span>
             </div>
-            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">{stats.totalOrders}</h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{stats.totalOrders} non-cancelled</p>
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white mt-1 leading-tight whitespace-nowrap">{stats.totalOrders}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{stats.totalOrders} non-cancelled</p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+        <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Active Tables</p>
-              <span className="text-purple-500 text-xs font-bold">Live</span>
+              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active Tables</p>
+              <span className="text-gray-500 dark:text-gray-400 text-xs font-semibold">Live</span>
             </div>
-            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">{stats.activeTablesCount}</h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white mt-1 leading-tight whitespace-nowrap">{stats.activeTablesCount}</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {stats.activeTableNames.length > 0 ? `Tables: ${stats.activeTableNames.join(', ')}` : '0 dining now'}
             </p>
           </CardContent>
         </Card>
 
-        <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
+        <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Avg Order Value</p>
-              <span className="text-amber-500 text-xs font-bold">Per Order</span>
+              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Avg Order Value</p>
+              <span className="text-gray-500 dark:text-gray-400 text-xs font-semibold">Per Order</span>
             </div>
-            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white mt-1 leading-tight whitespace-nowrap">
+            <h3 className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white mt-1 leading-tight whitespace-nowrap">
               {stats.totalOrders > 0 ? formatPrice(stats.revenue / stats.totalOrders) : '₹0'}
             </h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Per closed ticket</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Per closed ticket</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Dedicated Live Table Occupancy Card */}
-      <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
+      <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-lg">
-                🪑
+              <div className="h-10 w-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-900 dark:text-gray-100 font-bold text-base">
+                <Boxes className="h-5 w-5 text-gray-700 dark:text-gray-300" />
               </div>
               <div>
-                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Live Table Occupancy</h3>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Real-time dining room seating and QR status</p>
+                <h3 className="font-bold text-gray-950 dark:text-white text-base">Live Table Occupancy</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Real-time dining room seating and QR status</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/50">
-                <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white border border-gray-300 dark:border-gray-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-gray-900 dark:bg-gray-100"></span>
                 {tableOccupancy.occupancyRate}% Occupied
               </span>
               <Link href="/dashboard/tables">
@@ -553,19 +553,19 @@ export default function DashboardPage() {
           </div>
 
           {/* Occupancy Progress Bar */}
-          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 mb-5 overflow-hidden flex">
+          <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 mb-5 overflow-hidden flex">
             <div
-              className="bg-rose-500 h-2.5 transition-all duration-500 ease-out"
+              className="bg-gray-900 dark:bg-gray-100 h-2 transition-all duration-500 ease-out"
               style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.occupied / tableOccupancy.total) * 100 : 0}%` }}
               title={`Occupied: ${tableOccupancy.occupied}`}
             />
             <div
-              className="bg-emerald-500 h-2.5 transition-all duration-500 ease-out"
+              className="bg-gray-400 dark:bg-gray-600 h-2 transition-all duration-500 ease-out"
               style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.available / tableOccupancy.total) * 100 : 0}%` }}
               title={`Available: ${tableOccupancy.available}`}
             />
             <div
-              className="bg-slate-400 h-2.5 transition-all duration-500 ease-out"
+              className="bg-gray-200 dark:bg-gray-700 h-2 transition-all duration-500 ease-out"
               style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.inactive / tableOccupancy.total) * 100 : 0}%` }}
               title={`Disabled: ${tableOccupancy.inactive}`}
             />
@@ -573,21 +573,21 @@ export default function DashboardPage() {
 
           {/* 4-Stat KPI Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-900 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.total}</p>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Total Tables</p>
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.total}</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">Total Tables</p>
             </div>
-            <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-emerald-600 dark:text-emerald-400 leading-tight whitespace-nowrap">{tableOccupancy.available}</p>
-              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mt-1">🟢 Available</p>
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.available}</p>
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mt-1">Available</p>
             </div>
-            <div className="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-rose-600 dark:text-rose-400 leading-tight whitespace-nowrap">{tableOccupancy.occupied}</p>
-              <p className="text-xs font-bold text-rose-700 dark:text-rose-300 mt-1">🔴 Occupied</p>
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.occupied}</p>
+              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mt-1">Occupied</p>
             </div>
-            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-black text-slate-600 dark:text-slate-400 leading-tight whitespace-nowrap">{tableOccupancy.inactive}</p>
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">⚪ QR Disabled</p>
+            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
+              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.inactive}</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">QR Disabled</p>
             </div>
           </div>
         </CardContent>
@@ -708,33 +708,33 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Out of Stock Card */}
-          <Card className="border border-rose-200 dark:border-rose-900/50 rounded-2xl bg-rose-50/30 dark:bg-rose-950/20 overflow-hidden shadow-sm">
+          <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
             <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-rose-100 dark:border-rose-900/40 pb-2.5">
-                <span className="text-xs font-extrabold text-rose-900 dark:text-rose-200 uppercase tracking-wider">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2.5">
+                <span className="text-xs font-bold text-gray-950 dark:text-white uppercase tracking-wider">
                   Out of Stock ({stockAlerts.outOfStock.length})
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-200 dark:bg-rose-900/80 text-rose-900 dark:text-rose-200">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white border border-gray-300 dark:border-gray-700">
                   CRITICAL
                 </span>
               </div>
 
               {stockAlerts.outOfStock.length === 0 ? (
-                <div className="py-4 text-center text-xs font-bold text-slate-400 dark:text-slate-500">
-                  🎉 No out of stock items. All recipe ingredients are available!
+                <div className="py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  No out of stock items. All recipe ingredients are available.
                 </div>
               ) : (
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {stockAlerts.outOfStock.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-rose-100 dark:border-rose-900/30 flex items-start justify-between gap-3 text-xs">
+                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 text-xs">
                       <div>
-                        <span className="font-extrabold text-slate-900 dark:text-white block">{item.name}</span>
-                        <span className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold block mt-0.5">
+                        <span className="font-bold text-gray-950 dark:text-white block">{item.name}</span>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mt-0.5">
                           {item.reasons.join(' • ')}
                         </span>
                       </div>
                       <Link href="/dashboard/inventory">
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50 px-2 font-bold">
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold">
                           Restock
                         </Button>
                       </Link>
@@ -746,38 +746,38 @@ export default function DashboardPage() {
           </Card>
 
           {/* Low Stock Card */}
-          <Card className="border border-amber-200 dark:border-amber-900/50 rounded-2xl bg-amber-50/30 dark:bg-amber-950/20 overflow-hidden shadow-sm">
+          <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
             <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-amber-100 dark:border-amber-900/40 pb-2.5">
-                <span className="text-xs font-extrabold text-amber-900 dark:text-amber-200 uppercase tracking-wider">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2.5">
+                <span className="text-xs font-bold text-gray-950 dark:text-white uppercase tracking-wider">
                   Low Stock ({stockAlerts.lowStock.length})
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white border border-gray-300 dark:border-gray-700">
                   WARNING
                 </span>
               </div>
 
               {stockAlerts.lowStock.length === 0 ? (
-                <div className="py-4 text-center text-xs font-bold text-slate-400 dark:text-slate-500">
-                  👍 No low stock items. All inventory levels are healthy!
+                <div className="py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  No low stock items. All inventory levels are healthy.
                 </div>
               ) : (
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {stockAlerts.lowStock.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-amber-100 dark:border-amber-900/30 flex items-start justify-between gap-3 text-xs">
+                    <div key={idx} className="p-3 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 text-xs">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-slate-900 dark:text-white">{item.name}</span>
-                          <span className="text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 px-1.5 py-0.5 rounded">
+                          <span className="font-bold text-gray-950 dark:text-white">{item.name}</span>
+                          <span className="text-[10px] font-bold bg-gray-200 text-gray-900 dark:bg-gray-800 dark:text-gray-200 px-1.5 py-0.5 rounded">
                             {item.maxServings} left
                           </span>
                         </div>
-                        <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold block mt-0.5">
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mt-0.5">
                           {item.reasons.join(' • ')}
                         </span>
                       </div>
                       <Link href="/dashboard/inventory">
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/50 px-2 font-bold">
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold">
                           Add Stock
                         </Button>
                       </Link>
@@ -794,10 +794,10 @@ export default function DashboardPage() {
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-gray-950 dark:text-white uppercase tracking-wider">
               Order Cancellation & Prepared Food Waste Impact
             </h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Breakdown of today's cancellations by stage, food disposition channels, and net financial loss.
             </p>
           </div>
@@ -810,44 +810,44 @@ export default function DashboardPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Cancellation by Stage */}
-          <Card className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+          <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
             <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                <span className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2.5">
+                <span className="text-xs font-bold text-gray-950 dark:text-white uppercase tracking-wider">
                   Cancellations By Stage
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                   {cancellationStats.totalCancelledToday} Total Today
                 </span>
               </div>
 
               <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 rounded-xl">
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div className="space-y-0.5">
-                    <span className="font-bold text-slate-800 dark:text-slate-200 block">Before Cooking</span>
-                    <span className="text-[10px] text-slate-400">Placed / Accepted</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100 block">Before Cooking</span>
+                    <span className="text-[10px] text-gray-500">Placed / Accepted</span>
                   </div>
-                  <span className="font-extrabold text-slate-900 dark:text-white bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-lg text-xs">
+                  <span className="font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
                     {cancellationStats.beforePrepCount}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-200/60 dark:border-amber-900/30">
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div className="space-y-0.5">
-                    <span className="font-bold text-amber-900 dark:text-amber-200 block">During Cooking</span>
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400">In Preparation</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100 block">During Cooking</span>
+                    <span className="text-[10px] text-gray-500">In Preparation</span>
                   </div>
-                  <span className="font-extrabold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg text-xs">
+                  <span className="font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
                     {cancellationStats.duringPrepCount}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 bg-rose-50/60 dark:bg-rose-950/20 rounded-xl border border-rose-200/60 dark:border-rose-900/30">
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div className="space-y-0.5">
-                    <span className="font-bold text-rose-900 dark:text-rose-200 block">After Cooking / Served</span>
-                    <span className="text-[10px] text-rose-700 dark:text-rose-400">Ready / Served</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100 block">After Cooking / Served</span>
+                    <span className="text-[10px] text-gray-500">Ready / Served</span>
                   </div>
-                  <span className="font-extrabold text-rose-800 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60 px-2 py-0.5 rounded-lg text-xs">
+                  <span className="font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
                     {cancellationStats.afterPrepCount}
                   </span>
                 </div>
@@ -856,44 +856,44 @@ export default function DashboardPage() {
           </Card>
 
           {/* Prepared Food Dispositions */}
-          <Card className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+          <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
             <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                <span className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2.5">
+                <span className="text-xs font-bold text-gray-950 dark:text-white uppercase tracking-wider">
                   Cooked Food Dispositions
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
                   {cancellationStats.totalDispositionsCount} Logged
                 </span>
               </div>
 
               <div className="space-y-2.5 text-xs">
-                <div className="flex items-center justify-between p-2.5 bg-blue-50/60 dark:bg-blue-950/20 rounded-xl border border-blue-200/60 dark:border-blue-900/30">
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div>
-                    <span className="font-bold text-blue-900 dark:text-blue-200 block">Reallocated / Resold</span>
-                    <span className="text-[10px] text-blue-700 dark:text-blue-400">Given to other tables</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100 block">Reallocated / Resold</span>
+                    <span className="text-[10px] text-gray-500">Given to other tables</span>
                   </div>
-                  <span className="font-extrabold text-blue-800 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 rounded-lg text-xs">
+                  <span className="font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
                     {cancellationStats.reallocatedDishesCount} dishes
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 bg-amber-50/60 dark:bg-amber-950/20 rounded-xl border border-amber-200/60 dark:border-amber-900/30">
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div>
-                    <span className="font-bold text-amber-900 dark:text-amber-200 block">Staff / Complimentary</span>
-                    <span className="text-[10px] text-amber-700 dark:text-amber-400">Internal consumption</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100 block">Staff / Complimentary</span>
+                    <span className="text-[10px] text-gray-500">Internal consumption</span>
                   </div>
-                  <span className="font-extrabold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg text-xs">
+                  <span className="font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
                     {cancellationStats.staffAndOtherDishesCount} dishes
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between p-2.5 bg-rose-50/60 dark:bg-rose-950/20 rounded-xl border border-rose-200/60 dark:border-rose-900/30">
+                <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div>
-                    <span className="font-bold text-rose-900 dark:text-rose-200 block">Discarded / Wasted</span>
-                    <span className="text-[10px] text-rose-700 dark:text-rose-400">Total food dumped</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100 block">Discarded / Wasted</span>
+                    <span className="text-[10px] text-gray-500">Total food dumped</span>
                   </div>
-                  <span className="font-extrabold text-rose-800 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60 px-2 py-0.5 rounded-lg text-xs">
+                  <span className="font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-lg text-xs">
                     {cancellationStats.wasteDishesCount} dishes
                   </span>
                 </div>
@@ -902,45 +902,45 @@ export default function DashboardPage() {
           </Card>
 
           {/* Financial Loss Breakdown */}
-          <Card className="border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+          <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
             <CardContent className="p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-                <span className="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2.5">
+                <span className="text-xs font-bold text-gray-950 dark:text-white uppercase tracking-wider">
                   Unpaid Cancellation Loss
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white border border-gray-300 dark:border-gray-700">
                   ESTIMATED IMPACT
                 </span>
               </div>
 
               <div className="space-y-2 text-xs">
-                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-500">Gross Cancelled Bill Value:</span>
-                  <span className="font-bold text-slate-800 dark:text-slate-200">
+                <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-gray-500">Gross Cancelled Bill Value:</span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100">
                     {formatPrice(cancellationStats.totalCancelledGrossValue, restaurant?.settings?.currency)}
                   </span>
                 </div>
 
-                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-500">Payments Retained / Paid:</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-gray-500">Payments Retained / Paid:</span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100">
                     +{formatPrice(cancellationStats.paidBeforeCancelValue, restaurant?.settings?.currency)}
                   </span>
                 </div>
 
-                <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-slate-500">Wasted Raw Ingredient Cost:</span>
-                  <span className="font-bold text-rose-600 dark:text-rose-400">
+                <div className="flex justify-between py-1 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-gray-500">Wasted Raw Ingredient Cost:</span>
+                  <span className="font-bold text-gray-900 dark:text-gray-100">
                     -{formatPrice(cancellationStats.estimatedWasteFoodCost, restaurant?.settings?.currency)}
                   </span>
                 </div>
 
-                <div className="pt-2 flex items-center justify-between bg-rose-50 dark:bg-rose-950/40 p-2.5 rounded-xl border border-rose-200 dark:border-rose-900/50">
+                <div className="pt-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800/60 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700">
                   <div>
-                    <span className="font-black text-rose-900 dark:text-rose-200 block text-xs">Net Financial Loss:</span>
-                    <span className="text-[10px] text-rose-700 dark:text-rose-400 font-semibold">Uncollected bill + wasted stock</span>
+                    <span className="font-bold text-gray-950 dark:text-white block text-xs">Net Financial Loss:</span>
+                    <span className="text-[10px] text-gray-500 font-medium">Uncollected bill + wasted stock</span>
                   </div>
-                  <span className="font-black text-rose-600 dark:text-rose-400 text-sm">
+                  <span className="font-bold text-gray-950 dark:text-white text-sm">
                     {formatPrice(cancellationStats.estimatedLoss, restaurant?.settings?.currency)}
                   </span>
                 </div>

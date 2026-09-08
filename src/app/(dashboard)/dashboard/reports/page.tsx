@@ -12,7 +12,8 @@ import {
   TrendingUp, BarChart3, ShoppingCart, Calendar, 
   Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle,
   ShoppingBag, ClipboardList, Lock, Banknote, Download, FileText, Filter, ArrowUpDown,
-  Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight
+  Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight,
+  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb
 } from 'lucide-react';
 import { isRevenueOrder } from '@/lib/billingEngine';
 
@@ -1195,8 +1196,8 @@ export default function ReportsPage() {
       value: salesSummary.totalOrders.toString(),
       desc: 'Excludes cancelled',
       icon: ShoppingBag,
-      iconColor: 'text-blue-500 dark:text-blue-400',
-      valueColor: 'text-slate-900 dark:text-white',
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
     },
     {
       id: 'gross-sales',
@@ -1204,8 +1205,8 @@ export default function ReportsPage() {
       value: formatPrice(salesSummary.grossSales, restaurant?.settings?.currency || 'INR'),
       desc: 'Subtotal before discount',
       icon: TrendingUp,
-      iconColor: 'text-emerald-500 dark:text-emerald-400',
-      valueColor: 'text-slate-900 dark:text-white',
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
     },
     {
       id: 'discounts',
@@ -1213,8 +1214,8 @@ export default function ReportsPage() {
       value: `-${formatPrice(salesSummary.totalDiscount, restaurant?.settings?.currency || 'INR')}`,
       desc: 'Promo & offer vouchers',
       icon: Tag,
-      iconColor: 'text-rose-500 dark:text-rose-400',
-      valueColor: 'text-rose-600 dark:text-rose-400',
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
     },
     {
       id: 'taxable-sales',
@@ -1222,8 +1223,8 @@ export default function ReportsPage() {
       value: formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR'),
       desc: 'Gross minus discount',
       icon: Calculator,
-      iconColor: 'text-indigo-500 dark:text-indigo-400',
-      valueColor: 'text-slate-900 dark:text-white',
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
     },
     {
       id: 'gst-collected',
@@ -1231,8 +1232,8 @@ export default function ReportsPage() {
       value: formatPrice(salesSummary.totalGstCollected, restaurant?.settings?.currency || 'INR'),
       desc: 'CGST+SGST / IGST',
       icon: Receipt,
-      iconColor: 'text-teal-500 dark:text-teal-400',
-      valueColor: 'text-slate-900 dark:text-white',
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
     },
     {
       id: 'net-revenue',
@@ -1240,9 +1241,8 @@ export default function ReportsPage() {
       value: formatPrice(salesSummary.netRevenue, restaurant?.settings?.currency || 'INR'),
       desc: 'Grand total collected',
       icon: Wallet,
-      iconColor: 'text-emerald-600 dark:text-emerald-400',
-      valueColor: 'text-slate-900 dark:text-white',
-      cardBorder: 'border-emerald-500/40 dark:border-emerald-500/30 ring-1 ring-emerald-500/20 dark:ring-emerald-500/10',
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
     },
   ];
 
@@ -1322,18 +1322,18 @@ export default function ReportsPage() {
           {/* EXPORT ACTION GROUP */}
           <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800/40 p-1 rounded-xl border border-slate-200 dark:border-slate-700/50">
             <Button onClick={handleExportOrdersSummaryCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
-              <Download className="h-3 w-3 text-emerald-600" /> Orders CSV
+              <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Orders CSV
             </Button>
             <Button onClick={handleExportOrderItemsCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
-              <Download className="h-3 w-3 text-emerald-600" /> Items CSV
+              <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Items CSV
             </Button>
             <Button onClick={handleExportCombinedCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
-              <Download className="h-3 w-3 text-emerald-600" /> Accounting CSV
+              <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Accounting CSV
             </Button>
             <Button onClick={handleExportPDF} variant="primary" size="sm" className="gap-1 text-xs font-bold shadow-2xs px-2.5 py-1 h-7">
               <FileText className="h-3 w-3" /> Print / PDF
             </Button>
-            <Button onClick={() => setClosingReportModalOpen(true)} variant="primary" size="sm" className="gap-1 text-xs font-bold shadow-2xs px-2.5 py-1 h-7 bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Button onClick={() => setClosingReportModalOpen(true)} variant="primary" size="sm" className="gap-1 text-xs font-bold shadow-2xs px-2.5 py-1 h-7 bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white">
               <ClipboardList className="h-3 w-3" /> Closing Report
             </Button>
           </div>
@@ -1382,7 +1382,7 @@ export default function ReportsPage() {
           return (
             <div 
               key={kpi.id} 
-              className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-sm transition-all rounded-xl p-3.5 flex flex-col justify-between h-full min-h-[110px] ${kpi.cardBorder || ''}`}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-sm transition-all rounded-xl p-3.5 flex flex-col justify-between h-full min-h-[110px]"
             >
               <div className="space-y-1">
                 <span className="text-[11px] font-bold uppercase tracking-wider block text-slate-500 dark:text-slate-400">
@@ -1429,10 +1429,10 @@ export default function ReportsPage() {
                 <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Intrastate (CGST + SGST)</td>
                   <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
                   <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">
+                  <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
                     {formatPrice(salesSummary.cgstCollected + salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
@@ -1441,18 +1441,18 @@ export default function ReportsPage() {
                   <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.igstCollected > 0 ? salesSummary.taxableSales : 0, restaurant?.settings?.currency || 'INR')}</td>
                   <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
                   <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
                     {formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
                 <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-black text-xs border-t-2 border-slate-200 dark:border-slate-700">
                   <td className="py-4 px-4 text-slate-900 dark:text-white font-black">Total GST Collected</td>
                   <td className="py-4 px-4 text-right font-extrabold text-slate-900 dark:text-white">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-black text-emerald-700 dark:text-emerald-300">
+                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-bold text-slate-950 dark:text-white">
                     {formatPrice(salesSummary.totalGstCollected, restaurant?.settings?.currency || 'INR')}
                   </td>
                 </tr>
@@ -1470,15 +1470,15 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-              ⚡
+            <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
+              <Zap className="h-4 w-4" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Kitchen SLA Intelligence</h3>
               <p className="text-xs text-slate-400 font-medium">Automatic lifecycle velocity from order placement to table delivery.</p>
             </div>
           </div>
-          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
             {salesSummary.periodLabel}
           </span>
         </CardHeader>
@@ -1489,28 +1489,28 @@ export default function ReportsPage() {
               <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 {kitchenSlaStats.avgAcceptTimeSec > 0 ? `${kitchenSlaStats.avgAcceptTimeSec} sec` : '—'}
               </p>
-              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 60 sec</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">Target: &lt; 60 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Prep Time</p>
               <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 {kitchenSlaStats.avgPrepTimeMin > 0 ? `${kitchenSlaStats.avgPrepTimeMin} min` : '—'}
               </p>
-              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 15 min</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">Target: &lt; 15 min</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ready → Served</p>
               <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 {kitchenSlaStats.readyToServedSec > 0 ? `${kitchenSlaStats.readyToServedSec} sec` : '—'}
               </p>
-              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 90 sec</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">Target: &lt; 90 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Fulfillment</p>
-              <p className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">
+              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 {kitchenSlaStats.totalFulfillmentMin > 0 ? `${kitchenSlaStats.totalFulfillmentMin} min` : '—'}
               </p>
-              <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mt-1">End-to-End Delivery</p>
+              <p className="text-[11px] font-semibold text-slate-500 mt-1">End-to-End Delivery</p>
             </div>
           </div>
         </CardContent>
@@ -1520,8 +1520,8 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
-              🏆
+            <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
+              <Trophy className="h-4 w-4" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Waiter Performance Intelligence</h3>
@@ -1586,8 +1586,8 @@ export default function ReportsPage() {
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
           <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold">
-                🪑
+              <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
+                <UtensilsCrossed className="h-4 w-4" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Table Turnover Intelligence</h3>
@@ -1612,10 +1612,10 @@ export default function ReportsPage() {
                   {tableTurnoverList.map((t) => (
                     <tr key={t.tableName} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">{t.tableName}</td>
-                      <td className="py-3 px-4 text-center font-bold text-indigo-600 dark:text-indigo-400">{t.turnoverCount}</td>
+                      <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{t.turnoverCount}</td>
                       <td className="py-3 px-4 text-center font-semibold">{t.avgStayDurationMin}m</td>
-                      <td className="py-3 px-4 text-center font-semibold text-rose-500">{t.occupiedTimeMin}m</td>
-                      <td className="py-3 px-4 text-center font-semibold text-emerald-600">{t.freeTimeMin}m</td>
+                      <td className="py-3 px-4 text-center font-semibold text-slate-700 dark:text-slate-300">{t.occupiedTimeMin}m</td>
+                      <td className="py-3 px-4 text-center font-semibold text-slate-700 dark:text-slate-300">{t.freeTimeMin}m</td>
                       <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white">{formatPrice(t.totalRevenue, restaurant?.settings?.currency || 'INR')}</td>
                     </tr>
                   ))}
@@ -1629,8 +1629,8 @@ export default function ReportsPage() {
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
           <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
-                🔥
+              <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
+                <Flame className="h-4 w-4" />
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Peak Hour Heatmap</h3>
@@ -1638,10 +1638,10 @@ export default function ReportsPage() {
               </div>
             </div>
             <div className="flex items-center gap-2 text-[11px] font-bold">
-              <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
+              <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-950 dark:bg-gray-800 dark:text-white border border-gray-300 dark:border-gray-700">
                 Peak: {peakHourSummary.peakHour} ({peakHourSummary.peakOrders} orders)
               </span>
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <span className="px-2 py-0.5 rounded-md bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
                 Slow: {peakHourSummary.slowHour}
               </span>
             </div>
@@ -1649,28 +1649,28 @@ export default function ReportsPage() {
           <CardContent className="p-4">
             {/* Priority 5: Live Occupancy & Hourly Rush Merged Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-4 text-center">
-              <div className="p-2.5 bg-rose-50/70 dark:bg-rose-950/30 rounded-xl border border-rose-100 dark:border-rose-900/50">
-                <p className="text-[10px] font-bold text-rose-500 uppercase">Occupied Tables</p>
-                <p className="text-base font-bold text-rose-600 dark:text-rose-400 mt-0.5">{liveOccupancyMerge.occupied}</p>
+              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Occupied Tables</p>
+                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.occupied}</p>
               </div>
-              <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-100 dark:border-emerald-900/50">
-                <p className="text-[10px] font-bold text-emerald-500 uppercase">Free Tables</p>
-                <p className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{liveOccupancyMerge.free}</p>
+              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Free Tables</p>
+                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.free}</p>
               </div>
-              <div className="p-2.5 bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
-                <p className="text-[10px] font-bold text-indigo-500 uppercase">Avg Wait Time</p>
-                <p className="text-base font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{liveOccupancyMerge.avgWaitTime}</p>
+              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Avg Wait Time</p>
+                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.avgWaitTime}</p>
               </div>
-              <div className="p-2.5 bg-purple-50/70 dark:bg-purple-950/30 rounded-xl border border-purple-100 dark:border-purple-900/50">
-                <p className="text-[10px] font-bold text-purple-500 uppercase">Queue Length</p>
-                <p className="text-base font-bold text-purple-600 dark:text-purple-400 mt-0.5">{liveOccupancyMerge.queueLength}</p>
+              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Queue Length</p>
+                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.queueLength}</p>
               </div>
-              <div className="p-2.5 bg-amber-50/70 dark:bg-amber-950/30 rounded-xl border border-amber-100 dark:border-amber-900/50">
-                <p className="text-[10px] font-bold text-amber-600 uppercase">Peak Orders/hr</p>
-                <p className="text-base font-bold text-amber-700 dark:text-amber-300 mt-0.5">{peakHourSummary.peakOrders}</p>
+              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Peak Orders/hr</p>
+                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{peakHourSummary.peakOrders}</p>
               </div>
-              <div className="p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">Peak Rev/hr</p>
+              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Peak Rev/hr</p>
                 <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">
                   {formatPrice(hourlyHeatmap.find(h => h.label === peakHourSummary.peakHour)?.revenue || 0)}
                 </p>
@@ -1679,15 +1679,14 @@ export default function ReportsPage() {
 
             <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
               {hourlyHeatmap.map((slot) => {
-                const isPeak = slot.label === peakHourSummary.peakHour && slot.ordersCount > 0;
                 const intensity = slot.ordersCount > 0 ? (slot.ordersCount / Math.max(1, peakHourSummary.peakOrders)) : 0;
                 const bgClass = slot.ordersCount === 0
                   ? 'bg-slate-50 dark:bg-slate-800/40 text-slate-400 border-slate-100 dark:border-slate-800'
                   : intensity > 0.7
-                    ? 'bg-rose-500 text-white border-rose-600 shadow-sm'
+                    ? 'bg-gray-900 text-white border-gray-950 shadow-xs'
                     : intensity > 0.4
-                      ? 'bg-amber-400 text-slate-900 border-amber-500'
-                      : 'bg-indigo-100 text-indigo-900 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-200';
+                      ? 'bg-gray-300 text-gray-900 border-gray-400'
+                      : 'bg-gray-100 text-gray-900 border-gray-200 dark:bg-gray-800 dark:text-gray-100';
                 return (
                   <div
                     key={slot.hour}
@@ -1709,65 +1708,65 @@ export default function ReportsPage() {
       <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold">
-              ⚠️
+            <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
+              <AlertTriangle className="h-4 w-4" />
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Kitchen Bottleneck Detection</h3>
               <p className="text-xs text-slate-400 font-medium">Automated identification of slow dishes, cancelled recipes, and stuck tickets.</p>
             </div>
           </div>
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
             Real-time Anomaly Guard
           </span>
         </CardHeader>
         <CardContent className="p-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-xl">
-              <p className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider">Slowest Prep Dish</p>
+            <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Slowest Prep Dish</p>
               <p className="text-base font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.slowestDish.name}>
                 {kitchenBottlenecks.slowestDish.name}
               </p>
-              <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mt-1">
+              <p className="text-xs font-semibold text-slate-500 mt-1">
                 {kitchenBottlenecks.slowestDish.avgPrepMin > 0 ? `Avg: ${kitchenBottlenecks.slowestDish.avgPrepMin} min prep` : 'Optimal Prep Time'}
               </p>
             </div>
 
-            <div className="p-4 bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/50 rounded-xl">
-              <p className="text-xs font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">Most Cancelled Dish</p>
+            <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Most Cancelled Dish</p>
               <p className="text-base font-bold text-slate-900 dark:text-white mt-1 truncate" title={kitchenBottlenecks.mostCancelledDish.name}>
                 {kitchenBottlenecks.mostCancelledDish.name}
               </p>
-              <p className="text-xs font-bold text-rose-700 dark:text-rose-400 mt-1">
+              <p className="text-xs font-semibold text-slate-500 mt-1">
                 {kitchenBottlenecks.mostCancelledDish.count} cancellations
               </p>
             </div>
 
-            <div className="p-4 bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-800/50 rounded-xl">
-              <p className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider">Longest Pending Ticket</p>
+            <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Longest Pending Ticket</p>
               <p className="text-base font-bold text-slate-900 dark:text-white mt-1">
                 #{kitchenBottlenecks.longestPendingTicket.orderId} • {kitchenBottlenecks.longestPendingTicket.tableName}
               </p>
-              <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 mt-1">
+              <p className="text-xs font-semibold text-slate-500 mt-1">
                 Waiting {kitchenBottlenecks.longestPendingTicket.elapsedMin} min
               </p>
             </div>
 
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Average Kitchen Queue</p>
+            <div className="p-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Average Kitchen Queue</p>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
                 {kitchenBottlenecks.averageKitchenQueue} active tickets
               </p>
-              <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+              <p className="text-xs font-semibold text-slate-500 mt-1">
                 {kitchenBottlenecks.averageKitchenQueue > 5 ? 'High Load Rush' : 'Healthy Velocity'}
               </p>
             </div>
           </div>
 
-          <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center gap-2.5 text-xs font-medium text-slate-600 dark:text-slate-300">
-            <span className="text-base">💡</span>
+          <div className="mt-4 p-3 bg-white dark:bg-gray-900 border-l-2 border-gray-400 dark:border-gray-600 rounded-r-xl flex items-center gap-2.5 text-xs font-medium text-slate-700 dark:text-slate-300">
+            <Lightbulb className="h-4 w-4 text-slate-700 dark:text-slate-300 shrink-0" />
             <span>
-              <strong>Operational Recommendation:</strong> {kitchenBottlenecks.slowestDish.avgPrepMin > 0 
+              <strong className="text-slate-900 dark:text-white">Operational Recommendation:</strong> {kitchenBottlenecks.slowestDish.avgPrepMin > 0 
                 ? `Pre-batch ingredients for ${kitchenBottlenecks.slowestDish.name} 30 minutes before ${peakHourSummary.peakHour} peak rush to optimize prep flow.`
                 : `All menu items are currently preparing within target SLA. Maintain prep readiness ahead of ${peakHourSummary.peakHour} peak rush.`}
             </span>
@@ -1969,38 +1968,38 @@ export default function ReportsPage() {
             <p className="text-xs text-red-600/80 dark:text-red-400/80 font-medium">Audit of cancelled orders and lost revenue during {salesSummary.periodLabel}.</p>
           </div>
           <div className="text-right">
-            <span className="text-xs font-bold text-red-700 dark:text-red-400">
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
               {cancellationStats.cancelledCount} Cancelled Orders
             </span>
-            <p className="text-sm font-bold text-red-600 dark:text-red-400">
+            <p className="text-sm font-bold text-slate-900 dark:text-white">
               - {formatPrice(cancellationStats.totalLost, restaurant?.settings?.currency || 'INR')}
             </p>
           </div>
         </CardHeader>
         <CardContent>
           {cancellationStats.reasons.length === 0 ? (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 italic py-4 text-center font-bold">
-              🎉 Zero cancellations recorded in this period!
+            <p className="text-xs text-slate-500 dark:text-slate-400 italic py-4 text-center font-medium">
+              Zero cancellations recorded in this period.
             </p>
           ) : (
-            <div className="overflow-x-auto border border-red-100 dark:border-red-900/40 rounded-xl">
+            <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-red-100/40 dark:bg-red-950/40 text-[11px] font-bold text-red-700 dark:text-red-300 uppercase tracking-wider border-b border-red-200 dark:border-red-900/40">
+                  <tr className="bg-slate-50 dark:bg-slate-800/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                     <th className="py-3 px-4">Cancellation Reason</th>
                     <th className="py-3 px-4 text-center">Orders Count</th>
                     <th className="py-3 px-4 text-right">Lost Value</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-red-100 dark:divide-red-900/30 text-xs font-semibold">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
                   {cancellationStats.reasons.map((cr, idx) => (
-                    <tr key={idx} className="hover:bg-red-50/50 dark:hover:bg-red-950/20 transition-all">
+                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-all">
                       <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-red-500" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-gray-600" />
                         {cr.reason}
                       </td>
-                      <td className="py-3 px-4 text-center font-bold text-red-600 dark:text-red-400">{cr.count}</td>
-                      <td className="py-3 px-4 text-right font-black text-red-700 dark:text-red-300">
+                      <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{cr.count}</td>
+                      <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white">
                         {formatPrice(cr.lostAmount, restaurant?.settings?.currency || 'INR')}
                       </td>
                     </tr>
@@ -2027,7 +2026,7 @@ export default function ReportsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2 print:hidden">
-                <Button onClick={() => window.print()} variant="primary" size="sm" className="gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white">
+                <Button onClick={() => window.print()} variant="primary" size="sm" className="gap-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white">
                   <Printer className="h-3.5 w-3.5" /> Print Ledger
                 </Button>
                 <button
@@ -2050,10 +2049,10 @@ export default function ReportsPage() {
                     <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.grossSales)}</p>
                     <p className="text-[10px] text-slate-400 font-medium">{salesSummary.totalOrders} total orders</p>
                   </div>
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-100 dark:border-emerald-800">
-                    <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase">Net Revenue</p>
-                    <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">{formatPrice(salesSummary.netRevenue)}</p>
-                    <p className="text-[10px] text-emerald-600 font-semibold">Post-discount net</p>
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase">Net Revenue</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{formatPrice(salesSummary.netRevenue)}</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Post-discount net</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Total GST (5%)</p>
@@ -2062,7 +2061,7 @@ export default function ReportsPage() {
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Peak Hour Rush</p>
-                    <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{peakHourSummary.peakHour}</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{peakHourSummary.peakHour}</p>
                     <p className="text-[10px] text-slate-400 font-medium">{peakHourSummary.peakOrders} orders</p>
                   </div>
                 </div>
@@ -2077,26 +2076,26 @@ export default function ReportsPage() {
                     <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
                       {kitchenSlaStats.avgAcceptTimeSec > 0 ? `${kitchenSlaStats.avgAcceptTimeSec} sec` : '—'}
                     </p>
-                    <p className="text-[10px] text-emerald-600 font-semibold">Ready → Dispatched</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Ready → Dispatched</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Avg Waiter Serve</p>
                     <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
                       {kitchenSlaStats.readyToServedSec > 0 ? `${kitchenSlaStats.readyToServedSec} sec` : '—'}
                     </p>
-                    <p className="text-[10px] text-emerald-600 font-semibold">Target: &lt; 90s</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Target: &lt; 90s</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Kitchen SLA %</p>
-                    <p className="text-lg font-bold text-emerald-600 mt-0.5">{kitchenSlaSuccessPct}</p>
-                    <p className="text-[10px] text-emerald-600 font-semibold">Within 15m SLA</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{kitchenSlaSuccessPct}</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Within 15m SLA</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Table Turns</p>
-                    <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
                       {tableTurnoverList.reduce((sum, t) => sum + t.turnoverCount, 0)} turns
                     </p>
-                    <p className="text-[10px] text-indigo-600 font-semibold">Total Dining Rotations</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Total Dining Rotations</p>
                   </div>
                 </div>
               </div>
@@ -2104,7 +2103,7 @@ export default function ReportsPage() {
               {/* Waiter Ranking & Inventory Alerts */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <h5 className="text-xs font-bold text-slate-900 dark:text-white uppercase mb-2">🏆 Waiter Performance Ranking</h5>
+                  <h5 className="text-xs font-bold text-slate-900 dark:text-white uppercase mb-2">Waiter Performance Ranking</h5>
                   <div className="space-y-2 text-xs">
                     {waiterLeaderboard.length === 0 ? (
                       <p className="text-xs text-slate-400 py-2">No waiter deliveries recorded for this period.</p>
@@ -2112,7 +2111,7 @@ export default function ReportsPage() {
                       waiterLeaderboard.map((w, idx) => (
                         <div key={w.waiterName || w.name || idx} className="flex items-center justify-between py-1 border-b border-slate-200/60 dark:border-slate-700/60 last:border-0">
                           <div className="flex items-center gap-2">
-                            <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
+                            <span className="w-4 h-4 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 flex items-center justify-center text-[10px] font-bold">
                               {idx + 1}
                             </span>
                             <span className="font-bold text-slate-800 dark:text-slate-200">{w.waiterName || w.name}</span>
@@ -2128,19 +2127,19 @@ export default function ReportsPage() {
                 </div>
 
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
-                  <h5 className="text-xs font-bold text-slate-900 dark:text-white uppercase mb-2">📦 Low Stock & Wastage Alert</h5>
+                  <h5 className="text-xs font-bold text-slate-900 dark:text-white uppercase mb-2">Low Stock & Wastage Alert</h5>
                   <div className="space-y-1.5 text-xs">
                     <p className="flex justify-between font-medium">
                       <span>Low Stock Ingredients:</span>
-                      <span className="font-bold text-amber-600">{lowStockItems.length} items</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{lowStockItems.length} items</span>
                     </p>
                     <p className="flex justify-between font-medium">
                       <span>Cancelled Orders:</span>
-                      <span className="font-bold text-rose-500">{cancellationStats.cancelledCount} orders</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{cancellationStats.cancelledCount} orders</span>
                     </p>
                     <p className="flex justify-between font-medium">
                       <span>Food Wastage Cost:</span>
-                      <span className="font-black text-rose-600">
+                      <span className="font-bold text-slate-900 dark:text-white">
                         {formatPrice(
                           dispositionsList.reduce((acc: number, d: any) => acc + Number(d.raw_materials_wasted_cost || 0), 0)
                         )}

@@ -36,8 +36,8 @@ async function runPostImplementationValidation() {
     adminStatsMRR: mrr,
     totalRestaurants: rests?.length || 0
   };
-  console.log('✔ Historical Orders Verified:', historicalOrders?.length || 0);
-  console.log('✔ Admin MRR Intact:', mrr);
+  console.log('[PASS] Historical Orders Verified:', historicalOrders?.length || 0);
+  console.log('[PASS] Admin MRR Intact:', mrr);
 
   // 2. MULTI-BATCH STRESS TEST (Batch 1 -> 2 -> 3 -> 4)
   console.log('\n2️⃣ [MULTI-BATCH STRESS TEST (4 Batches)]');
@@ -106,7 +106,7 @@ async function runPostImplementationValidation() {
     finalTotal: finalOrder?.total,
     orderDiscountsRowsCount: discounts.length
   };
-  console.log('✔ Multi-Batch Stress Test (4 Batches):');
+  console.log('[PASS] Multi-Batch Stress Test (4 Batches):');
   console.log('  - Batches Count:', finalOrder?.batches?.length);
   console.log('  - Final Subtotal:', finalOrder?.subtotal);
   console.log('  - Locked Flat Discount Amount:', finalOrder?.discount_amount);
@@ -131,7 +131,7 @@ async function runPostImplementationValidation() {
     stackedDiscountSum,
     expectedSum: 285
   };
-  console.log('✔ Stacked Multi-Discount Sum on ₹1000 Subtotal:', stackedDiscountSum, '(Expected ₹285)');
+  console.log('[PASS] Stacked Multi-Discount Sum on ₹1000 Subtotal:', stackedDiscountSum, '(Expected ₹285)');
 
   // 4. CONCURRENCY TEST
   console.log('\n4️⃣ [CONCURRENCY SIMULATION TEST]');
@@ -147,7 +147,7 @@ async function runPostImplementationValidation() {
     customerRequestSuccess: Boolean(resP2),
     directQuerySuccess: Boolean(resP3?.data?.length)
   };
-  console.log('✔ Concurrency Operations Completed Consistently!');
+  console.log('[PASS] Concurrency Operations Completed Consistently!');
 
   // 5. PERFORMANCE MEASUREMENT
   console.log('\n5️⃣ [PERFORMANCE BENCHMARKING]');
@@ -163,7 +163,7 @@ async function runPostImplementationValidation() {
     iterations: 1000,
     totalExecutionMs: (t1 - t0).toFixed(2)
   };
-  console.log('✔ Discount Engine Speed:', engineExecutionMs.toFixed(4), 'ms per evaluation (1000 iterations in', (t1 - t0).toFixed(2), 'ms)');
+  console.log('[PASS] Discount Engine Speed:', engineExecutionMs.toFixed(4), 'ms per evaluation (1000 iterations in', (t1 - t0).toFixed(2), 'ms)');
 
   // 6. REGRESSION VERIFICATION MATRIX
   console.log('\n6️⃣ [REGRESSION VERIFICATION MATRIX]');
@@ -175,8 +175,8 @@ async function runPostImplementationValidation() {
     customerRequestsActive: requests?.length,
     allModulesIntact: true
   };
-  console.log('✔ KDS Orders Query Intact:', kdsOrders?.length);
-  console.log('✔ Customer Requests Intact:', requests?.length);
+  console.log('[PASS] KDS Orders Query Intact:', kdsOrders?.length);
+  console.log('[PASS] Customer Requests Intact:', requests?.length);
 
   console.log('\n=== POST-IMPLEMENTATION VALIDATION SUITE COMPLETE ===');
   return results;

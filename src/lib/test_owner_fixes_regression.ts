@@ -27,15 +27,15 @@ async function runOwnerModuleRegressionSuite() {
     restId
   );
 
-  console.log('✔ Staff Profile Created with ID:', staffProfile.id);
-  console.log('✔ Staff Role:', staffProfile.role);
+  console.log('[PASS] Staff Profile Created with ID:', staffProfile.id);
+  console.log('[PASS] Staff Role:', staffProfile.role);
 
   // Verify plain_password is NOT stored in metadata
   const { data: authUsers } = await supabase.auth.admin?.listUsers() || { data: { users: [] } };
   const createdAuthUser = authUsers.users?.find((u: any) => u.email === testEmail);
   if (createdAuthUser) {
     const hasPlainPassInMeta = Boolean(createdAuthUser.user_metadata?.plain_password);
-    console.log('✔ Plain Password in Auth Metadata:', hasPlainPassInMeta, '(Expected: false)');
+    console.log('[PASS] Plain Password in Auth Metadata:', hasPlainPassInMeta, '(Expected: false)');
     if (hasPlainPassInMeta) {
       throw new Error('FAIL: BUG-O3 plain_password was still stored in user metadata!');
     }
@@ -51,7 +51,7 @@ async function runOwnerModuleRegressionSuite() {
   if (signInErr || !signInData.user) {
     throw new Error(`FAIL: Staff authentication via Supabase Auth failed: ${signInErr?.message}`);
   }
-  console.log('✔ Staff Auth via Sovereign Supabase Auth Authority PASSED 100%\n');
+  console.log('[PASS] Staff Auth via Sovereign Supabase Auth Authority PASSED 100%\n');
 
   // 2. TEST BUG-O4: CALENDAR-ALIGNED DATE RANGE CALCULATIONS
   console.log('2️⃣ [TEST BUG-O4: CALENDAR-ALIGNED DATE RANGES]');
@@ -66,15 +66,15 @@ async function runOwnerModuleRegressionSuite() {
   monthlyStart.setHours(0, 0, 0, 0);
   monthlyStart.setDate(monthlyStart.getDate() - 29);
 
-  console.log('✔ Daily Range Start:', todayMidnight.toISOString());
-  console.log('✔ Weekly Range Start (7 Calendar Days):', weeklyStart.toISOString());
-  console.log('✔ Monthly Range Start (30 Calendar Days):', monthlyStart.toISOString());
+  console.log('[PASS] Daily Range Start:', todayMidnight.toISOString());
+  console.log('[PASS] Weekly Range Start (7 Calendar Days):', weeklyStart.toISOString());
+  console.log('[PASS] Monthly Range Start (30 Calendar Days):', monthlyStart.toISOString());
 
   // Confirm weekly start is exactly at 00:00:00.000
   if (weeklyStart.getHours() !== 0 || weeklyStart.getMinutes() !== 0 || weeklyStart.getSeconds() !== 0) {
     throw new Error('FAIL: BUG-O4 Weekly date range is not calendar-midnight aligned!');
   }
-  console.log('✔ Calendar-Aligned Date Calculations PASSED 100%\n');
+  console.log('[PASS] Calendar-Aligned Date Calculations PASSED 100%\n');
 
   // 3. TEST BUG-O2: IN-MEMORY TENANT FILTERING FOR REALTIME EVENTS
   console.log('3️⃣ [TEST BUG-O2: IN-MEMORY TENANT FILTERING]');
@@ -82,13 +82,13 @@ async function runOwnerModuleRegressionSuite() {
   const matchingBatch = { order_id: 'order-1' };
   const foreignBatch = { order_id: 'foreign-tenant-order' };
 
-  console.log('✔ Local Batch Match Check:', localOrderIds.has(matchingBatch.order_id), '(Expected: true)');
-  console.log('✔ Foreign Batch Match Check:', localOrderIds.has(foreignBatch.order_id), '(Expected: false)');
+  console.log('[PASS] Local Batch Match Check:', localOrderIds.has(matchingBatch.order_id), '(Expected: true)');
+  console.log('[PASS] Foreign Batch Match Check:', localOrderIds.has(foreignBatch.order_id), '(Expected: false)');
 
   if (localOrderIds.has(foreignBatch.order_id)) {
     throw new Error('FAIL: BUG-O2 Foreign tenant batch was incorrectly matched!');
   }
-  console.log('✔ In-Memory Tenant Filtering PASSED 100%\n');
+  console.log('[PASS] In-Memory Tenant Filtering PASSED 100%\n');
 
   console.log('=== ALL PHASE 5 OWNER MODULE REGRESSION TESTS PASSED 100% ===');
 }

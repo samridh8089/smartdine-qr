@@ -54,7 +54,7 @@ self.addEventListener('fetch', (event) => {
 
 // Push Notification Handler for Background Tab & Minimized Window Notifications
 self.addEventListener('push', (event) => {
-  let data = { title: '🚨 NEW ORDER RECEIVED!', body: 'New kitchen order needs attention.', url: '/dashboard/kds' };
+  let data = { title: 'NEW ORDER RECEIVED', body: 'New kitchen order needs attention.', url: '/dashboard/kds' };
 
   try {
     if (event.data) {
@@ -88,7 +88,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || '🚨 NEW ORDER RECEIVED!', options)
+    self.registration.showNotification(data.title || 'NEW ORDER RECEIVED', options)
   );
 });
 

@@ -10,7 +10,8 @@ import {
   Eye, 
   RefreshCw,
   ImageIcon,
-  Info
+  Info,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
@@ -382,8 +383,8 @@ export default function AiMenuReview({
                           <ImageIcon className="h-4 w-4 text-purple-600" />
                           MENU ITEM IMAGE
                         </span>
-                        <span className="text-[10px] font-bold text-slate-400">
-                          {item.selectedImageUrl ? '✓ Image Attached' : 'No Image Selected'}
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                          {item.selectedImageUrl ? <><Check className="w-3 h-3 text-gray-700 dark:text-gray-300 inline" /> Image Attached</> : 'No Image Selected'}
                         </span>
                       </div>
 
@@ -677,9 +678,9 @@ export default function AiMenuReview({
               <button
                 type="button"
                 onClick={() => setActivePreviewImage(null)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer flex items-center gap-1"
               >
-                ✕ Close
+                <X className="w-4 h-4" /> Close
               </button>
             </div>
             <div className="max-h-[70vh] rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">
@@ -701,9 +702,9 @@ export default function AiMenuReview({
               <button
                 type="button"
                 onClick={() => setActiveEvidenceCrop(null)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer flex items-center gap-1"
               >
-                ✕ Close
+                <X className="w-4 h-4" /> Close
               </button>
             </div>
             <div className="max-h-[50vh] rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">

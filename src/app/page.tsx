@@ -8,7 +8,7 @@ import {
   Play, Clock, ChevronDown, ChevronUp, AlertTriangle, 
   ShieldCheck, Zap, Laptop, Users, Receipt, Package,
   Lock, FileText, XCircle, CheckCircle2, RefreshCw, Layers,
-  Globe, Mail, Phone, MapPin
+  Globe, Mail, Phone, MapPin, Languages
 } from 'lucide-react';
 
 import { db, PricingPlan } from '@/lib/db';
@@ -122,8 +122,8 @@ export default function LandingPage() {
       modal: {
         title: 'Choose your language',
         subtitle: 'Aap kabhi bhi baad me language change kar sakte hain.',
-        btnHinglish: '🇮🇳 Hinglish',
-        btnEnglish: '🌍 English',
+        btnHinglish: 'Hinglish',
+        btnEnglish: 'English',
       },
       nav: {
         preview: 'Preview',
@@ -179,10 +179,10 @@ export default function LandingPage() {
           cashier: 'Cashier',
         },
         subtitles: {
-          owner: '📱 Owner: Sales, inventory aur staff ek hi screen se manage karo.',
-          kitchen: '🍳 Kitchen: Live order queue bina kisi confusion ke.',
-          waiter: '🛎️ Waiter: Table requests aur bill instantly receive karo.',
-          cashier: '💳 Cashier: UPI aur receipt 2 taps me.',
+          owner: 'Owner: Sales, inventory aur staff ek hi screen se manage karo.',
+          kitchen: 'Kitchen: Live order queue bina kisi confusion ke.',
+          waiter: 'Waiter: Table requests aur bill instantly receive karo.',
+          cashier: 'Cashier: UPI aur receipt 2 taps me.',
         },
         demoHeader: 'Demo Dashboard Preview',
         sampleTag: 'Sample Restaurant Data',
@@ -440,8 +440,8 @@ export default function LandingPage() {
       modal: {
         title: 'Choose your language',
         subtitle: 'You can switch your language anytime later.',
-        btnHinglish: '🇮🇳 Hinglish',
-        btnEnglish: '🌍 English',
+        btnHinglish: 'Hinglish',
+        btnEnglish: 'English',
       },
       nav: {
         preview: 'Preview',
@@ -497,10 +497,10 @@ export default function LandingPage() {
           cashier: 'Cashier',
         },
         subtitles: {
-          owner: '📱 Owner: Manage sales, inventory, and staff from a single screen.',
-          kitchen: '🍳 Kitchen: Live order queue without any confusion.',
-          waiter: '🛎️ Waiter: Receive table service calls and bill requests instantly.',
-          cashier: '💳 Cashier: Instant UPI QR and receipt printing in 2 taps.',
+          owner: 'Owner: Manage sales, inventory, and staff from a single screen.',
+          kitchen: 'Kitchen: Live order queue without any confusion.',
+          waiter: 'Waiter: Receive table service calls and bill requests instantly.',
+          cashier: 'Cashier: Instant UPI QR and receipt printing in 2 taps.',
         },
         demoHeader: 'Demo Dashboard Preview',
         sampleTag: 'Sample Restaurant Data',
@@ -805,21 +805,21 @@ export default function LandingPage() {
                 onClick={() => handleModalSelect('hi')}
                 className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                   !isBrowserEn
-                    ? 'bg-emerald-50/60 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300'
+                    ? 'bg-gray-50 border-gray-900 ring-1 ring-gray-950 dark:bg-gray-800 dark:border-white shadow-xs'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800'
                 }`}
               >
                 <div className="flex items-center gap-3.5">
-                  <span className="text-2xl sm:text-3xl select-none">🇮🇳</span>
+                  <Languages className="w-6 h-6 text-gray-700 dark:text-gray-300 shrink-0" />
                   <div>
-                    <div className="font-extrabold text-slate-900 text-sm sm:text-base">Hinglish</div>
+                    <div className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">Hinglish</div>
                     <div className="text-[11px] sm:text-xs text-slate-500 font-medium">
                       {!isBrowserEn ? 'Default choice' : 'Switch anytime later'}
                     </div>
                   </div>
                 </div>
                 {!isBrowserEn && (
-                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-extrabold uppercase text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-full shrink-0">
+                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold uppercase text-gray-900 bg-gray-100 border border-gray-300 dark:text-white dark:bg-gray-800 dark:border-gray-700 px-2.5 py-1 rounded-full shrink-0">
                     Recommended
                   </span>
                 )}
@@ -830,21 +830,21 @@ export default function LandingPage() {
                 onClick={() => handleModalSelect('en')}
                 className={`w-full text-left p-4 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
                   isBrowserEn
-                    ? 'bg-emerald-50/60 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
-                    : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300'
+                    ? 'bg-gray-50 border-gray-900 ring-1 ring-gray-950 dark:bg-gray-800 dark:border-white shadow-xs'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800'
                 }`}
               >
                 <div className="flex items-center gap-3.5">
-                  <span className="text-2xl sm:text-3xl select-none">🌍</span>
+                  <Globe className="w-6 h-6 text-gray-700 dark:text-gray-300 shrink-0" />
                   <div>
-                    <div className="font-extrabold text-slate-900 text-sm sm:text-base">English</div>
+                    <div className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">English</div>
                     <div className="text-[11px] sm:text-xs text-slate-500 font-medium">
                       {isBrowserEn ? 'Default choice' : 'Switch anytime later'}
                     </div>
                   </div>
                 </div>
                 {isBrowserEn && (
-                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-extrabold uppercase text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-1 rounded-full shrink-0">
+                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold uppercase text-gray-900 bg-gray-100 border border-gray-300 dark:text-white dark:bg-gray-800 dark:border-gray-700 px-2.5 py-1 rounded-full shrink-0">
                     Recommended
                   </span>
                 )}
