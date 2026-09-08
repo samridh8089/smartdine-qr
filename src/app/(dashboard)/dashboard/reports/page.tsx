@@ -71,6 +71,7 @@ export default function ReportsPage() {
   const { restaurant } = useRestaurant();
   const [orders, setOrders] = useState<Order[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom'>('today');
   
   // Date Range Controls (Standardized to IST)
@@ -124,10 +125,10 @@ export default function ReportsPage() {
 
   // Operations Intelligence Suite (Phase-19)
   const [kitchenSlaStats, setKitchenSlaStats] = useState({
-    avgAcceptTimeSec: 42,
-    avgPrepTimeMin: 11.4,
-    readyToServedSec: 38,
-    totalFulfillmentMin: 13.8
+    avgAcceptTimeSec: 0,
+    avgPrepTimeMin: 0,
+    readyToServedSec: 0,
+    totalFulfillmentMin: 0
   });
 
   const [waiterLeaderboard, setWaiterLeaderboard] = useState<any[]>([]);
@@ -141,7 +142,7 @@ export default function ReportsPage() {
     slowOrders: 0
   });
   const [kitchenBottlenecks, setKitchenBottlenecks] = useState({
-    slowestDish: { name: 'Paneer Butter Masala', avgPrepMin: 14.5 },
+    slowestDish: { name: 'None', avgPrepMin: 0 },
     mostCancelledDish: { name: 'None', count: 0 },
     longestPendingTicket: { orderId: 'N/A', tableName: 'None', elapsedMin: 0 },
     averageKitchenQueue: 0
@@ -170,7 +171,7 @@ export default function ReportsPage() {
     setAppliedEndDate(customEndDate);
   };
 
-  const computeStats = (allOrders: Order[], catList: Category[], dispositions: any[] = [], occupiedCount: number = 0, freeCount: number = 20) => {
+  const computeStats = (allOrders: Order[], catList: Category[], dispositions: any[] = [], occupiedCount: number = 0, freeCount: number = 20, mItemsList: MenuItem[] = []) => {
     let rangeOrders: Order[] = [];
     let periodLabel = '';
 
@@ -340,14 +341,39 @@ export default function ReportsPage() {
     const performanceRows = Object.values(itemMap);
     setItemPerformance(performanceRows);
 
-    // Customer Analytics Breakdown
+    // Customer Analytics Breakdown (BUG-AN-004 Fix: prevent collapsing distinct table guests across days)
     const customerMap: Record<string, CustomerPerformanceRow> = {};
     validOrders.forEach(o => {
-      const custKey = (o as any).payment_reference || (o.table_name ? `Table ${o.table_name}` : (o.order_type === 'takeaway' ? 'Takeaway Guest' : `Table ${o.table_id || 'Walk-in'}`));
+      let custKey = '';
+      let displayName = '';
+
+      if ((o as any).customer_phone) {
+        custKey = (o as any).customer_phone;
+        displayName = (o as any).customer_name ? `${(o as any).customer_name} (${(o as any).customer_phone})` : `Guest (${(o as any).customer_phone})`;
+      } else if ((o as any).customer_name) {
+        custKey = (o as any).customer_name;
+        displayName = (o as any).customer_name;
+      } else if (o.payment_reference) {
+        custKey = o.payment_reference;
+        displayName = `Guest (Ref: ${o.payment_reference.slice(-6)})`;
+      } else {
+        const visitDate = getISTDateString(o.created_at);
+        if (o.table_name) {
+          custKey = `Table ${o.table_name} (${visitDate})`;
+          displayName = `Table ${o.table_name} Guest`;
+        } else if (o.order_type === 'takeaway') {
+          custKey = `Takeaway (${visitDate}-${o.id.slice(-4)})`;
+          displayName = 'Takeaway Guest';
+        } else {
+          custKey = `Guest-${o.id.slice(-6)}`;
+          displayName = 'Dine-in Guest';
+        }
+      }
+
       if (!customerMap[custKey]) {
         customerMap[custKey] = {
           key: custKey,
-          name: custKey,
+          name: displayName,
           orderCount: 0,
           totalSpent: 0,
           avgOrderValue: 0,
@@ -403,23 +429,58 @@ export default function ReportsPage() {
       reasons: Object.values(cancelReasonMap).sort((a, b) => b.count - a.count)
     });
 
-    // Category Performance
+    // Category Performance (BUG-AN-CAT Fix: Map order items to actual menu item categories)
+    const catIdToNameMap: Record<string, string> = {};
+    (catList || []).forEach(c => {
+      catIdToNameMap[c.id] = c.name;
+    });
+
+    const itemIdToCatName: Record<string, string> = {};
+    const itemNameCleanToCatName: Record<string, string> = {};
+    (mItemsList || []).forEach(m => {
+      const cName = catIdToNameMap[m.category_id] || 'General Menu';
+      if (m.id) itemIdToCatName[m.id] = cName;
+      if (m.name) {
+        itemNameCleanToCatName[m.name.toLowerCase().trim()] = cName;
+      }
+    });
+
     const catMap: Record<string, CategoryPerformanceRow> = {};
     (catList || []).forEach(c => {
       catMap[c.name] = { categoryName: c.name, quantity: 0, sales: 0 };
     });
 
-    performanceRows.forEach(row => {
-      const foundCat = catList.find(c => c.name.toLowerCase() === row.name.toLowerCase());
-      const catName = foundCat ? foundCat.name : 'General Menu';
-      if (!catMap[catName]) {
-        catMap[catName] = { categoryName: catName, quantity: 0, sales: 0 };
-      }
-      catMap[catName].quantity += row.quantity;
-      catMap[catName].sales += row.grossSales;
+    validOrders.forEach(o => {
+      (o.items || []).forEach(item => {
+        if (item.is_cancelled || item.status === 'cancelled' || item.notes?.includes('[CANCELLED]')) return;
+
+        let baseName = item.menu_item_name;
+        const vMatch = item.menu_item_name.match(/^(.*?)\s*\((.*?)\)$/);
+        if (vMatch) {
+          baseName = vMatch[1].trim();
+        }
+
+        let catName = 'General Menu';
+        if (item.menu_item_id && itemIdToCatName[item.menu_item_id]) {
+          catName = itemIdToCatName[item.menu_item_id];
+        } else if (itemNameCleanToCatName[baseName.toLowerCase().trim()]) {
+          catName = itemNameCleanToCatName[baseName.toLowerCase().trim()];
+        } else {
+          const matchedCat = catList.find(c => c.name.toLowerCase().trim() === baseName.toLowerCase().trim());
+          if (matchedCat) catName = matchedCat.name;
+        }
+
+        if (!catMap[catName]) {
+          catMap[catName] = { categoryName: catName, quantity: 0, sales: 0 };
+        }
+        const itemRevenue = Number(item.price || 0) * Number(item.quantity || 1);
+        catMap[catName].quantity += Number(item.quantity || 1);
+        catMap[catName].sales += itemRevenue;
+      });
     });
 
-    setCategoryPerformance(Object.values(catMap).filter(c => c.quantity > 0 || c.sales > 0));
+    const activeCategories = Object.values(catMap).filter(c => c.quantity > 0 || c.sales > 0).sort((a, b) => b.sales - a.sales);
+    setCategoryPerformance(activeCategories.length > 0 ? activeCategories : Object.values(catMap).slice(0, 5));
 
     // ==========================================
     // PHASE-19 OPERATIONS INTELLIGENCE COMPUTATIONS
@@ -458,27 +519,22 @@ export default function ReportsPage() {
       }
     });
 
+    // BUG-AN-SLA Fix: Honest SLA metrics (0 when no data, no fake 42s, 11.4m, etc.)
     setKitchenSlaStats({
-      avgAcceptTimeSec: acceptCount > 0 ? Math.round(totalAcceptSec / acceptCount) : 42,
-      avgPrepTimeMin: prepCount > 0 ? Number((totalPrepSec / prepCount / 60).toFixed(1)) : 11.4,
-      readyToServedSec: serveCount > 0 ? Math.round(totalServeSec / serveCount) : 38,
-      totalFulfillmentMin: fulfillCount > 0 ? Number((totalFulfillmentSec / fulfillCount / 60).toFixed(1)) : 13.8
+      avgAcceptTimeSec: acceptCount > 0 ? Math.round(totalAcceptSec / acceptCount) : 0,
+      avgPrepTimeMin: prepCount > 0 ? Number((totalPrepSec / prepCount / 60).toFixed(1)) : 0,
+      readyToServedSec: serveCount > 0 ? Math.round(totalServeSec / serveCount) : 0,
+      totalFulfillmentMin: fulfillCount > 0 ? Number((totalFulfillmentSec / fulfillCount / 60).toFixed(1)) : 0
     });
 
-    // 2. Waiter Performance Leaderboard
-    const waiterMap: Record<string, { orders: number; serveTimes: number[]; delayCount: number; activeTables: Set<string> }> = {
-      'Samridh (Waiter 1)': { orders: 0, serveTimes: [], delayCount: 0, activeTables: new Set() },
-      'Pooja (Waiter 2)': { orders: 0, serveTimes: [], delayCount: 0, activeTables: new Set() }
-    };
+    // 2. Waiter Performance Leaderboard (BUG-AN-WAITER Fix: No hardcoded stubs, export both waiterName and name)
+    const waiterMap: Record<string, { orders: number; serveTimes: number[]; delayCount: number; activeTables: Set<string> }> = {};
 
     allBatches.forEach(b => {
       const waiter = b.served_by || (b.status === 'served' ? 'Staff Waiter' : null);
       if (!waiter) return;
 
-      let matchedKey = waiter;
-      if (waiter.toLowerCase().includes('samridh')) matchedKey = 'Samridh (Waiter 1)';
-      else if (waiter.toLowerCase().includes('pooja')) matchedKey = 'Pooja (Waiter 2)';
-
+      const matchedKey = waiter.trim();
       if (!waiterMap[matchedKey]) {
         waiterMap[matchedKey] = { orders: 0, serveTimes: [], delayCount: 0, activeTables: new Set() };
       }
@@ -493,26 +549,30 @@ export default function ReportsPage() {
       }
     });
 
-    const waiterRows = Object.entries(waiterMap).map(([name, data]) => {
-      const times = data.serveTimes;
-      const avg = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : (data.orders > 0 ? 36 : 0);
-      const fastest = times.length > 0 ? Math.min(...times) : (data.orders > 0 ? 18 : 0);
-      const slowest = times.length > 0 ? Math.max(...times) : (data.orders > 0 ? 74 : 0);
-      const delayPct = times.length > 0 ? Math.round((data.delayCount / times.length) * 100) : 0;
-      return {
-        waiterName: name,
-        ordersServed: data.orders,
-        avgServeSec: avg,
-        fastestSec: fastest,
-        slowestSec: slowest,
-        delayPercent: delayPct,
-        activeTables: data.activeTables.size
-      };
-    }).sort((a, b) => b.ordersServed - a.ordersServed);
+    const waiterRows = Object.entries(waiterMap)
+      .filter(([_, data]) => data.orders > 0)
+      .map(([name, data]) => {
+        const times = data.serveTimes;
+        const avg = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : 0;
+        const fastest = times.length > 0 ? Math.min(...times) : 0;
+        const slowest = times.length > 0 ? Math.max(...times) : 0;
+        const delayPct = times.length > 0 ? Math.round((data.delayCount / times.length) * 100) : 0;
+        return {
+          waiterName: name,
+          name,
+          ordersServed: data.orders,
+          avgServeSec: avg,
+          avgServeTimeSec: avg,
+          fastestSec: fastest,
+          slowestSec: slowest,
+          delayPercent: delayPct,
+          activeTables: data.activeTables.size
+        };
+      }).sort((a, b) => b.ordersServed - a.ordersServed);
 
     setWaiterLeaderboard(waiterRows);
 
-    // 3. Table Turnover Analytics
+    // 3. Table Turnover Analytics (BUG-AN-TURNOVER Fix: Use actual range duration for operating window)
     const tableTurnoverMap: Record<string, { count: number; stayDurations: number[]; revenue: number }> = {};
     validOrders.forEach(o => {
       const tName = o.table_name || (o.order_type === 'takeaway' ? 'Takeaway' : 'Table 1');
@@ -528,10 +588,22 @@ export default function ReportsPage() {
       tableTurnoverMap[tName].stayDurations.push(stayMin);
     });
 
+    let totalOperatingWindowMin = 480; // 8h default for 1 day
+    if (timeRange === 'weekly') {
+      totalOperatingWindowMin = 7 * 480; // 3,360 min
+    } else if (timeRange === 'monthly') {
+      totalOperatingWindowMin = 30 * 480; // 14,400 min
+    } else if (timeRange === 'custom') {
+      const startMs = new Date(`${appliedStartDate}T00:00:00+05:30`).getTime();
+      const endMs = new Date(`${appliedEndDate}T23:59:59.999+05:30`).getTime();
+      const daysCount = Math.max(1, Math.round((endMs - startMs) / (24 * 3600 * 1000)));
+      totalOperatingWindowMin = daysCount * 480;
+    }
+
     const turnoverRows = Object.entries(tableTurnoverMap).map(([name, data]) => {
       const avgStay = data.stayDurations.length > 0 ? Math.round(data.stayDurations.reduce((a, b) => a + b, 0) / data.stayDurations.length) : 35;
       const occupiedMin = data.count * avgStay;
-      const freeMin = Math.max(0, 480 - occupiedMin);
+      const freeMin = Math.max(0, totalOperatingWindowMin - occupiedMin);
       return {
         tableName: name,
         turnoverCount: data.count,
@@ -544,7 +616,7 @@ export default function ReportsPage() {
 
     setTableTurnoverList(turnoverRows);
 
-    // 4. Peak Hour Heatmap
+    // 4. Peak Hour Heatmap (BUG-AN-001 Fix: Only valid revenue orders counted for parity)
     const hoursArr = Array.from({ length: 24 }, (_, i) => {
       const h12 = i === 0 ? '12 AM' : i < 12 ? `${i} AM` : i === 12 ? '12 PM' : `${i - 12} PM`;
       return { hour: i, label: h12, ordersCount: 0, revenue: 0 };
@@ -553,8 +625,8 @@ export default function ReportsPage() {
     rangeOrders.forEach(o => {
       const h = getISTHour(o.created_at);
       if (hoursArr[h]) {
-        hoursArr[h].ordersCount += 1;
         if (isRevenueOrder(o)) {
+          hoursArr[h].ordersCount += 1;
           hoursArr[h].revenue += Number(o.grand_total || o.total || 0);
         }
       }
@@ -577,17 +649,47 @@ export default function ReportsPage() {
       slowOrders: hoursArr[sIdx]?.ordersCount || 0
     });
 
-    // 5. Kitchen Bottleneck Detection
-    let slowestName = 'Paneer Butter Masala', maxAvg = 14.5;
+    // 5. Kitchen Bottleneck Detection (BUG-AN-BOTTLENECK Fix: Compute real prep times or honest zero)
     const dishCounts: Record<string, number> = {};
+    const dishPrepDurations: Record<string, number[]> = {};
+
     validOrders.forEach(o => {
       (o.items || []).forEach(item => {
+        if (item.is_cancelled || item.status === 'cancelled') return;
         dishCounts[item.menu_item_name] = (dishCounts[item.menu_item_name] || 0) + (item.quantity || 1);
       });
+      (o.batches || []).forEach(b => {
+        if (b.ready_at) {
+          const prepStart = b.preparing_at ? new Date(b.preparing_at).getTime() : (b.accepted_at ? new Date(b.accepted_at).getTime() : new Date(b.created_at || o.created_at).getTime());
+          const diffMin = (new Date(b.ready_at).getTime() - prepStart) / 60000;
+          if (diffMin >= 0 && diffMin <= 120) {
+            (b.items || []).forEach(bi => {
+              if (!dishPrepDurations[bi.menu_item_name]) dishPrepDurations[bi.menu_item_name] = [];
+              dishPrepDurations[bi.menu_item_name].push(diffMin);
+            });
+          }
+        }
+      });
     });
-    const popularDishes = Object.keys(dishCounts);
-    if (popularDishes.length > 0) {
-      slowestName = popularDishes[0];
+
+    let slowestName = 'None';
+    let maxAvg = 0;
+    Object.entries(dishPrepDurations).forEach(([dName, times]) => {
+      if (times.length > 0) {
+        const avg = times.reduce((a, b) => a + b, 0) / times.length;
+        if (avg > maxAvg) {
+          maxAvg = Math.round((avg + Number.EPSILON) * 10) / 10;
+          slowestName = dName;
+        }
+      }
+    });
+
+    if (slowestName === 'None') {
+      const popularDishes = Object.keys(dishCounts).sort((a, b) => (dishCounts[b] || 0) - (dishCounts[a] || 0));
+      if (popularDishes.length > 0) {
+        slowestName = popularDishes[0];
+        maxAvg = 0;
+      }
     }
 
     const dishCancelCount: Record<string, number> = {};
@@ -602,7 +704,7 @@ export default function ReportsPage() {
     });
 
     const pendingBatches = allBatches.filter(b => ['new', 'accepted', 'preparing'].includes(b.status) && !b.special_instructions?.includes('[CANCELLED]'));
-    let longestTicket = { orderId: 'None', tableName: 'None', elapsedMin: 0 };
+    let longestTicket = { orderId: 'N/A', tableName: 'None', elapsedMin: 0 };
     if (pendingBatches.length > 0) {
       pendingBatches.sort((a, b) => new Date(a.created_at || a.orderCreatedAt).getTime() - new Date(b.created_at || b.orderCreatedAt).getTime());
       const oldest = pendingBatches[0];
@@ -625,7 +727,7 @@ export default function ReportsPage() {
     setLiveOccupancyMerge({
       occupied: occupiedCount,
       free: freeCount,
-      avgWaitTime: `${fulfillCount > 0 ? Number((totalFulfillmentSec / fulfillCount / 60).toFixed(1)) : 12.3} min`,
+      avgWaitTime: `${fulfillCount > 0 ? Number((totalFulfillmentSec / fulfillCount / 60).toFixed(1)) : 0} min`,
       queueLength: activeOrdersQueue.length,
       ordersPerHour: hoursArr[pIdx]?.ordersCount || 0,
       revenuePerHour: Math.round(hoursArr[pIdx]?.revenue || 0)
@@ -650,15 +752,17 @@ export default function ReportsPage() {
       const restId = restaurant?.id || user?.restaurant_id;
       if (!restId) return;
 
-      const [allOrders, cats, invItemsRes, dispRes, liveTableData] = await Promise.all([
+      const [allOrders, cats, invItemsRes, dispRes, liveTableData, mItems] = await Promise.all([
         db.getOrders(restId),
         db.getCategories(restId),
         supabase.from('inventory_items').select('*').eq('restaurant_id', restId),
         (supabase as any).from('prepared_food_dispositions').select('*').eq('restaurant_id', restId),
-        db.getTablesWithLiveStatus(restId)
+        db.getTablesWithLiveStatus(restId),
+        db.getMenuItems(restId)
       ]);
       setOrders(allOrders);
       setCategories(cats);
+      setMenuItems(mItems || []);
       const invItems = invItemsRes?.data || [];
       const lowStock = invItems.filter((item: any) => Number(item.current_stock || 0) <= Number(item.minimum_stock || 5));
       setLowStockItems(lowStock);
@@ -670,7 +774,7 @@ export default function ReportsPage() {
         occupied: occ,
         free: fr
       }));
-      computeStats(allOrders, cats, dispRes?.data || [], occ, fr);
+      computeStats(allOrders, cats, dispRes?.data || [], occ, fr, mItems || []);
       setLoading(false);
     } catch (err) {
       console.error('Failed to load reports:', err);
@@ -748,14 +852,50 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
+  // Helper to extract active range valid revenue orders for exports (BUG-AN-005 Fix)
+  const getFilteredValidOrders = (): Order[] => {
+    const now = new Date();
+    const todayIST = getISTDateString(now);
+
+    let filtered: Order[] = [];
+    if (timeRange === 'today') {
+      filtered = orders.filter(o => getISTDateString(o.created_at) === todayIST);
+    } else if (timeRange === 'yesterday') {
+      const yDate = new Date(now.getTime() - 24 * 3600 * 1000);
+      const yDateIST = getISTDateString(yDate);
+      filtered = orders.filter(o => getISTDateString(o.created_at) === yDateIST);
+    } else if (timeRange === 'weekly') {
+      const weekStartDate = new Date(now.getTime() - 6 * 24 * 3600 * 1000);
+      const weekStartIST = getISTDateString(weekStartDate);
+      const startMs = new Date(`${weekStartIST}T00:00:00+05:30`).getTime();
+      filtered = orders.filter(o => new Date(o.created_at).getTime() >= startMs);
+    } else if (timeRange === 'monthly') {
+      filtered = orders.filter(o => {
+        const { month: oMonth, year: oYear } = getISTMonthYear(o.created_at);
+        return oMonth === selectedMonth && oYear === selectedYear;
+      });
+    } else if (timeRange === 'custom') {
+      const startMs = new Date(`${appliedStartDate}T00:00:00+05:30`).getTime();
+      const endMs = new Date(`${appliedEndDate}T23:59:59.999+05:30`).getTime();
+      filtered = orders.filter(o => {
+        const t = new Date(o.created_at).getTime();
+        return t >= startMs && t <= endMs;
+      });
+    } else {
+      filtered = orders;
+    }
+
+    return filtered.filter(isRevenueOrder);
+  };
+
   // CSV EXPORT 1: ORDERS SUMMARY (One row per order, perfectly accounting-friendly!)
   const handleExportOrdersSummaryCSV = () => {
-    if (!orders || orders.length === 0) {
-      alert('No order data available to export.');
+    const validOrders = getFilteredValidOrders();
+    if (!validOrders || validOrders.length === 0) {
+      alert(`No valid completed/paid orders found to export for ${salesSummary.periodLabel || timeRange}.`);
       return;
     }
 
-    const validOrders = orders.filter(o => o.status !== 'cancelled');
     const headers = [
       'Order ID',
       'Order Date & Time',
@@ -839,17 +979,17 @@ export default function ReportsPage() {
     });
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    triggerDownload(`CleverOps_Orders_Summary_${new Date().toISOString().split('T')[0]}.csv`, csvContent);
+    triggerDownload(`CleverOps_Orders_${timeRange}_${getISTDateString()}.csv`, csvContent);
   };
 
   // CSV EXPORT 2: ORDER ITEMS (One row per item with exact Item Subtotal = Qty * Unit Price)
   const handleExportOrderItemsCSV = () => {
-    if (!orders || orders.length === 0) {
-      alert('No order data available to export.');
+    const validOrders = getFilteredValidOrders();
+    if (!validOrders || validOrders.length === 0) {
+      alert(`No valid completed/paid orders found to export for ${salesSummary.periodLabel || timeRange}.`);
       return;
     }
 
-    const validOrders = orders.filter(o => o.status !== 'cancelled');
     const headers = [
       'Order ID',
       'Order Date & Time',
@@ -893,17 +1033,17 @@ export default function ReportsPage() {
     });
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    triggerDownload(`CleverOps_Order_Items_${new Date().toISOString().split('T')[0]}.csv`, csvContent);
+    triggerDownload(`CleverOps_Order_Items_${timeRange}_${getISTDateString()}.csv`, csvContent);
   };
 
   // CSV EXPORT 3: COMBINED ACCOUNTING CSV (Order financial totals ONCE on row 1, subsequent item rows BLANK for order columns)
   const handleExportCombinedCSV = () => {
-    if (!orders || orders.length === 0) {
-      alert('No order data available to export.');
+    const validOrders = getFilteredValidOrders();
+    if (!validOrders || validOrders.length === 0) {
+      alert(`No valid completed/paid orders found to export for ${salesSummary.periodLabel || timeRange}.`);
       return;
     }
 
-    const validOrders = orders.filter(o => o.status !== 'cancelled');
     const headers = [
       'Order ID',
       'Order Date',
@@ -1013,7 +1153,7 @@ export default function ReportsPage() {
     });
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    triggerDownload(`CleverOps_Accounting_Report_${new Date().toISOString().split('T')[0]}.csv`, csvContent);
+    triggerDownload(`CleverOps_Accounting_${timeRange}_${getISTDateString()}.csv`, csvContent);
   };
 
   // PDF Export Handler (Triggers Printable Report View)
@@ -1346,22 +1486,30 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Accept Time</p>
-              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.avgAcceptTimeSec} sec</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                {kitchenSlaStats.avgAcceptTimeSec > 0 ? `${kitchenSlaStats.avgAcceptTimeSec} sec` : '—'}
+              </p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 60 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Average Prep Time</p>
-              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.avgPrepTimeMin} min</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                {kitchenSlaStats.avgPrepTimeMin > 0 ? `${kitchenSlaStats.avgPrepTimeMin} min` : '—'}
+              </p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 15 min</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Ready → Served</p>
-              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">{kitchenSlaStats.readyToServedSec} sec</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                {kitchenSlaStats.readyToServedSec > 0 ? `${kitchenSlaStats.readyToServedSec} sec` : '—'}
+              </p>
               <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">Target: &lt; 90 sec</p>
             </div>
             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Fulfillment</p>
-              <p className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">{kitchenSlaStats.totalFulfillmentMin} min</p>
+              <p className="text-xl sm:text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                {kitchenSlaStats.totalFulfillmentMin > 0 ? `${kitchenSlaStats.totalFulfillmentMin} min` : '—'}
+              </p>
               <p className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 mt-1">End-to-End Delivery</p>
             </div>
           </div>
@@ -1396,28 +1544,36 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
-                {waiterLeaderboard.map((w, idx) => (
-                  <tr key={w.waiterName} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                    <td className="py-3 px-4 font-bold flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
-                        {idx + 1}
-                      </span>
-                      <span>{w.waiterName}</span>
+                {waiterLeaderboard.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-6 text-center text-slate-400">
+                      No waiter deliveries recorded for the selected date range.
                     </td>
-                    <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{w.ordersServed}</td>
-                    <td className="py-3 px-4 text-center font-semibold">{w.avgServeSec}s</td>
-                    <td className="py-3 px-4 text-center font-semibold text-emerald-600 dark:text-emerald-400">{w.fastestSec}s</td>
-                    <td className="py-3 px-4 text-center font-semibold text-rose-500">{w.slowestSec}s</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        w.delayPercent > 10 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                      }`}>
-                        {w.delayPercent}%
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{w.activeTables}</td>
                   </tr>
-                ))}
+                ) : (
+                  waiterLeaderboard.map((w, idx) => (
+                    <tr key={w.waiterName || w.name || idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4 font-bold flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
+                          {idx + 1}
+                        </span>
+                        <span>{w.waiterName || w.name}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{w.ordersServed}</td>
+                      <td className="py-3 px-4 text-center font-semibold">{w.avgServeSec}s</td>
+                      <td className="py-3 px-4 text-center font-semibold text-emerald-600 dark:text-emerald-400">{w.fastestSec}s</td>
+                      <td className="py-3 px-4 text-center font-semibold text-rose-500">{w.slowestSec}s</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          w.delayPercent > 10 ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                        }`}>
+                          {w.delayPercent}%
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{w.activeTables}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -1573,7 +1729,7 @@ export default function ReportsPage() {
                 {kitchenBottlenecks.slowestDish.name}
               </p>
               <p className="text-xs font-bold text-amber-700 dark:text-amber-400 mt-1">
-                Avg: {kitchenBottlenecks.slowestDish.avgPrepMin} min prep
+                {kitchenBottlenecks.slowestDish.avgPrepMin > 0 ? `Avg: ${kitchenBottlenecks.slowestDish.avgPrepMin} min prep` : 'Optimal Prep Time'}
               </p>
             </div>
 
@@ -1611,7 +1767,9 @@ export default function ReportsPage() {
           <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center gap-2.5 text-xs font-medium text-slate-600 dark:text-slate-300">
             <span className="text-base">💡</span>
             <span>
-              <strong>Operational Recommendation:</strong> Pre-batch ingredients for {kitchenBottlenecks.slowestDish.name} 30 minutes before {peakHourSummary.peakHour} peak rush to shave off ~4.2 minutes per order.
+              <strong>Operational Recommendation:</strong> {kitchenBottlenecks.slowestDish.avgPrepMin > 0 
+                ? `Pre-batch ingredients for ${kitchenBottlenecks.slowestDish.name} 30 minutes before ${peakHourSummary.peakHour} peak rush to optimize prep flow.`
+                : `All menu items are currently preparing within target SLA. Maintain prep readiness ahead of ${peakHourSummary.peakHour} peak rush.`}
             </span>
           </div>
         </CardContent>
@@ -1916,12 +2074,16 @@ export default function ReportsPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Avg Pickup Time</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{kitchenSlaStats.avgAcceptTimeSec || 34} sec</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
+                      {kitchenSlaStats.avgAcceptTimeSec > 0 ? `${kitchenSlaStats.avgAcceptTimeSec} sec` : '—'}
+                    </p>
                     <p className="text-[10px] text-emerald-600 font-semibold">Ready → Dispatched</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                     <p className="text-[11px] font-bold text-slate-400 uppercase">Avg Waiter Serve</p>
-                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">{kitchenSlaStats.readyToServedSec || 58} sec</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white mt-0.5">
+                      {kitchenSlaStats.readyToServedSec > 0 ? `${kitchenSlaStats.readyToServedSec} sec` : '—'}
+                    </p>
                     <p className="text-[10px] text-emerald-600 font-semibold">Target: &lt; 90s</p>
                   </div>
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
@@ -1944,20 +2106,24 @@ export default function ReportsPage() {
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
                   <h5 className="text-xs font-bold text-slate-900 dark:text-white uppercase mb-2">🏆 Waiter Performance Ranking</h5>
                   <div className="space-y-2 text-xs">
-                    {waiterLeaderboard.map((w, idx) => (
-                      <div key={w.name} className="flex items-center justify-between py-1 border-b border-slate-200/60 dark:border-slate-700/60 last:border-0">
-                        <div className="flex items-center gap-2">
-                          <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
-                            {idx + 1}
-                          </span>
-                          <span className="font-bold text-slate-800 dark:text-slate-200">{w.name}</span>
+                    {waiterLeaderboard.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-2">No waiter deliveries recorded for this period.</p>
+                    ) : (
+                      waiterLeaderboard.map((w, idx) => (
+                        <div key={w.waiterName || w.name || idx} className="flex items-center justify-between py-1 border-b border-slate-200/60 dark:border-slate-700/60 last:border-0">
+                          <div className="flex items-center gap-2">
+                            <span className="w-4 h-4 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold">
+                              {idx + 1}
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{w.waiterName || w.name}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="font-bold text-slate-900 dark:text-white">{w.ordersServed} served</span>
+                            <span className="text-[10px] text-slate-400 ml-1.5">(Avg: {w.avgServeSec || w.avgServeTimeSec || 0}s)</span>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <span className="font-bold text-slate-900 dark:text-white">{w.ordersServed} served</span>
-                          <span className="text-[10px] text-slate-400 ml-1.5">(Avg: {w.avgServeTimeSec}s)</span>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
 
