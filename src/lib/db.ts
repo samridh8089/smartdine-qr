@@ -1203,36 +1203,8 @@ export const db = {
 
   // --- Tables CRUD & Live Status ---
   async getTables(restaurantId: string): Promise<Table[]> {
-    const { data, error } = await supabase
-      .from('tables')
-      .select('*')
-      .eq('restaurant_id', restaurantId);
-    if (error || !data) return [];
-
-    try {
-      const rest = await this.getRestaurantById(restaurantId);
-      const tableStates = rest?.settings?.table_states || {};
-      const assignments = rest?.settings?.table_assignments || [];
-
-      return (data as any[]).map(t => {
-        const state = tableStates[t.id] || {};
-        const qrEnabled = state.qr_enabled !== false;
-        const assigned = assignments
-          .filter((a: any) => a.table_id === t.id && a.active !== false)
-          .map((a: any) => ({ id: a.waiter_id, name: a.waiter_name || 'Waiter' }));
-
-        return {
-          ...t,
-          qr_enabled: qrEnabled,
-          occupancy_status: !qrEnabled ? 'inactive' : (state.occupancy_status || 'available'),
-          occupied_at: state.occupied_at || null,
-          current_session_id: state.current_session_id || null,
-          assigned_waiters: assigned
-        } as Table;
-      });
-    } catch (e) {
-      return data as Table[];
-    }
+    const live = await this.getTablesWithLiveStatus(restaurantId);
+    return live.tables;
   },
 
   async getTablesWithLiveStatus(restaurantId: string, preloadedOrders?: Order[]): Promise<{
@@ -1246,7 +1218,7 @@ export const db = {
       }
       const { data } = await supabase
         .from('orders')
-        .select('id, table_id, table_name, status, payment_status, created_at')
+        .select('id, table_id, table_name, status, payment_status, created_at, order_type, special_instructions')
         .eq('restaurant_id', restaurantId)
         .not('status', 'in', '(completed,cancelled)');
       return data || [];
@@ -1273,7 +1245,14 @@ export const db = {
       const state = tableStates[t.id] || {};
       const qrEnabled = state.qr_enabled !== false;
 
-      const tblOrders = activeOrders.filter(o => o.table_id === t.id || (o.table_name && o.table_name.toLowerCase() === t.name.toLowerCase()));
+      const tblOrders = activeOrders.filter(o => {
+        // Exclude Takeaway orders from occupying dining tables
+        if (o.order_type === 'takeaway' || o.table_name === 'Takeaway Counter') return false;
+        // Exclude unassigned reservation bookings
+        if ((o.order_type === 'reservation' || o.table_name === 'Reservation' || o.special_instructions?.includes('TABLE RESERVATION')) && !o.table_id) return false;
+
+        return o.table_id === t.id || (o.table_name && o.table_name.toLowerCase() === t.name.toLowerCase());
+      });
       const activeCount = tblOrders.length;
       const paymentPending = tblOrders.some(o => o.payment_status !== 'paid');
 
