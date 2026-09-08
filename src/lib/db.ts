@@ -2340,12 +2340,6 @@ export const db = {
       batchUpdateData.special_instructions = cancellationReason ? `[CANCELLED] ${cancellationReason}` : '[CANCELLED]';
     }
 
-    await supabase
-      .from('order_batches')
-      .update(batchUpdateData)
-      .eq('order_id', id)
-      .neq('status', 'cancelled');
-
     // Authoritative Server-Side Order-Level Lifecycle Transition & Defensive Inventory Consumption
     await transitionOrderBatchLifecycle({
       restaurantId: currentOrder.restaurant_id,
@@ -2355,6 +2349,12 @@ export const db = {
       actor: userName || 'Staff Member',
       cancellationReason
     });
+
+    await supabase
+      .from('order_batches')
+      .update(batchUpdateData)
+      .eq('order_id', id)
+      .neq('status', 'cancelled');
 
     if (['served', 'completed'].includes(status)) {
       try {
