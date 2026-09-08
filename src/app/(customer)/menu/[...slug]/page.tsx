@@ -24,7 +24,7 @@ export default async function CustomerMenuCatchAllPage({ params, searchParams }:
   let isTakeaway = false;
   let isReservation = false;
 
-  if (slugParts[1] === 'table' && slugParts[2]) {
+  if ((slugParts[1] === 'table' || slugParts[1] === 'tbl') && slugParts[2]) {
     tableId = slugParts[2];
   } else if (slugParts[1] === 'takeaway') {
     isTakeaway = true;

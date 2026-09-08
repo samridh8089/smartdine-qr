@@ -71,7 +71,9 @@ export default function TablesPage() {
     if (tables && tables.length > 0) {
       return tables.map((t, idx) => ({
         id: t.id,
-        tableNumber: t.name.replace(/^Table\s*/i, ''),
+        table_uuid: t.table_uuid || t.id,
+        display_number: t.display_number || t.name.replace(/^Table\s*/i, ''),
+        tableNumber: t.display_number || t.name.replace(/^Table\s*/i, ''),
         name: t.name,
         kind: 'table' as const,
         shape: 'square' as const,
@@ -80,7 +82,12 @@ export default function TablesPage() {
         width: 80,
         height: 80,
         rotation: 0,
-        seats: 4,
+        seats: t.seats || t.capacity || 4,
+        zone_id: t.zone_id,
+        zone_name: t.zone_name,
+        assigned_waiter_id: t.assigned_waiter_id,
+        assignment_source: t.assignment_source,
+        service_badges: t.service_badges,
         status: (t.occupancy_status || 'available') as any,
         dbTableId: t.id,
         qrCodeUrl: qrCodes[t.id]
@@ -638,9 +645,11 @@ export default function TablesPage() {
         <FloorCanvasWrapper
           restaurantId={restaurantId}
           restaurantName={restaurant?.name || 'The Foody Hub'}
+          restaurantSlug={restaurantSlug || 'thefoodyhub'}
           mode={floorPlanMode}
           onModeChange={setFloorPlanMode}
           initialItems={floorPlanItems}
+          onDataMutated={() => fetchTablesData(restaurantId, true)}
           onViewQR={(item) => {
             const tbl = tables.find(t => t.id === item.id || t.name === item.name);
             if (tbl) {
