@@ -10,6 +10,8 @@ import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import MockBanner from '@/components/shared/MockBanner';
 import buildInfo from '@/lib/build-info.json';
 import { dashboardStore } from '@/lib/dashboardStore';
+import { PreviewModeProvider } from '@/context/PreviewModeContext';
+import DemoPreviewToggle from '@/components/shared/DemoPreviewToggle';
 
 import { 
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
@@ -425,7 +427,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <RestaurantContext.Provider value={{ restaurant, profile, activeRole, dbRole, planSpec, refresh: checkAuth, alarmMuted, setAlarmMuted }}>
-      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+      <PreviewModeProvider>
+        <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
         <MockBanner />
 
         {isImpersonating && (
@@ -618,7 +621,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
 
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                <DemoPreviewToggle />
                 {restaurant?.subscription_plan && (
                   <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">
                     {planSpec.name} Plan
@@ -671,6 +675,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </div>
+      </PreviewModeProvider>
     </RestaurantContext.Provider>
   );
 }

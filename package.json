@@ -20,6 +20,7 @@
     "@supabase/supabase-js": "^2.108.2",
     "@types/web-push": "^3.6.4",
     "firebase-admin": "^14.3.0",
+    "konva": "^10.5.0",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "pg": "^8.22.0",
@@ -27,6 +28,7 @@
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-konva": "^19.2.6",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
