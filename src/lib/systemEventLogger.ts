@@ -147,6 +147,16 @@ export interface LogSystemEventParams {
   metadata?: Record<string, unknown>;
 }
 
+export const ESSENTIAL_SYSTEM_EVENTS = new Set<SystemEventType>([
+  'order_created', 'order_accepted', 'order_preparing', 'order_ready',
+  'order_served', 'order_cancelled', 'order_completed',
+  'reservation_created', 'reservation_seated', 'reservation_cancelled',
+  'takeaway_created', 'takeaway_ready', 'takeaway_handed_over',
+  'waiter_assigned', 'payment_success', 'payment_failed', 'bill_closed',
+  'session_closed', 'inventory_reserved', 'inventory_deducted', 'inventory_rollback',
+  'customer_call_accepted', 'customer_call_resolved',
+]);
+
 /**
  * Fire-and-forget system event logger.
  * Call with .catch(() => {}) — never await in hot paths.
@@ -157,6 +167,13 @@ export interface LogSystemEventParams {
 export async function logSystemEvent(params: LogSystemEventParams): Promise<void> {
   try {
     if (!params.restaurantId || params.restaurantId === 'demo-rest') return;
+
+    // Event Recorder config checks
+    if (process.env.EVENT_RECORDER_ENABLED === 'false') return;
+    const isProductionMode = (process.env.EVENT_RECORDER_MODE || 'production') === 'production';
+    if (isProductionMode && !ESSENTIAL_SYSTEM_EVENTS.has(params.eventType)) {
+      return;
+    }
 
     const client = getAdminClient();
     const resolvedSource = params.sourceNode ?? EVENT_SOURCE_NODE[params.eventType];
