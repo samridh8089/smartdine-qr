@@ -69,7 +69,45 @@ export interface OrderDotState {
 
 // ─── Founder Mode ─────────────────────────────────────────────────────────────
 
-export type FounderMode = 'live' | 'replay' | 'system' | 'debug';
+export type FounderMode = 'live' | 'replay' | 'freeze' | 'system' | 'debug';
+
+// ─── Freeze Frame & Time Travel Types (Phase-19A-R1) ──────────────────────────
+
+export interface FreezeMetrics {
+  activeOrders: number;
+  preparing: number;
+  ready: number;
+  serving: number;
+  billing: number;
+}
+
+export interface FreezeFrameSnapshot {
+  timestampMs: number;
+  timestampIso: string;
+  metrics: FreezeMetrics;
+  tableStatus: Record<string, 'available' | 'occupied' | 'preparing' | 'ready' | 'waiting_bill' | 'closed'>;
+  kdsQueue: Array<{ orderId: string; table: string; status: string; elapsedMin: number }>;
+  waiterAssignments: Record<string, string>;
+  inventoryState: Record<string, { reserved: number; deducted: number; rolledBack: number }>;
+  customerCalls: Array<{ id: string; table: string; status: string }>;
+  dots: OrderDotState[];
+}
+
+export interface StateDiffItem {
+  category: 'table' | 'order' | 'kitchen' | 'inventory' | 'waiter';
+  entity: string;
+  before: string;
+  after: string;
+  highlight?: boolean;
+}
+
+export interface GhostTableOverlay {
+  tableId: string;
+  tableName: string;
+  historicalStatus: string;
+  currentStatus: string;
+  hasChanged: boolean;
+}
 
 // ─── Flight Recorder ─────────────────────────────────────────────────────────
 
@@ -127,3 +165,4 @@ export interface FailureAlert {
 
 export type ReplayRange = '5min' | '15min' | '1hour' | 'today' | 'custom';
 export type ReplaySpeed = 1 | 2 | 5;
+
