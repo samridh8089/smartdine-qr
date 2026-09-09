@@ -1239,6 +1239,7 @@ export default function FloorCanvas({
           setSelectedId(t.id);
         }}
         onArchiveTable={handleArchiveTable}
+        onDuplicateTable={handleDuplicateItem}
         onOpenBill={(t) => setActiveOpenBillTable(t)}
       />
 

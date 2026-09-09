@@ -46,8 +46,8 @@ export const SelectionBox: React.FC<SelectionBoxProps> = ({
     <Transformer
       ref={trRef}
       boundBoxFunc={(oldBox, newBox) => {
-        // Enforce minimum dimension of 30px
-        if (newBox.width < 30 || newBox.height < 30) {
+        // Enforce minimum dimension of 24px and maximum dimension of 600px
+        if (newBox.width < 24 || newBox.height < 24 || newBox.width > 600 || newBox.height > 600) {
           return oldBox;
         }
         return newBox;
@@ -79,8 +79,8 @@ export const SelectionBox: React.FC<SelectionBoxProps> = ({
         const rawW = node.width() || (node.getClientRect ? node.getClientRect().width / (scaleX || 1) : 80);
         const rawH = node.height() || (node.getClientRect ? node.getClientRect().height / (scaleY || 1) : 80);
 
-        const newW = Math.max(30, Math.round(rawW * scaleX));
-        const newH = Math.max(30, Math.round(rawH * scaleY));
+        const newW = Math.max(24, Math.min(600, Math.round(rawW * scaleX)));
+        const newH = Math.max(24, Math.min(600, Math.round(rawH * scaleY)));
 
         onTransformEnd({
           x: Math.round(node.x()),

@@ -27,8 +27,8 @@ export const TableNode: React.FC<TableNodeProps> = ({
 }) => {
   const shape = item.shape || 'rectangle';
   const status = item.status || 'available';
-  const width = Math.max(50, item.width);
-  const height = Math.max(50, item.height);
+  const width = Math.max(24, Math.min(600, item.width));
+  const height = Math.max(24, Math.min(600, item.height));
 
   // Status-driven styling (OpenTable + Toast POS Executive Colors)
   let fillColor = '#FFFFFF';

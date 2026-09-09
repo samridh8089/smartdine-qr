@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { 
   Users, QrCode, Printer, Edit2, UserCheck, Layers, 
   Archive, X, Check, AlertTriangle, ChevronRight, Hash,
-  MoreHorizontal, Receipt, ChevronLeft
+  MoreHorizontal, Receipt, ChevronLeft, Copy
 } from 'lucide-react';
 import { FloorPlanItem } from './types';
 
@@ -25,6 +25,7 @@ interface TableQuickActionPopoverProps {
   onAssignWaiter: (table: FloorPlanItem, waiterId: string | null) => Promise<void> | void;
   onMergeTable: (table: FloorPlanItem) => void;
   onArchiveTable: (table: FloorPlanItem) => Promise<void> | void;
+  onDuplicateTable?: (table: FloorPlanItem) => void;
   onOpenBill?: (table: FloorPlanItem) => void;
   availableWaiters?: WaiterOption[];
   defaultZoneWaiterName?: string;
@@ -42,6 +43,7 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
   onAssignWaiter,
   onMergeTable,
   onArchiveTable,
+  onDuplicateTable,
   onOpenBill,
   availableWaiters = [
     { id: 'w1', name: 'Priya Sharma' },
@@ -413,7 +415,27 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
             </button>
 
-            {/* Action 3: Soft Delete / Archive */}
+            {/* Action 3: Duplicate Table */}
+            {onDuplicateTable && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onDuplicateTable(table);
+                }}
+                className="w-full p-2.5 rounded-lg hover:bg-[#F8F8F6] flex items-center justify-between text-xs text-[#171717] font-semibold transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-7 h-7 rounded-md bg-[#F5F5F4] text-[#171717] flex items-center justify-center">
+                    <Copy className="w-3.5 h-3.5" />
+                  </div>
+                  <span>Duplicate Table</span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
+              </button>
+            )}
+
+            {/* Action 4: Soft Delete / Archive */}
             <button
               type="button"
               onClick={handleOpenArchive}

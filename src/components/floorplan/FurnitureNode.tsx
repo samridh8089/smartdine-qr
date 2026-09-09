@@ -22,8 +22,8 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
   onDragEnd
 }) => {
   const type = item.furnitureType || 'counter';
-  const width = Math.max(40, item.width);
-  const height = Math.max(30, item.height);
+  const width = Math.max(24, Math.min(600, item.width));
+  const height = Math.max(24, Math.min(600, item.height));
 
   const strokeColor = isSelected && isEditable ? '#171717' : '#D6D3D1';
   const strokeWidth = isSelected ? 2 : 1.5;
