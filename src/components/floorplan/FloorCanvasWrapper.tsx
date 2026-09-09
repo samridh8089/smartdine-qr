@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import React from 'react';
-import { FloorPlanItem } from './types';
+import { FloorPlanItem, RestaurantZone } from './types';
 
 interface FloorCanvasWrapperProps {
   restaurantId: string;
@@ -11,6 +11,7 @@ interface FloorCanvasWrapperProps {
   mode: 'view' | 'edit';
   onModeChange: (mode: 'view' | 'edit') => void;
   initialItems?: FloorPlanItem[];
+  zones?: RestaurantZone[];
   onViewQR?: (item: FloorPlanItem) => void;
   onDataMutated?: () => void;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { db, Table, checkTableHasActiveUnpaidOrders } from '@/lib/db';
+import { db, Table, checkTableHasActiveUnpaidOrders, RestaurantZone } from '@/lib/db';
 import { useRestaurant } from '../../layout';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { generateQRDataURL } from '@/lib/qr';
@@ -30,6 +30,7 @@ export default function TablesPage() {
   const [restaurantId, setRestaurantId] = useState(restId || '');
   const [restaurantSlug, setRestaurantSlug] = useState(restaurant?.slug || '');
   const [tables, setTables] = useState<Table[]>(() => initialCachedTables?.tables || []);
+  const [zones, setZones] = useState<RestaurantZone[]>(() => initialCachedTables?.zones || []);
   const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>(restaurant?.subscription_plan || 'starter');
   const [loading, setLoading] = useState(() => !initialCachedTables);
 
@@ -114,6 +115,9 @@ export default function TablesPage() {
         setTableStats(data.stats);
         setActiveMergeGroups(data.mergeGroups);
         setTableAssignments(data.assignments);
+        if (data.zones && data.zones.length > 0) {
+          setZones(data.zones);
+        }
       }
     } catch (e) {
       console.error('Error fetching tables data:', e);
@@ -649,6 +653,7 @@ export default function TablesPage() {
           mode={floorPlanMode}
           onModeChange={setFloorPlanMode}
           initialItems={floorPlanItems}
+          zones={zones}
           onDataMutated={() => fetchTablesData(restaurantId, true)}
           onViewQR={(item) => {
             const tbl = tables.find(t => t.id === item.id || t.name === item.name);
