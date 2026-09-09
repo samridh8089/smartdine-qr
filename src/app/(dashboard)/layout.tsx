@@ -51,8 +51,8 @@ export function useRestaurant() {
 }
 
 const ALLOWED_PATHS: Record<string, string[]> = {
-  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff'],
-  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff'],
+  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder'],
+  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder'],
   supervisor: ['/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu'],
   waiter: ['/dashboard/orders', '/dashboard/tables'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu'],
@@ -82,6 +82,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alarmMuted, setAlarmMuted] = useState(false);
+  // Phase-19: Founder Control Center easter egg (5-tap logo)
+  const [logoTapCount, setLogoTapCount] = useState(0);
+  const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Separate Portals Role View
   const [dbRole, setDbRole] = useState<Profile['role']>('owner');
@@ -136,7 +139,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
     if (user.role === 'super_admin') {
-      router.push('/super-admin');
+      // Phase-19: Allow super_admin to access /dashboard/founder/control-center
+      if (!pathname.startsWith('/dashboard/founder')) {
+        router.push('/super-admin');
+        return;
+      }
+      // For founder paths: set a minimal profile so the layout renders
+      setProfile(user);
+      setDbRole('super_admin' as any);
+      setActiveRole('owner' as any);
+      setLoading(false);
       return;
     }
     setProfile(user);
@@ -296,6 +308,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       window.removeEventListener('stop-waiter-sound', handleStopSound);
     };
   }, []);
+
+  // Phase-19: Ctrl+Shift+M keyboard shortcut → Founder Control Center
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+        e.preventDefault();
+        router.push('/dashboard/founder/control-center');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [router]);
 
   // Global Realtime Alarm Listener
   useEffect(() => {
@@ -476,10 +500,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           `}>
             {/* Logo Section */}
             <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
-              <Link href="/" className="flex items-center gap-3">
-                <img src="/logo.png" alt="CleverOps Logo" className="h-8 w-8 object-contain" />
-                <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">CleverOps</span>
-              </Link>
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
+                // Phase-19: 5-tap easter egg → Founder Control Center
+                if (logoTapTimerRef.current) clearTimeout(logoTapTimerRef.current);
+                const nextCount = logoTapCount + 1;
+                setLogoTapCount(nextCount);
+                if (nextCount >= 5) {
+                  setLogoTapCount(0);
+                  router.push('/dashboard/founder/control-center');
+                } else {
+                  logoTapTimerRef.current = setTimeout(() => setLogoTapCount(0), 3000);
+                }
+              }}>
+                <img src="/logo.png" alt="CleverOps Logo" className="h-8 w-8 object-contain select-none" />
+                <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent select-none">CleverOps</span>
+                {logoTapCount > 0 && logoTapCount < 5 && (
+                  <span className="text-[8px] text-emerald-400 font-mono opacity-60">{5 - logoTapCount}</span>
+                )}
+              </div>
               <button 
                 onClick={() => setSidebarOpen(false)} 
                 className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"

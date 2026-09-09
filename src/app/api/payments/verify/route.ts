@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
+import { logSystemEvent, generateCorrelationId } from '@/lib/systemEventLogger';
 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -133,6 +134,23 @@ export async function POST(req: Request) {
         });
       } catch (e) {}
     }
+
+    // ─── Phase-19: Event Bus — fire-and-forget ───────────────────────────────
+    if (restaurant_id && restaurant_id !== 'demo-rest') {
+      logSystemEvent({
+        restaurantId: restaurant_id,
+        correlationId: generateCorrelationId(),
+        actorType: 'system',
+        eventType: 'payment_success',
+        metadata: {
+          plan_name: normalizedPlan,
+          billing_interval,
+          amount: Number(amount),
+          razorpay_payment_id: razorpay_payment_id || null,
+        },
+      }).catch(() => {});
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     return NextResponse.json({
       success: true,
