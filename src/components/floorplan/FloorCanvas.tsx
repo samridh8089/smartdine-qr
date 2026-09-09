@@ -27,7 +27,7 @@ import { ZoneManagerModal } from './ZoneManagerModal';
 import { HistoryManager } from './HistoryManager';
 import { AutoSaveEngine } from './AutoSaveEngine';
 import { findCollidingTable, mergeTables, splitTable } from './CollisionEngine';
-import { db, RestaurantZone } from '@/lib/db';
+import { db, RestaurantZone, STANDARD_ZONES } from '@/lib/db';
 import { generateQRDataURL } from '@/lib/qr';
 
 interface FloorCanvasProps {
@@ -42,15 +42,15 @@ interface FloorCanvasProps {
   onDataMutated?: () => void;
 }
 
-// Default initial layout for realistic restaurant floor
+// Default initial layout for realistic restaurant floor with Standard Sections
 export const DEFAULT_INITIAL_ITEMS: FloorPlanItem[] = [
-  // Left Seating Zone: Booths & Dining
-  { id: 'tbl-1', tableNumber: '1', display_number: '1', name: 'Table 1', kind: 'table', shape: 'square', x: 80, y: 80, width: 80, height: 80, rotation: 0, seats: 4, status: 'available' },
-  { id: 'tbl-2', tableNumber: '2', display_number: '2', name: 'Table 2', kind: 'table', shape: 'square', x: 220, y: 80, width: 80, height: 80, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 28, currentGuests: 3, waiterName: 'Priya Sharma' },
-  { id: 'tbl-3', tableNumber: '3', display_number: '3', name: 'Table 3', kind: 'table', shape: 'rectangle', x: 360, y: 80, width: 130, height: 80, rotation: 0, seats: 6, status: 'reserved', reservationPartyName: 'Sanjay Kapoor', reservationTime: '20:00', reservationPhone: '+91 98110 33481' },
-  { id: 'tbl-4', tableNumber: '4', display_number: '4', name: 'Table 4', kind: 'table', shape: 'square', x: 80, y: 220, width: 80, height: 80, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 42, currentGuests: 4, waiterName: 'Rahul Verma' },
+  // Indoor AC Seating Zone
+  { id: 'tbl-1', tableNumber: '1', display_number: '1', name: 'Table 1', kind: 'table', shape: 'square', x: 80, y: 80, width: 80, height: 80, rotation: 0, seats: 4, zone_id: 'zone_indoor', zone_name: 'Indoor AC', status: 'available' },
+  { id: 'tbl-2', tableNumber: '2', display_number: '2', name: 'Table 2', kind: 'table', shape: 'square', x: 220, y: 80, width: 80, height: 80, rotation: 0, seats: 4, zone_id: 'zone_indoor', zone_name: 'Indoor AC', status: 'occupied', elapsedMinutes: 28, currentGuests: 3, waiterName: 'Priya Sharma' },
+  { id: 'tbl-3', tableNumber: '3', display_number: '3', name: 'Table 3', kind: 'table', shape: 'rectangle', x: 360, y: 80, width: 130, height: 80, rotation: 0, seats: 6, zone_id: 'zone_indoor', zone_name: 'Indoor AC', status: 'reserved', reservationPartyName: 'Sanjay Kapoor', reservationTime: '20:00', reservationPhone: '+91 98110 33481' },
+  { id: 'tbl-4', tableNumber: '4', display_number: '4', name: 'Table 4', kind: 'table', shape: 'square', x: 80, y: 220, width: 80, height: 80, rotation: 0, seats: 4, zone_id: 'zone_indoor', zone_name: 'Indoor AC', status: 'occupied', elapsedMinutes: 42, currentGuests: 4, waiterName: 'Rahul Verma' },
   
-  // Center Merged Entity: Table 5 + 6
+  // VIP Seating Zone
   { 
     id: 'tbl-5-6-merged', 
     tableNumber: '5 + 6',
@@ -64,6 +64,8 @@ export const DEFAULT_INITIAL_ITEMS: FloorPlanItem[] = [
     height: 80, 
     rotation: 0, 
     seats: 8, 
+    zone_id: 'zone_vip',
+    zone_name: 'VIP',
     status: 'merged', 
     isMerged: true, 
     mergedWithIds: ['tbl-5', 'tbl-6'], 
@@ -72,15 +74,18 @@ export const DEFAULT_INITIAL_ITEMS: FloorPlanItem[] = [
     currentGuests: 7,
     waiterName: 'Priya Sharma'
   },
+  { id: 'tbl-7', tableNumber: '7', display_number: '7', name: 'Table 7', kind: 'table', shape: 'circle', x: 440, y: 220, width: 85, height: 85, rotation: 0, seats: 4, zone_id: 'zone_vip', zone_name: 'VIP', status: 'occupied', elapsedMinutes: 14, currentGuests: 4, waiterName: 'Amit Patel' },
 
-  { id: 'tbl-7', tableNumber: '7', display_number: '7', name: 'Table 7', kind: 'table', shape: 'circle', x: 440, y: 220, width: 85, height: 85, rotation: 0, seats: 4, status: 'occupied', elapsedMinutes: 14, currentGuests: 4, waiterName: 'Amit Patel' },
-  { id: 'tbl-8', tableNumber: '8', display_number: '8', name: 'Table 8', kind: 'table', shape: 'rectangle', x: 80, y: 360, width: 130, height: 80, rotation: 0, seats: 6, status: 'reserved', reservationPartyName: 'Dr. Ramesh Nair', reservationTime: '19:30', reservationPhone: '+91 97401 88921' },
-  { id: 'tbl-9', tableNumber: '9', display_number: '9', name: 'Table 9', kind: 'table', shape: 'circle', x: 260, y: 360, width: 80, height: 80, rotation: 0, seats: 4, status: 'cleaning' },
-  { id: 'tbl-10', tableNumber: '10', display_number: '10', name: 'Table 10', kind: 'table', shape: 'square', x: 380, y: 360, width: 80, height: 80, rotation: 0, seats: 4, status: 'available' },
-  { id: 'tbl-11', tableNumber: '11', display_number: '11', name: 'Table 11', kind: 'table', shape: 'booth', x: 80, y: 490, width: 110, height: 85, rotation: 0, seats: 4, status: 'available' },
-  { id: 'tbl-12', tableNumber: '12', display_number: '12', name: 'Table 12', kind: 'table', shape: 'booth', x: 230, y: 490, width: 110, height: 85, rotation: 0, seats: 4, status: 'available' },
+  // Outdoor Seating Zone
+  { id: 'tbl-8', tableNumber: '8', display_number: '8', name: 'Table 8', kind: 'table', shape: 'rectangle', x: 80, y: 360, width: 130, height: 80, rotation: 0, seats: 6, zone_id: 'zone_outdoor', zone_name: 'Outdoor', status: 'reserved', reservationPartyName: 'Dr. Ramesh Nair', reservationTime: '19:30', reservationPhone: '+91 97401 88921' },
+  { id: 'tbl-9', tableNumber: '9', display_number: '9', name: 'Table 9', kind: 'table', shape: 'circle', x: 260, y: 360, width: 80, height: 80, rotation: 0, seats: 4, zone_id: 'zone_outdoor', zone_name: 'Outdoor', status: 'cleaning' },
+  { id: 'tbl-10', tableNumber: '10', display_number: '10', name: 'Table 10', kind: 'table', shape: 'square', x: 380, y: 360, width: 80, height: 80, rotation: 0, seats: 4, zone_id: 'zone_outdoor', zone_name: 'Outdoor', status: 'available' },
 
-  // Right Service & Architectural Zone
+  // Terrace Seating Zone
+  { id: 'tbl-11', tableNumber: '11', display_number: '11', name: 'Table 11', kind: 'table', shape: 'booth', x: 80, y: 490, width: 110, height: 85, rotation: 0, seats: 4, zone_id: 'zone_terrace', zone_name: 'Terrace', status: 'available' },
+  { id: 'tbl-12', tableNumber: '12', display_number: '12', name: 'Table 12', kind: 'table', shape: 'booth', x: 230, y: 490, width: 110, height: 85, rotation: 0, seats: 4, zone_id: 'zone_terrace', zone_name: 'Terrace', status: 'available' },
+
+  // Right Service & Architectural Fixtures
   { id: 'furn-bar', tableNumber: '', name: 'Artisan Beverage Bar', kind: 'furniture', furnitureType: 'bar_seats', x: 620, y: 80, width: 180, height: 45, rotation: 0, seats: 5, status: 'available' },
   { id: 'furn-kitchen', tableNumber: '', name: 'Kitchen Pass', kind: 'furniture', furnitureType: 'kitchen', x: 620, y: 190, width: 180, height: 80, rotation: 0, seats: 0, status: 'available' },
   { id: 'furn-pos', tableNumber: '', name: 'Cash Counter / POS', kind: 'furniture', furnitureType: 'cash_counter', x: 620, y: 320, width: 130, height: 50, rotation: 0, seats: 0, status: 'available' },
@@ -116,8 +121,13 @@ export default function FloorCanvas({
   const [showHeatmapModal, setShowHeatmapModal] = useState<boolean>(false);
   const [showZoneModal, setShowZoneModal] = useState<boolean>(false);
   const [zones, setZones] = useState<RestaurantZone[]>(() => {
-    if (propZones && propZones.length > 0) return propZones;
-    return [{ id: 'zone_general', name: 'General', color: '#10B981' }];
+    if (propZones && propZones.length > 0) {
+      if (propZones.length === 1 && propZones[0].id === 'zone_general') {
+        return STANDARD_ZONES;
+      }
+      return propZones;
+    }
+    return STANDARD_ZONES;
   });
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('all');
   const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({});
@@ -208,18 +218,15 @@ export default function FloorCanvas({
       return items.filter((it) => {
         if (it.kind !== 'table') return true;
         if (it.is_archived) return false;
-        const zoneId = it.zone_id || 'zone_general';
+        const zoneId = it.zone_id || 'zone_indoor';
         return !collapsedZones[zoneId];
       });
     }
     return items.filter((it) => {
       if (it.kind !== 'table') return true;
       if (it.is_archived) return false;
-      const zoneId = it.zone_id || 'zone_general';
+      const zoneId = it.zone_id || 'zone_indoor';
       if (collapsedZones[zoneId]) return false;
-      if (selectedZoneFilter === 'general' || selectedZoneFilter === 'zone_general') {
-        return zoneId === 'general' || zoneId === 'zone_general';
-      }
       return zoneId === selectedZoneFilter;
     });
   }, [items, selectedZoneFilter, collapsedZones]);
@@ -237,21 +244,21 @@ export default function FloorCanvas({
     setAutoSaveStatus('dirty');
     localDebounceTimerRef.current = setTimeout(() => {
       if (autoSaveEngineRef.current) {
-        autoSaveEngineRef.current.trigger();
+        autoSaveEngineRef.current.flushSave(newItems);
       }
     }, 300);
   }, [restaurantId]);
 
   const handleManualSave = useCallback(() => {
     if (autoSaveEngineRef.current) {
-      autoSaveEngineRef.current.trigger();
+      autoSaveEngineRef.current.flushSave(items);
       setAutoSaveStatus('saving');
       setTimeout(() => {
         setAutoSaveStatus('saved');
         setHasUnsavedDraft(false);
-      }, 600);
+      }, 300);
     }
-  }, []);
+  }, [items]);
 
   const handleSelectItem = useCallback((item: FloorPlanItem, e: any) => {
     e.cancelBubble = true;
@@ -313,14 +320,14 @@ export default function FloorCanvas({
       height: template.height || 80,
       rotation: 0,
       seats: template.seats || 4,
-      zone_id: selectedZoneFilter !== 'all' ? selectedZoneFilter : 'zone_general',
+      zone_id: selectedZoneFilter !== 'all' ? selectedZoneFilter : (zones[0]?.id || 'zone_indoor'),
       status: 'available'
     };
 
     const updated = [...items, newItem];
     updateItemsWithHistory(updated);
     setSelectedId(newItem.id);
-  }, [items, stagePos, scale, selectedZoneFilter, updateItemsWithHistory]);
+  }, [items, stagePos, scale, selectedZoneFilter, zones, updateItemsWithHistory]);
 
   const handleDuplicateItem = useCallback((item: FloorPlanItem) => {
     const isTable = item.kind === 'table';
@@ -718,11 +725,21 @@ export default function FloorCanvas({
   // Sync Zones from props or DB
   useEffect(() => {
     if (propZones && propZones.length > 0) {
-      setZones(propZones);
+      if (propZones.length === 1 && propZones[0].id === 'zone_general') {
+        setZones(STANDARD_ZONES);
+      } else {
+        setZones(propZones);
+      }
     } else if (restaurantId) {
       db.getZones(restaurantId)
         .then((z) => {
-          if (z && z.length > 0) setZones(z);
+          if (z && z.length > 0) {
+            if (z.length === 1 && z[0].id === 'zone_general') {
+              setZones(STANDARD_ZONES);
+            } else {
+              setZones(z);
+            }
+          }
         })
         .catch(() => {});
     }

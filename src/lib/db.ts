@@ -411,6 +411,13 @@ export interface RestaurantZone {
   collapsed?: boolean;
 }
 
+export const STANDARD_ZONES: RestaurantZone[] = [
+  { id: 'zone_indoor', name: 'Indoor AC', sort_order: 1, color: '#3B82F6', created_at: new Date().toISOString() },
+  { id: 'zone_outdoor', name: 'Outdoor', sort_order: 2, color: '#10B981', created_at: new Date().toISOString() },
+  { id: 'zone_vip', name: 'VIP', sort_order: 3, color: '#8B5CF6', created_at: new Date().toISOString() },
+  { id: 'zone_terrace', name: 'Terrace', sort_order: 4, color: '#F59E0B', created_at: new Date().toISOString() }
+];
+
 export interface Table {
   id: string;
   restaurant_id: string;
@@ -1377,9 +1384,9 @@ export const db = {
     const tableStates = rest?.settings?.table_states || {};
     const assignments = rest?.settings?.table_assignments || [];
 
-    const zones: RestaurantZone[] = rest?.settings?.zones && rest.settings.zones.length > 0
+    const zones: RestaurantZone[] = rest?.settings?.zones && rest.settings.zones.length > 0 && !(rest.settings.zones.length === 1 && rest.settings.zones[0].id === 'zone_general')
       ? rest.settings.zones
-      : [{ id: 'zone_general', name: 'General', sort_order: 1, created_at: new Date().toISOString() }];
+      : STANDARD_ZONES;
 
     const enrichedTables: Table[] = rawTables.map(t => {
       const state = tableStates[t.id] || {};
@@ -1413,9 +1420,9 @@ export const db = {
       const seats = typeof state.seats === 'number' ? state.seats : (typeof state.capacity === 'number' ? state.capacity : 4);
 
       // Zone resolution
-      const zoneId = state.zone_id || 'zone_general';
+      const zoneId = state.zone_id || zones[0]?.id || 'zone_indoor';
       const matchedZone = zones.find(z => z.id === zoneId) || zones[0];
-      const zoneName = matchedZone ? matchedZone.name : 'General';
+      const zoneName = matchedZone ? matchedZone.name : 'Indoor AC';
 
       // 3-Tier Waiter Priority Engine:
       // Tier 1: Manual table assignment
@@ -1669,14 +1676,17 @@ export const db = {
     }
 
     const newTbl = inserted[0];
-    // Initialize default state with zone_general and 4 seats
+    const defaultZone = rest.settings?.zones && rest.settings.zones.length > 0 && !(rest.settings.zones.length === 1 && rest.settings.zones[0].id === 'zone_general')
+      ? rest.settings.zones[0]
+      : STANDARD_ZONES[0];
+    // Initialize default state with standard zone and 4 seats
     const tableStates = { ...(rest.settings?.table_states || {}) };
     tableStates[newTbl.id] = {
       ...(tableStates[newTbl.id] || {}),
       display_number: cleanName,
       seats: 4,
       capacity: 4,
-      zone_id: 'zone_general',
+      zone_id: defaultZone.id,
       is_archived: false,
       occupancy_status: 'available'
     };
@@ -1693,8 +1703,8 @@ export const db = {
       display_number: cleanName,
       seats: 4,
       capacity: 4,
-      zone_id: 'zone_general',
-      zone_name: 'General',
+      zone_id: defaultZone.id,
+      zone_name: defaultZone.name,
       is_archived: false,
       occupancy_status: 'available'
     } as Table;
@@ -1874,10 +1884,8 @@ export const db = {
     let zones: RestaurantZone[] = rest.settings?.zones || [];
     let needsSave = false;
 
-    if (!zones || zones.length === 0) {
-      zones = [
-        { id: 'zone_general', name: 'General', sort_order: 1, created_at: new Date().toISOString() }
-      ];
+    if (!zones || zones.length === 0 || (zones.length === 1 && zones[0].id === 'zone_general')) {
+      zones = STANDARD_ZONES;
       needsSave = true;
     }
 
@@ -1886,10 +1894,10 @@ export const db = {
     if (rawTables) {
       rawTables.forEach(t => {
         if (!tableStates[t.id]) {
-          tableStates[t.id] = { zone_id: 'zone_general', seats: 4, capacity: 4 };
+          tableStates[t.id] = { zone_id: zones[0]?.id || 'zone_indoor', seats: 4, capacity: 4 };
           needsSave = true;
-        } else if (!tableStates[t.id].zone_id) {
-          tableStates[t.id].zone_id = 'zone_general';
+        } else if (!tableStates[t.id].zone_id || tableStates[t.id].zone_id === 'zone_general') {
+          tableStates[t.id].zone_id = zones[0]?.id || 'zone_indoor';
           needsSave = true;
         }
       });
@@ -1917,9 +1925,9 @@ export const db = {
     const rest = await this.getRestaurantById(restaurantId);
     if (!rest) throw new Error('Restaurant not found');
 
-    const zones: RestaurantZone[] = rest.settings?.zones && rest.settings.zones.length > 0
+    const zones: RestaurantZone[] = rest.settings?.zones && rest.settings.zones.length > 0 && !(rest.settings.zones.length === 1 && rest.settings.zones[0].id === 'zone_general')
       ? [...rest.settings.zones]
-      : [{ id: 'zone_general', name: 'General', sort_order: 1, created_at: new Date().toISOString() }];
+      : [...STANDARD_ZONES];
 
     const newZone: RestaurantZone = {
       id: `zone_${Date.now()}`,
@@ -1961,16 +1969,19 @@ export const db = {
   },
 
   async deleteZone(restaurantId: string, zoneId: string): Promise<void> {
-    if (zoneId === 'zone_general') throw new Error('Cannot delete default General zone');
     const rest = await this.getRestaurantById(restaurantId);
     if (!rest) throw new Error('Restaurant not found');
 
-    const zones: RestaurantZone[] = (rest.settings?.zones || []).filter((z: RestaurantZone) => z.id !== zoneId);
+    const currentZones = rest.settings?.zones && rest.settings.zones.length > 0 ? rest.settings.zones : STANDARD_ZONES;
+    if (currentZones.length <= 1) throw new Error('Cannot delete the last remaining zone');
+
+    const zones: RestaurantZone[] = currentZones.filter((z: RestaurantZone) => z.id !== zoneId);
     const tableStates = { ...(rest.settings?.table_states || {}) };
+    const fallbackZoneId = zones[0]?.id || 'zone_indoor';
 
     Object.keys(tableStates).forEach(tid => {
       if (tableStates[tid]?.zone_id === zoneId) {
-        tableStates[tid].zone_id = 'zone_general';
+        tableStates[tid].zone_id = fallbackZoneId;
       }
     });
 
