@@ -1,6 +1,8 @@
 // Floor Plan Types for CleverOps Phase-18.17A
 // Production-ready Blueprint Schema
 
+export type { RestaurantZone } from '@/lib/db';
+
 export type TableShape = 'square' | 'rectangle' | 'circle' | 'oval' | 'booth';
 
 export type FurnitureType = 

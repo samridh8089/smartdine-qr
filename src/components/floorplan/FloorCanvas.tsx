@@ -37,6 +37,7 @@ interface FloorCanvasProps {
   mode: 'view' | 'edit';
   onModeChange: (mode: 'view' | 'edit') => void;
   initialItems?: FloorPlanItem[];
+  zones?: RestaurantZone[];
   onViewQR?: (item: FloorPlanItem) => void;
   onDataMutated?: () => void;
 }
@@ -95,6 +96,7 @@ export default function FloorCanvas({
   mode,
   onModeChange,
   initialItems,
+  zones: propZones,
   onViewQR,
   onDataMutated
 }: FloorCanvasProps) {
@@ -113,9 +115,10 @@ export default function FloorCanvas({
   const [activeQRDataUrl, setActiveQRDataUrl] = useState<string>('');
   const [showHeatmapModal, setShowHeatmapModal] = useState<boolean>(false);
   const [showZoneModal, setShowZoneModal] = useState<boolean>(false);
-  const [zones, setZones] = useState<RestaurantZone[]>([
-    { id: 'general', name: 'General', color: '#10B981' }
-  ]);
+  const [zones, setZones] = useState<RestaurantZone[]>(() => {
+    if (propZones && propZones.length > 0) return propZones;
+    return [{ id: 'zone_general', name: 'General', color: '#10B981' }];
+  });
   const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>('all');
   const [collapsedZones, setCollapsedZones] = useState<Record<string, boolean>>({});
   const [mergeCandidatePair, setMergeCandidatePair] = useState<{ tableA: FloorPlanItem; tableB: FloorPlanItem } | null>(null);
@@ -205,15 +208,18 @@ export default function FloorCanvas({
       return items.filter((it) => {
         if (it.kind !== 'table') return true;
         if (it.is_archived) return false;
-        const zoneId = it.zone_id || 'general';
+        const zoneId = it.zone_id || 'zone_general';
         return !collapsedZones[zoneId];
       });
     }
     return items.filter((it) => {
       if (it.kind !== 'table') return true;
       if (it.is_archived) return false;
-      const zoneId = it.zone_id || 'general';
+      const zoneId = it.zone_id || 'zone_general';
       if (collapsedZones[zoneId]) return false;
+      if (selectedZoneFilter === 'general' || selectedZoneFilter === 'zone_general') {
+        return zoneId === 'general' || zoneId === 'zone_general';
+      }
       return zoneId === selectedZoneFilter;
     });
   }, [items, selectedZoneFilter, collapsedZones]);
@@ -228,25 +234,28 @@ export default function FloorCanvas({
     
     // 300ms Debounced Local Save + 3s AutoSave
     if (localDebounceTimerRef.current) clearTimeout(localDebounceTimerRef.current);
+    setAutoSaveStatus('dirty');
     localDebounceTimerRef.current = setTimeout(() => {
-      autoSaveEngineRef.current?.markDirty(newItems);
+      if (autoSaveEngineRef.current) {
+        autoSaveEngineRef.current.trigger();
+      }
     }, 300);
   }, [restaurantId]);
 
   const handleManualSave = useCallback(() => {
-    if (!autoSaveEngineRef.current) return;
-    autoSaveEngineRef.current.flushSave(items);
-    try {
-      localStorage.setItem(`cleverops_floorplan_draft_${restaurantId}`, JSON.stringify({ items, timestamp: Date.now() }));
-    } catch (e) {}
-    setAutoSaveStatus('saved');
-    setHasUnsavedDraft(false);
-  }, [items, restaurantId]);
+    if (autoSaveEngineRef.current) {
+      autoSaveEngineRef.current.trigger();
+      setAutoSaveStatus('saving');
+      setTimeout(() => {
+        setAutoSaveStatus('saved');
+        setHasUnsavedDraft(false);
+      }, 600);
+    }
+  }, []);
 
   const handleSelectItem = useCallback((item: FloorPlanItem, e: any) => {
-    if (e) e.cancelBubble = true;
+    e.cancelBubble = true;
     setSelectedId(item.id);
-
     if (mode === 'view' && item.kind === 'table') {
       setActiveQuickActionTable(item);
     }
@@ -269,7 +278,23 @@ export default function FloorCanvas({
       return it;
     });
     updateItemsWithHistory(updated);
-  }, [selectedId, items, updateItemsWithHistory]);
+
+    // Live sync to database for persistent table fields (P0-5)
+    const targetItem = items.find((x) => x.id === selectedId);
+    if (targetItem && targetItem.kind === 'table') {
+      const tableDbId = targetItem.dbTableId || targetItem.id;
+      if (newAttrs.zone_id) {
+        db.assignTableZone(restaurantId, tableDbId, newAttrs.zone_id).catch(() => {});
+      }
+      if (typeof newAttrs.seats === 'number') {
+        db.updateTableSeats(restaurantId, tableDbId, newAttrs.seats).catch(() => {});
+      }
+      if (newAttrs.display_number || newAttrs.tableNumber) {
+        const num = newAttrs.display_number || newAttrs.tableNumber;
+        if (num) db.renameTable(restaurantId, tableDbId, num).catch(() => {});
+      }
+    }
+  }, [selectedId, items, restaurantId, updateItemsWithHistory]);
 
   const handleAddItem = useCallback((template: Partial<FloorPlanItem>) => {
     const isTable = template.kind === 'table';
@@ -288,7 +313,7 @@ export default function FloorCanvas({
       height: template.height || 80,
       rotation: 0,
       seats: template.seats || 4,
-      zone_id: selectedZoneFilter !== 'all' ? selectedZoneFilter : 'general',
+      zone_id: selectedZoneFilter !== 'all' ? selectedZoneFilter : 'zone_general',
       status: 'available'
     };
 
@@ -690,6 +715,19 @@ export default function FloorCanvas({
     } catch (e) {}
   }, [restaurantId]);
 
+  // Sync Zones from props or DB
+  useEffect(() => {
+    if (propZones && propZones.length > 0) {
+      setZones(propZones);
+    } else if (restaurantId) {
+      db.getZones(restaurantId)
+        .then((z) => {
+          if (z && z.length > 0) setZones(z);
+        })
+        .catch(() => {});
+    }
+  }, [propZones, restaurantId]);
+
   // Keyboard Shortcuts: Ctrl+Z (Undo), Ctrl+Shift+Z / Ctrl+Y (Redo), Ctrl+S (Save Layout)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -943,38 +981,41 @@ export default function FloorCanvas({
 
         {/* Right: Zone Filter Tabs & Waiter Heatmap Trigger */}
         <div className="flex items-center space-x-2">
-          {/* Zone Filter Tabs */}
-          <div className="flex items-center bg-white p-0.5 rounded-lg border border-[#E7E5E4] text-[11px]">
+          {/* Zone Filter Tabs (P0-8 OpenTable Executive Styling) */}
+          <div className="flex items-center bg-white p-0.5 rounded-lg border border-[#E7E5E4] text-[11px] gap-1 shadow-2xs">
             <button
               type="button"
               onClick={() => setSelectedZoneFilter('all')}
-              className={`px-2.5 py-0.5 rounded font-semibold transition-all cursor-pointer ${
+              className={`px-3 py-1 rounded-md font-semibold transition-all cursor-pointer ${
                 selectedZoneFilter === 'all'
                   ? 'bg-[#171717] text-white shadow-2xs'
-                  : 'text-[#737373] hover:text-[#171717]'
+                  : 'text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4]'
               }`}
             >
               All
             </button>
-            {zones.map((z) => (
-              <button
-                key={z.id}
-                type="button"
-                onClick={() => setSelectedZoneFilter(z.id)}
-                className={`px-2 py-0.5 rounded font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
-                  selectedZoneFilter === z.id
-                    ? 'bg-[#171717] text-white shadow-2xs'
-                    : 'text-[#737373] hover:text-[#171717]'
-                }`}
-              >
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: z.color || '#10B981' }} />
-                <span>{z.name}</span>
-              </button>
-            ))}
+            {zones.map((z) => {
+              const isSelected = selectedZoneFilter === z.id || ((selectedZoneFilter === 'general' || selectedZoneFilter === 'zone_general') && (z.id === 'general' || z.id === 'zone_general'));
+              return (
+                <button
+                  key={z.id}
+                  type="button"
+                  onClick={() => setSelectedZoneFilter(z.id)}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition-all flex items-center space-x-1.5 cursor-pointer border ${
+                    isSelected
+                      ? 'bg-[#171717] text-white border-[#171717] shadow-2xs'
+                      : 'bg-stone-50/70 text-[#171717] border-stone-200 hover:bg-stone-100 hover:border-stone-300'
+                  }`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: z.color || '#10B981' }} />
+                  <span>{z.name}</span>
+                </button>
+              );
+            })}
             <button
               type="button"
               onClick={() => setShowZoneModal(true)}
-              className="px-2 py-0.5 text-stone-500 hover:text-stone-900 font-bold border-l border-stone-200 ml-1 cursor-pointer"
+              className="px-2 py-1 text-stone-500 hover:text-stone-900 font-bold border-l border-stone-200 ml-0.5 cursor-pointer"
               title="Manage Restaurant Zones"
             >
               +
@@ -1145,6 +1186,8 @@ export default function FloorCanvas({
         {isEditable && (
           <PropertyPanel
             item={selectedItem}
+            existingItems={items}
+            zones={zones}
             onUpdate={handleUpdateItem}
             onDuplicate={handleDuplicateItem}
             onDelete={handleDeleteItem}

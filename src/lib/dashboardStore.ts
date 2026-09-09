@@ -1,4 +1,4 @@
-import { db, Order, Table, MenuItem, Category, PricingPlan } from '@/lib/db';
+import { db, Order, Table, MenuItem, Category, PricingPlan, RestaurantZone } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
 
 interface CacheEntry<T> {
@@ -10,11 +10,11 @@ const CACHE_TTL_MS = 60000; // 60 seconds
 
 class DashboardStore {
   private ordersCache = new Map<string, CacheEntry<Order[]>>();
-  private tablesCache = new Map<string, CacheEntry<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[] }>>();
+  private tablesCache = new Map<string, CacheEntry<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[]; zones?: RestaurantZone[] }>>();
   private menuCache = new Map<string, CacheEntry<{ categories: Category[]; menuItems: MenuItem[] }>>();
   private billingCache = new Map<string, CacheEntry<{ tablesCount: number; itemsCount: number; staffCount: number; invCount: number; plans: PricingPlan[] }>>();
   private overviewCache = new Map<string, CacheEntry<any>>();
-  private inFlightTables = new Map<string, Promise<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[] }>>();
+  private inFlightTables = new Map<string, Promise<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[]; zones?: RestaurantZone[] }>>();
   private inFlightBilling = new Map<string, Promise<{ tablesCount: number; itemsCount: number; staffCount: number; invCount: number; plans: PricingPlan[] }>>();
   private qrCache = new Map<string, string>();
 
@@ -38,7 +38,7 @@ class DashboardStore {
   }
 
   // Deduplicated tables fetching
-  fetchTablesDeduplicated(restId: string, force: boolean = false): Promise<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[] }> {
+  fetchTablesDeduplicated(restId: string, force: boolean = false): Promise<{ tables: Table[]; stats: any; mergeGroups: any[]; assignments: any[]; zones?: RestaurantZone[] }> {
     if (!force && this.inFlightTables.has(restId)) {
       return this.inFlightTables.get(restId)!;
     }
@@ -55,7 +55,8 @@ class DashboardStore {
           tables: live?.tables || [],
           stats: live?.stats || { total: 0, available: 0, occupied: 0, inactive: 0, occupancyRate: 0 },
           mergeGroups: groups || [],
-          assignments
+          assignments,
+          zones: live?.zones || []
         };
         this.setCachedTables(restId, result);
         return result;

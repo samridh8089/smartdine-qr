@@ -39,6 +39,10 @@ export class AutoSaveEngine {
     this.flush();
   }
 
+  trigger(items?: FloorPlanItem[]) {
+    this.flushSave(items);
+  }
+
   flush() {
     if (this.timer) {
       clearTimeout(this.timer);

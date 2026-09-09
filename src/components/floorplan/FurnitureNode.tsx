@@ -60,7 +60,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
             {/* Door leaf */}
             <Line points={[6, height, 6, 0]} stroke="#171717" strokeWidth={2.5} />
             <Text
-              text="DOOR"
+              text={item.name || 'DOOR'}
               x={0}
               y={height / 2 - 5}
               width={width}
@@ -86,7 +86,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
               dash={[4, 4]}
             />
             <Text
-              text="PARTITION"
+              text={item.name || 'PARTITION'}
               x={0}
               y={height / 2 - 5}
               width={width}
@@ -154,7 +154,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
             />
             <Line points={[0, height * 0.4, width, height * 0.4]} stroke="#D6D3D1" strokeWidth={1} />
             <Text
-              text="KITCHEN PASS"
+              text={item.name || 'KITCHEN PASS'}
               x={0}
               y={height * 0.12}
               width={width}
@@ -190,7 +190,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
             />
             <Rect x={10} y={height / 2 - 8} width={20} height={16} fill="#E7E5E4" stroke="#A8A29E" strokeWidth={1} />
             <Text
-              text="CASH / POS"
+              text={item.name || 'CASH / POS'}
               x={35}
               y={height / 2 - 5}
               fontSize={10}
@@ -214,7 +214,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
               strokeWidth={1.5}
             />
             <Text
-              text="WASHROOM"
+              text={item.name || 'WASHROOM'}
               x={0}
               y={height / 2 - 6}
               width={width}
@@ -240,7 +240,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
               strokeWidth={1.5}
             />
             <Text
-              text="WAITING LOUNGE"
+              text={item.name || 'WAITING LOUNGE'}
               x={0}
               y={height / 2 - 6}
               width={width}
@@ -303,7 +303,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
               strokeWidth={strokeWidth}
             />
             <Text
-              text={item.name || 'COUNTER'}
+              text={item.name || 'SERVICE COUNTER'}
               x={0}
               y={height / 2 - 6}
               width={width}
@@ -322,6 +322,8 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
       id={item.id}
       x={item.x}
       y={item.y}
+      width={width}
+      height={height}
       rotation={item.rotation || 0}
       draggable={isEditable}
       onClick={(e) => onSelect(item, e)}

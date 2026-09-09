@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Square, Circle, Armchair, DoorOpen, ChefHat, 
-  Layers, Plus, CreditCard, Users, ShieldAlert, Sparkles
+  Layers, Plus, CreditCard, Users, ShieldAlert, Sparkles,
+  ChevronLeft, ChevronRight, PanelLeftClose, PanelLeft
 } from 'lucide-react';
 import { FloorPlanItem, TableShape, FurnitureType } from './types';
 
@@ -12,6 +13,8 @@ interface ToolboxProps {
 }
 
 export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
+
   const tableTemplates: Array<{
     label: string;
     shape: TableShape;
@@ -45,12 +48,40 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
     { label: 'Cashier / POS', type: 'cash_counter', width: 110, height: 50, icon: CreditCard }
   ];
 
+  if (isCollapsed) {
+    return (
+      <div className="w-11 bg-white border-r border-[#E7E5E4] flex flex-col items-center py-3 select-none shrink-0 shadow-sm transition-all">
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(false)}
+          className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
+          title="Expand Toolbox"
+        >
+          <PanelLeft className="w-4 h-4" />
+        </button>
+        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-6 [writing-mode:vertical-lr] rotate-180">
+          Elements
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-64 bg-white border-r border-[#E7E5E4] flex flex-col h-full select-none overflow-y-auto shrink-0 shadow-sm">
+    <div className="w-60 md:w-64 bg-white border-r border-[#E7E5E4] flex flex-col h-full select-none overflow-y-auto shrink-0 shadow-sm transition-all">
       {/* Header */}
-      <div className="p-3.5 border-b border-[#EFEDE8]">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-[#171717]">Blueprint Elements</h2>
-        <p className="text-[11px] text-[#737373] mt-0.5">Click or drag elements to layout</p>
+      <div className="p-3 border-b border-[#EFEDE8] flex items-center justify-between">
+        <div>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-[#171717]">Elements</h2>
+          <p className="text-[10px] text-[#737373] mt-0.5">Click to add to layout</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(true)}
+          className="p-1 text-stone-400 hover:text-stone-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
+          title="Collapse Toolbox"
+        >
+          <PanelLeftClose className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Tables Section */}

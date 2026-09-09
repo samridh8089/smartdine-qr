@@ -938,6 +938,72 @@ export default function OrdersPage() {
     }
   };
 
+  const handleCardQuickUpdate = async (order: Order, newStatus: Order['status']) => {
+    if (!order || !restaurant) return;
+    const actionKey = `${order.id}:${newStatus}`;
+    if (processingOrderIdsRef.current.has(actionKey)) return;
+    processingOrderIdsRef.current.add(actionKey);
+
+    const origOrder = orders.find(o => o.id === order.id);
+    const origStatus = origOrder?.status || order.status;
+    const origBatches = origOrder?.batches || order.batches;
+
+    optimisticStatusMapRef.current[order.id] = newStatus;
+    setOptimisticStatusMap(prev => ({ ...prev, [order.id]: newStatus }));
+    setProcessingOrderIds(prev => [...prev, actionKey]);
+
+    if (newStatus === 'served') {
+      window.dispatchEvent(new Event('stop-waiter-sound'));
+    }
+
+    try {
+      const res = await fetch('/api/staff/update-order-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: order.id,
+          newStatus,
+          staffName: profile?.full_name || activeRole || 'Staff Member'
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Failed to update order status: HTTP ${res.status}`);
+      }
+
+      const resData = await res.json();
+      const updated = resData.order;
+      if (updated) {
+        optimisticStatusMapRef.current[order.id] = updated.status;
+        setOptimisticStatusMap(prev => ({ ...prev, [order.id]: updated.status }));
+        setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
+      }
+      window.dispatchEvent(new Event('storage'));
+      showToast(
+        newStatus === 'served'
+          ? (order.order_type === 'takeaway' ? 'Order handed over.' : `Order for ${order.table_name || 'Table'} served.`)
+          : `Order marked as ${newStatus}.`,
+        'Success',
+        'success'
+      );
+    } catch (err: any) {
+      delete optimisticStatusMapRef.current[order.id];
+      setOptimisticStatusMap(prev => {
+        const next = { ...prev };
+        delete next[order.id];
+        return next;
+      });
+      if (origOrder) {
+        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: origStatus, batches: origBatches } : o));
+      }
+      showToast(`Failed to update order: ${err.message}`, 'Error', 'error');
+    } finally {
+      processingOrderIdsRef.current.delete(actionKey);
+      setProcessingOrderIds(prev => prev.filter(id => id !== actionKey));
+    }
+  };
+
   const handleConfirmCancellationWithDisposition = async () => {
     if (!selectedOrder || !restaurant) return;
 
@@ -1651,7 +1717,7 @@ export default function OrdersPage() {
           {/* Left Side: Order List (Independent Scroll) */}
           <div
             ref={orderListContainerRef}
-            className="w-full md:w-5/12 lg:w-4/12 flex flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:max-h-[calc(100vh-140px)] md:overflow-y-auto"
+            className={`${selectedOrderId ? 'hidden md:flex' : 'flex'} w-full md:w-5/12 lg:w-4/12 flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:max-h-[calc(100vh-140px)] md:overflow-y-auto`}
           >
             {/* 3 Dedicated Queues Tabs (BUG-RES-002 & BUG-TAKE-002) */}
             <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
@@ -1820,6 +1886,20 @@ export default function OrdersPage() {
                           </div>
                         </div>
 
+                        {/* Customer Name & Contact (P0-4 Card-first Layout) */}
+                        {(() => {
+                          const cName = order.customer_name || (parsedRes?.name ? parsedRes.name : null);
+                          const cPhone = order.customer_phone || parsedRes?.phone;
+                          if (!cName && !cPhone) return null;
+                          return (
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                              <span className="truncate">{cName || 'Guest'}</span>
+                              {cPhone && <span className="text-[11px] text-slate-400 font-mono shrink-0">({cPhone})</span>}
+                            </div>
+                          );
+                        })()}
+
                         {/* Special ETA / Reservation Badges */}
                         {isTakeaway && (
                           <div className="flex items-center gap-2 flex-wrap text-xs">
@@ -1906,12 +1986,12 @@ export default function OrdersPage() {
                         })()}
 
                         {/* Quick action buttons */}
-                        <div className="pt-1 flex items-center justify-end gap-2">
+                        <div className="pt-2 flex items-center justify-end gap-2 flex-wrap">
                           {isReservation && order.status !== 'cancelled' && order.status !== 'completed' && (
-                            <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto justify-end">
                               <Button
                                 size="sm"
-                                className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer gap-1 shadow-xs"
+                                className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer gap-1 shadow-xs flex-1 sm:flex-initial"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setReservationToSeat(order);
@@ -1925,7 +2005,7 @@ export default function OrdersPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 text-xs px-2 py-1 rounded-lg cursor-pointer"
+                                className="text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 text-xs px-2 py-1.5 rounded-lg cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleExtendReservation(order, 15);
@@ -1937,7 +2017,7 @@ export default function OrdersPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-amber-700 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900 text-xs px-2 py-1 rounded-lg cursor-pointer"
+                                className="text-amber-700 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900 text-xs px-2 py-1.5 rounded-lg cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleReservationNoShow(order);
@@ -1948,7 +2028,7 @@ export default function OrdersPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-900 text-xs px-2 py-1 rounded-lg cursor-pointer"
+                                className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-900 text-xs px-2 py-1.5 rounded-lg cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleCancelReservationDirect(order);
@@ -1959,55 +2039,45 @@ export default function OrdersPage() {
                             </div>
                           )}
 
+                          {!isReservation && activeRole !== 'waiter' && order.status === 'new' && (
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto"
+                              isLoading={processingOrderIds.includes(`${order.id}:accepted`)}
+                              disabled={processingOrderIds.includes(`${order.id}:accepted`)}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleCardQuickUpdate(order, 'accepted');
+                              }}
+                            >
+                              Accept Order
+                            </Button>
+                          )}
+
+                          {!isReservation && activeRole !== 'waiter' && order.status === 'accepted' && (
+                            <Button
+                              size="sm"
+                              className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto"
+                              isLoading={processingOrderIds.includes(`${order.id}:preparing`)}
+                              disabled={processingOrderIds.includes(`${order.id}:preparing`)}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleCardQuickUpdate(order, 'preparing');
+                              }}
+                            >
+                              Start Preparing
+                            </Button>
+                          )}
+
                           {order.status === 'ready' && (
                             <Button
                               size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto"
                               isLoading={processingOrderIds.includes(`${order.id}:served`)}
                               disabled={processingOrderIds.includes(`${order.id}:served`)}
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                if (order.status === 'served' || order.status === 'completed') {
-                                  window.dispatchEvent(new Event('stop-waiter-sound'));
-                                  showToast("Order already updated.", "Notice", "info");
-                                  return;
-                                }
-
-                                const actionKey = `${order.id}:served`;
-                                if (processingOrderIdsRef.current.has(actionKey)) return;
-                                processingOrderIdsRef.current.add(actionKey);
-
-                                const origOrder = orders.find(o => o.id === order.id);
-                                setProcessingOrderIds(prev => [...prev, actionKey]);
-                                setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'served' } : o));
-                                window.dispatchEvent(new Event('stop-waiter-sound'));
-                                showToast(isTakeaway ? "Order handed over to customer." : `Order for ${order.table_name || 'Table'} marked as served.`, "Success", "success");
-
-                                try {
-                                  const updated = await db.updateOrderStatus(order.id, 'served', profile?.full_name || 'Staff');
-                                  await broadcastOrderRealtimeEvent({
-                                    restaurantId: restaurant.id,
-                                    orderId: order.id,
-                                    eventType: 'order-status-updated',
-                                    payload: {
-                                      orderId: order.id,
-                                      newStatus: 'served',
-                                      updatedOrder: updated
-                                    }
-                                  });
-                                  if (updated) {
-                                    setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o));
-                                  }
-                                  window.dispatchEvent(new Event('storage'));
-                                } catch (err: any) {
-                                  if (origOrder) {
-                                    setOrders(prev => prev.map(o => o.id === order.id ? origOrder : o));
-                                  }
-                                  showToast(`Failed to update order: ${err.message}`, "Error", "error");
-                                } finally {
-                                  processingOrderIdsRef.current.delete(actionKey);
-                                  setProcessingOrderIds(prev => prev.filter(id => id !== actionKey));
-                                }
+                                await handleCardQuickUpdate(order, 'served');
                               }}
                             >
                               {isTakeaway ? 'Hand Over Order' : 'Serve'}
@@ -2619,13 +2689,13 @@ export default function OrdersPage() {
                 )}
               </div>
 
-                  <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+                  <div className="sticky bottom-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-t border-slate-200 dark:border-slate-800 p-4 -mx-6 -mb-6 mt-4 shadow-lg md:static md:bg-slate-50 md:dark:bg-slate-950/20 md:border md:border-slate-100 md:dark:border-slate-800 md:rounded-xl md:p-4 md:m-0 md:shadow-none flex flex-col gap-3">
                     <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
                     <div className="flex flex-wrap gap-2">
                       {selectedOrder.order_type === 'reservation' && selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'completed' && (
                         <Button
                           size="sm"
-                          className="bg-gray-900 hover:bg-black text-white font-bold cursor-pointer gap-1.5 shadow-sm"
+                          className="bg-gray-900 hover:bg-black text-white font-bold cursor-pointer gap-1.5 shadow-sm w-full sm:w-auto"
                           onClick={async () => {
                             setReservationToSeat(selectedOrder);
                             let currentTables = allTables;
@@ -2650,7 +2720,7 @@ export default function OrdersPage() {
                         <Button 
                           size="sm" 
                           variant="primary" 
-                          className="cursor-pointer font-bold" 
+                          className="cursor-pointer font-bold w-full sm:w-auto" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:accepted`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:accepted`)}
                           onClick={() => updateOrderStatus('accepted')}
@@ -2661,7 +2731,7 @@ export default function OrdersPage() {
                       {activeRole !== 'waiter' && effectiveStatus === 'accepted' && (
                         <Button 
                           size="sm" 
-                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-medium" 
+                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-medium w-full sm:w-auto" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:preparing`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:preparing`)}
                           onClick={() => updateOrderStatus('preparing')}
@@ -2672,7 +2742,7 @@ export default function OrdersPage() {
                       {activeRole !== 'waiter' && effectiveStatus === 'preparing' && (
                         <Button 
                           size="sm" 
-                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-medium" 
+                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-medium w-full sm:w-auto" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:ready`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:ready`)}
                           onClick={() => updateOrderStatus('ready')}
@@ -2683,7 +2753,7 @@ export default function OrdersPage() {
                       {effectiveStatus === 'ready' && (
                         <Button 
                           size="sm" 
-                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-bold" 
+                          className="bg-gray-900 hover:bg-black text-white cursor-pointer font-bold w-full sm:w-auto" 
                           isLoading={processingOrderIds.includes(`${selectedOrder.id}:served`)}
                           disabled={processingOrderIds.includes(`${selectedOrder.id}:served`)}
                           onClick={() => updateOrderStatus('served')}
@@ -2694,7 +2764,7 @@ export default function OrdersPage() {
                       {effectiveStatus === 'served' && selectedOrder.payment_status !== 'paid' && (
                         <Button 
                           size="sm" 
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold shadow-md" 
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold shadow-md w-full sm:w-auto" 
                           isLoading={submittingPayment}
                           disabled={submittingPayment}
                           onClick={() => {
@@ -2709,7 +2779,7 @@ export default function OrdersPage() {
                         </Button>
                       )}
                       {(selectedOrder.payment_status === 'paid' || effectiveStatus === 'completed') && (
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white font-bold text-xs rounded-xl border border-gray-300 dark:border-gray-700">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white font-bold text-xs rounded-xl border border-gray-300 dark:border-gray-700 w-full sm:w-auto justify-center">
                           <Check className="h-3.5 w-3.5 text-gray-900 dark:text-gray-100" />
                           <span>Paid ({selectedOrder.payment_method?.toUpperCase() || 'PAID'})</span>
                         </div>
@@ -3550,14 +3620,41 @@ export default function OrdersPage() {
                     <span className="col-span-3 text-center">Zone</span>
                     <span className="col-span-2 text-right">Status</span>
                   </div>
-                  <div className="max-h-52 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800">
-                    {allTables
-                      .filter(t => !t.is_archived && t.name?.toLowerCase() !== 'takeaway')
-                      .map(t => {
+                  <div className="max-h-56 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800">
+                    {(() => {
+                      const resDetails = parseReservationDetails(reservationToSeat);
+                      const guestCountNum = parseInt(resDetails.guests || '1', 10) || 1;
+
+                      // 1. Deduplicate tables by ID (P0-6)
+                      const tableMap = new Map<string, typeof allTables[0]>();
+                      allTables.forEach((t) => {
+                        if (t && t.id && !tableMap.has(t.id) && !t.is_archived && t.name?.toLowerCase() !== 'takeaway') {
+                          tableMap.set(t.id, t);
+                        }
+                      });
+
+                      // 2. Sort: Best Fit Available -> Other Available -> Reserved -> Occupied (P0-6)
+                      const sortedTables = Array.from(tableMap.values()).sort((a, b) => {
+                        const isOccupiedA = a.is_occupied || a.occupancy_status === 'occupied';
+                        const isOccupiedB = b.is_occupied || b.occupancy_status === 'occupied';
+                        if (isOccupiedA !== isOccupiedB) return isOccupiedA ? 1 : -1;
+
+                        const isReservedA = a.occupancy_status === 'reserved';
+                        const isReservedB = b.occupancy_status === 'reserved';
+                        if (isReservedA !== isReservedB) return isReservedA ? 1 : -1;
+
+                        const tSeatsA = a.seats || a.capacity || 4;
+                        const tSeatsB = b.seats || b.capacity || 4;
+                        const isBestFitA = tSeatsA >= guestCountNum && tSeatsA <= guestCountNum + 2;
+                        const isBestFitB = tSeatsB >= guestCountNum && tSeatsB <= guestCountNum + 2;
+                        if (isBestFitA !== isBestFitB) return isBestFitA ? -1 : 1;
+
+                        return tSeatsA - tSeatsB;
+                      });
+
+                      return sortedTables.map((t) => {
                         const isOccupied = t.is_occupied || t.occupancy_status === 'occupied';
                         const isReserved = t.occupancy_status === 'reserved';
-                        const resDetails = parseReservationDetails(reservationToSeat);
-                        const guestCountNum = parseInt(resDetails.guests || '1', 10) || 1;
                         const tSeats = t.seats || t.capacity || 4;
                         const isBestFit = !isOccupied && !isReserved && tSeats >= guestCountNum && tSeats <= guestCountNum + 2;
 
@@ -3565,22 +3662,22 @@ export default function OrdersPage() {
                           <div
                             key={t.id}
                             onClick={() => !isOccupied && setSelectedTableForSeat(t.id)}
-                            className={`grid grid-cols-12 px-3 py-2 text-xs items-center cursor-pointer transition-colors ${
+                            className={`grid grid-cols-12 px-3 py-2.5 text-xs items-center cursor-pointer transition-colors ${
                               selectedTableForSeat === t.id
                                 ? 'bg-stone-100 dark:bg-stone-800 font-semibold border-l-2 border-stone-900'
                                 : 'hover:bg-stone-50 dark:hover:bg-stone-850'
-                            } ${isOccupied ? 'opacity-40 cursor-not-allowed' : ''}`}
+                            } ${isOccupied ? 'opacity-40 cursor-not-allowed bg-stone-50/50 dark:bg-stone-900/30' : ''}`}
                           >
                             <span className="col-span-5 flex items-center gap-1.5 font-medium text-stone-900 dark:text-stone-100">
                               <span
-                                className="w-2 h-2 rounded-full"
+                                className="w-2 h-2 rounded-full shrink-0"
                                 style={{
                                   backgroundColor: isOccupied ? '#f43f5e' : isReserved ? '#a8a29e' : '#10b981'
                                 }}
                               />
-                              {t.display_number || t.name}
+                              <span className="truncate">{t.display_number ? `Table ${t.display_number}` : t.name}</span>
                               {isBestFit && (
-                                <span className="text-[10px] px-1.5 py-0.5 bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300 rounded font-medium">
+                                <span className="text-[10px] px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 rounded font-bold shrink-0">
                                   Best Fit
                                 </span>
                               )}
@@ -3589,12 +3686,12 @@ export default function OrdersPage() {
                             <span className="col-span-3 text-center text-[11px] text-stone-500 truncate">{t.zone_name || 'General'}</span>
                             <span className="col-span-2 text-right">
                               <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
                                   isOccupied
-                                    ? 'bg-stone-50 text-stone-700 border-stone-300'
+                                    ? 'bg-rose-50 text-rose-800 border-rose-200'
                                     : isReserved
                                     ? 'bg-stone-50 text-stone-600 border-stone-200'
-                                    : 'bg-stone-50 text-stone-900 border-stone-300'
+                                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                 }`}
                               >
                                 {isOccupied ? 'Occupied' : isReserved ? 'Reserved' : 'Available'}
@@ -3602,7 +3699,8 @@ export default function OrdersPage() {
                             </span>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                 </div>
                 <p className="text-[11px] text-stone-500 dark:text-stone-400">

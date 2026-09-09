@@ -175,6 +175,8 @@ export const TableNode: React.FC<TableNodeProps> = ({
       id={item.id}
       x={item.x}
       y={item.y}
+      width={width}
+      height={height}
       rotation={item.rotation || 0}
       draggable={isEditable}
       onClick={(e) => onSelect(item, e)}
@@ -196,8 +198,8 @@ export const TableNode: React.FC<TableNodeProps> = ({
           strokeWidth={strokeWidth}
           dash={strokeDash}
           shadowColor="#000000"
-          shadowBlur={isSelected ? 8 : 2}
-          shadowOpacity={0.06}
+          shadowBlur={isSelected ? 12 : 2}
+          shadowOpacity={isSelected ? 0.18 : 0.05}
         />
       ) : shape === 'oval' ? (
         <Ellipse
@@ -210,8 +212,8 @@ export const TableNode: React.FC<TableNodeProps> = ({
           strokeWidth={strokeWidth}
           dash={strokeDash}
           shadowColor="#000000"
-          shadowBlur={isSelected ? 8 : 2}
-          shadowOpacity={0.06}
+          shadowBlur={isSelected ? 12 : 2}
+          shadowOpacity={isSelected ? 0.18 : 0.05}
         />
       ) : shape === 'booth' ? (
         <Group>
@@ -237,22 +239,26 @@ export const TableNode: React.FC<TableNodeProps> = ({
             stroke={strokeColor}
             strokeWidth={strokeWidth}
             dash={strokeDash}
+            shadowColor="#000000"
+            shadowBlur={isSelected ? 12 : 2}
+            shadowOpacity={isSelected ? 0.18 : 0.05}
           />
         </Group>
       ) : (
+        /* Rectangle / Square default */
         <Rect
           x={0}
           y={0}
           width={width}
           height={height}
-          cornerRadius={8}
+          cornerRadius={shape === 'square' ? 6 : 4}
           fill={fillColor}
           stroke={strokeColor}
           strokeWidth={strokeWidth}
           dash={strokeDash}
           shadowColor="#000000"
-          shadowBlur={isSelected ? 8 : 2}
-          shadowOpacity={0.06}
+          shadowBlur={isSelected ? 12 : 2}
+          shadowOpacity={isSelected ? 0.18 : 0.05}
         />
       )}
 

@@ -1,14 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Copy, Trash2, RotateCw, QrCode, Split, 
-  Plus, Minus, X, Check, ArrowRight
+  Plus, Minus, X, Check, ArrowRight, MapPin, AlertCircle
 } from 'lucide-react';
-import { FloorPlanItem, TableShape } from './types';
+import { FloorPlanItem, TableShape, RestaurantZone } from './types';
 
 interface PropertyPanelProps {
   item: FloorPlanItem | null;
+  existingItems?: FloorPlanItem[];
+  zones?: RestaurantZone[];
   onUpdate: (newAttrs: Partial<FloorPlanItem>) => void;
   onDuplicate: (item: FloorPlanItem) => void;
   onDelete: (id: string) => void;
@@ -19,6 +21,8 @@ interface PropertyPanelProps {
 
 export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   item,
+  existingItems = [],
+  zones = [],
   onUpdate,
   onDuplicate,
   onDelete,
@@ -26,11 +30,32 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   onClose,
   onViewQR
 }) => {
+  // 1. useState declarations (Strict React Hooks Safety Guardrail)
+  const [localWidth, setLocalWidth] = useState<string>('');
+  const [localHeight, setLocalHeight] = useState<string>('');
+  const [localName, setLocalName] = useState<string>('');
+  const [localTableNumber, setLocalTableNumber] = useState<string>('');
+  const [nameError, setNameError] = useState<string>('');
+  const [numberError, setNumberError] = useState<string>('');
+
+  // 2. useEffect declarations (Synchronize controlled inputs on item change)
+  useEffect(() => {
+    if (item) {
+      setLocalWidth(String(Math.round(item.width || 80)));
+      setLocalHeight(String(Math.round(item.height || 80)));
+      setLocalName(item.name || '');
+      setLocalTableNumber(item.display_number || item.tableNumber || '');
+      setNameError('');
+      setNumberError('');
+    }
+  }, [item?.id, item?.width, item?.height, item?.name, item?.tableNumber, item?.display_number]);
+
+  // ALL HOOKS STRICTLY ABOVE CONDITIONAL RETURNS
   if (!item) {
     return (
-      <div className="w-72 bg-white border-l border-[#E7E5E4] p-5 flex flex-col items-center justify-center text-center select-none shrink-0 shadow-sm">
+      <div className="hidden md:flex w-72 bg-white border-l border-[#E7E5E4] p-5 flex-col items-center justify-center text-center select-none shrink-0 shadow-sm">
         <p className="text-xs font-medium text-[#737373]">
-          Select any table or object on the canvas to inspect and edit its properties.
+          Select any table or fixture on the canvas to inspect and edit its properties.
         </p>
       </div>
     );
@@ -38,13 +63,99 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
 
   const isTable = item.kind === 'table';
 
+  const handleWidthChange = (val: string) => {
+    setLocalWidth(val);
+    const num = Number(val);
+    if (!isNaN(num) && num >= 20) {
+      onUpdate({ width: Math.round(num) });
+    }
+  };
+
+  const handleWidthBlur = () => {
+    const num = Number(localWidth);
+    const clamped = Math.max(30, Math.min(1200, isNaN(num) || num < 30 ? 30 : Math.round(num)));
+    setLocalWidth(String(clamped));
+    onUpdate({ width: clamped });
+  };
+
+  const handleHeightChange = (val: string) => {
+    setLocalHeight(val);
+    const num = Number(val);
+    if (!isNaN(num) && num >= 20) {
+      onUpdate({ height: Math.round(num) });
+    }
+  };
+
+  const handleHeightBlur = () => {
+    const num = Number(localHeight);
+    const clamped = Math.max(30, Math.min(1200, isNaN(num) || num < 30 ? 30 : Math.round(num)));
+    setLocalHeight(String(clamped));
+    onUpdate({ height: clamped });
+  };
+
+  const handleNameChange = (val: string) => {
+    setLocalName(val);
+    setNameError('');
+    onUpdate({ name: val });
+  };
+
+  const handleNameBlur = () => {
+    if (!localName.trim()) {
+      setNameError('Fixture name cannot be empty');
+      const fallback = item.furnitureType ? item.furnitureType.toUpperCase() : 'FIXTURE';
+      setLocalName(fallback);
+      onUpdate({ name: fallback });
+    }
+  };
+
+  const handleTableNumberChange = (val: string) => {
+    setLocalTableNumber(val);
+    const clean = val.trim();
+    if (!clean) {
+      setNumberError('Table number cannot be empty');
+      return;
+    }
+    // Check duplicate table identifier
+    const isDup = existingItems.some(
+      (it) => it.id !== item.id && it.kind === 'table' && (it.display_number === clean || it.tableNumber === clean)
+    );
+    if (isDup) {
+      setNumberError(`Table ${clean} already exists`);
+    } else {
+      setNumberError('');
+    }
+    onUpdate({
+      tableNumber: val,
+      display_number: val,
+      name: `Table ${val}`
+    });
+  };
+
+  const handleTableNumberBlur = () => {
+    if (!localTableNumber.trim()) {
+      const fallback = item.display_number || item.tableNumber || '1';
+      setLocalTableNumber(fallback);
+      setNumberError('');
+      onUpdate({
+        tableNumber: fallback,
+        display_number: fallback,
+        name: `Table ${fallback}`
+      });
+    }
+  };
+
   return (
-    <div className="w-72 bg-white border-l border-[#E7E5E4] flex flex-col h-full select-none overflow-y-auto shrink-0 shadow-sm">
+    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[82vh] rounded-t-2xl shadow-2xl border-t border-[#E7E5E4] md:static md:inset-auto md:max-h-none md:w-72 md:rounded-none md:shadow-sm md:border-t-0 md:border-l bg-white flex flex-col h-auto md:h-full select-none overflow-y-auto shrink-0 transition-all">
+      {/* Mobile Drawer Pull Handle */}
+      <div className="pt-2 pb-1 flex items-center justify-center md:hidden">
+        <div className="w-10 h-1 bg-stone-300 rounded-full" />
+      </div>
+
       {/* Header */}
       <div className="p-3.5 border-b border-[#EFEDE8] flex items-center justify-between">
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wider text-[#171717]">
-            {isTable ? `Table ${item.tableNumber}` : item.name}
+            {isTable ? `Table ${item.display_number || item.tableNumber || item.name}` : item.name}
           </h2>
           <span className="text-[10px] text-[#737373] uppercase tracking-wider">
             {isTable ? `${item.shape || 'rectangle'} table` : 'fixture'}
@@ -63,17 +174,60 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
         {/* Identifier / Name */}
         <div>
           <label className="block text-[11px] font-semibold text-[#525252] uppercase tracking-wider mb-1.5">
-            {isTable ? 'Table Identifier' : 'Element Name'}
+            {isTable ? 'Table Identifier' : 'Fixture Name / Label'}
           </label>
           <input
             type="text"
-            value={isTable ? item.tableNumber : item.name}
-            onChange={(e) =>
-              onUpdate(isTable ? { tableNumber: e.target.value } : { name: e.target.value })
-            }
-            className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
+            value={isTable ? localTableNumber : localName}
+            onChange={(e) => isTable ? handleTableNumberChange(e.target.value) : handleNameChange(e.target.value)}
+            onBlur={isTable ? handleTableNumberBlur : handleNameBlur}
+            className={`w-full px-2.5 py-1.5 border rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none transition-colors ${
+              (numberError || nameError) ? 'border-red-500 focus:border-red-600' : 'border-[#E7E5E4] focus:border-[#171717]'
+            }`}
           />
+          {numberError && (
+            <p className="mt-1 text-[10px] text-red-600 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> {numberError}
+            </p>
+          )}
+          {nameError && (
+            <p className="mt-1 text-[10px] text-red-600 font-medium flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> {nameError}
+            </p>
+          )}
         </div>
+
+        {/* Zone Assignment (For tables) */}
+        {isTable && zones.length > 0 && (
+          <div>
+            <label className="block text-[11px] font-semibold text-[#525252] uppercase tracking-wider mb-1.5">
+              Assigned Zone / Area
+            </label>
+            <div className="relative">
+              <select
+                value={item.zone_id || 'zone_general'}
+                onChange={(e) => {
+                  const targetZoneId = e.target.value;
+                  const matchedZone = zones.find((z) => z.id === targetZoneId);
+                  onUpdate({
+                    zone_id: targetZoneId,
+                    zone_name: matchedZone ? matchedZone.name : 'General'
+                  });
+                }}
+                className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717] appearance-none cursor-pointer"
+              >
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-stone-500">
+                <MapPin className="w-3.5 h-3.5" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Seats (For tables) */}
         {isTable && (
@@ -137,19 +291,21 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
             <div>
               <span className="text-[10px] text-[#737373] block mb-1">Width</span>
               <input
-                type="number"
-                value={Math.round(item.width)}
-                onChange={(e) => onUpdate({ width: Math.max(30, Number(e.target.value)) })}
-                className="w-full px-2 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
+                type="text"
+                value={localWidth}
+                onChange={(e) => handleWidthChange(e.target.value)}
+                onBlur={handleWidthBlur}
+                className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
               />
             </div>
             <div>
               <span className="text-[10px] text-[#737373] block mb-1">Height</span>
               <input
-                type="number"
-                value={Math.round(item.height)}
-                onChange={(e) => onUpdate({ height: Math.max(30, Number(e.target.value)) })}
-                className="w-full px-2 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
+                type="text"
+                value={localHeight}
+                onChange={(e) => handleHeightChange(e.target.value)}
+                onBlur={handleHeightBlur}
+                className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
               />
             </div>
           </div>
@@ -196,9 +352,9 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               onChange={(e) => onUpdate({ status: e.target.value as any })}
               className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
             >
-              <option value="available">Available (White)</option>
-              <option value="occupied">Occupied / Running (Charcoal)</option>
-              <option value="reserved">Reserved (Warm Sand)</option>
+              <option value="available">Available (Mint)</option>
+              <option value="occupied">Occupied / Running (Soft Red)</option>
+              <option value="reserved">Reserved (Slate)</option>
               <option value="cleaning">Cleaning (Light Gray)</option>
               <option value="merged">Merged (Dashed Border)</option>
             </select>
