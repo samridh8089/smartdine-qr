@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus } from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus, User } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
@@ -1464,16 +1464,23 @@ export default function OrdersPage() {
       // 1. Mark physical table as occupied
       await db.toggleTableOccupancy(restaurant.id, selectedTableForSeat, true);
 
-      // 2. Update order: assign physical table and transition to active dine_in dining session
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reservationToSeat.id);
-      if (isUuid) {
+      // 2. Safe UUID validation for both order ID and table ID to prevent "invalid input syntax for type uuid" (P0-5)
+      const isOrderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reservationToSeat.id);
+      const isTableUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedTableForSeat);
+
+      if (isOrderUuid) {
+        const updatePayload: any = {
+          table_name: targetTableName,
+          order_type: 'dine_in'
+        };
+        // Only assign foreign key table_id if it's a valid Postgres UUID
+        if (isTableUuid) {
+          updatePayload.table_id = selectedTableForSeat;
+        }
+
         const { error } = await supabase
           .from('orders')
-          .update({
-            table_id: selectedTableForSeat,
-            table_name: targetTableName,
-            order_type: 'dine_in'
-          })
+          .update(updatePayload)
           .eq('id', reservationToSeat.id);
 
         if (error) {
@@ -1488,7 +1495,7 @@ export default function OrdersPage() {
           payload: {
             updatedOrder: {
               ...reservationToSeat,
-              table_id: selectedTableForSeat,
+              table_id: isTableUuid ? selectedTableForSeat : undefined,
               table_name: targetTableName,
               order_type: 'dine_in'
             }
@@ -2359,6 +2366,25 @@ export default function OrdersPage() {
                       )}
                       <span>• {formatDate(selectedOrder.created_at)}</span>
                     </p>
+                    {(() => {
+                      const cust = parseCustomerDetailsFromOrder(selectedOrder);
+                      const cName = selectedOrder.customer_name || cust.name;
+                      const cPhone = selectedOrder.customer_phone || cust.phone;
+                      if (!cName && !cPhone) return null;
+                      return (
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1">
+                          <User className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <span className="font-bold text-slate-900 dark:text-white">{cName || 'Valued Guest'}</span>
+                          {cPhone && (
+                            <>
+                              <span className="text-slate-300 dark:text-slate-600">•</span>
+                              <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 ml-0.5" />
+                              <span className="font-mono text-slate-600 dark:text-slate-400">{cPhone}</span>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   
                   <div className="flex items-center gap-2">
@@ -3613,14 +3639,8 @@ export default function OrdersPage() {
                 <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
                   Select Physical Table to Assign *
                 </label>
-                <div className="border border-stone-200 dark:border-stone-800 rounded-xl overflow-hidden divide-y divide-stone-100 dark:divide-stone-800">
-                  <div className="grid grid-cols-12 bg-stone-50 dark:bg-stone-900/50 px-3 py-2 text-xs font-semibold text-stone-600 dark:text-stone-400">
-                    <span className="col-span-5">Table</span>
-                    <span className="col-span-2 text-center">Seats</span>
-                    <span className="col-span-3 text-center">Zone</span>
-                    <span className="col-span-2 text-right">Status</span>
-                  </div>
-                  <div className="max-h-56 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800">
+                <div className="max-h-72 overflow-y-auto p-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                     {(() => {
                       const resDetails = parseReservationDetails(reservationToSeat);
                       const guestCountNum = parseInt(resDetails.guests || '1', 10) || 1;
@@ -3657,47 +3677,61 @@ export default function OrdersPage() {
                         const isReserved = t.occupancy_status === 'reserved';
                         const tSeats = t.seats || t.capacity || 4;
                         const isBestFit = !isOccupied && !isReserved && tSeats >= guestCountNum && tSeats <= guestCountNum + 2;
+                        const isSelected = selectedTableForSeat === t.id;
 
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={t.id}
+                            disabled={isOccupied}
                             onClick={() => !isOccupied && setSelectedTableForSeat(t.id)}
-                            className={`grid grid-cols-12 px-3 py-2.5 text-xs items-center cursor-pointer transition-colors ${
-                              selectedTableForSeat === t.id
-                                ? 'bg-stone-100 dark:bg-stone-800 font-semibold border-l-2 border-stone-900'
-                                : 'hover:bg-stone-50 dark:hover:bg-stone-850'
-                            } ${isOccupied ? 'opacity-40 cursor-not-allowed bg-stone-50/50 dark:bg-stone-900/30' : ''}`}
+                            className={`p-3 rounded-xl text-left border transition-all cursor-pointer relative flex flex-col justify-between gap-2.5 ${
+                              isSelected
+                                ? 'bg-stone-900 text-white border-stone-900 dark:bg-stone-100 dark:text-stone-950 dark:border-stone-100 ring-2 ring-stone-900/20 shadow-sm'
+                                : isOccupied
+                                ? 'bg-stone-50/60 dark:bg-stone-900/30 border-stone-200/60 dark:border-stone-800/60 opacity-40 cursor-not-allowed pointer-events-none'
+                                : isBestFit
+                                ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 hover:border-emerald-500 shadow-2xs'
+                                : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 hover:border-stone-400'
+                            }`}
                           >
-                            <span className="col-span-5 flex items-center gap-1.5 font-medium text-stone-900 dark:text-stone-100">
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{
-                                  backgroundColor: isOccupied ? '#f43f5e' : isReserved ? '#a8a29e' : '#10b981'
-                                }}
-                              />
-                              <span className="truncate">{t.display_number ? `Table ${t.display_number}` : t.name}</span>
+                            <div className="flex items-start justify-between gap-1 w-full">
+                              <div className="min-w-0 flex-1">
+                                <h4 className={`font-bold text-sm tracking-tight truncate ${isSelected ? 'text-white dark:text-stone-950' : 'text-stone-950 dark:text-stone-100'}`}>
+                                  {t.display_number ? `Table ${t.display_number}` : t.name}
+                                </h4>
+                                <span className={`text-[10px] font-medium block mt-0.5 truncate ${isSelected ? 'text-stone-300 dark:text-stone-600' : 'text-stone-500'}`}>
+                                  {t.zone_name || 'General'}
+                                </span>
+                              </div>
                               {isBestFit && (
-                                <span className="text-[10px] px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 rounded font-bold shrink-0">
-                                  Best Fit
+                                <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                                  isSelected
+                                    ? 'bg-emerald-400 text-stone-950'
+                                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-900/60 dark:text-emerald-200'
+                                }`}>
+                                  ★ Best Fit
                                 </span>
                               )}
-                            </span>
-                            <span className="col-span-2 text-center font-mono text-stone-600 dark:text-stone-400">{tSeats}</span>
-                            <span className="col-span-3 text-center text-[11px] text-stone-500 truncate">{t.zone_name || 'General'}</span>
-                            <span className="col-span-2 text-right">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                                  isOccupied
-                                    ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                    : isReserved
-                                    ? 'bg-stone-50 text-stone-600 border-stone-200'
-                                    : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                }`}
-                              >
+                            </div>
+
+                            <div className="flex items-center justify-between text-xs w-full pt-1.5 border-t border-current/10">
+                              <span className="flex items-center gap-1 font-semibold text-[11px]">
+                                <Users className="w-3 h-3 opacity-70" /> {tSeats} Seats
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                isOccupied
+                                  ? 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300'
+                                  : isReserved
+                                  ? 'bg-stone-50 text-stone-600 border-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                                  : isSelected
+                                  ? 'bg-white/20 text-white dark:text-stone-900 border-white/30'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+                              }`}>
                                 {isOccupied ? 'Occupied' : isReserved ? 'Reserved' : 'Available'}
                               </span>
-                            </span>
-                          </div>
+                            </div>
+                          </button>
                         );
                       });
                     })()}

@@ -39,8 +39,42 @@ export async function POST(req: Request) {
       orderType = 'dine_in',
       paymentStatus = 'pending',
       staffName = 'Staff',
-      idempotencyKey
+      idempotencyKey,
+      customerName,
+      customerPhone,
+      customerArrivalMinutes,
+      takeawayNotes
     } = body;
+
+    let finalCustomerName = String(customerName || body.customer_name || '').trim();
+    let finalCustomerPhone = String(customerPhone || body.customer_phone || '').trim();
+
+    if (specialInstructions && typeof specialInstructions === 'string') {
+      try {
+        const parsed = JSON.parse(specialInstructions);
+        if (parsed.name && !finalCustomerName) finalCustomerName = String(parsed.name).trim();
+        if (parsed.phone && !finalCustomerPhone) finalCustomerPhone = String(parsed.phone).trim();
+      } catch (_) {}
+    }
+
+    // P0-8: Mandatory Customer Details Enforcement
+    if (orderType === 'takeaway') {
+      if (!finalCustomerName) {
+        return NextResponse.json({ error: 'Customer Name is required for Takeaway orders.' }, { status: 400 });
+      }
+      if (!finalCustomerPhone || finalCustomerPhone.replace(/\D/g, '').length < 10) {
+        return NextResponse.json({ error: 'Valid 10-digit mobile number is required for Takeaway orders.' }, { status: 400 });
+      }
+    }
+
+    if (orderType === 'reservation') {
+      if (!finalCustomerName) {
+        return NextResponse.json({ error: 'Customer Name is required for Table Reservations.' }, { status: 400 });
+      }
+      if (!finalCustomerPhone || finalCustomerPhone.replace(/\D/g, '').length < 10) {
+        return NextResponse.json({ error: 'Valid 10-digit mobile number is required for Table Reservations.' }, { status: 400 });
+      }
+    }
 
     // 2. INVENTORY & MENU ITEM PARALLEL VALIDATION PHASE
     timer.start('inventory');
@@ -194,6 +228,10 @@ export async function POST(req: Request) {
         service_charge: serviceCharge,
         total: grandTotal,
         grand_total: grandTotal,
+        customer_name: finalCustomerName || null,
+        customer_phone: finalCustomerPhone || null,
+        takeaway_notes: takeawayNotes || null,
+        customer_arrival_minutes: customerArrivalMinutes || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };

@@ -205,13 +205,13 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
             </label>
             <div className="relative">
               <select
-                value={item.zone_id || 'zone_general'}
+                value={item.zone_id || zones[0]?.id || 'zone_indoor'}
                 onChange={(e) => {
                   const targetZoneId = e.target.value;
                   const matchedZone = zones.find((z) => z.id === targetZoneId);
                   onUpdate({
                     zone_id: targetZoneId,
-                    zone_name: matchedZone ? matchedZone.name : 'General'
+                    zone_name: matchedZone ? matchedZone.name : 'Indoor AC'
                   });
                 }}
                 className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717] appearance-none cursor-pointer"
