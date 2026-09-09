@@ -29,56 +29,87 @@ export function formatDate(dateString: string): string {
 }
 
 /**
- * Formats order ID into standard unique code: <RestaurantPrefix>-DDMMYY-T<TableNo>-<Sequence>-<Checksum>
- * Example: TIU-250826-T07-000123-4G
+ * Generates a deterministic 3-character alphanumeric code for a restaurant ID/name
+ * if one is not explicitly configured in restaurant.settings.restaurant_code.
  */
-export function getFormattedOrderId(order: any, restaurantName: string = '', allOrders: any[] = []): string {
+export function getDeterministicRestaurantCode(restaurantIdOrName: string = ''): string {
+  const clean = String(restaurantIdOrName).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  if (clean === 'THEFOODYHUBJAIPUR' || clean === 'FOODYHUBJAIPUR') return 'Q4M';
+  if (clean === 'THEFOODYHUBDELHI' || clean === 'FOODYHUBDELHI') return 'X9R';
+  if (clean.includes('81FA8201') || clean === 'THEFOODYHUBUDAIPUR' || clean === 'FOODYHUBUDAIPUR' || clean === 'FOODYHUB' || clean === 'THEFOODYHUB') {
+    return 'A7K';
+  }
+  if (!clean) return 'A7K';
+  
+  const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let hash = 5381;
+  for (let i = 0; i < clean.length; i++) {
+    hash = ((hash << 5) + hash) ^ clean.charCodeAt(i);
+  }
+  const h1 = Math.abs(hash) % CHARSET.length;
+  const h2 = Math.abs(Math.floor(hash / CHARSET.length)) % CHARSET.length;
+  const h3 = Math.abs(Math.floor(hash / (CHARSET.length * CHARSET.length))) % CHARSET.length;
+  return `${CHARSET[h1]}${CHARSET[h2]}${CHARSET[h3]}`;
+}
+
+/**
+ * Formats order ID into standard production code:
+ * Staff/Owner facing: <RestaurantCode>-<YY><Type><Sequence> (e.g. A7K-26T0001, A7K-26D0001)
+ * Customer facing: #<YY><Type><Sequence> (e.g. Order #26T0001)
+ */
+export function getFormattedOrderId(
+  order: any,
+  restaurantName: string = '',
+  allOrders: any[] = [],
+  isCustomerFacing: boolean = false
+): string {
   try {
-    if (!order) return 'CLR-010126-T01-000001-A1';
-
-    if (order.order_number && /^[A-Z0-9]{3}-\d{6}-[A-Z0-9]{3,4}-\d{6}-[A-Z0-9]{2}$/.test(order.order_number)) {
-      return order.order_number;
+    if (!order) {
+      return isCustomerFacing ? 'Order #26D0001' : 'A7K-26D0001';
     }
 
-    // 1. Prefix (3 chars)
-    let rawPrefixSource = '';
-    if (order.restaurant_id) {
-      rawPrefixSource = String(order.restaurant_id).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    } else if (order.restaurant?.id) {
-      rawPrefixSource = String(order.restaurant.id).replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    // Check if order already has a valid production display_order_id (e.g. A7K-26T0001)
+    const existingCode = order.display_order_id || order.order_number;
+    const match = existingCode && String(existingCode).match(/^([A-Z0-9]{3,4})-(\d{2}[DTRP]\d{4,})$/);
+    if (match) {
+      return isCustomerFacing ? `Order #${match[2]}` : `${match[1]}-${match[2]}`;
     }
 
-    if (rawPrefixSource.length < 3) {
-      const rName = (restaurantName || order.restaurant_name || order.restaurant?.name || 'CleverOps').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-      rawPrefixSource = (rawPrefixSource + rName + 'CLR').slice(0, 3);
-    }
-    const prefix = rawPrefixSource.slice(0, 3);
+    // 1. Restaurant Code (3 chars: A-Z, 0-9)
+    let restCode = order.restaurant_code 
+      || order.restaurant?.settings?.restaurant_code 
+      || order.restaurant?.restaurant_code;
 
-    // 2. Date: DDMMYY
+    if (!restCode) {
+      const restKey = order.restaurant_id || order.restaurant?.id || restaurantName || 'The Foody Hub';
+      restCode = getDeterministicRestaurantCode(restKey);
+    }
+    restCode = String(restCode).toUpperCase().slice(0, 4);
+
+    // 2. Year: YY (2 digits)
     const orderDate = new Date(order.created_at || Date.now());
     const validDate = isNaN(orderDate.getTime()) ? new Date() : orderDate;
-    const dd = String(validDate.getDate()).padStart(2, '0');
-    const mm = String(validDate.getMonth() + 1).padStart(2, '0');
     const yy = String(validDate.getFullYear()).slice(-2);
-    const dateStr = `${dd}${mm}${yy}`;
 
-    // 3. Table: T<TableNo> or TAK / RES
-    let tableStr = 'T01';
-    if (order.order_type === 'takeaway') {
-      tableStr = 'TAK';
-    } else if (order.order_type === 'reservation') {
-      tableStr = 'RES';
+    // 3. Type: D (Dine-In), T (Takeaway), R (Reservation), P (Punch)
+    let typeChar = 'D';
+    const rawType = String(order.order_type || '').toLowerCase();
+    const rawTable = String(order.table_name || order.table?.name || '').toLowerCase();
+
+    if (rawType === 'takeaway' || rawTable.includes('takeaway')) {
+      typeChar = 'T';
+    } else if (rawType === 'reservation' || rawTable.includes('reservation')) {
+      typeChar = 'R';
+    } else if (rawType === 'punch') {
+      typeChar = 'P';
     } else {
-      const rawTable = order.table_number || order.table_name || order.table?.name || '1';
-      const numMatch = String(rawTable).match(/\d+/);
-      const tableNum = numMatch ? parseInt(numMatch[0], 10) : 1;
-      tableStr = `T${String(tableNum).padStart(2, '0')}`;
+      typeChar = 'D';
     }
 
-    // 4. Restaurant Sequence (6 digits)
+    // 4. Restaurant Sequence (4 digits, annual sequence)
     let sequence = 1;
-    if (order.daily_sequence || order.order_sequence) {
-      sequence = Number(order.daily_sequence || order.order_sequence);
+    if (order.daily_sequence || order.order_sequence || order.order_number) {
+      sequence = Number(order.daily_sequence || order.order_sequence || order.order_number);
     } else if (Array.isArray(allOrders) && allOrders.length > 0) {
       const index = allOrders.findIndex(o => o?.id === order.id || o?.order_id === order.id);
       if (index >= 0) {
@@ -86,26 +117,112 @@ export function getFormattedOrderId(order: any, restaurantName: string = '', all
       }
     } else if (order.id) {
       const numOnly = String(order.id).replace(/\D/g, '');
-      sequence = numOnly ? (parseInt(numOnly.slice(-6), 10) || 1) : 1;
+      sequence = numOnly ? (parseInt(numOnly.slice(-4), 10) || 1) : 1;
     }
-    const seqStr = String(sequence).padStart(6, '0');
+    const seqStr = String(sequence).padStart(4, '0');
 
-    // 5. Checksum (2 chars)
-    const combined = `${prefix}${dateStr}${tableStr}${seqStr}`;
-    let sum1 = 0;
-    let sum2 = 0;
-    for (let i = 0; i < combined.length; i++) {
-      const code = combined.charCodeAt(i);
-      sum1 = (sum1 + code * (i + 1)) % 36;
-      sum2 = (sum2 + code * (i + 7)) % 36;
+    const suffix = `${yy}${typeChar}${seqStr}`;
+
+    if (isCustomerFacing) {
+      return `Order #${suffix}`;
     }
-    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const checksum = `${chars[sum1]}${chars[sum2]}`;
 
-    return `${prefix}-${dateStr}-${tableStr}-${seqStr}-${checksum}`;
+    return `${restCode}-${suffix}`;
   } catch (err) {
-    return 'CLR-230826-T01-000001-A1';
+    return isCustomerFacing ? 'Order #26D0001' : 'A7K-26D0001';
   }
+}
+
+/**
+ * Returns customer-facing order ID hiding the internal restaurant code:
+ * Example: Order #26T0001
+ */
+export function getCustomerFacingOrderId(order: any, restaurantName: string = '', allOrders: any[] = []): string {
+  return getFormattedOrderId(order, restaurantName, allOrders, true);
+}
+
+/**
+ * Parses customer name, phone, notes and arrival minutes from order object
+ * across structured columns and special_instructions.
+ */
+export function parseCustomerDetailsFromOrder(order: any): {
+  name: string;
+  phone: string;
+  notes: string;
+  arrivalMinutes?: number;
+} {
+  if (!order) return { name: '', phone: '', notes: '' };
+
+  let name = order.customer_name || order.customerName || '';
+  let phone = order.customer_phone || order.customerPhone || order.phone || '';
+  let notes = order.takeaway_notes || order.customer_note || order.customerNote || '';
+  let arrivalMinutes = order.customer_arrival_minutes || order.arrivalMinutes;
+
+  const textBlob = `${order.special_instructions || ''} | ${order.customer_notes || ''} | ${order.notes || ''}`;
+
+  if (!name) {
+    const nameMatch = textBlob.match(/(?:CUSTOMER|Name|Guest):\s*([^|]+)/i);
+    if (nameMatch) name = nameMatch[1].trim();
+  }
+  if (!phone) {
+    const phoneMatch = textBlob.match(/(?:PHONE|Contact|Mobile):\s*([^|]+)/i);
+    if (phoneMatch) phone = phoneMatch[1].trim();
+  }
+  if (!notes) {
+    const notesMatch = textBlob.match(/(?:NOTES|Notes):\s*([^|]+)/i);
+    if (notesMatch) notes = notesMatch[1].trim();
+  }
+  if (!arrivalMinutes) {
+    const arrivalMatch = textBlob.match(/ARRIVAL:\s*(\d+)/i);
+    if (arrivalMatch) arrivalMinutes = parseInt(arrivalMatch[1], 10);
+  }
+
+  return { name, phone, notes, arrivalMinutes };
+}
+
+/**
+ * Universal search matcher for Orders across Live Orders, KDS, Billing, and Reports.
+ * Matches full ID (A7K-26T0043), short ID (26T0043), sequence (0043),
+ * customer name, phone, table number, and items.
+ */
+export function matchesOrderSearchQuery(
+  order: any,
+  query: string,
+  restaurantName: string = '',
+  allOrders: any[] = []
+): boolean {
+  if (!query || !query.trim()) return true;
+  const q = query.trim().toLowerCase();
+  const qClean = q.replace(/^#/, '');
+
+  const fullId = getFormattedOrderId(order, restaurantName, allOrders, false).toLowerCase();
+  const shortId = fullId.split('-')[1] || fullId;
+  const seqOnly = shortId.replace(/^[0-9]{2}[A-Z]/i, '');
+
+  if (fullId.includes(q) || fullId.includes(qClean)) return true;
+  if (shortId.includes(q) || shortId.includes(qClean)) return true;
+  if (seqOnly && (seqOnly.includes(qClean) || parseInt(seqOnly, 10) === parseInt(qClean, 10))) return true;
+
+  if (order.id && String(order.id).toLowerCase().includes(q)) return true;
+
+  const cust = parseCustomerDetailsFromOrder(order);
+  if (cust.name && cust.name.toLowerCase().includes(q)) return true;
+  if (cust.phone && cust.phone.replace(/\s+/g, '').includes(q.replace(/\s+/g, ''))) return true;
+
+  const tblNum = order.table_number || order.table?.table_number;
+  const tblName = String(order.table_name || order.table?.name || '').toLowerCase();
+  const tblDisplay = tblNum ? `table ${tblNum}` : '';
+  if (tblName && (tblName.includes(q) || q.includes(tblName))) return true;
+  if (tblNum && (String(tblNum) === qClean || tblDisplay.includes(q) || q.includes(tblDisplay))) return true;
+
+  // Match items
+  if (Array.isArray(order.items)) {
+    if (order.items.some((it: any) => (it.menu_item_name || it.name || '').toLowerCase().includes(q))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function getCleanSpecialInstructions(order?: any, batch?: any): string {

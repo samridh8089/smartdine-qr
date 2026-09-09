@@ -31,6 +31,14 @@ export class AutoSaveEngine {
     }
   }
 
+  flushSave(items?: FloorPlanItem[]) {
+    if (items) {
+      this.pendingItems = items;
+      this.isDirty = true;
+    }
+    this.flush();
+  }
+
   flush() {
     if (this.timer) {
       clearTimeout(this.timer);

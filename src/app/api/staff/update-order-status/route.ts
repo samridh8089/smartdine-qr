@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     const restId = updatedOrder?.restaurant_id || updatedBatch?.restaurant_id;
     const targetOrderId = orderId || updatedBatch?.order_id || updatedOrder?.id;
 
-    if (restId) {
+    if (restId && restId !== 'demo-rest') {
       // Instant Parallel Broadcast across Live Orders, KDS, Dashboard, & Customer Tracking UI
       await broadcastOrderRealtimeEvent({
         restaurantId: restId,

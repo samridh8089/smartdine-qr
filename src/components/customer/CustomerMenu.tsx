@@ -102,6 +102,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   // Takeaway States
   const [arrivalMinutes, setArrivalMinutes] = useState<number>(10);
   const [takeawayNotes, setTakeawayNotes] = useState<string>('');
+  const [takeawayName, setTakeawayName] = useState<string>('');
+  const [takeawayPhone, setTakeawayPhone] = useState<string>('');
   const [takeawayPaymentCompleted, setTakeawayPaymentCompleted] = useState<boolean>(false);
   
   // Reservation States
@@ -789,17 +791,59 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       return;
     }
 
-    if (isTakeaway && !takeawayPaymentCompleted) {
-      isSubmittingRef.current = false;
-      setOrderPlacing(false);
-      showToast('Please complete the UPI payment before placing a takeaway order.');
-      return;
+    if (isTakeaway) {
+      if (!takeawayName.trim()) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please enter your full name for takeaway pickup.');
+        return;
+      }
+      const cleanPhone = takeawayPhone.replace(/\D/g, '');
+      if (!cleanPhone || cleanPhone.length < 10) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please enter a valid 10-digit mobile number for order status updates.');
+        return;
+      }
+      if (!takeawayPaymentCompleted) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please complete the UPI payment before placing a takeaway order.');
+        return;
+      }
     }
-    if (isReservation && !reservationPaymentCompleted) {
-      isSubmittingRef.current = false;
-      setOrderPlacing(false);
-      showToast('Please complete the UPI payment to confirm your table reservation.');
-      return;
+    if (isReservation) {
+      if (!reservationName.trim()) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please enter your full name for the table reservation.');
+        return;
+      }
+      const cleanPhone = reservationPhone.replace(/\D/g, '');
+      if (!cleanPhone || cleanPhone.length < 10) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please enter a valid 10-digit mobile number for reservation confirmation.');
+        return;
+      }
+      if (!reservationTime) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please select your preferred booking time.');
+        return;
+      }
+      if (!reservationGuests || reservationGuests < 1) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please specify the number of guests for your reservation.');
+        return;
+      }
+      if (!reservationPaymentCompleted) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please complete the UPI payment to confirm your table reservation.');
+        return;
+      }
     }
 
     // Pre-checkout cart validation against fresh DB menu
@@ -888,9 +932,12 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         price: item.price !== undefined && item.price !== null ? item.price : item.menuItem.price
       }));
 
-      const finalInstructions = isReservation 
-        ? `TABLE RESERVATION | Date: ${reservationDate} | Time: ${reservationTime} | Guests: ${reservationGuests}${reservationName ? ` | Name: ${reservationName}` : ''}${reservationPhone ? ` | Contact: ${reservationPhone}` : ''}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`
-        : specialInstructions;
+      let finalInstructions = specialInstructions;
+      if (isReservation) {
+        finalInstructions = `TABLE RESERVATION | Name: ${reservationName.trim()} | Contact: ${reservationPhone.trim()} | Guests: ${reservationGuests} | Date: ${reservationDate} | Time: ${reservationTime}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
+      } else if (isTakeaway) {
+        finalInstructions = `TAKEAWAY | CUSTOMER: ${takeawayName.trim()} | PHONE: ${takeawayPhone.trim()} | ARRIVAL: ${arrivalMinutes} mins${takeawayNotes ? ` | NOTES: ${takeawayNotes}` : ''}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
+      }
 
       let newOrder: any;
       try {
@@ -909,6 +956,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
             customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
             takeawayNotes: isTakeaway ? takeawayNotes : undefined,
+            customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : undefined,
+            customerPhone: isTakeaway ? takeawayPhone.trim() : isReservation ? reservationPhone.trim() : undefined,
             paymentStatus: (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
             idempotencyKey,
             offerCode: appliedOffer?.code,
@@ -2285,11 +2334,41 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             />
           </div>
 
-          {/* Takeaway Arrival & Notes */}
+          {/* Takeaway Customer Details, Arrival & Notes */}
           {isTakeaway && (
             <div className="space-y-4 pt-3.5 border-t border-slate-100 dark:border-slate-800">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+                    Customer Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Aman Gupta"
+                    value={takeawayName}
+                    onChange={(e) => setTakeawayName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-stone-500/20"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 uppercase tracking-wider">
+                    Mobile Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 9876543210"
+                    value={takeawayPhone}
+                    onChange={(e) => setTakeawayPhone(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-stone-500/20 font-mono"
+                    required
+                  />
+                </div>
+              </div>
+
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Estimated Arrival Time</label>
+                <label className="block text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">Estimated Arrival Time</label>
                 <select
                   value={arrivalMinutes}
                   onChange={(e) => setArrivalMinutes(Number(e.target.value))}
@@ -2305,39 +2384,39 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Takeaway Arrival Notes</label>
+                <label className="block text-xs font-bold text-stone-600 dark:text-stone-400 uppercase tracking-wider">Takeaway Arrival Notes</label>
                 <input
                   type="text"
-                  placeholder="e.g. Package sauces separately, I'll arrive in a red car"
+                  placeholder="e.g. Package sauces separately, arriving by red car"
                   value={takeawayNotes}
                   onChange={(e) => setTakeawayNotes(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
 
-              {/* Professional Warning message */}
-              <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30 rounded-xl p-3.5 text-[11px] font-semibold text-purple-700 dark:text-purple-400 leading-relaxed">
-                Please complete payment before placing a takeaway order.
-                If you prefer to pay at the restaurant, kindly visit the restaurant and place your order in person.
+              {/* Professional Neutral Notice */}
+              <div className="bg-[#F8F8F6] dark:bg-stone-900/60 border border-[#E7E5E4] dark:border-stone-800 rounded-xl p-3.5 text-[11px] font-medium text-stone-700 dark:text-stone-300 leading-relaxed">
+                Please complete prepaid UPI transfer before placing your takeaway order.
+                If you prefer to pay at the counter, kindly place your order directly with restaurant staff.
               </div>
 
               {/* UPI prepaid billing card */}
               {restaurant.settings.payment_enabled && restaurant.settings.upi_id ? (
-                <div className="border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/10 rounded-xl p-4 space-y-3">
+                <div className="border border-stone-200 dark:border-stone-800 bg-[#F8F8F6] dark:bg-stone-900/30 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Prepaid UPI Transfer</span>
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 text-[9px] font-black border border-purple-100 dark:border-purple-900/30 uppercase">
+                    <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider">Prepaid UPI Transfer</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200 text-[9px] font-bold uppercase">
                       Prepaid Only
                     </span>
                   </div>
                   
-                  <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-3 rounded-lg">
+                  <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-stone-200 dark:border-stone-800 p-3 rounded-lg">
                     <div>
-                      <p className="text-[9px] text-slate-400 font-bold">UPI NAME</p>
+                      <p className="text-[9px] text-stone-400 font-bold">UPI NAME</p>
                       <p className="text-xs font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_name}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[9px] text-slate-400 font-bold">UPI ID</p>
+                      <p className="text-[9px] text-stone-400 font-bold">UPI ID</p>
                       <p className="text-xs font-mono font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_id}</p>
                     </div>
                   </div>
@@ -2345,7 +2424,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                   <a
                     href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${cartTotal}&cu=INR`}
                     onClick={() => setTakeawayPaymentCompleted(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
                   >
                     <CreditCard className="h-4 w-4" />
                     Pay {formatPrice(cartTotal, restaurant.settings.currency)} Now
@@ -2356,9 +2435,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       type="checkbox"
                       checked={takeawayPaymentCompleted}
                       onChange={(e) => setTakeawayPaymentCompleted(e.target.checked)}
-                      className="mt-0.5 h-3.5 w-3.5 rounded border-slate-350 text-purple-600 focus:ring-purple-500/20 cursor-pointer"
+                      className="mt-0.5 h-3.5 w-3.5 rounded border-stone-300 text-stone-900 focus:ring-stone-500/20 cursor-pointer"
                     />
-                    <span className="text-[11px] font-bold text-slate-500 leading-tight">
+                    <span className="text-[11px] font-medium text-stone-600 dark:text-stone-300 leading-tight">
                       I have completed the UPI payment transfer of {formatPrice(cartTotal, restaurant.settings.currency)}
                     </span>
                   </label>

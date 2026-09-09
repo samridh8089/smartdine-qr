@@ -20,6 +20,7 @@ import { PropertyPanel } from './PropertyPanel';
 import { MergePromptModal } from './MergePromptModal';
 import { SeatGuestDrawer } from './SeatGuestDrawer';
 import { TableQuickActionPopover } from './TableQuickActionPopover';
+import { OpenBillsDrawer } from './OpenBillsDrawer';
 import { TableQRPopover } from './TableQRPopover';
 import { WaiterHeatmapModal } from './WaiterHeatmapModal';
 import { ZoneManagerModal } from './ZoneManagerModal';
@@ -122,6 +123,10 @@ export default function FloorCanvas({
   const [guideLines, setGuideLines] = useState<GuideLine[]>([]);
   const [canvasDimensions, setCanvasDimensions] = useState<{ width: number; height: number }>({ width: 1200, height: 650 });
   const [showMiniMap, setShowMiniMap] = useState<boolean>(false);
+  const [activeOpenBillTable, setActiveOpenBillTable] = useState<FloorPlanItem | null>(null);
+  const [hasUnsavedDraft, setHasUnsavedDraft] = useState<boolean>(false);
+  const [draftItems, setDraftItems] = useState<FloorPlanItem[] | null>(null);
+  const [showExitWarningModal, setShowExitWarningModal] = useState<boolean>(false);
 
   // 2. useRef declarations
   const stageRef = useRef<Konva.Stage>(null);
@@ -217,13 +222,26 @@ export default function FloorCanvas({
   const updateItemsWithHistory = useCallback((newItems: FloorPlanItem[]) => {
     setItems(newItems);
     historyManagerRef.current.push(newItems);
+    try {
+      localStorage.setItem(`cleverops_floorplan_draft_${restaurantId}`, JSON.stringify({ items: newItems, timestamp: Date.now() }));
+    } catch (e) {}
     
     // 300ms Debounced Local Save + 3s AutoSave
     if (localDebounceTimerRef.current) clearTimeout(localDebounceTimerRef.current);
     localDebounceTimerRef.current = setTimeout(() => {
       autoSaveEngineRef.current?.markDirty(newItems);
     }, 300);
-  }, []);
+  }, [restaurantId]);
+
+  const handleManualSave = useCallback(() => {
+    if (!autoSaveEngineRef.current) return;
+    autoSaveEngineRef.current.flushSave(items);
+    try {
+      localStorage.setItem(`cleverops_floorplan_draft_${restaurantId}`, JSON.stringify({ items, timestamp: Date.now() }));
+    } catch (e) {}
+    setAutoSaveStatus('saved');
+    setHasUnsavedDraft(false);
+  }, [items, restaurantId]);
 
   const handleSelectItem = useCallback((item: FloorPlanItem, e: any) => {
     if (e) e.cancelBubble = true;
@@ -656,7 +674,23 @@ export default function FloorCanvas({
     }
   }, [canvasDimensions.width, layoutBounds.minX, layoutBounds.maxX]);
 
-  // Keyboard Shortcuts: Ctrl+Z (Undo), Ctrl+Shift+Z / Ctrl+Y (Redo)
+  // Check localStorage for unsaved draft on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`cleverops_floorplan_draft_${restaurantId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+          if (parsed.timestamp && Date.now() - parsed.timestamp < 7 * 24 * 3600 * 1000) {
+            setDraftItems(parsed.items);
+            setHasUnsavedDraft(true);
+          }
+        }
+      }
+    } catch (e) {}
+  }, [restaurantId]);
+
+  // Keyboard Shortcuts: Ctrl+Z (Undo), Ctrl+Shift+Z / Ctrl+Y (Redo), Ctrl+S (Save Layout)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -670,6 +704,9 @@ export default function FloorCanvas({
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
         e.preventDefault();
         handleRedo();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        handleManualSave();
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag !== 'INPUT' && tag !== 'TEXTAREA' && selectedId && isEditable) {
@@ -680,7 +717,7 @@ export default function FloorCanvas({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo, selectedId, isEditable, handleDeleteItem]);
+  }, [handleUndo, handleRedo, selectedId, isEditable, handleDeleteItem, handleManualSave]);
 
   return (
     <div
@@ -694,7 +731,13 @@ export default function FloorCanvas({
           <div className="flex items-center bg-[#F5F5F4] p-0.5 rounded-lg border border-[#E7E5E4]">
             <button
               type="button"
-              onClick={() => onModeChange('view')}
+              onClick={() => {
+                if (mode === 'edit' && autoSaveStatus === 'dirty') {
+                  setShowExitWarningModal(true);
+                } else {
+                  onModeChange('view');
+                }
+              }}
               className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                 mode === 'view'
                   ? 'bg-white text-[#171717] shadow-xs'
@@ -720,24 +763,17 @@ export default function FloorCanvas({
 
           <div className="h-4 w-px bg-[#E7E5E4]" />
 
-          {/* Subtle AutoSave Indicator */}
-          <div className="flex items-center space-x-1.5 text-[10px] text-stone-400 font-medium">
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                autoSaveStatus === 'saved'
-                  ? 'bg-emerald-500/80'
-                  : autoSaveStatus === 'saving'
-                  ? 'bg-amber-500 animate-pulse'
-                  : 'bg-stone-300'
-              }`}
-            />
-            <span className="capitalize text-stone-500">
-              {autoSaveStatus === 'saved'
-                ? 'Saved'
-                : autoSaveStatus === 'saving'
-                ? 'Saving...'
-                : 'Unsaved'}
+          {/* AutoSave & Dirty State Badges */}
+          <div className="flex items-center space-x-2 text-[10px] font-semibold">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Auto Save: On
             </span>
+            {autoSaveStatus === 'dirty' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
+                Unsaved Changes
+              </span>
+            )}
           </div>
         </div>
 
@@ -745,6 +781,32 @@ export default function FloorCanvas({
         <div className="flex items-center space-x-1.5">
           {isEditable && (
             <>
+              {/* Save Blueprint Button */}
+              <button
+                type="button"
+                onClick={handleManualSave}
+                className="flex items-center gap-1.5 px-3 py-1 bg-stone-900 hover:bg-black text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer mr-1"
+                title="Save Blueprint Layout (Ctrl+S)"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Save Layout</span>
+              </button>
+
+              {/* Exit Blueprint Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (autoSaveStatus === 'dirty') {
+                    setShowExitWarningModal(true);
+                  } else {
+                    onModeChange('view');
+                  }
+                }}
+                className="px-2.5 py-1 text-stone-600 hover:text-stone-900 border border-stone-200 rounded-lg text-xs font-semibold hover:bg-stone-50 cursor-pointer mr-1"
+              >
+                Cancel
+              </button>
+
               {/* Undo / Redo */}
               <button
                 type="button"
@@ -811,6 +873,41 @@ export default function FloorCanvas({
           </button>
         </div>
       </div>
+
+      {/* Draft Recovery Banner */}
+      {hasUnsavedDraft && draftItems && (
+        <div className="bg-stone-900 text-white px-4 py-2 flex items-center justify-between text-xs z-20 shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-400" />
+            <span>Unsaved floor plan draft detected from your previous session.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setItems(draftItems);
+                historyManagerRef.current.push(draftItems);
+                setHasUnsavedDraft(false);
+              }}
+              className="px-2.5 py-1 bg-white text-stone-900 rounded font-bold hover:bg-stone-100 cursor-pointer text-xs"
+            >
+              Restore Last Draft
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(`cleverops_floorplan_draft_${restaurantId}`);
+                } catch (e) {}
+                setHasUnsavedDraft(false);
+              }}
+              className="px-2 py-1 text-stone-400 hover:text-white cursor-pointer text-xs"
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Live Occupancy Strip & Zone Toolbar */}
       <div className="bg-[#FAF9F6] border-b border-[#E7E5E4] px-4 py-2 flex flex-wrap items-center justify-between text-xs text-[#171717] select-none gap-2 shrink-0">
@@ -1082,7 +1179,51 @@ export default function FloorCanvas({
           setSelectedId(t.id);
         }}
         onArchiveTable={handleArchiveTable}
+        onOpenBill={(t) => setActiveOpenBillTable(t)}
       />
+
+      {/* Open Bills Drawer */}
+      <OpenBillsDrawer
+        table={activeOpenBillTable}
+        isOpen={Boolean(activeOpenBillTable && mode === 'view')}
+        onClose={() => setActiveOpenBillTable(null)}
+        onSettleBill={(t) => handleClearTable(t)}
+      />
+
+      {/* Exit Warning Modal */}
+      {showExitWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 p-5 max-w-sm w-full space-y-4 shadow-xl text-stone-900 dark:text-stone-100">
+            <h3 className="font-bold text-sm">Unsaved Blueprint Changes</h3>
+            <p className="text-xs text-stone-600 dark:text-stone-400">
+              You have unsaved adjustments to your restaurant blueprint. Would you like to save before exiting?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExitWarningModal(false);
+                  onModeChange('view');
+                }}
+                className="px-3 py-1.5 text-xs text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white font-semibold rounded-lg cursor-pointer"
+              >
+                Discard &amp; Exit
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleManualSave();
+                  setShowExitWarningModal(false);
+                  onModeChange('view');
+                }}
+                className="px-3.5 py-1.5 text-xs bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-bold rounded-lg cursor-pointer"
+              >
+                Save &amp; Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Permanent QR Modal Popover */}
       <TableQRPopover

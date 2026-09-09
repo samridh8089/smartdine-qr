@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { 
   Users, QrCode, Printer, Edit2, UserCheck, Layers, 
-  Archive, X, Check, AlertTriangle, ChevronRight, Hash
+  Archive, X, Check, AlertTriangle, ChevronRight, Hash,
+  MoreHorizontal, Receipt, ChevronLeft
 } from 'lucide-react';
 import { FloorPlanItem } from './types';
 
@@ -24,6 +25,7 @@ interface TableQuickActionPopoverProps {
   onAssignWaiter: (table: FloorPlanItem, waiterId: string | null) => Promise<void> | void;
   onMergeTable: (table: FloorPlanItem) => void;
   onArchiveTable: (table: FloorPlanItem) => Promise<void> | void;
+  onOpenBill?: (table: FloorPlanItem) => void;
   availableWaiters?: WaiterOption[];
   defaultZoneWaiterName?: string;
 }
@@ -40,6 +42,7 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
   onAssignWaiter,
   onMergeTable,
   onArchiveTable,
+  onOpenBill,
   availableWaiters = [
     { id: 'w1', name: 'Priya Sharma' },
     { id: 'w2', name: 'Rahul Verma' },
@@ -49,6 +52,7 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
   defaultZoneWaiterName
 }) => {
   const [subModal, setSubModal] = useState<'rename' | 'seats' | 'waiter' | 'archive' | null>(null);
+  const [showMoreMenu, setShowMoreMenu] = useState<boolean>(false);
   const [renameValue, setRenameValue] = useState<string>('');
   const [customSeats, setCustomSeats] = useState<number>(4);
   const [selectedWaiterId, setSelectedWaiterId] = useState<string>('');
@@ -161,13 +165,25 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-[#737373] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-md transition-colors cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center space-x-1">
+            <button
+              type="button"
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                showMoreMenu ? 'bg-[#F5F5F4] text-[#171717]' : 'text-[#737373] hover:text-[#171717] hover:bg-[#F5F5F4]'
+              }`}
+              title="More table options"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-[#737373] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-md transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Sub-modals inside popover */}
@@ -345,28 +361,21 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               </button>
             </div>
           </div>
-        ) : (
-          /* Main Quick Action Items */
+        ) : showMoreMenu ? (
+          /* Secondary 3-Dot Menu Actions (QR Details & Archive) */
           <div className="p-2 divide-y divide-[#EFEDE8]">
-            {/* Action 1: Seat Guest */}
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onSeatGuest(table);
-              }}
-              className="w-full p-2.5 rounded-lg hover:bg-[#F8F8F6] flex items-center justify-between text-xs text-[#171717] font-semibold transition-colors cursor-pointer group"
-            >
-              <div className="flex items-center space-x-2.5">
-                <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center">
-                  <Users className="w-3.5 h-3.5" />
-                </div>
-                <span>{isOccupied ? 'Manage Dining Session' : 'Seat Guest'}</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
-            </button>
+            <div className="px-2.5 py-1.5 flex items-center justify-between text-xs font-bold text-stone-600 bg-stone-50 rounded-md mb-1">
+              <span>Secondary Actions</span>
+              <button
+                type="button"
+                onClick={() => setShowMoreMenu(false)}
+                className="text-stone-500 hover:text-stone-900 flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
+              >
+                <ChevronLeft className="w-3 h-3" /> Back
+              </button>
+            </div>
 
-            {/* Action 2: View / Share QR */}
+            {/* Action 1: View / Share QR */}
             <button
               type="button"
               onClick={() => {
@@ -387,7 +396,7 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
             </button>
 
-            {/* Action 3: Print QR */}
+            {/* Action 2: Print QR */}
             <button
               type="button"
               onClick={() => {
@@ -404,7 +413,43 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
             </button>
 
-            {/* Action 4: Rename Table */}
+            {/* Action 3: Soft Delete / Archive */}
+            <button
+              type="button"
+              onClick={handleOpenArchive}
+              className="w-full p-2.5 rounded-lg hover:bg-red-50 flex items-center justify-between text-xs text-red-600 font-semibold transition-colors cursor-pointer group"
+            >
+              <div className="flex items-center space-x-2.5">
+                <div className="w-7 h-7 rounded-md bg-red-50 text-red-600 flex items-center justify-center">
+                  <Archive className="w-3.5 h-3.5" />
+                </div>
+                <span>Archive Table</span>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-red-400 group-hover:text-red-600" />
+            </button>
+          </div>
+        ) : (
+          /* 5 Primary Quick Actions (P0-6 Lock) */
+          <div className="p-2 divide-y divide-[#EFEDE8]">
+            {/* Primary Action 1: Seat Guest */}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onSeatGuest(table);
+              }}
+              className="w-full p-2.5 rounded-lg hover:bg-[#F8F8F6] flex items-center justify-between text-xs text-[#171717] font-semibold transition-colors cursor-pointer group"
+            >
+              <div className="flex items-center space-x-2.5">
+                <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <Users className="w-3.5 h-3.5" />
+                </div>
+                <span>{isOccupied ? 'Manage Dining Session' : 'Seat Guest'}</span>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
+            </button>
+
+            {/* Primary Action 2: Rename Table */}
             <button
               type="button"
               onClick={handleOpenRename}
@@ -419,7 +464,7 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
             </button>
 
-            {/* Action 5: Change Seats */}
+            {/* Primary Action 3: Change Seats */}
             <button
               type="button"
               onClick={handleOpenSeats}
@@ -437,7 +482,7 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
             </button>
 
-            {/* Action 6: Assign Waiter */}
+            {/* Primary Action 4: Assign Waiter */}
             <button
               type="button"
               onClick={handleOpenWaiter}
@@ -457,7 +502,7 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
             </button>
 
-            {/* Action 7: Merge Table */}
+            {/* Primary Action 5: Merge Table */}
             <button
               type="button"
               onClick={() => {
@@ -475,20 +520,36 @@ export const TableQuickActionPopover: React.FC<TableQuickActionPopoverProps> = (
               <ChevronRight className="w-3.5 h-3.5 text-[#A8A29E] group-hover:text-[#171717]" />
             </button>
 
-            {/* Action 8: Soft Delete / Archive */}
-            <button
-              type="button"
-              onClick={handleOpenArchive}
-              className="w-full p-2.5 rounded-lg hover:bg-red-50 flex items-center justify-between text-xs text-red-600 font-semibold transition-colors cursor-pointer group"
-            >
-              <div className="flex items-center space-x-2.5">
-                <div className="w-7 h-7 rounded-md bg-red-50 text-red-600 flex items-center justify-center">
-                  <Archive className="w-3.5 h-3.5" />
+            {/* Optional Open Bill Action if table occupied */}
+            {isOccupied && onOpenBill && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenBill(table);
+                }}
+                className="w-full p-2.5 rounded-lg hover:bg-amber-50 flex items-center justify-between text-xs text-amber-900 font-semibold transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-7 h-7 rounded-md bg-amber-100 text-amber-900 flex items-center justify-center">
+                    <Receipt className="w-3.5 h-3.5" />
+                  </div>
+                  <span>View Open Bill &amp; Settle</span>
                 </div>
-                <span>Archive Table</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-red-400 group-hover:text-red-600" />
-            </button>
+                <ChevronRight className="w-3.5 h-3.5 text-amber-500 group-hover:text-amber-900" />
+              </button>
+            )}
+
+            {/* Footer trigger to open secondary options */}
+            <div className="pt-1.5">
+              <button
+                type="button"
+                onClick={() => setShowMoreMenu(true)}
+                className="w-full py-1.5 text-center text-[11px] text-stone-500 hover:text-stone-900 flex items-center justify-center gap-1 cursor-pointer font-medium"
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" /> More options (QR details, Archive)...
+              </button>
+            </div>
           </div>
         )}
       </div>

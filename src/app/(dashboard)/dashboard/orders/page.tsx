@@ -6,13 +6,13 @@ import { db, Order, Restaurant, CustomerRequest, OrderBatch, VALID_ORDER_TRANSIT
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
-import { formatPrice, formatDate, getFormattedOrderId } from '@/lib/utils';
+import { formatPrice, formatDate, getFormattedOrderId, matchesOrderSearchQuery, parseCustomerDetailsFromOrder } from '@/lib/utils';
 import { formatExactTimestamp } from '@/lib/timestamp';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed } from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
@@ -97,21 +97,8 @@ export function getOrderDisplayInfo(order: Order, restaurantName = '', allOrders
     tableDisplay = `TABLE ${(order as any).table_number}`;
   }
 
-  // 2. Short Sequence Number (Secondary) e.g. #0030
-  let seqNumber = '';
-  if ((order as any).daily_sequence || (order as any).order_sequence) {
-    seqNumber = String((order as any).daily_sequence || (order as any).order_sequence).padStart(4, '0');
-  } else {
-    const formatted = getFormattedOrderId(order, restaurantName, allOrders);
-    const parts = formatted.split('-');
-    if (parts.length >= 4 && parts[3]) {
-      seqNumber = parts[3].slice(-4);
-    } else {
-      const numOnly = String(order.id).replace(/\D/g, '');
-      seqNumber = numOnly ? numOnly.slice(-4).padStart(4, '0') : order.id.slice(-4).toUpperCase();
-    }
-  }
-  const shortOrderId = `#${seqNumber}`;
+  // 2. Staff Display Order ID (e.g. A7K-26T0001, A7K-26D0038)
+  const shortOrderId = getFormattedOrderId(order, restaurantName, allOrders, false);
 
   return { tableDisplay, shortOrderId };
 }
@@ -236,6 +223,8 @@ export default function OrdersPage() {
   const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
   const processingOrderIdsRef = useRef<Set<string>>(new Set());
   const [punchModalOpen, setPunchModalOpen] = useState(false);
+  const [customerLookupOpen, setCustomerLookupOpen] = useState(false);
+  const [customerLookupQuery, setCustomerLookupQuery] = useState('');
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printOrderData, setPrintOrderData] = useState<any | null>(null);
 
@@ -1410,33 +1399,50 @@ export default function OrdersPage() {
       await db.toggleTableOccupancy(restaurant.id, selectedTableForSeat, true);
 
       // 2. Update order: assign physical table and transition to active dine_in dining session
-      const { data: updatedOrder, error } = await supabase
-        .from('orders')
-        .update({
-          table_id: selectedTableForSeat,
-          table_name: targetTableName,
-          order_type: 'dine_in'
-        })
-        .eq('id', reservationToSeat.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // 3. Broadcast realtime event so KDS and dashboard pick up the seated dining session & pre-ordered items
-      await broadcastOrderRealtimeEvent({
-        restaurantId: restaurant.id,
-        orderId: reservationToSeat.id,
-        eventType: 'new-order',
-        payload: {
-          updatedOrder: {
-            ...reservationToSeat,
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reservationToSeat.id);
+      if (isUuid) {
+        const { error } = await supabase
+          .from('orders')
+          .update({
             table_id: selectedTableForSeat,
             table_name: targetTableName,
             order_type: 'dine_in'
-          }
+          })
+          .eq('id', reservationToSeat.id);
+
+        if (error) {
+          console.warn('Seat guest Supabase update error:', error);
         }
-      });
+
+        // 3. Broadcast realtime event so KDS and dashboard pick up the seated dining session & pre-ordered items
+        await broadcastOrderRealtimeEvent({
+          restaurantId: restaurant.id,
+          orderId: reservationToSeat.id,
+          eventType: 'new-order',
+          payload: {
+            updatedOrder: {
+              ...reservationToSeat,
+              table_id: selectedTableForSeat,
+              table_name: targetTableName,
+              order_type: 'dine_in'
+            }
+          }
+        }).catch(() => {});
+      }
+
+      // Optimistic local state updates
+      setOrders(prev => prev.map(o => o.id === reservationToSeat.id ? {
+        ...o,
+        table_id: selectedTableForSeat,
+        table_name: targetTableName,
+        order_type: 'dine_in'
+      } : o));
+
+      setAllTables(prev => prev.map(t => t.id === selectedTableForSeat ? {
+        ...t,
+        is_occupied: true,
+        occupancy_status: 'occupied'
+      } : t));
 
       showToast(`Guest seated at ${targetTableName}! Pre-ordered ticket sent to kitchen.`, "Guest Seated", "success");
       setSeatGuestModalOpen(false);
@@ -1444,11 +1450,112 @@ export default function OrdersPage() {
       setSelectedTableForSeat('');
       await safeReloadOrders(restaurant.id);
     } catch (err: any) {
-      alert('Failed to seat guest: ' + err.message);
+      showToast('Failed to seat guest: ' + err.message, "Error", "error");
     } finally {
       setIsSeatingGuest(false);
     }
   };
+
+  const handleExtendReservation = async (order: Order, mins = 15) => {
+    const currentArrival = order.customer_arrival_minutes || 20;
+    const newArrival = currentArrival + mins;
+    
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, customer_arrival_minutes: newArrival } : o));
+    showToast(`Reservation arrival extended by +${mins}m.`, "Timer Extended", "info");
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.id);
+    if (isUuid) {
+      await supabase.from('orders').update({ customer_arrival_minutes: newArrival }).eq('id', order.id);
+    }
+  };
+
+  const handleReservationNoShow = async (order: Order) => {
+    if (!window.confirm(`Mark reservation for ${order.table_name || 'Guest'} as No-Show?`)) return;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.id);
+    setOrders(prev => prev.map(o => o.id === order.id ? {
+      ...o,
+      status: 'cancelled',
+      cancellation_reason: 'No-Show: Guest did not arrive within grace period'
+    } : o));
+    showToast("Reservation marked as No-Show.", "No-Show", "info");
+    if (isUuid) {
+      await supabase.from('orders').update({
+        status: 'cancelled',
+        cancellation_reason: 'No-Show: Guest did not arrive within grace period',
+        cancelled_at: new Date().toISOString()
+      }).eq('id', order.id);
+    }
+  };
+
+  const handleCancelReservationDirect = async (order: Order) => {
+    if (!window.confirm(`Cancel reservation for ${order.table_name || 'Guest'}?`)) return;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(order.id);
+    setOrders(prev => prev.map(o => o.id === order.id ? {
+      ...o,
+      status: 'cancelled',
+      cancellation_reason: 'Cancelled by restaurant staff / guest request'
+    } : o));
+    showToast("Reservation cancelled.", "Cancelled", "info");
+    if (isUuid) {
+      await supabase.from('orders').update({
+        status: 'cancelled',
+        cancellation_reason: 'Cancelled by restaurant staff / guest request',
+        cancelled_at: new Date().toISOString()
+      }).eq('id', order.id);
+    }
+  };
+
+  // Recent Customers Lookup (Toast POS / Square Style Re-order)
+  const recentCustomers = useMemo(() => {
+    const map = new Map<string, {
+      phone: string;
+      name: string;
+      orderCount: number;
+      lastOrderDate: string;
+      lastItems: string[];
+      lastOrder: Order;
+    }>();
+
+    effectiveOrders.forEach(ord => {
+      const details = parseCustomerDetailsFromOrder(ord);
+      const phone = details.phone || (ord as any).customer_phone;
+      const name = details.name || (ord as any).customer_name;
+      if (!phone && !name) return;
+      const key = (phone || name).toLowerCase();
+
+      if (!map.has(key)) {
+        map.set(key, {
+          phone: phone || '',
+          name: name || 'Valued Guest',
+          orderCount: 1,
+          lastOrderDate: ord.created_at,
+          lastItems: (ord.items || []).map(i => i.menu_item_name),
+          lastOrder: ord
+        });
+      } else {
+        const entry = map.get(key)!;
+        entry.orderCount += 1;
+        if (new Date(ord.created_at) > new Date(entry.lastOrderDate)) {
+          entry.lastOrderDate = ord.created_at;
+          entry.lastItems = (ord.items || []).map(i => i.menu_item_name);
+          entry.lastOrder = ord;
+          if (name && entry.name === 'Valued Guest') entry.name = name;
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => new Date(b.lastOrderDate).getTime() - new Date(a.lastOrderDate).getTime());
+  }, [effectiveOrders]);
+
+  const filteredRecentCustomers = useMemo(() => {
+    const q = customerLookupQuery.toLowerCase().trim();
+    if (!q) return recentCustomers;
+    return recentCustomers.filter(c => 
+      c.name.toLowerCase().includes(q) || 
+      c.phone.replace(/\s+/g, '').includes(q.replace(/\s+/g, '')) ||
+      c.lastItems.some(it => it.toLowerCase().includes(q))
+    );
+  }, [recentCustomers, customerLookupQuery]);
 
   // Filter orders
   const filteredOrders = useMemo(() => {
@@ -1463,13 +1570,7 @@ export default function OrdersPage() {
         if (order.order_type !== 'reservation') return false;
       }
 
-      const formattedId = getFormattedOrderId(order, restaurant?.name || '');
-      const matchesSearch = !q ||
-        order.id.toLowerCase().includes(q) ||
-        formattedId.toLowerCase().includes(q) ||
-        (order.table_name || '').toLowerCase().includes(q) ||
-        order.items.some(i => i.menu_item_name.toLowerCase().includes(q));
-
+      const matchesSearch = matchesOrderSearchQuery(order, q, restaurant?.name || '', effectiveOrders);
       const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
 
       return matchesSearch && matchesStatus;
@@ -1518,14 +1619,22 @@ export default function OrdersPage() {
                   : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
               }`}
             >
-              <Bell className="h-3.5 w-3.5" /> Customer Calls
+              <Bell className="h-3.5 w-3.5" /> Customer Calls ({customerRequests.length})
               {customerRequests.length > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 h-4 w-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center animate-pulse">
                   {customerRequests.length}
                 </span>
               )}
             </button>
           </div>
+
+          <Button
+            onClick={() => setCustomerLookupOpen(true)}
+            variant="outline"
+            className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs shadow-xs gap-1.5 cursor-pointer rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+          >
+            <Search className="h-3.5 w-3.5" /> Customer Lookup
+          </Button>
 
           <Button
             onClick={() => setPunchModalOpen(true)}
@@ -1799,19 +1908,55 @@ export default function OrdersPage() {
                         {/* Quick action buttons */}
                         <div className="pt-1 flex items-center justify-end gap-2">
                           {isReservation && order.status !== 'cancelled' && order.status !== 'completed' && (
-                            <Button
-                              size="sm"
-                              className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer gap-1"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setReservationToSeat(order);
-                                const avail = allTables.find(t => !t.is_occupied && t.occupancy_status !== 'occupied');
-                                setSelectedTableForSeat(avail?.id || '');
-                                setSeatGuestModalOpen(true);
-                              }}
-                            >
-                              <UserCheck className="h-3.5 w-3.5" /> Seat Guest
-                            </Button>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Button
+                                size="sm"
+                                className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-2.5 py-1 text-xs rounded-lg cursor-pointer gap-1 shadow-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReservationToSeat(order);
+                                  const avail = allTables.find(t => !t.is_occupied && t.occupancy_status !== 'occupied');
+                                  setSelectedTableForSeat(avail?.id || '');
+                                  setSeatGuestModalOpen(true);
+                                }}
+                              >
+                                <UserCheck className="h-3.5 w-3.5" /> Seat Guest
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 text-xs px-2 py-1 rounded-lg cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExtendReservation(order, 15);
+                                }}
+                                title="Extend arrival by 15 mins"
+                              >
+                                +15m
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-amber-700 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900 text-xs px-2 py-1 rounded-lg cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReservationNoShow(order);
+                                }}
+                              >
+                                No Show
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-900 text-xs px-2 py-1 rounded-lg cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelReservationDirect(order);
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
                           )}
 
                           {order.status === 'ready' && (
@@ -2205,10 +2350,10 @@ export default function OrdersPage() {
                         )}
 
                         {selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'completed' && (
-                          <div className="pt-1 flex items-center gap-2">
+                          <div className="pt-2 flex items-center gap-2 flex-wrap border-t border-stone-200 dark:border-stone-800">
                             <Button
                               size="sm"
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5 cursor-pointer shadow-sm"
+                              className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold gap-1.5 cursor-pointer shadow-sm"
                               onClick={() => {
                                 setReservationToSeat(selectedOrder);
                                 const avail = allTables.find(t => !t.is_occupied && t.occupancy_status !== 'occupied');
@@ -2217,6 +2362,30 @@ export default function OrdersPage() {
                               }}
                             >
                               <UserCheck className="h-4 w-4" /> Customer Arrived — Seat Table &amp; Release to Kitchen
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 font-semibold"
+                              onClick={() => handleExtendReservation(selectedOrder, 15)}
+                            >
+                              +15m Extend
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-amber-700 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900 font-semibold"
+                              onClick={() => handleReservationNoShow(selectedOrder)}
+                            >
+                              No Show
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-900 font-semibold"
+                              onClick={() => handleCancelReservationDirect(selectedOrder)}
+                            >
+                              Cancel Reservation
                             </Button>
                           </div>
                         )}
@@ -2231,14 +2400,16 @@ export default function OrdersPage() {
                     const arrivalMins = selectedOrder.customer_arrival_minutes || 20;
                     const remainingMins = arrivalMins - elapsedMins;
                     return (
-                      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900/50 rounded-2xl p-4 space-y-2">
+                      <div className="bg-[#F8F8F6] dark:bg-stone-900 border border-[#E7E5E4] dark:border-stone-800 rounded-2xl p-4 space-y-2">
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
-                            <ShoppingBag className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                            <h4 className="text-sm font-bold text-purple-950 dark:text-purple-200">Takeaway Pickup Details</h4>
+                            <ShoppingBag className="h-5 w-5 text-stone-900 dark:text-stone-100" />
+                            <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">Takeaway Pickup Details</h4>
                           </div>
                           {effectiveStatus === 'ready' ? (
-                            <Badge variant="purple">Ready for Pickup at Counter</Badge>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                              Ready for Pickup at Counter
+                            </span>
                           ) : effectiveStatus === 'served' ? (
                             <Badge variant="success">Handed Over to Customer</Badge>
                           ) : remainingMins > 0 ? (
@@ -3345,20 +3516,24 @@ export default function OrdersPage() {
               {(() => {
                 const parsed = parseReservationDetails(reservationToSeat);
                 return (
-                  <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4 space-y-2">
+                  <div className="bg-[#F8F8F6] dark:bg-stone-900 border border-[#E7E5E4] dark:border-stone-800 rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-purple-900 dark:text-purple-200">
-                        {parsed.name || 'Guest Reservation'}
-                      </span>
-                      <Badge variant="purple">
+                      <div>
+                        <span className="font-bold text-sm text-stone-900 dark:text-stone-100">
+                          {parsed.name || 'Guest Reservation'}
+                        </span>
+                        {parsed.phone && (
+                          <p className="text-xs text-stone-500 font-mono mt-0.5">{parsed.phone}</p>
+                        )}
+                      </div>
+                      <span className="px-2.5 py-0.5 bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200 text-xs font-bold rounded-full">
                         {parsed.guests} Guests
-                      </Badge>
+                      </span>
                     </div>
-                    <div className="text-xs text-purple-700 dark:text-purple-300 space-y-1">
-                      <p>• Booking Time: <span className="font-bold font-mono">{parsed.date} {parsed.time}</span></p>
-                      {parsed.phone && <p>• Contact: <span className="font-bold">{parsed.phone}</span></p>}
-                      {parsed.notes && <p>• Notes: <span>{parsed.notes}</span></p>}
-                      <p>• Pre-ordered Items: <span className="font-bold">{(reservationToSeat.items || []).length} item(s)</span></p>
+                    <div className="text-xs text-stone-600 dark:text-stone-400 space-y-1.5 pt-1 border-t border-stone-200 dark:border-stone-800">
+                      <p>• Booking Time: <span className="font-bold font-mono text-stone-900 dark:text-stone-100">{parsed.date} {parsed.time}</span></p>
+                      {parsed.notes && <p>• Customer Note: <span className="italic text-stone-700 dark:text-stone-300">{parsed.notes}</span></p>}
+                      <p>• Pre-ordered Items: <span className="font-bold text-stone-900 dark:text-stone-100">{(reservationToSeat.items || []).length} item(s)</span></p>
                     </div>
                   </div>
                 );
@@ -3440,12 +3615,97 @@ export default function OrdersPage() {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-5"
+                  className="bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 font-bold px-5"
                   disabled={!selectedTableForSeat || isSeatingGuest}
                   isLoading={isSeatingGuest}
                   onClick={handleSeatReservation}
                 >
                   Seat Guest &amp; Start Session
+                </Button>
+              </div>
+            </div>
+          </Dialog>
+        )}
+
+        {/* Customer Lookup & Re-Order Dialog (Toast POS / Square Style) */}
+        {customerLookupOpen && (
+          <Dialog
+            isOpen={customerLookupOpen}
+            onClose={() => setCustomerLookupOpen(false)}
+            title="Customer Lookup &amp; Quick Re-order"
+          >
+            <div className="space-y-4 pt-2">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                Search repeat guests by mobile number, name, or ordered items.
+              </p>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="Enter 10-digit mobile number or customer name..."
+                  value={customerLookupQuery}
+                  onChange={(e) => setCustomerLookupQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 rounded-lg focus:outline-none focus:ring-1 focus:ring-stone-900"
+                  autoFocus
+                />
+              </div>
+
+              <div className="max-h-72 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800 border border-stone-200 dark:border-stone-800 rounded-xl">
+                {filteredRecentCustomers.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-stone-400">
+                    No matching customer records found.
+                  </div>
+                ) : (
+                  filteredRecentCustomers.map((cust, idx) => (
+                    <div
+                      key={`cust_${cust.phone || cust.name}_${idx}`}
+                      className="p-3 hover:bg-stone-50 dark:hover:bg-stone-850 flex items-center justify-between gap-3 transition-colors"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-stone-900 dark:text-stone-100 truncate">
+                            {cust.name}
+                          </span>
+                          {cust.phone && (
+                            <span className="font-mono text-[11px] text-stone-600 dark:text-stone-400">
+                              {cust.phone}
+                            </span>
+                          )}
+                          <span className="text-[10px] px-1.5 py-0.2 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 rounded-full font-semibold">
+                            {cust.orderCount} {cust.orderCount === 1 ? 'visit' : 'visits'}
+                          </span>
+                        </div>
+                        {cust.lastItems.length > 0 && (
+                          <p className="text-[11px] text-stone-500 truncate">
+                            Last order: {cust.lastItems.slice(0, 3).join(', ')}{cust.lastItems.length > 3 ? '...' : ''}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-stone-400">
+                          Last seen {formatDate(cust.lastOrderDate)}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 text-xs font-bold px-3 py-1 rounded-lg cursor-pointer"
+                          onClick={() => {
+                            setCustomerLookupOpen(false);
+                            setPunchModalOpen(true);
+                          }}
+                        >
+                          Punch Order
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="pt-2 flex justify-end border-t border-stone-100 dark:border-stone-800">
+                <Button variant="ghost" size="sm" onClick={() => setCustomerLookupOpen(false)}>
+                  Close
                 </Button>
               </div>
             </div>
