@@ -47,7 +47,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     return (localStorage.getItem('founder_recorder_mode') as 'production' | 'test') || 'production';
   });
 
-  const { events, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
+  const { events, orderDots, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
     restaurantId,
     enabled: true,
   });
@@ -209,6 +209,8 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             restaurantId={restaurantId}
             followingOrderId={followingOrderId}
             onFollowOrder={handleFollowOrder}
+            events={events}
+            orderDots={orderDots}
           />
         )}
         {activeMode === 'replay' && (
