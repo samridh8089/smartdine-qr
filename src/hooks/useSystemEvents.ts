@@ -41,7 +41,8 @@ export function useSystemEvents({
 
   const colorMapRef = useRef<Map<string, string>>(new Map());
   const colorIndexRef = useRef(0);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const activeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const isSubscribedRef = useRef(false);
 
   const getOrAssignColor = useCallback((correlationId: string): string => {
     if (!colorMapRef.current.has(correlationId)) {
@@ -94,16 +95,17 @@ export function useSystemEvents({
 
   const isConnected = connectionStatus === 'connected';
 
-  // ─── Realtime Subscription ────────────────────────────────────────────────
+  // ─── Realtime Subscription (React Strict Mode Safe) ─────────────────────
   useEffect(() => {
     if (!restaurantId || !enabled) {
       setConnectionStatus('disconnected');
       return;
     }
 
+    let isMounted = true;
     setConnectionStatus('connecting');
 
-    // Load recent events on mount
+    // 1. Load recent historical events on mount
     void (async () => {
       try {
         const { data } = await supabase
@@ -112,7 +114,8 @@ export function useSystemEvents({
           .eq('restaurant_id', restaurantId)
           .order('created_at', { ascending: false })
           .limit(200);
-        if (data && data.length > 0) {
+
+        if (isMounted && data && data.length > 0) {
           setEvents(data.reverse() as SystemEvent[]);
           setTotalEventCount(data.length);
         }
@@ -121,9 +124,18 @@ export function useSystemEvents({
       }
     })();
 
-    // Subscribe to live inserts
+    // 2. Stable channel name (no Date.now())
+    const channelName = `founder_events_${restaurantId}`;
+
+    // 3. Clean up any existing channel with same topic before subscribing
+    const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${channelName}`);
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
+
+    // 4. Register all .on() callbacks BEFORE calling .subscribe()
     const channel = supabase
-      .channel(`founder_events_${restaurantId}_${Date.now()}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -133,8 +145,12 @@ export function useSystemEvents({
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         (payload) => {
+          if (!isMounted) return;
           const newEvent = payload.new as SystemEvent;
+          if (!newEvent || !newEvent.id) return;
+
           setEvents(prev => {
+            if (prev.some(e => e.id === newEvent.id)) return prev;
             const updated = [...prev, newEvent];
             return updated.length > MAX_EVENTS
               ? updated.slice(updated.length - MAX_EVENTS)
@@ -144,18 +160,27 @@ export function useSystemEvents({
         }
       )
       .subscribe((status) => {
+        if (!isMounted) return;
         if (status === 'SUBSCRIBED') {
+          isSubscribedRef.current = true;
           setConnectionStatus('connected');
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        } else if (status === 'CLOSED') {
+          isSubscribedRef.current = false;
+          setConnectionStatus('disconnected');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          isSubscribedRef.current = false;
           setConnectionStatus('error');
         }
       });
 
-    channelRef.current = channel;
+    activeChannelRef.current = channel;
 
+    // 5. Cleanup properly on unmount
     return () => {
+      isMounted = false;
+      isSubscribedRef.current = false;
       supabase.removeChannel(channel);
-      channelRef.current = null;
+      activeChannelRef.current = null;
       setConnectionStatus('disconnected');
     };
   }, [restaurantId, enabled]);

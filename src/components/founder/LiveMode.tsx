@@ -27,9 +27,17 @@ interface LiveModeProps {
   restaurantId: string;
   followingOrderId: string | null;
   onFollowOrder: (id: string | null) => void;
+  events?: SystemEvent[];
+  orderDots?: OrderDotState[];
 }
 
-export default function LiveMode({ restaurantId, followingOrderId, onFollowOrder }: LiveModeProps) {
+export default function LiveMode({
+  restaurantId,
+  followingOrderId,
+  onFollowOrder,
+  events: propEvents,
+  orderDots: propOrderDots,
+}: LiveModeProps) {
   // ─── All hooks FIRST ─────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
@@ -37,7 +45,10 @@ export default function LiveMode({ restaurantId, followingOrderId, onFollowOrder
   const [selectedDot, setSelectedDot] = useState<OrderDotState | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'timeline' | 'inspector' | 'flight'>('timeline');
 
-  const { events, orderDots } = useSystemEvents({ restaurantId, enabled: true });
+  // Only subscribe if parent did not provide events
+  const fallback = useSystemEvents({ restaurantId, enabled: !propEvents });
+  const events = propEvents ?? fallback.events;
+  const orderDots = propOrderDots ?? fallback.orderDots;
 
   // Measure container
   useEffect(() => {

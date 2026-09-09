@@ -91,6 +91,7 @@ export const EVENT_TO_NODE: Record<string, string> = {
   customer_call_resolved:  'customer_calls',
   push_sent:               'push_notifications',
   push_failed:             'push_notifications',
+  reservation_created:     'order_created',
   reservation_seated:      'live_orders',
   takeaway_created:        'order_created',
 };
