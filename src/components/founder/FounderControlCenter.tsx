@@ -7,10 +7,11 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Activity, RotateCcw, Network, Bug, Wifi, WifiOff, Zap } from 'lucide-react';
+import { Activity, RotateCcw, PauseCircle, Network, Bug, Wifi, WifiOff, Zap } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LiveMode from './LiveMode';
 import ReplayMode from './ReplayMode';
+import FreezeMode from './FreezeMode';
 import SystemMode from './SystemMode';
 import DebugMode from './DebugMode';
 import type { FounderMode } from './types';
@@ -23,6 +24,7 @@ interface FounderControlCenterProps {
 const MODE_CONFIG: Array<{ id: FounderMode; label: string; icon: typeof Activity }> = [
   { id: 'live',   label: 'Live',   icon: Activity },
   { id: 'replay', label: 'Replay', icon: RotateCcw },
+  { id: 'freeze', label: 'Freeze', icon: PauseCircle },
   { id: 'system', label: 'System', icon: Network },
   { id: 'debug',  label: 'Debug',  icon: Bug },
 ];
@@ -211,6 +213,12 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         )}
         {activeMode === 'replay' && (
           <ReplayMode restaurantId={restaurantId} />
+        )}
+        {activeMode === 'freeze' && (
+          <FreezeMode
+            restaurantId={restaurantId}
+            events={events}
+          />
         )}
         {activeMode === 'system' && (
           <SystemMode restaurantId={restaurantId} />
