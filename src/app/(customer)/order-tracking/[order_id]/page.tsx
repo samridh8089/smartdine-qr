@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { db, Order, Restaurant } from '@/lib/db';
 import { parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
 import { calculateBillingTotals } from '@/lib/billingEngine';
-import { formatPrice, formatDate, getFormattedOrderId } from '@/lib/utils';
+import { formatPrice, formatDate, getFormattedOrderId, getCustomerFacingOrderId } from '@/lib/utils';
 import { formatExactTimestamp } from '@/lib/timestamp';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -575,19 +575,19 @@ export default function OrderTrackingPage({ params }: PageProps) {
         
         {/* Restaurant Header Info */}
         <div className="text-center space-y-2">
-          <span className="inline-block px-3 py-1 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40 rounded-full text-xs font-black tracking-wide uppercase">
-            Order {getFormattedOrderId(order, restaurant.name)}
+          <span className="inline-block px-3 py-1 bg-stone-100 dark:bg-stone-900 text-stone-900 dark:text-stone-100 border border-stone-200 dark:border-stone-800 rounded-full text-xs font-black tracking-wide">
+            {getCustomerFacingOrderId(order, restaurant.name)}
           </span>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white leading-none pt-1">{restaurant.name}</h1>
           <p className="text-xs text-slate-450 dark:text-slate-500 font-semibold uppercase flex items-center justify-center gap-1.5">
             {order.order_type === 'takeaway' ? (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200 uppercase">
                 Takeaway
               </span>
             ) : (
               <span>{order.table_name || 'Table'}</span>
             )}
-            <span>• Receipt #{getFormattedOrderId(order, restaurant.name)}</span>
+            <span>• Receipt #{getCustomerFacingOrderId(order, restaurant.name).replace(/^Order\s*#/i, '')}</span>
           </p>
           <div className="pt-2 flex flex-col items-center gap-1.5">
             <span

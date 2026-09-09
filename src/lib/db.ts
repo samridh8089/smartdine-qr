@@ -522,13 +522,16 @@ export interface Order {
   takeaway_notes?: string;
   offer_code?: string;
   discount_amount?: number;
+  display_order_id?: string;
+  customer_name?: string;
+  customer_phone?: string;
 }
 
 export const VALID_ORDER_TRANSITIONS: Record<Order['status'], Order['status'][]> = {
   new: ['accepted', 'cancelled'],
   accepted: ['preparing', 'cancelled'],
   preparing: ['ready', 'cancelled'],
-  ready: ['served', 'cancelled'],
+  ready: ['served', 'completed', 'cancelled'],
   served: ['completed'],
   completed: [],
   cancelled: []
@@ -540,7 +543,7 @@ export const ALLOWED_PRIOR_STATUSES: Record<Order['status'], Order['status'][]> 
   preparing: ['accepted'],
   ready: ['preparing'],
   served: ['ready'],
-  completed: ['served'],
+  completed: ['served', 'ready'],
   cancelled: ['new', 'accepted', 'preparing', 'ready']
 };
 
@@ -2103,6 +2106,10 @@ export const db = {
   },
 
   async getOrderById(id: string): Promise<Order | null> {
+    if (!id) return null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) return null;
+
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*), order_batches(*)')
@@ -2787,6 +2794,21 @@ export const db = {
   },
 
   async updateOrderStatus(id: string, status: Order['status'], userName?: string, cancellationReason?: string): Promise<Order> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      return {
+        id,
+        restaurant_id: 'demo-rest',
+        table_id: 'demo-table',
+        status,
+        subtotal: 0,
+        gst: 0,
+        service_charge: 0,
+        total: 0,
+        created_at: new Date().toISOString(),
+        items: []
+      } as Order;
+    }
     const currentOrder = await this.getOrderById(id);
     if (!currentOrder) throw new Error('Order not found');
 

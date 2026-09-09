@@ -393,8 +393,8 @@ export interface DemoOrder {
 
 export const DEMO_ORDERS: DemoOrder[] = [
   {
-    id: 'ord-038',
-    orderNumber: '#00038',
+    id: '00000000-0000-4000-8000-000000000038',
+    orderNumber: 'A7K-26D0038',
     tableDisplay: 'TABLE 2',
     orderType: 'dine_in',
     status: 'preparing',
@@ -409,8 +409,8 @@ export const DEMO_ORDERS: DemoOrder[] = [
     guestCount: 2
   },
   {
-    id: 'ord-037',
-    orderNumber: '#00037',
+    id: '00000000-0000-4000-8000-000000000037',
+    orderNumber: 'A7K-26D0037',
     tableDisplay: 'TABLE 7',
     orderType: 'dine_in',
     status: 'accepted',
@@ -425,8 +425,8 @@ export const DEMO_ORDERS: DemoOrder[] = [
     guestCount: 4
   },
   {
-    id: 'ord-036',
-    orderNumber: '#00036',
+    id: '00000000-0000-4000-8000-000000000036',
+    orderNumber: 'A7K-26D0036',
     tableDisplay: 'TABLE 5 + 6',
     orderType: 'dine_in',
     status: 'ready',
@@ -441,8 +441,8 @@ export const DEMO_ORDERS: DemoOrder[] = [
     guestCount: 8
   },
   {
-    id: 'ord-035',
-    orderNumber: '#00035',
+    id: '00000000-0000-4000-8000-000000000035',
+    orderNumber: 'A7K-26D0035',
     tableDisplay: 'TABLE 4',
     orderType: 'dine_in',
     status: 'served',
@@ -456,8 +456,8 @@ export const DEMO_ORDERS: DemoOrder[] = [
     guestCount: 3
   },
   {
-    id: 'ord-034',
-    orderNumber: '#00034',
+    id: '00000000-0000-4000-8000-000000000034',
+    orderNumber: 'A7K-26T0034',
     tableDisplay: 'TAKEAWAY',
     orderType: 'takeaway',
     status: 'ready',
@@ -473,8 +473,8 @@ export const DEMO_ORDERS: DemoOrder[] = [
     elapsedMinutes: 18
   },
   {
-    id: 'ord-033',
-    orderNumber: '#00033',
+    id: '00000000-0000-4000-8000-000000000033',
+    orderNumber: 'A7K-26T0033',
     tableDisplay: 'TAKEAWAY',
     orderType: 'takeaway',
     status: 'preparing',
@@ -490,8 +490,8 @@ export const DEMO_ORDERS: DemoOrder[] = [
     elapsedMinutes: 9
   },
   {
-    id: 'ord-032',
-    orderNumber: '#00032',
+    id: '00000000-0000-4000-8000-000000000032',
+    orderNumber: 'A7K-26R0032',
     tableDisplay: 'RESERVATION (T-3)',
     orderType: 'reservation',
     status: 'new',
@@ -509,8 +509,8 @@ export const DEMO_ORDERS: DemoOrder[] = [
     guestCount: 4
   },
   {
-    id: 'ord-031',
-    orderNumber: '#00031',
+    id: '00000000-0000-4000-8000-000000000031',
+    orderNumber: 'A7K-26R0031',
     tableDisplay: 'RESERVATION (T-8)',
     orderType: 'reservation',
     status: 'accepted',

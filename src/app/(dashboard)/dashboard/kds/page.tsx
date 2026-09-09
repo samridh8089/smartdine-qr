@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, Order, OrderBatch } from '@/lib/db';
 import { formatExactTimestamp } from '@/lib/timestamp';
 import { supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
-import { formatPrice, getFormattedOrderId, getCleanSpecialInstructions } from '@/lib/utils';
+import { formatPrice, getFormattedOrderId, getCleanSpecialInstructions, matchesOrderSearchQuery } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -29,6 +29,7 @@ export default function KitchenDisplayPage() {
     return initialCachedOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
   });
   const [loading, setLoading] = useState(() => !initialCachedOrders);
+  const [searchQuery, setSearchQuery] = useState('');
   const [processingBatchIds, setProcessingBatchIds] = useState<string[]>([]);
   const processingBatchIdsRef = useRef<Set<string>>(new Set());
 
@@ -552,6 +553,12 @@ export default function KitchenDisplayPage() {
     }
   };
 
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return orders;
+    return orders.filter(order => matchesOrderSearchQuery(order, q, restaurant?.name || '', orders));
+  }, [orders, searchQuery, restaurant?.name]);
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -566,7 +573,7 @@ export default function KitchenDisplayPage() {
   }
 
   // Extract active batches from active orders (BUG-RES-001: reservations excluded)
-  const activeBatches = orders.filter(o => o.order_type !== 'reservation').reduce((acc: any[], order) => {
+  const activeBatches = filteredOrders.filter(o => o.order_type !== 'reservation').reduce((acc: any[], order) => {
     if (order.batches) {
       order.batches.forEach(batch => {
         const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
@@ -602,17 +609,29 @@ export default function KitchenDisplayPage() {
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Live cooking tickets and real-time customer status tracking.</p>
         </div>
-        <button
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            soundEnabled 
-              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/30' 
-              : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
-          }`}
-        >
-          <Volume2 className="h-4 w-4" />
-          {soundEnabled ? 'Kitchen Bell On' : 'Kitchen Bell Off'}
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search order ID, table..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-100"
+            />
+          </div>
+          <button
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              soundEnabled 
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/30' 
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            <Volume2 className="h-4 w-4" />
+            {soundEnabled ? 'Kitchen Bell On' : 'Kitchen Bell Off'}
+          </button>
+        </div>
       </div>
 
 
@@ -642,7 +661,7 @@ export default function KitchenDisplayPage() {
                       <div>
                         <div className="flex items-center gap-1.5">
                           {order.order_type === 'takeaway' ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 uppercase">
                               Takeaway
                             </span>
                           ) : (
@@ -655,12 +674,14 @@ export default function KitchenDisplayPage() {
                           ) : null}
                         </div>
                         {order.order_type === 'takeaway' && (
-                          <div className="text-xs font-black text-purple-600 dark:text-purple-400 mt-1">
+                          <div className="text-xs font-bold text-stone-700 dark:text-stone-300 mt-1">
                             Arrives in {order.customer_arrival_minutes} mins
                             {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
                           </div>
                         )}
-                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider">ORDER #{getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders)} • BATCH #{order.batch_number}</span>
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider font-mono">
+                          {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                        </span>
                       </div>
                       {(() => {
                         const sla = getSlaTimerInfo(order.created_at, nowTime);
@@ -812,7 +833,7 @@ export default function KitchenDisplayPage() {
                       <div>
                         <div className="flex items-center gap-1.5">
                           {order.order_type === 'takeaway' ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 uppercase">
                               Takeaway
                             </span>
                           ) : (
@@ -825,12 +846,14 @@ export default function KitchenDisplayPage() {
                           ) : null}
                         </div>
                         {order.order_type === 'takeaway' && (
-                          <div className="text-xs font-black text-purple-600 dark:text-purple-400 mt-1">
+                          <div className="text-xs font-bold text-stone-700 dark:text-stone-300 mt-1">
                             Arrives in {order.customer_arrival_minutes} mins
                             {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
                           </div>
                         )}
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider">ORDER {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders)} • BATCH #{order.batch_number}</span>
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider font-mono">
+                          {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                        </span>
                       </div>
                       {(() => {
                         const sla = getSlaTimerInfo(order.created_at, nowTime);
@@ -916,10 +939,10 @@ export default function KitchenDisplayPage() {
         <div className="bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col space-y-4">
           <div className="flex items-center justify-between shrink-0 border-b border-slate-200 dark:border-slate-800 pb-2">
             <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-sm tracking-wider uppercase flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
               Ready
             </h3>
-            <Badge variant="purple">{readyOrders.length}</Badge>
+            <Badge variant="success">{readyOrders.length}</Badge>
           </div>
           <div className="flex-1 overflow-y-auto space-y-4 pr-1">
             {readyOrders.length === 0 ? (
@@ -928,13 +951,13 @@ export default function KitchenDisplayPage() {
               </div>
             ) : (
               readyOrders.map(order => (
-                <Card key={order.id} className="border-l-4 border-l-purple-600 shadow-md">
+                <Card key={order.id} className="border-l-4 border-l-emerald-600 shadow-md">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex justify-between items-start">
                       <div>
                         <div className="flex items-center gap-1.5">
                           {order.order_type === 'takeaway' ? (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 uppercase">
                               Takeaway
                             </span>
                           ) : (
@@ -947,12 +970,14 @@ export default function KitchenDisplayPage() {
                           ) : null}
                         </div>
                         {order.order_type === 'takeaway' && (
-                          <div className="text-xs font-black text-purple-600 dark:text-purple-400 mt-1">
+                          <div className="text-xs font-bold text-stone-700 dark:text-stone-300 mt-1">
                             Arrives in {order.customer_arrival_minutes} mins
                             {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
                           </div>
                         )}
-                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 tracking-wider">ORDER #{getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders)} • BATCH #{order.batch_number}</span>
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 tracking-wider font-mono">
+                          {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                        </span>
                       </div>
                       {(() => {
                         const sla = getSlaTimerInfo(order.created_at, nowTime);
@@ -984,12 +1009,12 @@ export default function KitchenDisplayPage() {
 
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
                       {order.order_type === 'takeaway' ? (
-                        <span className="text-xs text-purple-600 dark:text-purple-400 font-bold flex items-center justify-center gap-1.5 py-1">
+                        <span className="text-xs text-amber-700 dark:text-amber-400 font-bold flex items-center justify-center gap-1.5 py-1">
                           <ShoppingBag className="h-3.5 w-3.5" /> Ready for Counter Pickup
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-400 font-semibold italic flex items-center justify-center gap-1.5 py-1">
-                          <Clock className="h-3.5 w-3.5 text-purple-500" /> Waiting for waiter pickup
+                        <span className="text-xs text-slate-500 font-semibold flex items-center justify-center gap-1.5 py-1">
+                          <Clock className="h-3.5 w-3.5 text-emerald-600" /> Waiting for waiter pickup
                         </span>
                       )}
                     </div>
@@ -1041,7 +1066,7 @@ export default function KitchenDisplayPage() {
             <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl p-4 text-center">
               <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">Dining Location</span>
               <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-0.5">{newOrderAlert.table_name}</h3>
-              <p className="text-xs text-slate-400 mt-1 font-mono">ORDER #{getFormattedOrderId(newOrderAlert, restaurant?.name || '', orders)}</p>
+              <p className="text-xs text-slate-500 mt-1 font-mono font-bold">{getFormattedOrderId(newOrderAlert, restaurant?.name || '', orders, false)}</p>
             </div>
 
             <div className="space-y-2">
