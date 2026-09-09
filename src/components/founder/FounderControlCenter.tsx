@@ -36,22 +36,19 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   // ─── All hooks FIRST (React Hook Safety Rule) ────────────────────────────
   const [activeMode, setActiveMode] = useState<FounderMode>(readSavedMode);
   const [followingOrderId, setFollowingOrderId] = useState<string | null>(null);
+  const [recorderEnabled, setRecorderEnabled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('founder_recorder_enabled') !== 'false';
+  });
+  const [recorderMode, setRecorderMode] = useState<'production' | 'test'>(() => {
+    if (typeof window === 'undefined') return 'production';
+    return (localStorage.getItem('founder_recorder_mode') as 'production' | 'test') || 'production';
+  });
 
   const { events, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
     restaurantId,
     enabled: true,
   });
-
-  const handleModeChange = useCallback((mode: FounderMode) => {
-    setActiveMode(mode);
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('founder_mode', mode);
-    }
-  }, []);
-
-  const handleFollowOrder = useCallback((id: string | null) => {
-    setFollowingOrderId(id);
-  }, []);
 
   const statusColor = useMemo(() => {
     if (connectionStatus === 'connected') return 'text-emerald-400';
@@ -65,6 +62,34 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     if (connectionStatus === 'error') return 'Error';
     return 'Offline';
   }, [connectionStatus]);
+
+  const handleModeChange = useCallback((mode: FounderMode) => {
+    setActiveMode(mode);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('founder_mode', mode);
+    }
+  }, []);
+
+  const handleFollowOrder = useCallback((id: string | null) => {
+    setFollowingOrderId(id);
+  }, []);
+
+  const handleToggleRecorder = useCallback(() => {
+    setRecorderEnabled(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('founder_recorder_enabled', next ? 'true' : 'false');
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSetRecorderMode = useCallback((mode: 'production' | 'test') => {
+    setRecorderMode(mode);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('founder_recorder_mode', mode);
+    }
+  }, []);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -97,6 +122,49 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               <span className="hidden sm:block">{label}</span>
             </button>
           ))}
+        </div>
+
+        {/* ── Event Recorder Controls ── */}
+        <div className="hidden lg:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
+          <button
+            onClick={handleToggleRecorder}
+            className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
+              recorderEnabled
+                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/50'
+                : 'bg-slate-700 text-slate-400'
+            }`}
+            title={recorderEnabled ? 'Click to turn Event Recorder OFF' : 'Click to turn Event Recorder ON'}
+          >
+            <div className={`h-1.5 w-1.5 rounded-full ${recorderEnabled ? 'bg-white animate-pulse' : 'bg-slate-500'}`} />
+            <span>Recorder: {recorderEnabled ? 'ON' : 'OFF'}</span>
+          </button>
+
+          {recorderEnabled && (
+            <div className="flex items-center bg-slate-900 rounded p-0.5 text-[9px] font-mono border border-slate-700/50">
+              <button
+                onClick={() => handleSetRecorderMode('production')}
+                className={`px-1.5 py-0.5 rounded transition-colors ${
+                  recorderMode === 'production'
+                    ? 'bg-blue-600 text-white font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Production mode: Essential events only (orders, transitions, payments)"
+              >
+                Prod (Essential)
+              </button>
+              <button
+                onClick={() => handleSetRecorderMode('test')}
+                className={`px-1.5 py-0.5 rounded transition-colors ${
+                  recorderMode === 'test'
+                    ? 'bg-purple-600 text-white font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Test mode: Verbose (QR scan, cart update, API timings)"
+              >
+                Test (Verbose)
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Right side: connection + stats */}

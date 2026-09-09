@@ -32,6 +32,22 @@ export function getOrCreateCorrelationId(tableId?: string): string {
   return id;
 }
 
+export function isRecorderEnabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  return localStorage.getItem('founder_recorder_enabled') !== 'false';
+}
+
+export function getRecorderMode(): 'production' | 'test' {
+  if (typeof window === 'undefined') return 'production';
+  return (localStorage.getItem('founder_recorder_mode') as 'production' | 'test') || 'production';
+}
+
+export function setRecorderConfig(enabled: boolean, mode: 'production' | 'test'): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('founder_recorder_enabled', enabled ? 'true' : 'false');
+  localStorage.setItem('founder_recorder_mode', mode);
+}
+
 /**
  * Fire-and-forget client event logger.
  * Posts to /api/system-events. Never awaited.
@@ -47,6 +63,17 @@ export function logClientEvent(
 ): void {
   if (!restaurantId || restaurantId === 'demo-rest') return;
   if (typeof window === 'undefined') return;
+
+  // Event Recorder check
+  if (!isRecorderEnabled()) return;
+
+  const mode = getRecorderMode();
+  // Production mode: Essential events only (skip noisy customer browse events)
+  // Test mode: Verbose (logs qr_scanned, menu_opened, cart_updated, etc.)
+  const verboseClientEvents: ClientEventType[] = ['qr_scanned', 'menu_opened', 'cart_updated'];
+  if (mode === 'production' && verboseClientEvents.includes(eventType)) {
+    return;
+  }
 
   const correlationId = getOrCreateCorrelationId(tableId);
 
