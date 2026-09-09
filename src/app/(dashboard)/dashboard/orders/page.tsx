@@ -61,6 +61,13 @@ export function parseReservationDetails(order: Order): ParsedReservation {
   const notesMatch = text.match(/Notes:\s*(.+)$/i);
   if (notesMatch) result.notes = notesMatch[1].trim();
 
+  // Direct order properties fallback
+  if (!result.name && (order as any).customer_name) result.name = (order as any).customer_name;
+  if (!result.phone && (order as any).customer_phone) result.phone = (order as any).customer_phone;
+  if (result.guests === '1' && ((order as any).guest_count || (order as any).guests || (order as any).party_size)) {
+    result.guests = String((order as any).guest_count || (order as any).guests || (order as any).party_size);
+  }
+
   if (result.date && result.time) {
     try {
       const d = new Date(`${result.date} ${result.time}`);
@@ -225,6 +232,7 @@ export default function OrdersPage() {
   const [punchModalOpen, setPunchModalOpen] = useState(false);
   const [customerLookupOpen, setCustomerLookupOpen] = useState(false);
   const [customerLookupQuery, setCustomerLookupQuery] = useState('');
+  const [lookupPrefillCustomer, setLookupPrefillCustomer] = useState<{ name: string; phone: string } | null>(null);
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printOrderData, setPrintOrderData] = useState<any | null>(null);
 
@@ -403,7 +411,7 @@ export default function OrdersPage() {
     const filteredForRole = activeRole === 'waiter'
       ? allOrders.filter(o => {
           if (!['ready', 'served', 'completed', 'accepted', 'preparing'].includes(o.status)) return false;
-          return o.table_id ? waiterTableIds.has(o.table_id) : true;
+          return Boolean(o.table_id && waiterTableIds.has(o.table_id));
         })
       : allOrders;
     setOrders(filteredForRole);
@@ -415,8 +423,8 @@ export default function OrdersPage() {
     // Load pending & active requests - filtered for waiter
     const activeReqs = (reqs || []).filter(r => {
       if (r.status !== 'pending') return false;
-      if (activeRole === 'waiter' && r.table_id) {
-        return waiterTableIds.has(r.table_id);
+      if (activeRole === 'waiter') {
+        return Boolean(r.table_id && waiterTableIds.has(r.table_id));
       }
       return true;
     });
@@ -557,7 +565,7 @@ export default function OrdersPage() {
       const filteredOrders = activeRole === 'waiter'
         ? allOrders.filter(o => {
             if (!['ready', 'served', 'completed', 'accepted', 'preparing'].includes(o.status)) return false;
-            return o.table_id ? waiterTableIds.has(o.table_id) : true;
+            return Boolean(o.table_id && waiterTableIds.has(o.table_id));
           })
         : allOrders;
       setOrders(filteredOrders.map(o => {
@@ -577,8 +585,8 @@ export default function OrdersPage() {
       let reqs = await db.getCustomerRequests(restId);
       let activeReqs = (reqs || []).filter(r => {
         if (r.status !== 'pending') return false;
-        if (activeRole === 'waiter' && r.table_id) {
-          return waiterTableIds.has(r.table_id);
+        if (activeRole === 'waiter') {
+          return Boolean(r.table_id && waiterTableIds.has(r.table_id));
         }
         return true;
       });
@@ -1462,7 +1470,11 @@ export default function OrdersPage() {
       const targetTableName = targetTable ? (targetTable.table_number ? `Table ${targetTable.table_number}` : targetTable.name) : 'Table';
 
       // 1. Mark physical table as occupied
-      await db.toggleTableOccupancy(restaurant.id, selectedTableForSeat, true);
+      try {
+        await db.toggleTableOccupancy(restaurant.id, selectedTableForSeat, true);
+      } catch (e) {
+        console.warn('Could not toggle table occupancy in db:', e);
+      }
 
       // 2. Safe UUID validation for both order ID and table ID to prevent "invalid input syntax for type uuid" (P0-5)
       const isOrderUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reservationToSeat.id);
@@ -1521,7 +1533,9 @@ export default function OrdersPage() {
       setSeatGuestModalOpen(false);
       setReservationToSeat(null);
       setSelectedTableForSeat('');
-      await safeReloadOrders(restaurant.id);
+      if (restaurant?.id && !isPreviewMode) {
+        await safeReloadOrders(restaurant.id);
+      }
     } catch (err: any) {
       showToast('Failed to seat guest: ' + err.message, "Error", "error");
     } finally {
@@ -1859,79 +1873,98 @@ export default function OrdersPage() {
                   const parsedRes = isReservation ? parseReservationDetails(order) : null;
                   const diffMins = parsedRes?.targetDateTime ? Math.round((parsedRes.targetDateTime.getTime() - currentTime) / 60000) : null;
 
-                  return (
-                    <button
+                    return (
+                    <div
                       key={order.id}
                       id={`order-item-${order.id}`}
                       onClick={() => handleSelectOrder(order)}
-                      className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 cursor-pointer ${
+                      className={`w-full text-left p-3.5 rounded-xl transition-all duration-200 cursor-pointer overflow-hidden max-w-full ${
                         isSelected 
-                          ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-2 border-emerald-500/80 shadow-sm ring-2 ring-emerald-500/30 text-slate-900 dark:text-white' 
-                          : 'border border-slate-100 dark:border-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800/40 text-slate-700 dark:text-slate-300'
+                          ? 'bg-[#FAF9F6] dark:bg-stone-900 border-2 border-stone-900 dark:border-stone-100 shadow-sm ring-2 ring-stone-900/10 dark:ring-stone-100/10 text-stone-900 dark:text-white' 
+                          : 'bg-white dark:bg-stone-900/60 border border-[#E5E7EB] dark:border-stone-800 hover:border-stone-400 text-stone-800 dark:text-stone-200'
                       }`}
                     >
-                      <div className="w-full space-y-2">
-                        {/* Primary & Secondary: Identifier & Sequence ID */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <h4 className="text-base font-black tracking-tight text-slate-950 dark:text-white leading-tight">
-                              {isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RESERVATION: ${parsedRes.name}` : 'RESERVATION') : tableDisplay}
-                            </h4>
-                            <p className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400 mt-0.5">
+                      <div className="w-full space-y-2.5">
+                        {/* 1. Order ID (Primary Prominent ID + Table/Type Badge) */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                            <span className="font-mono font-black text-sm tracking-tight text-stone-900 dark:text-stone-100">
                               {shortOrderId}
-                            </p>
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border uppercase tracking-wider ${
+                              isTakeaway
+                                ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
+                                : isReservation
+                                ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+                                : 'bg-stone-100 text-stone-800 border-stone-300 dark:bg-stone-800 dark:text-stone-200'
+                            }`}>
+                              {isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RES: ${parsedRes.name}` : 'RESERVATION') : tableDisplay}
+                            </span>
                           </div>
-                          <div className="text-right">
-                            {displayTotal != null ? (
-                              <p className="font-black text-sm text-slate-900 dark:text-white">
-                                {formatPrice(displayTotal, restaurant?.settings?.currency)}
-                              </p>
-                            ) : null}
-                            <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                              {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                            </p>
-                          </div>
+                          <span className="text-[10px] text-stone-400 font-mono shrink-0">
+                            {formatExactTimestamp(order.created_at)}
+                          </span>
                         </div>
 
-                        {/* Customer Name & Contact (P0-4 Card-first Layout) */}
+                        {/* 2. Customer Details (Name & 10-digit Phone) */}
                         {(() => {
-                          const cName = order.customer_name || (parsedRes?.name ? parsedRes.name : null);
-                          const cPhone = order.customer_phone || parsedRes?.phone;
-                          if (!cName && !cPhone) return null;
+                          const custData = parseCustomerDetailsFromOrder(order);
+                          const cName = order.customer_name || parsedRes?.name || custData.name;
+                          const cPhone = order.customer_phone || parsedRes?.phone || custData.phone;
                           return (
-                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                              <span className="truncate">{cName || 'Guest'}</span>
-                              {cPhone && <span className="text-[11px] text-slate-400 font-mono shrink-0">({cPhone})</span>}
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-stone-200">
+                              <User className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                              <span className="truncate">{cName || 'Walk-in Guest'}</span>
+                              {cPhone && <span className="text-[11px] text-stone-500 font-mono shrink-0">({cPhone})</span>}
                             </div>
                           );
                         })()}
 
-                        {/* Special ETA / Reservation Badges */}
-                        {isTakeaway && (
+                        {/* 3. Status Badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {getStatusBadge(optimisticStatusMap[order.id] || order.status, order.order_type)}
+                          {order.payment_status === 'paid' ? (
+                            <Badge variant="success">Paid</Badge>
+                          ) : order.payment_status === 'customer_marked_paid' ? (
+                            <Badge variant="warning">Marked Paid</Badge>
+                          ) : (
+                            <Badge variant="neutral">Unpaid</Badge>
+                          )}
+                        </div>
+
+                        {/* 4. Amount & Items count */}
+                        <div className="flex items-center justify-between text-xs pt-0.5 border-t border-stone-100 dark:border-stone-800">
+                          <span className="font-black text-sm text-stone-900 dark:text-stone-100">
+                            {displayTotal != null ? formatPrice(displayTotal, restaurant?.settings?.currency) : '—'}
+                          </span>
+                          <span className="text-[11px] text-stone-500 font-medium">
+                            {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
+
+                        {/* 5. ETA / Schedule */}
+                        {isTakeaway ? (
                           <div className="flex items-center gap-2 flex-wrap text-xs">
-                            <span className="font-semibold text-purple-700 dark:text-purple-300">
-                              {order.takeaway_notes ? `Note: ${order.takeaway_notes}` : 'Counter Pickup'}
-                            </span>
                             {order.status === 'ready' ? (
                               <Badge variant="purple">Ready for Pickup</Badge>
                             ) : order.status === 'served' ? (
                               <Badge variant="success">Handed Over</Badge>
                             ) : remainingMins > 0 ? (
-                              <span className="text-[11px] font-semibold text-gray-700 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md border border-gray-300 dark:border-gray-700">
+                              <span className="text-[11px] font-semibold text-amber-800 bg-[#FFFBEB] px-2 py-0.5 rounded-md border border-[#FDE68A]">
                                 Pickup in ~{remainingMins}m
                               </span>
                             ) : (
-                              <span className="text-[11px] font-bold text-gray-950 dark:text-white bg-gray-200 dark:bg-gray-800 px-2 py-0.5 rounded-md border border-gray-400 dark:border-gray-600">
+                              <span className="text-[11px] font-bold text-rose-800 bg-[#FEF2F2] px-2 py-0.5 rounded-md border border-[#FCA5A5]">
                                 Overdue ({Math.abs(remainingMins)}m)
                               </span>
                             )}
+                            {order.takeaway_notes && (
+                              <span className="text-[11px] text-stone-500 truncate">Note: {order.takeaway_notes}</span>
+                            )}
                           </div>
-                        )}
-
-                        {isReservation && parsedRes && (
+                        ) : isReservation && parsedRes ? (
                           <div className="space-y-1 text-xs">
-                            <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300 font-medium flex-wrap">
+                            <div className="flex items-center gap-2 text-stone-700 dark:text-stone-300 font-medium flex-wrap">
                               <span>{parsedRes.date || 'Today'} {parsedRes.time}</span>
                               <span>• {parsedRes.guests} Guests</span>
                             </div>
@@ -1950,29 +1983,19 @@ export default function OrdersPage() {
                               {order.table_name && order.table_name !== 'Reservation' ? (
                                 <Badge variant="neutral">Table: {order.table_name}</Badge>
                               ) : (
-                                <span className="text-[10px] text-gray-500 font-medium">Table Unassigned</span>
+                                <span className="text-[10px] text-stone-500 font-medium">Table Unassigned</span>
                               )}
                             </div>
                           </div>
+                        ) : (
+                          <div className="text-[11px] text-stone-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-stone-400" />
+                            <span>{Math.max(1, elapsedMins)}m active dining session</span>
+                          </div>
                         )}
 
-                        {/* Tertiary: Status Badges */}
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {getStatusBadge(optimisticStatusMap[order.id] || order.status, order.order_type)}
-                            {order.payment_status === 'paid' ? (
-                              <Badge variant="success">Paid</Badge>
-                            ) : order.payment_status === 'customer_marked_paid' ? (
-                              <Badge variant="warning">Marked Paid</Badge>
-                            ) : null}
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            {formatExactTimestamp(order.created_at)}
-                          </span>
-                        </div>
-
                         {/* Dishes Snippet */}
-                        <p className="text-xs truncate text-slate-500 dark:text-slate-400">
+                        <p className="text-xs truncate text-stone-500 dark:text-stone-400">
                           {(order.items || []).map(i => i.menu_item_name).join(', ')}
                         </p>
 
@@ -1984,21 +2007,21 @@ export default function OrdersPage() {
                             .trim();
                           if (cleanInst && !cleanInst.startsWith('[CANCELLED]')) {
                             return (
-                              <div className="text-[11px] font-medium text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border-l-2 border-gray-400 dark:border-gray-600 px-2 py-0.5 rounded-sm inline-block max-w-full truncate">
-                                <span className="font-bold text-gray-950 dark:text-white">Note:</span> {cleanInst}
+                              <div className="text-[11px] font-medium text-stone-800 dark:text-stone-200 bg-stone-50 dark:bg-stone-800 border-l-2 border-stone-400 dark:border-stone-600 px-2 py-0.5 rounded-sm inline-block max-w-full truncate">
+                                <span className="font-bold text-stone-950 dark:text-white">Note:</span> {cleanInst}
                               </div>
                             );
                           }
                           return null;
                         })()}
 
-                        {/* Quick action buttons */}
-                        <div className="pt-2 flex items-center justify-end gap-2 flex-wrap">
+                        {/* Quick action buttons (Full width on mobile 320-768px, inline on desktop) */}
+                        <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 w-full">
                           {isReservation && order.status !== 'cancelled' && order.status !== 'completed' && (
-                            <div className="flex items-center gap-1.5 flex-wrap w-full sm:w-auto justify-end">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 w-full sm:w-auto">
                               <Button
                                 size="sm"
-                                className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer gap-1 shadow-xs flex-1 sm:flex-initial"
+                                className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer gap-1 shadow-xs w-full sm:w-auto justify-center"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setReservationToSeat(order);
@@ -2009,47 +2032,49 @@ export default function OrdersPage() {
                               >
                                 <UserCheck className="h-3.5 w-3.5" /> Seat Guest
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 text-xs px-2 py-1.5 rounded-lg cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleExtendReservation(order, 15);
-                                }}
-                                title="Extend arrival by 15 mins"
-                              >
-                                +15m
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-amber-700 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900 text-xs px-2 py-1.5 rounded-lg cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleReservationNoShow(order);
-                                }}
-                              >
-                                No Show
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-900 text-xs px-2 py-1.5 rounded-lg cursor-pointer"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCancelReservationDirect(order);
-                                }}
-                              >
-                                Cancel
-                              </Button>
+                              <div className="flex gap-1.5 w-full sm:w-auto">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 text-xs px-2 py-1.5 rounded-lg cursor-pointer flex-1 sm:flex-initial justify-center"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExtendReservation(order, 15);
+                                  }}
+                                  title="Extend arrival by 15 mins"
+                                >
+                                  +15m
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-amber-700 border-amber-200 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900 text-xs px-2 py-1.5 rounded-lg cursor-pointer flex-1 sm:flex-initial justify-center"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleReservationNoShow(order);
+                                  }}
+                                >
+                                  No Show
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-900 text-xs px-2 py-1.5 rounded-lg cursor-pointer flex-1 sm:flex-initial justify-center"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCancelReservationDirect(order);
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
                             </div>
                           )}
 
                           {!isReservation && activeRole !== 'waiter' && order.status === 'new' && (
                             <Button
                               size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
                               isLoading={processingOrderIds.includes(`${order.id}:accepted`)}
                               disabled={processingOrderIds.includes(`${order.id}:accepted`)}
                               onClick={async (e) => {
@@ -2064,7 +2089,7 @@ export default function OrdersPage() {
                           {!isReservation && activeRole !== 'waiter' && order.status === 'accepted' && (
                             <Button
                               size="sm"
-                              className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto"
+                              className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
                               isLoading={processingOrderIds.includes(`${order.id}:preparing`)}
                               disabled={processingOrderIds.includes(`${order.id}:preparing`)}
                               onClick={async (e) => {
@@ -2079,7 +2104,7 @@ export default function OrdersPage() {
                           {order.status === 'ready' && (
                             <Button
                               size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
                               isLoading={processingOrderIds.includes(`${order.id}:served`)}
                               disabled={processingOrderIds.includes(`${order.id}:served`)}
                               onClick={async (e) => {
@@ -2092,7 +2117,7 @@ export default function OrdersPage() {
                           )}
                         </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               )}
@@ -3445,10 +3470,16 @@ export default function OrdersPage() {
       {restaurant && (
         <PunchOrderModal
           isOpen={punchModalOpen}
-          onClose={() => setPunchModalOpen(false)}
+          onClose={() => {
+            setPunchModalOpen(false);
+            setLookupPrefillCustomer(null);
+          }}
           restaurant={restaurant}
           staffName={profile?.full_name || 'Staff Member'}
+          initialCustomerName={lookupPrefillCustomer?.name || ''}
+          initialCustomerPhone={lookupPrefillCustomer?.phone || ''}
           onOrderCreated={async () => {
+            setLookupPrefillCustomer(null);
             await safeReloadOrders(restaurant.id);
           }}
         />
@@ -3823,6 +3854,7 @@ export default function OrdersPage() {
                           size="sm"
                           className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 text-xs font-bold px-3 py-1 rounded-lg cursor-pointer"
                           onClick={() => {
+                            setLookupPrefillCustomer({ name: cust.name, phone: cust.phone || '' });
                             setCustomerLookupOpen(false);
                             setPunchModalOpen(true);
                           }}

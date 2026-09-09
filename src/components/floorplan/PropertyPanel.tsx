@@ -66,14 +66,14 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   const handleWidthChange = (val: string) => {
     setLocalWidth(val);
     const num = Number(val);
-    if (!isNaN(num) && num >= 20) {
+    if (!isNaN(num) && num >= 24 && num <= 600) {
       onUpdate({ width: Math.round(num) });
     }
   };
 
   const handleWidthBlur = () => {
     const num = Number(localWidth);
-    const clamped = Math.max(30, Math.min(1200, isNaN(num) || num < 30 ? 30 : Math.round(num)));
+    const clamped = Math.max(24, Math.min(600, isNaN(num) || num < 24 ? 24 : Math.round(num)));
     setLocalWidth(String(clamped));
     onUpdate({ width: clamped });
   };
@@ -81,14 +81,14 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   const handleHeightChange = (val: string) => {
     setLocalHeight(val);
     const num = Number(val);
-    if (!isNaN(num) && num >= 20) {
+    if (!isNaN(num) && num >= 24 && num <= 600) {
       onUpdate({ height: Math.round(num) });
     }
   };
 
   const handleHeightBlur = () => {
     const num = Number(localHeight);
-    const clamped = Math.max(30, Math.min(1200, isNaN(num) || num < 30 ? 30 : Math.round(num)));
+    const clamped = Math.max(24, Math.min(600, isNaN(num) || num < 24 ? 24 : Math.round(num)));
     setLocalHeight(String(clamped));
     onUpdate({ height: clamped });
   };

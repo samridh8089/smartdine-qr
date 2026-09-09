@@ -24,6 +24,8 @@ interface PunchOrderModalProps {
   restaurant: Restaurant;
   staffName: string;
   onOrderCreated: () => void;
+  initialCustomerName?: string;
+  initialCustomerPhone?: string;
 }
 
 export default function PunchOrderModal({
@@ -31,7 +33,9 @@ export default function PunchOrderModal({
   onClose,
   restaurant,
   staffName,
-  onOrderCreated
+  onOrderCreated,
+  initialCustomerName = '',
+  initialCustomerPhone = ''
 }: PunchOrderModalProps) {
   const [tables, setTables] = useState<Table[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -44,6 +48,16 @@ export default function PunchOrderModal({
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [customerName, setCustomerName] = useState(initialCustomerName);
+  const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone);
+
+  // Sync initial customer details when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (initialCustomerName) setCustomerName(initialCustomerName);
+      if (initialCustomerPhone) setCustomerPhone(initialCustomerPhone);
+    }
+  }, [isOpen, initialCustomerName, initialCustomerPhone]);
   
   // Payment Options
   const [markPaid, setMarkPaid] = useState(false);
@@ -151,6 +165,17 @@ export default function PunchOrderModal({
       setErrorMsg('Please select a dining table for Dine-in orders.');
       return;
     }
+    if (orderType === 'takeaway') {
+      if (!customerName.trim()) {
+        setErrorMsg('Customer name is mandatory for takeaway orders.');
+        return;
+      }
+      const cleanPhone = customerPhone.replace(/\D/g, '');
+      if (cleanPhone.length !== 10) {
+        setErrorMsg('A valid 10-digit customer mobile number is mandatory for takeaway orders.');
+        return;
+      }
+    }
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -168,15 +193,22 @@ export default function PunchOrderModal({
         notes: c.notes || undefined
       }));
 
+      // Format customer name & mobile into special_instructions for universal system parsing
+      let fullInstructions = specialInstructions.trim();
+      if (customerName.trim() || customerPhone.trim()) {
+        const custHeader = `CUSTOMER: ${customerName.trim()} | PHONE: ${customerPhone.trim()}`;
+        fullInstructions = fullInstructions ? `${custHeader} | NOTES: ${fullInstructions}` : custHeader;
+      }
+
       // 1. Create order in DB
       const newOrder = await db.createOrder(
         restaurant.id,
         targetTableId,
         orderItemsPayload,
-        specialInstructions.trim() || undefined,
+        fullInstructions || undefined,
         orderType,
         undefined, // arrival mins
-        undefined  // takeaway notes
+        customerPhone.trim() || undefined // takeaway notes / phone
       );
 
       // 2. If marked paid immediately by waiter
@@ -198,6 +230,8 @@ export default function PunchOrderModal({
       // Reset form
       setCart([]);
       setSpecialInstructions('');
+      setCustomerName('');
+      setCustomerPhone('');
       setMarkPaid(false);
     } catch (err: any) {
       console.error('Punch order failed:', err);
@@ -290,6 +324,37 @@ export default function PunchOrderModal({
                   </select>
                 </div>
               )}
+            </div>
+
+            {/* Customer Details Row (P0-7 Mandatory for Takeaway) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                  Customer Name {orderType === 'takeaway' ? <span className="text-rose-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Sharma"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  required={orderType === 'takeaway'}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+                  Mobile Number (10 digits) {orderType === 'takeaway' ? <span className="text-rose-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
+                </label>
+                <input
+                  type="tel"
+                  maxLength={10}
+                  placeholder="e.g. 9876543210"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-medium bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  required={orderType === 'takeaway'}
+                />
+              </div>
             </div>
           </div>
 
