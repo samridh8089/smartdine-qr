@@ -243,7 +243,7 @@ export async function POST(req: Request) {
           }).catch(() => {});
         }
 
-        // After completed → payment verified + session closed
+        // After completed → payment verified + session closed → report generated
         if (effectiveStatus === 'completed') {
           logSystemEvent({
             restaurantId: restId,
@@ -253,7 +253,12 @@ export async function POST(req: Request) {
             eventType: 'payment_success',
             sourceNode: 'billing',
             targetNode: 'payment',
-            metadata: { staffName, paymentStatus: 'paid' },
+            metadata: {
+              staffName,
+              paymentStatus: updatedOrder?.payment_status || 'paid',
+              paymentMethod: updatedOrder?.payment_method || 'cash',
+              total: updatedOrder?.total || 0,
+            },
           }).catch(() => {});
 
           logSystemEvent({
@@ -266,7 +271,25 @@ export async function POST(req: Request) {
             targetNode: 'session_closed',
             metadata: { staffName },
           }).catch(() => {});
+
+          logSystemEvent({
+            restaurantId: restId,
+            correlationId: stableCorrId,
+            orderId: targetOrderId,
+            actorType: 'system',
+            eventType: 'report_generated',
+            sourceNode: 'session_closed',
+            targetNode: 'reports',
+            metadata: {
+              staffName,
+              revenue: updatedOrder?.total || 0,
+              paymentMethod: updatedOrder?.payment_method || 'cash',
+              orderType: updatedOrder?.order_type || 'dine_in',
+              reportType: 'order_session_closed',
+            },
+          }).catch(() => {});
         }
+
 
         // ────────────────────────────────────────────────────────────────────
       }

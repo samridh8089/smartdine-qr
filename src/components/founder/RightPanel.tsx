@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 /**
  * Phase-19: Founder Control Center — Right Panel
@@ -47,14 +47,22 @@ function truncate(s: string | undefined, len: number): string {
 }
 
 const EVENT_BADGE_COLOR: Record<string, string> = {
-  order_created:   'bg-emerald-700 text-emerald-100',
-  order_preparing: 'bg-amber-700 text-amber-100',
-  order_ready:     'bg-sky-700 text-sky-100',
-  order_served:    'bg-violet-700 text-violet-100',
-  payment_success: 'bg-green-700 text-green-100',
-  payment_failed:  'bg-red-700 text-red-100',
-  push_failed:     'bg-red-700 text-red-100',
+  order_created:      'bg-emerald-700 text-emerald-100',
+  order_accepted:     'bg-blue-700 text-blue-100',
+  order_preparing:    'bg-amber-700 text-amber-100',
+  order_ready:        'bg-sky-700 text-sky-100',
+  waiter_assigned:    'bg-purple-700 text-purple-100',
+  order_served:       'bg-violet-700 text-violet-100',
+  bill_closed:        'bg-cyan-700 text-cyan-100',
+  payment_success:    'bg-green-700 text-green-100',
+  payment_failed:     'bg-red-700 text-red-100',
+  session_closed:     'bg-slate-700 text-slate-100',
+  push_sent:          'bg-teal-700 text-teal-100',
+  push_failed:        'bg-red-700 text-red-100',
   inventory_reserved: 'bg-teal-700 text-teal-100',
+  inventory_deducted: 'bg-teal-800 text-teal-100',
+  audit_written:      'bg-fuchsia-800 text-fuchsia-100',
+  report_generated:   'bg-indigo-700 text-indigo-100',
 };
 
 function badgeClass(eventType: string): string {
@@ -169,28 +177,32 @@ interface InspectorTabProps {
 }
 
 function InspectorTab({ selectedNodeId, events }: InspectorTabProps) {
-  const nodeData = useMemo<NodeInspectorData | null>(() => {
-    if (!selectedNodeId) return null;
+  // ── 1. useState ──
+  const [internalNodeId, setInternalNodeId] = useState<string>('reports');
 
-    const graphNode = GRAPH_NODES.find((n) => n.id === selectedNodeId);
+  // ── 3. useMemo ──
+  const activeNodeId = useMemo(
+    () => selectedNodeId || internalNodeId || 'reports',
+    [selectedNodeId, internalNodeId]
+  );
+
+  const nodeData = useMemo<NodeInspectorData | null>(() => {
+    const graphNode = GRAPH_NODES.find((n) => n.id === activeNodeId);
     if (!graphNode) return null;
 
     // Events whose target_node or mapped event_type matches this node
     const nodeEvents = events
       .filter((ev) => {
         const mapped = EVENT_TO_NODE[ev.event_type];
-        return ev.target_node === selectedNodeId || mapped === selectedNodeId;
+        return ev.target_node === activeNodeId || mapped === activeNodeId;
       })
       .slice()
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
     const recentEvents = nodeEvents.slice(0, 10);
 
-    // Current queue: orders that arrived at this node but have no subsequent node event
+    // Current queue: count unique correlation_ids in last 5 min at this node
     const activeCorrIds = new Set<string>();
-    const nodesAfter = new Set<string>();
-
-    // Simple heuristic: count unique correlation_ids in last 5 min at this node
     const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
     for (const ev of nodeEvents) {
       if (ev.created_at >= fiveMinAgo) {
@@ -215,11 +227,9 @@ function InspectorTab({ selectedNodeId, events }: InspectorTabProps) {
       (ev) => ev.event_type.includes('failed') || ev.event_type.includes('cancelled')
     );
 
-    // Connected nodes from edges
     const connectedNodes: string[] = [];
-    // We'll pull a simple list from the node description context
     return {
-      nodeId: selectedNodeId,
+      nodeId: activeNodeId,
       label: graphNode.label,
       currentQueue: activeCorrIds.size,
       lastEventAt: lastEvent?.created_at,
@@ -228,87 +238,102 @@ function InspectorTab({ selectedNodeId, events }: InspectorTabProps) {
       connectedNodes,
       errors,
     };
-  }, [selectedNodeId, events]);
+  }, [activeNodeId, events]);
 
-  if (!selectedNodeId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-500">
-        <Search className="w-8 h-8 opacity-30" />
-        <p className="text-sm">Click a node on the canvas to inspect it</p>
-      </div>
-    );
-  }
+  // ── 5. useEffect ──
+  useEffect(() => {
+    if (selectedNodeId) {
+      setInternalNodeId(selectedNodeId);
+    }
+  }, [selectedNodeId]);
 
-  if (!nodeData) {
-    return (
-      <div className="flex items-center justify-center h-full text-slate-500 text-sm">
-        Node not found: {selectedNodeId}
-      </div>
-    );
-  }
-
+  // ── Render (all hooks unconditionally executed) ──
   return (
-    <div className="overflow-y-auto h-full divide-y divide-slate-800">
-      {/* Node header */}
-      <div className="px-4 py-3 bg-slate-800/40">
-        <h3 className="text-sm font-semibold text-slate-100">{nodeData.label}</h3>
-        <p className="text-[11px] text-slate-400 mt-0.5">
-          {GRAPH_NODES.find((n) => n.id === nodeData.nodeId)?.description ?? ''}
-        </p>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 divide-x divide-slate-800">
-        <Stat label="Queue (5m)" value={String(nodeData.currentQueue)} />
-        <Stat
-          label="Last Event"
-          value={nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '—'}
-        />
-        <Stat
-          label="Avg Duration"
-          value={nodeData.avgDurationMs != null ? `${nodeData.avgDurationMs}ms` : '—'}
-        />
-      </div>
-
-      {/* Errors */}
-      {nodeData.errors.length > 0 && (
-        <div className="px-3 py-2">
-          <p className="text-[10px] font-semibold text-red-400 mb-1">
-            ⚠ {nodeData.errors.length} error event{nodeData.errors.length !== 1 ? 's' : ''}
-          </p>
-          {nodeData.errors.slice(0, 3).map((ev) => (
-            <div key={ev.id} className="text-[10px] text-slate-400 py-0.5">
-              {fmtTime(ev.created_at)} · {ev.event_type} · corr={truncate(ev.correlation_id, 8)}
-            </div>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Node selector dropdown */}
+      <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Node:</span>
+        <select
+          value={activeNodeId}
+          onChange={(e) => setInternalNodeId(e.target.value)}
+          className="bg-slate-900 text-xs text-sky-400 font-semibold rounded border border-slate-700 px-2 py-1 focus:outline-none focus:border-sky-500 cursor-pointer"
+        >
+          {GRAPH_NODES.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.label}
+            </option>
           ))}
+        </select>
+      </div>
+
+      {!nodeData ? (
+        <div className="flex items-center justify-center flex-1 text-slate-500 text-sm">
+          Node not found: {activeNodeId}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-800">
+          {/* Node header */}
+          <div className="px-4 py-3 bg-slate-800/40">
+            <h3 className="text-sm font-semibold text-slate-100">{nodeData.label}</h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {GRAPH_NODES.find((n) => n.id === nodeData.nodeId)?.description ?? ''}
+            </p>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 divide-x divide-slate-800">
+            <Stat label="Queue (5m)" value={String(nodeData.currentQueue)} />
+            <Stat
+              label="Last Event"
+              value={nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '—'}
+            />
+            <Stat
+              label="Avg Duration"
+              value={nodeData.avgDurationMs != null ? `${nodeData.avgDurationMs}ms` : '—'}
+            />
+          </div>
+
+          {/* Errors */}
+          {nodeData.errors.length > 0 && (
+            <div className="px-3 py-2">
+              <p className="text-[10px] font-semibold text-red-400 mb-1">
+                ⚠ {nodeData.errors.length} error event{nodeData.errors.length !== 1 ? 's' : ''}
+              </p>
+              {nodeData.errors.slice(0, 3).map((ev) => (
+                <div key={ev.id} className="text-[10px] text-slate-400 py-0.5">
+                  {fmtTime(ev.created_at)} · {ev.event_type} · corr={truncate(ev.correlation_id, 8)}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Recent events */}
+          <div className="px-3 py-2">
+            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Recent Events (last 10)
+            </p>
+            {nodeData.recentEvents.length === 0 ? (
+              <p className="text-[11px] text-slate-500">No events</p>
+            ) : (
+              <div className="divide-y divide-slate-800/60">
+                {nodeData.recentEvents.map((ev) => (
+                  <div key={ev.id} className="py-1.5 flex items-center gap-2">
+                    <span className="text-[10px] font-mono text-slate-500 w-16 shrink-0">
+                      {fmtTime(ev.created_at)}
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${badgeClass(ev.event_type)}`}>
+                      {ev.event_type}
+                    </span>
+                    <span className="text-[10px] text-slate-500 ml-auto font-mono">
+                      {truncate(ev.correlation_id, 8)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
-
-      {/* Recent events */}
-      <div className="px-3 py-2">
-        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-          Recent Events (last 10)
-        </p>
-        {nodeData.recentEvents.length === 0 ? (
-          <p className="text-[11px] text-slate-500">No events</p>
-        ) : (
-          <div className="divide-y divide-slate-800/60">
-            {nodeData.recentEvents.map((ev) => (
-              <div key={ev.id} className="py-1.5 flex items-center gap-2">
-                <span className="text-[10px] font-mono text-slate-500 w-16 shrink-0">
-                  {fmtTime(ev.created_at)}
-                </span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${badgeClass(ev.event_type)}`}>
-                  {ev.event_type}
-                </span>
-                <span className="text-[10px] text-slate-500 ml-auto font-mono">
-                  {truncate(ev.correlation_id, 8)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -330,15 +355,61 @@ interface FlightRecorderTabProps {
 }
 
 function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
+  // ── 1. useState ──
+  const [selectedCorrId, setSelectedCorrId] = useState<string | null>(() => selectedDot?.correlationId || null);
+
+  // ── 2. useRef ──
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // ── 3. useMemo ──
+  const distinctCorrelations = useMemo(() => {
+    const map = new Map<string, { correlationId: string; orderId?: string; lastEvent: string; time: string }>();
+    for (const ev of events) {
+      if (!map.has(ev.correlation_id)) {
+        map.set(ev.correlation_id, {
+          correlationId: ev.correlation_id,
+          orderId: ev.order_id,
+          lastEvent: ev.event_type,
+          time: ev.created_at,
+        });
+      }
+    }
+    return Array.from(map.values()).slice(0, 30);
+  }, [events]);
+
+  const effectiveCorrId = useMemo(
+    () => selectedCorrId || selectedDot?.correlationId || (distinctCorrelations[0]?.correlationId ?? null),
+    [selectedCorrId, selectedDot, distinctCorrelations]
+  );
+
   const journey = useMemo<SystemEvent[]>(() => {
-    if (!selectedDot) return [];
+    if (!effectiveCorrId) return [];
     return events
-      .filter((ev) => ev.correlation_id === selectedDot.correlationId)
+      .filter((ev) => ev.correlation_id === effectiveCorrId)
       .slice()
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
-  }, [selectedDot, events]);
+  }, [effectiveCorrId, events]);
+
+  const activeDotInfo = useMemo(() => {
+    if (selectedDot && selectedDot.correlationId === effectiveCorrId) {
+      return selectedDot;
+    }
+    const match = distinctCorrelations.find((c) => c.correlationId === effectiveCorrId);
+    const lastEv = journey[journey.length - 1];
+    return {
+      orderId: match?.orderId || lastEv?.order_id,
+      correlationId: effectiveCorrId || '',
+      currentNodeId: lastEv?.target_node || 'session_closed',
+      color: '#38bdf8',
+    };
+  }, [selectedDot, effectiveCorrId, distinctCorrelations, journey]);
+
+  // ── 5. useEffect ──
+  useEffect(() => {
+    if (selectedDot?.correlationId) {
+      setSelectedCorrId(selectedDot.correlationId);
+    }
+  }, [selectedDot]);
 
   useEffect(() => {
     if (bottomRef.current) {
@@ -346,7 +417,8 @@ function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
     }
   }, [journey]);
 
-  if (!selectedDot) {
+  // ── Render (all hooks unconditionally executed) ──
+  if (!effectiveCorrId) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-500">
         <Clock className="w-8 h-8 opacity-30" />
@@ -357,23 +429,39 @@ function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {/* Selector Header */}
+      <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-slate-800/80 border-b border-slate-700">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Journey:</span>
+        <select
+          value={effectiveCorrId}
+          onChange={(e) => setSelectedCorrId(e.target.value)}
+          className="bg-slate-900 text-[11px] text-sky-400 font-mono rounded border border-slate-700 px-2 py-0.5 max-w-[200px] truncate focus:outline-none focus:border-sky-500 cursor-pointer"
+        >
+          {distinctCorrelations.map((c) => (
+            <option key={c.correlationId} value={c.correlationId}>
+              {truncate(c.correlationId, 12)} ({c.lastEvent})
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Header */}
       <div className="shrink-0 px-3 py-2 bg-slate-800/40 border-b border-slate-800">
         <div className="flex items-center gap-2">
           <div
             className="w-3 h-3 rounded-full shrink-0"
-            style={{ backgroundColor: selectedDot.color }}
+            style={{ backgroundColor: activeDotInfo.color }}
           />
           <span className="text-[11px] font-mono text-slate-300">
-            {selectedDot.correlationId}
+            {effectiveCorrId}
           </span>
-          {selectedDot.orderId && (
-            <span className="text-[10px] text-slate-500">Order #{truncate(selectedDot.orderId, 8)}</span>
+          {activeDotInfo.orderId && (
+            <span className="text-[10px] text-slate-500">Order #{truncate(activeDotInfo.orderId, 8)}</span>
           )}
         </div>
         <p className="text-[10px] text-slate-500 mt-0.5">
-          {journey.length} events · Currently at{' '}
-          <span className="text-slate-300">{selectedDot.currentNodeId}</span>
+          {journey.length} events · Status:{' '}
+          <span className="text-slate-300 font-medium">{activeDotInfo.currentNodeId}</span>
         </p>
       </div>
 
@@ -464,8 +552,8 @@ export default function RightPanel({
   }, [selectedDot]);
 
   useEffect(() => {
-    if (selectedNodeId && !selectedDot) setActiveTab('inspector');
-  }, [selectedNodeId, selectedDot]);
+    if (selectedNodeId) setActiveTab('inspector');
+  }, [selectedNodeId]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (

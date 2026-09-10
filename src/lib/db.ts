@@ -3031,6 +3031,53 @@ export const db = {
     }
 
     if (paymentStatus === 'paid') {
+      const payCorrId = getOrderCorrelationId(fullOrder.id);
+      logSystemEvent({
+        restaurantId: fullOrder.restaurant_id,
+        correlationId: payCorrId,
+        orderId: fullOrder.id,
+        actorType: 'system',
+        eventType: 'payment_success',
+        sourceNode: 'billing',
+        targetNode: 'payment',
+        metadata: {
+          paymentMethod: method || 'online',
+          paymentStatus: 'paid',
+          total: fullOrder.total,
+          markedBy: userName || 'Billing Payment',
+          reference: reference || null,
+        },
+      }).catch(() => {});
+
+      logSystemEvent({
+        restaurantId: fullOrder.restaurant_id,
+        correlationId: payCorrId,
+        orderId: fullOrder.id,
+        actorType: 'system',
+        eventType: 'session_closed',
+        sourceNode: 'payment',
+        targetNode: 'session_closed',
+        metadata: {
+          markedBy: userName || 'Billing Payment',
+        },
+      }).catch(() => {});
+
+      logSystemEvent({
+        restaurantId: fullOrder.restaurant_id,
+        correlationId: payCorrId,
+        orderId: fullOrder.id,
+        actorType: 'system',
+        eventType: 'report_generated',
+        sourceNode: 'session_closed',
+        targetNode: 'reports',
+        metadata: {
+          revenue: fullOrder.total || 0,
+          paymentMethod: method || 'online',
+          orderType: fullOrder.order_type || 'dine_in',
+          reportType: 'order_session_closed',
+        },
+      }).catch(() => {});
+
       if (fullOrder.table_id) {
         this.checkAndReleaseTableOccupancy(fullOrder.restaurant_id, fullOrder.table_id).catch(err => {
           console.log('[TableOccupancy] Error releasing table occupancy on payment:', err?.message);
@@ -3048,6 +3095,7 @@ export const db = {
         console.error('[UpdateOrderPaymentStatus] Inventory consumption warning:', invErr?.message || invErr);
       }
     }
+
 
     return fullOrder;
   },

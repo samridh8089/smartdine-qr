@@ -92,10 +92,12 @@ export const EVENT_TO_NODE: Record<string, string> = {
   push_sent:               'push_notifications',
   push_failed:             'push_notifications',
   audit_written:           'audit_logs',
+  report_generated:        'reports',
   reservation_created:     'order_created',
   reservation_seated:      'live_orders',
   takeaway_created:        'order_created',
 };
+
 
 
 // ─── Node lookup by ID ────────────────────────────────────────────────────────
