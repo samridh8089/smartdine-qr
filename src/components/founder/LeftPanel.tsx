@@ -17,6 +17,8 @@ import {
   Receipt,
   Utensils,
   ExternalLink,
+  QrCode,
+  History,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -580,95 +582,168 @@ export default function LeftPanel({
 
           {/* Drawer Body */}
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {/* Meta Attributes Grid */}
-            <div className="grid grid-cols-2 gap-2 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-[10px] font-mono">
-              <div>
-                <span className="text-slate-500 block">Session ID:</span>
-                <span className="text-slate-300 font-medium truncate block">
-                  {activeSelectedTable.sessionId || 'sess_active_14'}
-                </span>
+            {activeSelectedTable.status === 'available' ? (
+              /* Empty / Available Table View */
+              <div className="flex flex-col items-center justify-center py-8 px-2 text-center space-y-3">
+                <div className="h-12 w-12 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center text-slate-400">
+                  <Utensils className="h-6 w-6 opacity-40" />
+                </div>
+                <div>
+                  <h5 className="text-xs font-bold text-slate-200 font-mono">No active order</h5>
+                  <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                    {activeSelectedTable.name} is currently vacant and ready for guests.
+                  </p>
+                </div>
+                <div className="w-full space-y-2 pt-2">
+                  <button
+                    onClick={handleOpenTimelineClick}
+                    className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 font-mono transition-all cursor-pointer"
+                  >
+                    <History className="h-3.5 w-3.5 text-sky-400" />
+                    <span>View History</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.open(`/menu?table=${encodeURIComponent(activeSelectedTable.name)}`, '_blank');
+                      }
+                    }}
+                    className="w-full py-2 px-3 bg-sky-950/60 hover:bg-sky-900/80 border border-sky-700/60 text-sky-300 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 font-mono transition-all cursor-pointer"
+                  >
+                    <QrCode className="h-3.5 w-3.5" />
+                    <span>Generate QR</span>
+                  </button>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-500 block">Assigned Waiter:</span>
-                <span className="text-sky-400 font-medium truncate block">
-                  {activeSelectedTable.waiterName || 'Ravi Sharma'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Current Status:</span>
-                <span
-                  className={`font-bold uppercase ${
-                    STATUS_CONFIG[activeSelectedTable.status]?.text || 'text-slate-300'
-                  }`}
-                >
-                  {activeSelectedTable.status}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Order Duration:</span>
-                <span className="text-amber-300 font-medium">
-                  {activeSelectedTable.orderDurationMin
-                    ? `${activeSelectedTable.orderDurationMin} mins`
-                    : 'Just seated'}
-                </span>
-              </div>
-            </div>
-
-            {/* Ordered Items List */}
-            <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between font-mono">
-                <span>Ordered Items</span>
-                <span className="text-slate-500 font-mono">
-                  {activeSelectedTable.items.length} items
-                </span>
-              </p>
-              <div className="space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-800/80 font-mono">
-                {activeSelectedTable.items.length === 0 ? (
-                  <div className="text-[10px] text-slate-500 py-2 text-center">
-                    1x Margherita Pizza, 1x Cheese Garlic Bread
+            ) : (
+              /* Active / Occupied Table View */
+              <>
+                {/* Meta Attributes Grid */}
+                <div className="grid grid-cols-2 gap-2 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-[10px] font-mono">
+                  <div>
+                    <span className="text-slate-500 block">Session ID:</span>
+                    <span className="text-slate-300 font-medium truncate block">
+                      {activeSelectedTable.sessionId || 'sess_active_14'}
+                    </span>
                   </div>
-                ) : (
-                  activeSelectedTable.items.map((item, idx) => (
-                    <div
-                      key={item.id || idx}
-                      className="flex items-center justify-between text-[10px] py-1 border-b border-slate-800/50 last:border-0"
+                  <div>
+                    <span className="text-slate-500 block">Assigned Waiter:</span>
+                    <span className="text-sky-400 font-medium truncate block">
+                      {activeSelectedTable.waiterName || 'Ravi Sharma'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Current Status:</span>
+                    <span
+                      className={`font-bold uppercase ${
+                        STATUS_CONFIG[activeSelectedTable.status]?.text || 'text-slate-300'
+                      }`}
                     >
-                      <div className="flex items-center gap-1.5 text-slate-200 truncate">
-                        <span className="font-mono text-sky-400 font-bold">{item.quantity}x</span>
-                        <span className="truncate">{item.name}</span>
-                      </div>
-                      <span className="font-mono text-slate-400 shrink-0">
-                        ₹{item.price * item.quantity}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+                      {activeSelectedTable.status}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Order Duration:</span>
+                    <span className="text-amber-300 font-medium">
+                      {activeSelectedTable.orderDurationMin
+                        ? `${activeSelectedTable.orderDurationMin} mins`
+                        : 'Just seated'}
+                    </span>
+                  </div>
+                </div>
 
-            {/* Total Bill Card */}
-            <div className="flex items-center justify-between p-2.5 bg-emerald-950/40 border border-emerald-700/60 rounded-lg">
-              <div className="flex items-center gap-1.5 text-emerald-400">
-                <Receipt className="h-4 w-4" />
-                <span className="text-xs font-bold uppercase tracking-wide font-mono">Total Bill</span>
-              </div>
-              <span className="text-sm font-mono font-bold text-emerald-300">
-                ₹{activeSelectedTable.totalBill || 458}
-              </span>
-            </div>
+                {/* Stage Tracking Pills */}
+                <div className="space-y-1 font-mono">
+                  <span className="text-[9px] text-slate-500 block uppercase">Operational Stages</span>
+                  <div className="grid grid-cols-3 gap-1 text-[9px] text-center">
+                    <span className={`py-1 rounded border font-semibold ${
+                      activeSelectedTable.status === 'ready'
+                        ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-300'
+                        : activeSelectedTable.status === 'preparing'
+                        ? 'bg-amber-950/60 border-amber-700/60 text-amber-300'
+                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}>
+                      Kitchen: {activeSelectedTable.status === 'ready' ? 'Ready' : activeSelectedTable.status === 'preparing' ? 'Preparing' : 'Queue'}
+                    </span>
+                    <span className="py-1 rounded border font-semibold bg-purple-950/60 border-purple-700/60 text-purple-300">
+                      Waiter: Assigned
+                    </span>
+                    <span className="py-1 rounded border font-semibold bg-cyan-950/60 border-cyan-700/60 text-cyan-300">
+                      Billing: Pending
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ordered Items List */}
+                <div>
+                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between font-mono">
+                    <span>Ordered Items</span>
+                    <span className="text-slate-500 font-mono">
+                      {activeSelectedTable.items.length} items
+                    </span>
+                  </p>
+                  <div className="space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-800/80 font-mono">
+                    {activeSelectedTable.items.length === 0 ? (
+                      <div className="text-[10px] text-slate-500 py-2 text-center">
+                        1x Margherita Pizza, 1x Cheese Garlic Bread
+                      </div>
+                    ) : (
+                      activeSelectedTable.items.map((item, idx) => (
+                        <div
+                          key={item.id || idx}
+                          className="flex items-center justify-between text-[10px] py-1 border-b border-slate-800/50 last:border-0"
+                        >
+                          <div className="flex items-center gap-1.5 text-slate-200 truncate">
+                            <span className="font-mono text-sky-400 font-bold">{item.quantity}x</span>
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                          <span className="font-mono text-slate-400 shrink-0">
+                            ₹{item.price * item.quantity}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Total Bill Card */}
+                <div className="flex items-center justify-between p-2.5 bg-emerald-950/40 border border-emerald-700/60 rounded-lg">
+                  <div className="flex items-center gap-1.5 text-emerald-400">
+                    <Receipt className="h-4 w-4" />
+                    <span className="text-xs font-bold uppercase tracking-wide font-mono">Total Bill</span>
+                  </div>
+                  <span className="text-sm font-mono font-bold text-emerald-300">
+                    ₹{activeSelectedTable.totalBill || 458}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Drawer Actions */}
-          <div className="p-3 border-t border-slate-800 bg-slate-900 shrink-0">
-            <button
-              data-testid="btn-open-timeline"
-              onClick={handleOpenTimelineClick}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-sky-900/40 transition-all cursor-pointer font-mono"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              <span>Open Timeline</span>
-            </button>
-          </div>
+          {activeSelectedTable.status !== 'available' && (
+            <div className="p-3 border-t border-slate-800 bg-slate-900 shrink-0 space-y-2">
+              <button
+                data-testid="btn-open-timeline"
+                onClick={handleOpenTimelineClick}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-sky-900/40 transition-all cursor-pointer font-mono"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Open Timeline</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.open('/dashboard/orders', '_blank');
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 py-1.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-all cursor-pointer font-mono"
+              >
+                <Utensils className="h-3 w-3 text-amber-400" />
+                <span>Open Live Order</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

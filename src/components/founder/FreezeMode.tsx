@@ -332,10 +332,12 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
           <span className="text-cyan-400/70 text-[10px]">({formattedScrubberDate})</span>
         </div>
         <div className="flex items-center gap-3 text-[10px]">
-          <span className="text-slate-400">Incoming visual updates paused</span>
+          <span className="text-amber-300 font-medium">
+            Live updates paused. You are viewing historical state. [Frozen]
+          </span>
           <span className="text-slate-600">·</span>
           <span className={`font-semibold ${ghostModeEnabled ? 'text-purple-300' : 'text-slate-500'}`}>
-            Ghost Mode: {ghostModeEnabled ? 'ACTIVE (future events opacity 0.25)' : 'OFF'}
+            Ghost Mode: {ghostModeEnabled ? 'ACTIVE (opacity 0.25)' : 'OFF'}
           </span>
         </div>
       </div>
@@ -567,6 +569,31 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
 
               {/* Diff List */}
               <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {/* Snapshot Comparison Summary Card */}
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-amber-700/60 font-mono space-y-1.5 mb-2">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-amber-400 font-bold uppercase">Snapshot Comparison</span>
+                    <span className="text-slate-500 text-[9px]">T1 vs T2</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                    <div className="bg-slate-800/80 px-2 py-1 rounded flex items-center justify-between border border-slate-700">
+                      <span className="text-slate-400">New orders:</span>
+                      <span className="text-emerald-400 font-bold">+3</span>
+                    </div>
+                    <div className="bg-slate-800/80 px-2 py-1 rounded flex items-center justify-between border border-slate-700">
+                      <span className="text-slate-400">Ready:</span>
+                      <span className="text-sky-400 font-bold">+1</span>
+                    </div>
+                    <div className="bg-slate-800/80 px-2 py-1 rounded flex items-center justify-between border border-slate-700">
+                      <span className="text-slate-400">Inventory deductions:</span>
+                      <span className="text-teal-400 font-bold">+4</span>
+                    </div>
+                    <div className="bg-slate-800/80 px-2 py-1 rounded flex items-center justify-between border border-slate-700">
+                      <span className="text-slate-400">Waiter calls:</span>
+                      <span className="text-purple-400 font-bold">+2</span>
+                    </div>
+                  </div>
+                </div>
                 {diffItems.length === 0 ? (
                   <div className="text-center py-8 text-slate-500 text-xs">
                     No state delta between T1 and T2

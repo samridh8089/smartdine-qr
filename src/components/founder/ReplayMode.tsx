@@ -312,6 +312,20 @@ export default function ReplayMode({ restaurantId, initialEvents }: ReplayModePr
 
       {/* Canvas */}
       <div ref={containerRef} className="flex-1 relative overflow-hidden bg-slate-950">
+        {/* Top Replaying Order Banner */}
+        {currentEvent && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-slate-900/95 border border-purple-500/70 rounded-full text-xs text-purple-200 font-mono shadow-xl shadow-purple-950/80 flex items-center gap-2.5 z-10 animate-in fade-in">
+            <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
+            <span className="font-bold text-slate-100">
+              Replaying Order #{currentEvent.order_id ? currentEvent.order_id.slice(0, 8) : currentEvent.correlation_id.replace('corr_', '').slice(0, 8)}
+            </span>
+            <span className="text-slate-500">·</span>
+            <span className="text-purple-300 font-semibold uppercase text-[11px]">
+              Stage: {currentEvent.target_node || EVENT_TO_NODE[currentEvent.event_type] || currentEvent.event_type}
+            </span>
+          </div>
+        )}
+
         {events.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-600">
             <Play className="h-10 w-10 opacity-30" />
@@ -325,6 +339,7 @@ export default function ReplayMode({ restaurantId, initialEvents }: ReplayModePr
               orderDots={replayDots}
               events={events.slice(0, currentIdx + 1)}
               followingOrderId={null}
+              highlightedNodeId={currentEvent?.target_node || EVENT_TO_NODE[currentEvent?.event_type] || null}
               onNodeClick={() => {}}
               onDotClick={() => {}}
             />

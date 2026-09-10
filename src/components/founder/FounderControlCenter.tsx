@@ -8,7 +8,21 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Activity, RotateCcw, PauseCircle, Network, Bug, Wifi, WifiOff, Zap, LogOut } from 'lucide-react';
+import {
+  Activity,
+  RotateCcw,
+  PauseCircle,
+  Network,
+  Bug,
+  Wifi,
+  WifiOff,
+  Zap,
+  LogOut,
+  HelpCircle,
+  BookOpen,
+  X,
+  Sparkles,
+} from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LiveMode from './LiveMode';
 import ReplayMode from './ReplayMode';
@@ -44,6 +58,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const router = useRouter();
   const [activeMode, setActiveMode] = useState<FounderMode>(readSavedMode);
   const [followingOrderId, setFollowingOrderId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState<boolean>(false);
   const [recorderEnabled, setRecorderEnabled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('founder_recorder_enabled') !== 'false';
@@ -97,6 +112,10 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     if (typeof window !== 'undefined') {
       localStorage.setItem('founder_recorder_mode', mode);
     }
+  }, []);
+
+  const handleToggleHelp = useCallback(() => {
+    setHelpOpen((prev) => !prev);
   }, []);
 
   const handleExitFounderMode = useCallback(() => {
@@ -214,10 +233,22 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             </div>
           )}
 
+          {/* Help & Guide button */}
+          <button
+            data-testid="btn-help-guide"
+            onClick={handleToggleHelp}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-300 hover:text-white bg-sky-950/60 hover:bg-sky-600 border border-sky-800/60 hover:border-sky-500 rounded-lg transition-all shadow-sm cursor-pointer ml-1"
+            title="Open Interactive Demo & Walkthrough Guide"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Help & Guide</span>
+            <span className="sm:hidden">Help</span>
+          </button>
+
           {/* Exit Founder Mode */}
           <button
             onClick={handleExitFounderMode}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/50 hover:bg-rose-600 border border-rose-800/60 hover:border-rose-500 rounded-lg transition-all shadow-sm cursor-pointer ml-1"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/50 hover:bg-rose-600 border border-rose-800/60 hover:border-rose-500 rounded-lg transition-all shadow-sm cursor-pointer"
             title="Exit Founder Control Center"
           >
             <LogOut className="h-3.5 w-3.5" />
@@ -254,6 +285,123 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           <DebugMode restaurantId={restaurantId} events={events} />
         )}
       </div>
+
+      {/* ── Part 10: Demo Walkthrough Mode Modal ─────────────────────────── */}
+      {helpOpen && (
+        <div
+          data-testid="help-guide-modal"
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-800 bg-slate-850 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-sky-950/80 border border-sky-600/50 text-sky-400">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100">
+                    Founder Control Center — Interactive Guide
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Mission control flight deck for smart restaurant operations
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setHelpOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs font-mono">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Live Mode */}
+                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-sky-400 font-bold">
+                    <Activity className="h-4 w-4" />
+                    <span>Live Mode & Pipeline</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Visualizes active orders moving from QR scan through Kitchen prep to Billing. Click glowing dots to trace complete order journey. Click nodes to open telemetry.
+                  </p>
+                </div>
+
+                {/* 2. Interactive Floor Twin */}
+                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Interactive Floor Twin</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Click any occupied table to view session ID, assigned waiter, bill amount, ordered items, and kitchen stage pills. Click empty tables to generate QR codes.
+                  </p>
+                </div>
+
+                {/* 3. Actionable Inspector */}
+                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-purple-400 font-bold">
+                    <Network className="h-4 w-4" />
+                    <span>Actionable Inspector</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Inspect telemetry for any subsystem. Customer Calls node includes instant dispatch buttons (&quot;I&apos;m Coming&quot;, &quot;Assign Ravi&quot;), Push alerts, and Executive Reports.
+                  </p>
+                </div>
+
+                {/* 4. CCTV Replay Mode */}
+                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-indigo-400 font-bold">
+                    <RotateCcw className="h-4 w-4" />
+                    <span>CCTV Replay Mode</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Auto-loads today&apos;s events. Scrub through time, choose 1x, 2x, or 5x playback speed, and watch orders traverse the pipeline with glowing camera tracking.
+                  </p>
+                </div>
+
+                {/* 5. Freeze Mode & Time Travel */}
+                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-cyan-400 font-bold">
+                    <PauseCircle className="h-4 w-4" />
+                    <span>Freeze Frame & Diff</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Freezes incoming updates. Scrubber slider reconstructs historical floor occupancy and KDS counts. Ghost Mode and Compare Diff compute state deltas.
+                  </p>
+                </div>
+
+                {/* 6. Frozen Inventory Telemetry */}
+                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
+                  <div className="flex items-center gap-2 text-teal-400 font-bold">
+                    <Zap className="h-4 w-4" />
+                    <span>Frozen Inventory Telemetry</span>
+                  </div>
+                  <p className="text-slate-300 text-[11px] leading-relaxed">
+                    Permanent frozen inventory engine. Real-time audit logs track reservations on acceptance and recipe deductions on kitchen preparation with idempotency.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-slate-800 bg-slate-850 flex items-center justify-between">
+              <span className="text-[10px] text-slate-500 font-mono">
+                CleverOps Founder Flight Deck v21.4
+              </span>
+              <button
+                onClick={() => setHelpOpen(false)}
+                className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold font-mono cursor-pointer transition-colors"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

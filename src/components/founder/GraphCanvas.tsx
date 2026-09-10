@@ -70,15 +70,12 @@ function getDotOffset(
   nodeWidth: number,
   nodeHeight: number
 ): { x: number; y: number } {
-  const col = indexInNode % DOTS_PER_ROW;
-  const row = Math.floor(indexInNode / DOTS_PER_ROW);
-  const totalCols = Math.min(DOTS_PER_ROW, 4);
-  const startX = (nodeWidth - (totalCols - 1) * DOT_COL_GAP) / 2;
-  // Position dots along the bottom shelf (y = nodeHeight - 11) to avoid overlapping centered label
-  const startY = nodeHeight - 11;
+  // Move colored dots slightly above-left of the title (Part 1 fix)
+  const col = indexInNode % 3;
+  const row = Math.floor(indexInNode / 3);
   return {
-    x: startX + col * DOT_COL_GAP - nodeWidth / 2,
-    y: startY + row * 10 - nodeHeight / 2,
+    x: -nodeWidth / 2 + 16 + col * 14,
+    y: -nodeHeight / 2 + 16 + row * 12,
   };
 }
 
@@ -162,12 +159,25 @@ const NodeGroup = React.memo(function NodeGroup({
         fill={glowColor}
         listening={false}
       />
+      {/* Category Indicator Dot: Above-left of node title */}
+      <Circle
+        x={14}
+        y={14}
+        radius={3.5}
+        fill="#38bdf8"
+        stroke="rgba(255,255,255,0.7)"
+        strokeWidth={1}
+        shadowColor="#38bdf8"
+        shadowBlur={4}
+        shadowOpacity={0.8}
+        listening={false}
+      />
       {/* Label: Strictly vertically centered with >= 12px horizontal padding */}
       <Text
         text={node.label}
-        x={12}
+        x={24}
         y={0}
-        width={node.width - 24}
+        width={node.width - 44}
         height={node.height}
         align="center"
         verticalAlign="middle"
