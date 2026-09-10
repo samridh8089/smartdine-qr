@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowRight,
+  Command,
 } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LiveMode from './LiveMode';
@@ -33,6 +34,7 @@ import FreezeMode from './FreezeMode';
 import SystemMode from './SystemMode';
 import DebugMode from './DebugMode';
 import OrderInvestigationBar, { InvestigatedOrder } from './OrderInvestigationBar';
+import CommandPalette from './CommandPalette';
 import type { FounderMode } from './types';
 
 interface FounderControlCenterProps {
@@ -155,6 +157,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const [investigatedOrder, setInvestigatedOrder] = useState<InvestigatedOrder | null>(null);
   const [replayTargetOrder, setReplayTargetOrder] = useState<InvestigatedOrder | null>(null);
   const [freezeTargetTimestamp, setFreezeTargetTimestamp] = useState<number | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
 
   const { events, orderDots, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
     restaurantId,
@@ -260,27 +263,46 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     handleModeChange('live');
   }, [handleModeChange]);
 
-  // Global keyboard shortcuts (Space Pause/Play, L Live, R Replay, F Freeze, T Theme, Esc Close Drawer/Help)
+  const handleSelectTableFromPalette = useCallback((tableName: string) => {
+    handleModeChange('live');
+  }, [handleModeChange]);
+
+  // Global keyboard shortcuts (Ctrl+K Command Palette, Space Pause/Play, L Live, R Replay, F Freeze, T Theme, Esc Close Drawer/Help/Palette)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+
+      // Ctrl+K or Cmd+K opens/toggles Command Palette
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        return;
+      }
+
       if (e.key === ' ' || e.code === 'Space') {
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('toggle-replay-playback'));
       } else if (e.key === 'l' || e.key === 'L') {
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         handleModeChange('live');
       } else if (e.key === 'r' || e.key === 'R') {
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         handleModeChange('replay');
       } else if (e.key === 'f' || e.key === 'F') {
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         handleModeChange('freeze');
       } else if (e.key === 't' || e.key === 'T') {
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         handleToggleTheme();
       } else if (e.key === 'Escape') {
         setFollowingOrderId(null);
         setHelpOpen(false);
         setInvestigatedOrder(null);
         setConfirmExitOpen(false);
+        setCommandPaletteOpen(false);
       } else if (e.key === '?') {
+        if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
         setHelpOpen((prev) => !prev);
       }
     };
@@ -342,6 +364,17 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             onOpenLiveOrder={handleOpenLiveOrder}
           />
         </div>
+
+        {/* Phase-28: Global Command Palette Trigger Button (Ctrl+K / Cmd+K) */}
+        <button
+          data-testid="btn-command-palette-trigger"
+          onClick={() => setCommandPaletteOpen(true)}
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 rounded-lg text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer ml-1"
+          title="Command Palette (Ctrl+K or Cmd+K)"
+        >
+          <Command className="h-3.5 w-3.5 text-sky-400" />
+          <span className="font-mono text-[10px] text-slate-400">Ctrl+K</span>
+        </button>
 
         {/* ── Event Recorder Controls ── */}
         <div className="hidden xl:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
@@ -521,7 +554,6 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         )}
       </div>
 
-      {/* ── Part 10: Demo Walkthrough Mode Modal ─────────────────────────── */}
       {/* ── Part 10: Demo Walkthrough Mode Modal ─────────────────────────── */}
       {helpOpen && (
         <div
@@ -755,6 +787,17 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           </div>
         </div>
       )}
+
+      {/* ── Phase-28: Global Command Palette (Ctrl+K / Cmd+K) ─────────────── */}
+      <CommandPalette
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onSelectMode={handleModeChange}
+        onSelectOrder={handleSelectInvestigationOrder}
+        onSelectTable={handleSelectTableFromPalette}
+        onToggleTheme={handleToggleTheme}
+        theme={theme}
+      />
     </div>
   );
 }

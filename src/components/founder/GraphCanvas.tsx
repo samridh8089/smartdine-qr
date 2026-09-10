@@ -20,7 +20,7 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { Stage, Layer, Rect, Text, Circle, Arrow, Group } from 'react-konva';
+import { Stage, Layer, Rect, Text, Circle, Arrow, Group, Line } from 'react-konva';
 import Konva from 'konva';
 
 import {
@@ -223,30 +223,16 @@ const NodeGroup = React.memo(function NodeGroup({
         listening={false}
       />
 
-      {/* Category Indicator Dot: x=6, y=11 */}
-      <Circle
-        x={6}
-        y={11}
-        radius={3}
-        fill={dotColor}
-        stroke="rgba(255,255,255,0.8)"
-        strokeWidth={0.8}
-        shadowColor={dotColor}
-        shadowBlur={3}
-        shadowOpacity={0.7}
-        listening={false}
-      />
-
-      {/* Label: x=54 (moved 8px farther from x=46, guaranteeing 48px clear distance, zero overlap at 100%, 125%, 150% zoom) */}
+      {/* Phase-28: Colored category dots removed completely. Clean label with 16px left/right padding */}
       <Text
         text={node.label}
-        x={54}
+        x={16}
         y={node.id === 'preparing' || node.id === 'waiter_assigned' ? -6 : 0}
-        width={node.width - 86}
+        width={node.width - 32}
         height={node.height}
         align="center"
         verticalAlign="middle"
-        fontSize={10}
+        fontSize={10.5}
         fontStyle="bold"
         fontFamily="'Inter', 'Segoe UI', sans-serif"
         fill={labelFill}
@@ -597,12 +583,37 @@ export default function GraphCanvas({
         setStagePos({ x: e.target.x(), y: e.target.y() });
       }}
       style={{
-        background: isLight ? '#f8fafc' : '#0b1120',
+        background: isLight
+          ? 'radial-gradient(ellipse at 50% 30%, #f8fafc 0%, #eef2f6 100%)'
+          : 'radial-gradient(ellipse at 50% 30%, #0d1527 0%, #060911 100%)',
         cursor: 'grab',
       }}
     >
-      {/* ── Layer 0: N8N Workflow Dot Grid Background ──────────────────────── */}
+      {/* ── Layer 0: N8N Workflow Dot Grid & Blueprint Guides ────────────────── */}
       <Layer listening={false}>
+        {/* Soft blueprint workflow guide lines (N8N feel) */}
+        <Line
+          points={[0, 300, CANVAS_WIDTH, 300]}
+          stroke={isLight ? 'rgba(148, 163, 184, 0.18)' : 'rgba(51, 65, 85, 0.28)'}
+          strokeWidth={1}
+          dash={[6, 12]}
+          listening={false}
+        />
+        <Line
+          points={[0, 130, CANVAS_WIDTH, 130]}
+          stroke={isLight ? 'rgba(148, 163, 184, 0.12)' : 'rgba(51, 65, 85, 0.18)'}
+          strokeWidth={1}
+          dash={[6, 12]}
+          listening={false}
+        />
+        <Line
+          points={[0, 480, CANVAS_WIDTH, 480]}
+          stroke={isLight ? 'rgba(148, 163, 184, 0.12)' : 'rgba(51, 65, 85, 0.18)'}
+          strokeWidth={1}
+          dash={[6, 12]}
+          listening={false}
+        />
+
         {gridDots.map((pt, i) => (
           <Circle
             key={`grid-${i}`}
@@ -766,7 +777,34 @@ export default function GraphCanvas({
           });
         })}
 
-        {/* ── Animated Waiter Travel Telemetry: Neha Patel Table 4 -> Table 12 ── */}
+        {/* ── Animated Waiter Travel Route & Pulse: Neha Patel Table 4 -> Table 12 ── */}
+        <Line
+          points={[1560, 265, 1740, 265]}
+          stroke="#a855f7"
+          strokeWidth={1.5}
+          dash={[6, 4]}
+          dashOffset={-dashOffset}
+          opacity={0.65}
+          listening={false}
+        />
+        {/* Destination Arrival Pulse at Table 12 */}
+        <Circle
+          x={1740}
+          y={265}
+          radius={7 + Math.sin(dashOffset * 0.1) * 2.5}
+          stroke="#a855f7"
+          strokeWidth={1.2}
+          opacity={0.8}
+          listening={false}
+        />
+        <Circle
+          x={1740}
+          y={265}
+          radius={3}
+          fill="#c084fc"
+          listening={false}
+        />
+
         <Group
           x={1650 + Math.sin(dashOffset * 0.04) * 70}
           y={265}
