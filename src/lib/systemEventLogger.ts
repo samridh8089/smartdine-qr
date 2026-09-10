@@ -106,24 +106,26 @@ const EVENT_TARGET_NODE: Partial<Record<SystemEventType, string>> = {
   cart_updated: 'cart',
   checkout_started: 'checkout',
   order_created: 'order_created',
-  order_accepted: 'kitchen_queue',
+  order_accepted: 'live_orders',     // FIX: was 'kitchen_queue' — must match EVENT_TO_NODE in NodeDefinitions.ts
   order_preparing: 'preparing',
   order_ready: 'ready',
   waiter_assigned: 'waiter_assigned',
   order_served: 'served',
   order_cancelled: 'session_closed',
+  order_completed: 'session_closed',
   takeaway_created: 'order_created',
   reservation_created: 'order_created',
   reservation_seated: 'live_orders',
-  payment_success: 'session_closed',
+  payment_success: 'payment',        // FIX: was 'session_closed' — payment event should land at payment node
   payment_failed: 'billing',
   bill_closed: 'session_closed',
   session_closed: 'session_closed',
   inventory_reserved: 'inventory',
   inventory_deducted: 'inventory',
   inventory_rollback: 'inventory',
-  customer_call_accepted: 'waiter_assigned',
-  push_sent: 'kitchen_queue',
+  customer_call_accepted: 'customer_calls', // FIX: was 'waiter_assigned' — should land at customer_calls node
+  customer_call_resolved: 'customer_calls',
+  push_sent: 'push_notifications',   // FIX: was 'kitchen_queue'
   push_failed: 'push_notifications',
 };
 
