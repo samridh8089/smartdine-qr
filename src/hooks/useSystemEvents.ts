@@ -118,22 +118,41 @@ export function useSystemEvents({
       setTotalEventCount((prev) => prev + 1);
     };
 
-    // 1. Load recent historical events on mount (with fallback to orders & audit_logs)
+    // 1. Load recent historical events on mount (primary: /api/system-events with service_role)
     void (async () => {
       try {
         let loaded = false;
-        const { data, error } = await supabase
-          .from('system_events')
-          .select('*')
-          .eq('restaurant_id', restaurantId)
-          .order('created_at', { ascending: false })
-          .limit(200);
 
-        if (isMounted && data && data.length > 0) {
-          setEvents(data.reverse() as SystemEvent[]);
-          setTotalEventCount(data.length);
-          loaded = true;
+        // Try API endpoint with service_role bypass
+        try {
+          const res = await fetch(`/api/system-events?restaurantId=${restaurantId}&limit=200`);
+          if (res.ok) {
+            const body = await res.json();
+            if (isMounted && body.events && Array.isArray(body.events) && body.events.length > 0) {
+              setEvents(body.events.reverse() as SystemEvent[]);
+              setTotalEventCount(body.events.length);
+              loaded = true;
+            }
+          }
+        } catch (apiErr) {
+          console.warn('[useSystemEvents] /api/system-events error, fallback to client:', apiErr);
         }
+
+        if (!loaded) {
+          const { data, error } = await supabase
+            .from('system_events')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .order('created_at', { ascending: false })
+            .limit(200);
+
+          if (isMounted && data && data.length > 0) {
+            setEvents(data.reverse() as SystemEvent[]);
+            setTotalEventCount(data.length);
+            loaded = true;
+          }
+        }
+
 
         // Fallback: If system_events table is pending/empty, synthesize events from orders
         if (!loaded && isMounted) {
@@ -292,15 +311,40 @@ export function useSystemEvents({
 
     activeChannelRef.current = channel;
 
-    // 5. Cleanup properly on unmount
+    // 5. Periodic polling sync for guaranteed real-time event updates
+    const syncInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const res = await fetch(`/api/system-events?restaurantId=${restaurantId}&limit=100`);
+        if (res.ok) {
+          const body = await res.json();
+          if (isMounted && body.events && Array.isArray(body.events)) {
+            setEvents((prev) => {
+              const existingIds = new Set(prev.map((e) => e.id));
+              const newEvents = body.events.filter((e: SystemEvent) => !existingIds.has(e.id));
+              if (newEvents.length === 0) return prev;
+              const combined = [...prev, ...newEvents.reverse()];
+              return combined.length > MAX_EVENTS
+                ? combined.slice(combined.length - MAX_EVENTS)
+                : combined;
+            });
+            setTotalEventCount((prev) => Math.max(prev, body.events.length));
+          }
+        }
+      } catch (_) {}
+    }, 4000);
+
+    // 6. Cleanup properly on unmount
     return () => {
       isMounted = false;
+      clearInterval(syncInterval);
       isSubscribedRef.current = false;
       supabase.removeChannel(channel);
       activeChannelRef.current = null;
       setConnectionStatus('disconnected');
     };
   }, [restaurantId, enabled]);
+
 
   return {
     events,

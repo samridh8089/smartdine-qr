@@ -178,6 +178,7 @@ export const ESSENTIAL_SYSTEM_EVENTS = new Set<SystemEventType>([
   'customer_call_accepted', 'customer_call_resolved',
   // Phase-21 additions
   'push_sent', 'audit_written', 'checkout_started',
+  'qr_scanned', 'menu_opened', 'cart_updated',
 ]);
 
 
@@ -200,10 +201,32 @@ export async function logSystemEvent(params: LogSystemEventParams): Promise<void
       return;
     }
 
-    const client = getAdminClient();
     const resolvedSource = params.sourceNode ?? EVENT_SOURCE_NODE[params.eventType];
     const resolvedTarget = params.targetNode ?? EVENT_TARGET_NODE[params.eventType];
     const correlationId = params.correlationId || getOrderCorrelationId(params.orderId);
+
+    // If running in browser (client-side), dispatch via /api/system-events to bypass RLS
+    if (typeof window !== 'undefined') {
+      fetch('/api/system-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurant_id: params.restaurantId,
+          correlation_id: correlationId,
+          order_id: params.orderId ?? null,
+          table_uuid: params.tableUuid ?? null,
+          actor_type: params.actorType ?? 'system',
+          event_type: params.eventType,
+          source_node: resolvedSource ?? null,
+          target_node: resolvedTarget ?? null,
+          duration_ms: params.durationMs ?? null,
+          metadata: params.metadata ?? {},
+        }),
+      }).catch(() => {});
+      return;
+    }
+
+    const client = getAdminClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: insertErr } = await (client.from('system_events') as any).insert({
@@ -227,3 +250,4 @@ export async function logSystemEvent(params: LogSystemEventParams): Promise<void
     console.error('[logSystemEvent] Unexpected error during event logging:', err);
   }
 }
+

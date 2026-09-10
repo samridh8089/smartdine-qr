@@ -11,9 +11,47 @@ function getAdmin(): SupabaseClient | null {
 }
 
 /**
+ * GET /api/system-events?restaurantId=...&limit=200
+ * Securely returns real events from system_events using service role,
+ * bypassing RLS restrictions for client dashboard display.
+ */
+export async function GET(req: Request) {
+  try {
+    const supabaseAdmin = getAdmin();
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 503 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const restaurantId = searchParams.get('restaurantId');
+    const limit = parseInt(searchParams.get('limit') || '200', 10);
+
+    if (!restaurantId || typeof restaurantId !== 'string') {
+      return NextResponse.json({ error: 'restaurantId required' }, { status: 400 });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabaseAdmin.from('system_events') as any)
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ events: data || [] });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
  * POST /api/system-events
- * Public endpoint for client-side event ingestion (customer events: QR scan, menu open, etc.)
- * Rate-limited by existing middleware (60 req/min per IP).
+ * Public endpoint for client-side event ingestion (customer events: QR scan, menu open, cart, etc.)
+ * Rate-limited by existing middleware.
  */
 export async function POST(req: Request) {
   try {
@@ -30,6 +68,9 @@ export async function POST(req: Request) {
       table_uuid,
       event_type,
       actor_type = 'customer',
+      source_node,
+      target_node,
+      duration_ms,
       metadata = {},
     } = body;
 
@@ -55,15 +96,23 @@ export async function POST(req: Request) {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabaseAdmin.from('system_events') as any).insert({
+    const { error: insertErr } = await (supabaseAdmin.from('system_events') as any).insert({
       restaurant_id,
       correlation_id,
       order_id: order_id || null,
       table_uuid: table_uuid || null,
       actor_type,
       event_type,
+      source_node: source_node || null,
+      target_node: target_node || null,
+      duration_ms: duration_ms || null,
       metadata: metadata || {},
     });
+
+    if (insertErr) {
+      console.error('[system-events] Insert error:', insertErr.message);
+      return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
@@ -72,3 +121,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }
+

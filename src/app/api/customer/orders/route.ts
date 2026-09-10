@@ -33,8 +33,10 @@ export async function POST(req: Request) {
       paymentStatus = 'pending',
       idempotencyKey,
       offerCode,
-      discountAmount = 0
+      discountAmount = 0,
+      correlationId: bodyCorrelationId,
     } = body;
+
 
     let finalCustomerName = String(customerName || body.customer_name || '').trim();
     let finalCustomerPhone = String(customerPhone || body.customer_phone || '').trim();
@@ -507,9 +509,10 @@ export async function POST(req: Request) {
 
     // ─── Phase-19/21: Event Bus — fire-and-forget, never awaited ─────────────
     if (createdOrder?.id && restaurantId && restaurantId !== 'demo-rest') {
-      const correlationId = getOrderCorrelationId(createdOrder.id);
+      const correlationId = bodyCorrelationId || getOrderCorrelationId(createdOrder.id);
 
       // 1. checkout_started (represents customer submitting cart → checkout)
+
       logSystemEvent({
         restaurantId,
         correlationId,

@@ -9,7 +9,9 @@ import { formatPrice } from '@/lib/utils';
 import { calculateOrderTax } from '@/lib/tax';
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { supabase } from '@/lib/supabase';
+import { logSystemEvent } from '@/lib/systemEventLogger';
 import { Card, CardContent } from '@/components/ui/Card';
+
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Dialog } from '@/components/ui/Dialog';
@@ -127,12 +129,33 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const [orderPlacing, setOrderPlacing] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState('');
   const isSubmittingRef = useRef(false);
+  const prevCartLengthRef = useRef(0);
 
   useEffect(() => {
     if (!idempotencyKey) {
       setIdempotencyKey(crypto.randomUUID());
     }
   }, []);
+
+  // Phase-21: Emit cart_updated system event when items are added to cart
+  useEffect(() => {
+    if (!restaurant?.id || cart.length === 0 || cart.length === prevCartLengthRef.current) return;
+    prevCartLengthRef.current = cart.length;
+    const corrId = typeof window !== 'undefined'
+      ? sessionStorage.getItem('smartdine_active_correlation_id') || undefined
+      : undefined;
+    logSystemEvent({
+      restaurantId: restaurant.id,
+      correlationId: corrId,
+      tableUuid: table?.id || undefined,
+      actorType: 'customer',
+      eventType: 'cart_updated',
+      sourceNode: 'customer_menu',
+      targetNode: 'cart',
+      metadata: { itemCount: cart.length },
+    }).catch(() => {});
+  }, [cart.length, restaurant?.id, table?.id]);
+
 
   // Cart animation trigger
   const [cartBouncing, setCartBouncing] = useState(false);
@@ -394,7 +417,30 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         }
         setRestaurant(rest);
 
+        // Phase-21: Establish active correlation ID and emit qr_scanned event
+        let corrId: string | null = null;
+        if (typeof window !== 'undefined') {
+          corrId = sessionStorage.getItem('smartdine_active_correlation_id');
+          if (!corrId) {
+            corrId = `corr_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+            sessionStorage.setItem('smartdine_active_correlation_id', corrId);
+          }
+        }
+        if (rest?.id) {
+          logSystemEvent({
+            restaurantId: rest.id,
+            correlationId: corrId || undefined,
+            tableUuid: tableId || undefined,
+            actorType: 'customer',
+            eventType: 'qr_scanned',
+            sourceNode: 'qr_scan',
+            targetNode: 'customer_menu',
+            metadata: { restaurantSlug, tableId: tableId || null },
+          }).catch(() => {});
+        }
+
         const planId = (rest.subscription_plan || 'starter').toLowerCase();
+
 
         // PHASE 1: Fast Parallel Fetch of Core Menu Data
         const [cats, rawItems, tbls, fetchedOffers, planRes] = await Promise.all([
@@ -961,8 +1007,10 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             paymentStatus: (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
             idempotencyKey,
             offerCode: appliedOffer?.code,
-            discountAmount
+            discountAmount,
+            correlationId: typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_active_correlation_id') || undefined : undefined
           })
+
         });
 
         const apiResult = await res.json();
