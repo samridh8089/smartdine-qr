@@ -159,11 +159,11 @@ const NodeGroup = React.memo(function NodeGroup({
         fill={glowColor}
         listening={false}
       />
-      {/* Category Indicator Dot: Above-left of node title */}
+      {/* Category Indicator Dot: Shifted 8px farther away from title for zero overlap at all zooms */}
       <Circle
-        x={14}
-        y={14}
-        radius={3.5}
+        x={10}
+        y={11}
+        radius={3}
         fill="#38bdf8"
         stroke="rgba(255,255,255,0.7)"
         strokeWidth={1}
@@ -172,19 +172,20 @@ const NodeGroup = React.memo(function NodeGroup({
         shadowOpacity={0.8}
         listening={false}
       />
-      {/* Label: Strictly vertically centered with >= 12px horizontal padding */}
+      {/* Label: Strictly vertically centered with generous 24px left margin & 22px right margin */}
       <Text
         text={node.label}
-        x={24}
+        x={34}
         y={0}
-        width={node.width - 44}
+        width={node.width - 64}
         height={node.height}
         align="center"
         verticalAlign="middle"
-        fontSize={11}
+        fontSize={10.5}
         fontStyle="bold"
         fontFamily="'Inter', 'Segoe UI', sans-serif"
         fill="#ffffff"
+        wrap="word"
         listening={false}
       />
       {/* Top-Right Badge: Exactly 22px diameter (11px radius) */}
@@ -442,22 +443,25 @@ export default function GraphCanvas({
           const isEdgeHighlighted =
             !!highlightedNodeId &&
             (edge.from === highlightedNodeId || edge.to === highlightedNodeId);
+          const isEdgeActive =
+            ((dotsByNode.get(edge.from)?.length || 0) > 0 || (dotsByNode.get(edge.to)?.length || 0) > 0);
+          const isEdgeGlowing = isEdgeHighlighted || isEdgeActive;
 
           return (
             <Arrow
               key={`edge-${edge.from}-${edge.to}`}
               points={points}
-              stroke={isEdgeHighlighted ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
-              strokeWidth={isEdgeHighlighted ? 3.5 : isMain ? 2 : 1}
-              fill={isEdgeHighlighted ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
-              shadowEnabled={isEdgeHighlighted}
+              stroke={isEdgeGlowing ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
+              strokeWidth={isEdgeHighlighted ? 3.5 : isEdgeActive ? 2.5 : isMain ? 2 : 1}
+              fill={isEdgeGlowing ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
+              shadowEnabled={isEdgeGlowing}
               shadowColor="#38bdf8"
-              shadowBlur={14}
-              pointerLength={isMain || isEdgeHighlighted ? 8 : 6}
-              pointerWidth={isMain || isEdgeHighlighted ? 6 : 4}
+              shadowBlur={isEdgeHighlighted ? 16 : 10}
+              pointerLength={isMain || isEdgeGlowing ? 8 : 6}
+              pointerWidth={isMain || isEdgeGlowing ? 6 : 4}
               dashEnabled
-              dash={isMain ? [10, 6] : [5, 5]}
-              dashOffset={isMain ? dashOffset : 0}
+              dash={isMain || isEdgeActive ? [10, 6] : [5, 5]}
+              dashOffset={isMain || isEdgeActive ? dashOffset : 0}
               lineCap="round"
               lineJoin="round"
               tension={edge.type === 'side' ? 0.4 : 0}
