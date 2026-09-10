@@ -173,8 +173,8 @@ export default function LiveMode({
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
     <div className={`flex h-full overflow-hidden select-none ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>
-      {/* Left Panel: Floor Digital Twin (260px) */}
-      <div className={`w-64 shrink-0 border-r overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
+      {/* Left Panel: Floor Digital Twin (responsive on mobile, 288px on desktop) */}
+      <div className={`w-full md:w-72 md:shrink-0 border-r overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
         <LeftPanel
           restaurantId={restaurantId}
           selectedOrderId={followingOrderId || selectedDot?.orderId || null}
@@ -201,7 +201,7 @@ export default function LiveMode({
       </div>
 
       {/* Center: Graph Canvas */}
-      <div ref={containerRef} className={`flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>
+      <div ref={containerRef} className={`hidden md:flex flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>
         {containerSize.width > 100 && (
           <GraphCanvas
             containerWidth={containerSize.width}
@@ -259,8 +259,8 @@ export default function LiveMode({
         </div>
       </div>
 
-      {/* Right Panel: 340px */}
-      <div className={`w-[340px] shrink-0 border-l overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
+      {/* Right Panel: 340px (desktop only) */}
+      <div className={`hidden lg:block w-[340px] shrink-0 border-l overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
         <RightPanel
           events={events}
           selectedNodeId={selectedNodeId}

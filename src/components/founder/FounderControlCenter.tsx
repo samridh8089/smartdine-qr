@@ -215,7 +215,9 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
       theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
     }`}>
       {/* ── Top Bar ──────────────────────────────────────────────────────── */}
-      <div className={`h-12 shrink-0 flex items-center gap-4 px-4 border-b transition-colors ${
+      <div
+        data-testid="founder-top-bar"
+        className={`h-12 shrink-0 flex items-center gap-3 px-4 border-b transition-colors overflow-x-auto lg:overflow-visible ${
         theme === 'light' ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900 border-slate-800'
       }`}>
         {/* Title */}

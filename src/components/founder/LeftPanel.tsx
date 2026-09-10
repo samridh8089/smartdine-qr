@@ -513,7 +513,7 @@ export default function LeftPanel({
                 <div className="h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2.5">
                 {tables.map((table) => {
                   const cfg = STATUS_CONFIG[table.status] || STATUS_CONFIG.available;
                   const isSelected = activeSelectedTable?.id === table.id;
