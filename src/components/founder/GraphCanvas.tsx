@@ -43,9 +43,9 @@ const DOT_COL_GAP = 22;
 /** Vertical spacing between dot rows inside a node */
 const DOT_ROW_GAP = 22;
 /** Dot radius */
-const DOT_RADIUS = 9;
-/** Badge radius */
-const BADGE_RADIUS = 9;
+const DOT_RADIUS = 7;
+/** Badge radius (11px radius = 22px diameter badge) */
+const BADGE_RADIUS = 11;
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ interface GraphCanvasProps {
   orderDots: OrderDotState[];
   events: SystemEvent[];
   followingOrderId: string | null;
+  highlightedNodeId?: string | null;
   onNodeClick: (nodeId: string) => void;
   onDotClick: (dot: OrderDotState) => void;
   onStageReady?: (stage: Konva.Stage) => void;
@@ -73,10 +74,11 @@ function getDotOffset(
   const row = Math.floor(indexInNode / DOTS_PER_ROW);
   const totalCols = Math.min(DOTS_PER_ROW, 4);
   const startX = (nodeWidth - (totalCols - 1) * DOT_COL_GAP) / 2;
-  const startY = nodeHeight / 2;
+  // Position dots along the bottom shelf (y = nodeHeight - 11) to avoid overlapping centered label
+  const startY = nodeHeight - 11;
   return {
     x: startX + col * DOT_COL_GAP - nodeWidth / 2,
-    y: startY + row * DOT_ROW_GAP - nodeHeight / 2,
+    y: startY + row * 10 - nodeHeight / 2,
   };
 }
 
@@ -111,16 +113,18 @@ interface NodeGroupProps {
   node: GraphNode;
   dotCount: number;
   isHovered: boolean;
+  isHighlighted?: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: () => void;
 }
 
-/** Renders a single graph node (rounded rect + label + optional badge) */
+/** Renders a single graph node (rounded rect + label + optional 22px top-right badge) */
 const NodeGroup = React.memo(function NodeGroup({
   node,
   dotCount,
   isHovered,
+  isHighlighted,
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -143,53 +147,57 @@ const NodeGroup = React.memo(function NodeGroup({
         height={node.height}
         cornerRadius={10}
         fill={node.color}
-        shadowEnabled={isHovered || dotCount > 0}
-        shadowColor={isHovered ? '#ffffff' : node.color}
-        shadowBlur={isHovered ? 16 : 8}
-        shadowOpacity={isHovered ? 0.45 : 0.6}
-        stroke={isHovered ? '#ffffff' : 'rgba(255,255,255,0.15)'}
-        strokeWidth={isHovered ? 1.5 : 0.8}
+        shadowEnabled={isHovered || !!isHighlighted || dotCount > 0}
+        shadowColor={isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : node.color}
+        shadowBlur={isHighlighted ? 22 : isHovered ? 16 : 8}
+        shadowOpacity={isHighlighted ? 0.9 : isHovered ? 0.45 : 0.6}
+        stroke={isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : 'rgba(255,255,255,0.15)'}
+        strokeWidth={isHighlighted ? 2.5 : isHovered ? 1.5 : 0.8}
       />
       {/* Subtle inner highlight strip */}
       <Rect
         width={node.width}
-        height={12}
+        height={10}
         cornerRadius={[10, 10, 0, 0]}
         fill={glowColor}
         listening={false}
       />
-      {/* Label */}
+      {/* Label: Strictly vertically centered with >= 12px horizontal padding */}
       <Text
         text={node.label}
-        width={node.width}
+        x={12}
+        y={0}
+        width={node.width - 24}
         height={node.height}
         align="center"
         verticalAlign="middle"
-        fontSize={12}
+        fontSize={11}
         fontStyle="bold"
         fontFamily="'Inter', 'Segoe UI', sans-serif"
         fill="#ffffff"
         listening={false}
       />
-      {/* Dot count badge */}
+      {/* Top-Right Badge: Exactly 22px diameter (11px radius) */}
       {dotCount > 0 && (
-        <Group x={node.width - BADGE_RADIUS} y={-BADGE_RADIUS}>
+        <Group x={node.width - 8} y={-4}>
           <Circle
-            radius={BADGE_RADIUS}
+            radius={11}
             fill="#ef4444"
             shadowColor="#ef4444"
-            shadowBlur={6}
-            shadowOpacity={0.8}
+            shadowBlur={8}
+            shadowOpacity={0.85}
+            stroke="#0f172a"
+            strokeWidth={2}
           />
           <Text
             text={String(dotCount > 99 ? '99+' : dotCount)}
-            width={BADGE_RADIUS * 2}
-            height={BADGE_RADIUS * 2}
-            offsetX={BADGE_RADIUS}
-            offsetY={BADGE_RADIUS}
+            width={22}
+            height={22}
+            offsetX={11}
+            offsetY={11}
             align="center"
             verticalAlign="middle"
-            fontSize={8}
+            fontSize={9}
             fontStyle="bold"
             fill="#ffffff"
             listening={false}
@@ -233,6 +241,7 @@ export default function GraphCanvas({
   orderDots,
   events,
   followingOrderId,
+  highlightedNodeId,
   onNodeClick,
   onDotClick,
   onStageReady,
@@ -353,6 +362,25 @@ export default function GraphCanvas({
     setStagePos({ x: targetX, y: targetY });
   }, [followingOrderId, orderDots, containerWidth, containerHeight]);
 
+  /** Smooth camera pan to highlighted node when selected */
+  useEffect(() => {
+    if (!highlightedNodeId || !stageRef.current) return;
+    const targetNode = GRAPH_NODES.find((n) => n.id === highlightedNodeId);
+    if (!targetNode) return;
+
+    const currentScale = stageRef.current.scaleX() || 1;
+    const targetX = containerWidth / 2 - (targetNode.x + targetNode.width / 2) * currentScale;
+    const targetY = containerHeight / 2 - (targetNode.y + targetNode.height / 2) * currentScale;
+
+    (stageRef.current as Konva.Stage & { to: (config: object) => void }).to({
+      x: targetX,
+      y: targetY,
+      duration: 0.6,
+      easing: Konva.Easings.EaseInOut,
+    });
+    setStagePos({ x: targetX, y: targetY });
+  }, [highlightedNodeId, containerWidth, containerHeight]);
+
   /**
    * Pre-compute edge anchor points once (nodes never move).
    * Side edges use top/bottom anchors; main edges use right→left.
@@ -401,16 +429,22 @@ export default function GraphCanvas({
           if (!points) return null;
 
           const isMain = edge.type === 'main';
+          const isEdgeHighlighted =
+            !!highlightedNodeId &&
+            (edge.from === highlightedNodeId || edge.to === highlightedNodeId);
 
           return (
             <Arrow
               key={`edge-${edge.from}-${edge.to}`}
               points={points}
-              stroke={isMain ? '#64748b' : '#374151'}
-              strokeWidth={isMain ? 2 : 1}
-              fill={isMain ? '#64748b' : '#374151'}
-              pointerLength={isMain ? 8 : 6}
-              pointerWidth={isMain ? 6 : 4}
+              stroke={isEdgeHighlighted ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
+              strokeWidth={isEdgeHighlighted ? 3.5 : isMain ? 2 : 1}
+              fill={isEdgeHighlighted ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
+              shadowEnabled={isEdgeHighlighted}
+              shadowColor="#38bdf8"
+              shadowBlur={14}
+              pointerLength={isMain || isEdgeHighlighted ? 8 : 6}
+              pointerWidth={isMain || isEdgeHighlighted ? 6 : 4}
               dashEnabled
               dash={isMain ? [10, 6] : [5, 5]}
               dashOffset={isMain ? dashOffset : 0}
@@ -433,6 +467,7 @@ export default function GraphCanvas({
               node={node}
               dotCount={dots.length}
               isHovered={hoveredNodeId === node.id}
+              isHighlighted={highlightedNodeId === node.id}
               onMouseEnter={handleNodeMouseEnter(node.id)}
               onMouseLeave={handleNodeMouseLeave}
               onClick={handleNodeClick(node.id)}

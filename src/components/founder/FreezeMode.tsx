@@ -319,6 +319,27 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
         </div>
       </div>
 
+      {/* ── Snapshot Frozen Banner ───────────────────────────────────────── */}
+      <div
+        data-testid="snapshot-frozen-banner"
+        className="h-8 shrink-0 bg-gradient-to-r from-cyan-950 via-slate-900 to-cyan-950 border-b border-cyan-800/60 px-4 flex items-center justify-between font-mono text-[11px]"
+      >
+        <div className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+          <span className="font-bold text-cyan-200 uppercase tracking-wide">
+            Snapshot frozen at {formattedScrubberTime}
+          </span>
+          <span className="text-cyan-400/70 text-[10px]">({formattedScrubberDate})</span>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="text-slate-400">Incoming visual updates paused</span>
+          <span className="text-slate-600">·</span>
+          <span className={`font-semibold ${ghostModeEnabled ? 'text-purple-300' : 'text-slate-500'}`}>
+            Ghost Mode: {ghostModeEnabled ? 'ACTIVE (future events opacity 0.25)' : 'OFF'}
+          </span>
+        </div>
+      </div>
+
       {/* ── Main Work Area: Left Panel + Center Graph + Right Panel ──────── */}
       <div className="flex-1 flex overflow-hidden">
         {/* ── Left Panel: Floor Plan & Subsystems Time Travel (Part E & G) ─ */}
@@ -609,7 +630,7 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
                           className={`p-2.5 rounded-lg border transition-all ${
                             isPast
                               ? 'bg-slate-800 border-cyan-800/80 text-slate-200'
-                              : 'bg-slate-900/40 border-slate-800/50 text-slate-500 opacity-60'
+                              : 'bg-slate-900/40 border-slate-800/50 text-slate-500 opacity-25'
                           }`}
                         >
                           <div className="flex items-center justify-between">

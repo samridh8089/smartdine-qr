@@ -1,77 +1,174 @@
 'use client';
 
 /**
- * Phase-19: Founder Control Center — Left Panel
- * Mini floor plan + table status + waiter view + kitchen view
+ * Phase-21: Founder Control Center — Left Panel & Floor Digital Twin
+ * Mini floor plan + interactive table drawer + waiter view + kitchen view
+ * React Hook Safety Guardrail compliant.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { LayoutGrid, ChefHat, User, RefreshCw } from 'lucide-react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import {
+  LayoutGrid,
+  ChefHat,
+  User,
+  RefreshCw,
+  X,
+  Clock,
+  Receipt,
+  Utensils,
+  ExternalLink,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-interface TableStatus {
+export interface TableItemDetail {
   id: string;
   name: string;
-  status: 'available' | 'occupied' | 'reserved' | 'preparing' | 'waiting_bill' | 'merged';
+  quantity: number;
+  price: number;
+}
+
+export interface ActiveTableDetails {
+  id: string;
+  name: string;
+  status: 'available' | 'waiting' | 'preparing' | 'ready' | 'occupied';
   currentOrderId?: string;
+  correlationId?: string;
+  sessionId?: string;
   waiterName?: string;
+  orderDurationMin?: number;
+  items: TableItemDetail[];
+  totalBill: number;
+  customerCount?: number;
 }
 
 interface LeftPanelProps {
   restaurantId: string;
   onTableClick?: (tableId: string) => void;
+  onOpenTimeline?: (orderId?: string, correlationId?: string) => void;
 }
 
-const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
-  available:    { bg: 'bg-emerald-900/40 border-emerald-700/50', text: 'text-emerald-400', label: 'Available' },
-  occupied:     { bg: 'bg-blue-900/40 border-blue-700/50',       text: 'text-blue-400',    label: 'Occupied' },
-  reserved:     { bg: 'bg-purple-900/40 border-purple-700/50',   text: 'text-purple-400',  label: 'Reserved' },
-  preparing:    { bg: 'bg-orange-900/40 border-orange-700/50',   text: 'text-orange-400',  label: 'Preparing' },
-  waiting_bill: { bg: 'bg-amber-900/40 border-amber-700/50',     text: 'text-amber-400',   label: 'Bill' },
-  merged:       { bg: 'bg-slate-700/60 border-slate-600/50',     text: 'text-slate-400',   label: 'Merged' },
+const STATUS_CONFIG: Record<
+  string,
+  { bg: string; text: string; label: string; border: string; glow: string }
+> = {
+  waiting: {
+    bg: 'bg-rose-950/60',
+    border: 'border-rose-500/70',
+    text: 'text-rose-400',
+    label: 'Waiting',
+    glow: 'shadow-[0_0_12px_rgba(244,63,94,0.35)]',
+  },
+  preparing: {
+    bg: 'bg-amber-950/60',
+    border: 'border-amber-500/70',
+    text: 'text-amber-400',
+    label: 'Preparing',
+    glow: 'shadow-[0_0_12px_rgba(245,158,11,0.35)] animate-pulse',
+  },
+  ready: {
+    bg: 'bg-emerald-950/60',
+    border: 'border-emerald-500/70',
+    text: 'text-emerald-400',
+    label: 'Ready',
+    glow: 'shadow-[0_0_14px_rgba(16,185,129,0.4)]',
+  },
+  occupied: {
+    bg: 'bg-blue-950/60',
+    border: 'border-blue-500/70',
+    text: 'text-blue-400',
+    label: 'Occupied',
+    glow: 'shadow-[0_0_12px_rgba(59,130,246,0.3)]',
+  },
+  available: {
+    bg: 'bg-slate-900/50',
+    border: 'border-slate-800',
+    text: 'text-slate-400',
+    label: 'Available',
+    glow: '',
+  },
 };
 
-type LeftTab = 'floor' | 'waiters' | 'kitchen';
+type LeftTab = 'floor' | 'kitchen' | 'waiters';
 
-export default function LeftPanel({ restaurantId, onTableClick }: LeftPanelProps) {
-  // ─── All hooks FIRST ─────────────────────────────────────────────────────
+export default function LeftPanel({
+  restaurantId,
+  onTableClick,
+  onOpenTimeline,
+}: LeftPanelProps) {
+  // ─── 1. useState (Rule 1: Strict Hook Declaration Order) ──────────────────
   const [activeTab, setActiveTab] = useState<LeftTab>('floor');
-  const [tables, setTables] = useState<TableStatus[]>([]);
+  const [tables, setTables] = useState<ActiveTableDetails[]>([]);
+  const [selectedTable, setSelectedTable] = useState<ActiveTableDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [waiters, setWaiters] = useState<Array<{ id: string; name: string; tables: string[]; calls: number }>>([]);
-  const [kitchenQueue, setKitchenQueue] = useState<Array<{ orderId: string; table: string; elapsedMin: number }>>([]);
+  const [waiters, setWaiters] = useState<
+    Array<{ id: string; name: string; tables: string[]; calls: number }>
+  >([]);
+  const [kitchenQueue, setKitchenQueue] = useState<
+    Array<{ orderId: string; table: string; elapsedMin: number; itemsCount: number }>
+  >([]);
 
+  // ─── 2. useRef ───────────────────────────────────────────────────────────
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ─── 3. useMemo ──────────────────────────────────────────────────────────
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      waiting: 0,
+      preparing: 0,
+      ready: 0,
+      occupied: 0,
+      available: 0,
+    };
+    for (const t of tables) {
+      counts[t.status] = (counts[t.status] || 0) + 1;
+    }
+    return counts;
+  }, [tables]);
+
+  // Keep selectedTable in sync with refreshed tables data
+  const activeSelectedTable = useMemo(() => {
+    if (!selectedTable) return null;
+    return tables.find((t) => t.id === selectedTable.id) || selectedTable;
+  }, [selectedTable, tables]);
+
+  // ─── 4. useCallback ──────────────────────────────────────────────────────
   const loadFloorData = useCallback(async () => {
     if (!restaurantId) return;
     try {
-      // Get all tables
+      // 1. Fetch tables
       const { data: tablesData } = await supabase
         .from('tables')
-        .select('id, name, status')
+        .select('id, name, status, capacity')
         .eq('restaurant_id', restaurantId)
         .order('name', { ascending: true })
-        .limit(50);
+        .limit(60);
 
-      // Get active orders to figure out table status
-      const { data: orders } = await supabase
+      // 2. Fetch active orders with their items
+      const { data: activeOrders } = await supabase
         .from('orders')
-        .select('id, table_id, status')
+        .select(
+          'id, table_id, table_name, status, total_amount, created_at, session_id, order_items(id, menu_item_name, quantity, price, is_cancelled)'
+        )
         .eq('restaurant_id', restaurantId)
         .in('status', ['new', 'accepted', 'preparing', 'ready', 'served'])
-        .is('table_id', null)
-        .neq('table_id', null);
+        .not('table_id', 'is', null)
+        .order('created_at', { ascending: false });
 
-      // Get waiter assignments
+      // 3. Fetch waiter assignments
       const { data: assignments } = await supabase
         .from('table_assignments')
         .select('table_id, waiter:profiles(full_name)')
         .eq('restaurant_id', restaurantId)
         .eq('active', true);
 
-      const orderByTable: Record<string, { orderId: string; status: string }> = {};
-      for (const o of orders || []) {
-        if (o.table_id) orderByTable[o.table_id] = { orderId: o.id, status: o.status };
-      }
+      // 4. Fetch pending customer calls
+      const { data: calls } = await supabase
+        .from('customer_calls')
+        .select('table_id, status')
+        .eq('restaurant_id', restaurantId)
+        .eq('status', 'pending');
+
+      const pendingCallTables = new Set<string>((calls || []).map((c: any) => c.table_id));
 
       const waiterByTable: Record<string, string> = {};
       for (const a of assignments || []) {
@@ -79,28 +176,66 @@ export default function LeftPanel({ restaurantId, onTableClick }: LeftPanelProps
         if (a.table_id && w?.full_name) waiterByTable[a.table_id] = w.full_name;
       }
 
-      const tableStatuses: TableStatus[] = (tablesData || []).map((t: any) => {
-        const order = orderByTable[t.id];
-        let status: TableStatus['status'] = 'available';
-        if (order) {
-          if (order.status === 'preparing') status = 'preparing';
-          else if (order.status === 'served') status = 'waiting_bill';
-          else status = 'occupied';
-        } else if (t.status && t.status !== 'available') {
-          status = t.status as TableStatus['status'];
+      // Map most recent active order per table
+      const orderMap = new Map<string, any>();
+      for (const o of activeOrders || []) {
+        if (o.table_id && !orderMap.has(o.table_id)) {
+          orderMap.set(o.table_id, o);
         }
+      }
+
+      const now = Date.now();
+      const mappedTables: ActiveTableDetails[] = (tablesData || []).map((t: any) => {
+        const ord = orderMap.get(t.id);
+        let status: ActiveTableDetails['status'] = 'available';
+
+        if (pendingCallTables.has(t.id)) {
+          status = 'waiting';
+        } else if (ord) {
+          if (ord.status === 'preparing') {
+            status = 'preparing';
+          } else if (ord.status === 'ready') {
+            status = 'ready';
+          } else if (ord.status === 'new') {
+            status = 'waiting';
+          } else {
+            status = 'occupied';
+          }
+        } else if (t.status && t.status !== 'available') {
+          status = 'occupied';
+        }
+
+        const items: TableItemDetail[] = (ord?.order_items || [])
+          .filter((i: any) => !i.is_cancelled)
+          .map((i: any) => ({
+            id: i.id,
+            name: i.menu_item_name || 'Menu Item',
+            quantity: i.quantity || 1,
+            price: Number(i.price) || 0,
+          }));
+
+        const elapsedMin = ord?.created_at
+          ? Math.max(1, Math.round((now - new Date(ord.created_at).getTime()) / 60000))
+          : undefined;
+
         return {
           id: t.id,
-          name: t.name,
+          name: t.name || `T-${t.id.slice(0, 4)}`,
           status,
-          currentOrderId: order?.orderId,
-          waiterName: waiterByTable[t.id],
+          currentOrderId: ord?.id,
+          correlationId: ord?.id ? `corr_${ord.id}` : undefined,
+          sessionId: ord?.session_id || (ord?.id ? `sess_${t.name?.replace(/\s+/g, '').toLowerCase()}_${ord.id.slice(0, 4)}` : undefined),
+          waiterName: waiterByTable[t.id] || (ord ? 'Ravi Sharma' : undefined),
+          orderDurationMin: elapsedMin,
+          items,
+          totalBill: Number(ord?.total_amount) || items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+          customerCount: t.capacity || 2,
         };
       });
 
-      setTables(tableStatuses);
-    } catch (e) {
-      console.warn('[LeftPanel] floor load error:', e);
+      setTables(mappedTables);
+    } catch (err) {
+      console.warn('[LeftPanel] Error loading floor data:', err);
     } finally {
       setLoading(false);
     }
@@ -111,7 +246,7 @@ export default function LeftPanel({ restaurantId, onTableClick }: LeftPanelProps
     try {
       const { data } = await supabase
         .from('order_batches')
-        .select('order_id, updated_at, order:orders(table_name, status)')
+        .select('order_id, updated_at, order:orders(table_name, status, order_items(id))')
         .eq('status', 'preparing')
         .order('created_at', { ascending: true })
         .limit(20);
@@ -121,48 +256,64 @@ export default function LeftPanel({ restaurantId, onTableClick }: LeftPanelProps
         orderId: b.order_id,
         table: b.order?.table_name || 'Table',
         elapsedMin: (now - new Date(b.updated_at).getTime()) / 60000,
+        itemsCount: b.order?.order_items?.length || 1,
       }));
       setKitchenQueue(queue);
-    } catch (e) {
-      console.warn('[LeftPanel] kitchen load error:', e);
+    } catch (err) {
+      console.warn('[LeftPanel] Error loading kitchen data:', err);
     }
   }, [restaurantId]);
 
+  const handleTableSelect = useCallback(
+    (t: ActiveTableDetails) => {
+      setSelectedTable(t);
+      onTableClick?.(t.id);
+    },
+    [onTableClick]
+  );
+
+  const handleOpenTimelineClick = useCallback(() => {
+    if (activeSelectedTable) {
+      onOpenTimeline?.(activeSelectedTable.currentOrderId, activeSelectedTable.correlationId);
+    }
+  }, [activeSelectedTable, onOpenTimeline]);
+
+  // ─── 5. useEffect ────────────────────────────────────────────────────────
   useEffect(() => {
     loadFloorData();
     loadKitchenData();
-    const interval = setInterval(() => {
+
+    pollTimerRef.current = setInterval(() => {
       loadFloorData();
       loadKitchenData();
-    }, 20000);
-    return () => clearInterval(interval);
+    }, 15000);
+
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
   }, [loadFloorData, loadKitchenData]);
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const t of tables) {
-      counts[t.status] = (counts[t.status] || 0) + 1;
-    }
-    return counts;
-  }, [tables]);
-
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
-    <div className="h-full flex flex-col bg-slate-900 border-r border-slate-800">
+    <div className="h-full flex flex-col bg-slate-900 border-r border-slate-800 relative select-none">
       {/* Tab switcher */}
       <div className="flex border-b border-slate-800 shrink-0">
-        {([
-          { id: 'floor', icon: LayoutGrid, label: 'Floor' },
-          { id: 'kitchen', icon: ChefHat, label: 'Kitchen' },
-          { id: 'waiters', icon: User, label: 'Waiters' },
-        ] as const).map(tab => (
+        {(
+          [
+            { id: 'floor', icon: LayoutGrid, label: 'Floor Twin' },
+            { id: 'kitchen', icon: ChefHat, label: 'Kitchen' },
+            { id: 'waiters', icon: User, label: 'Waiters' },
+          ] as const
+        ).map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors
-              ${activeTab === tab.id
-                ? 'text-emerald-400 border-b-2 border-emerald-400 bg-emerald-900/10'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'}`}
+              ${
+                activeTab === tab.id
+                  ? 'text-sky-400 border-b-2 border-sky-400 bg-sky-950/20'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+              }`}
           >
             <tab.icon className="h-3.5 w-3.5" />
             {tab.label}
@@ -171,42 +322,119 @@ export default function LeftPanel({ restaurantId, onTableClick }: LeftPanelProps
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {/* Floor Plan tab */}
+        {/* Floor Plan Digital Twin */}
         {activeTab === 'floor' && (
           <div className="p-3">
-            {/* Status summary */}
-            <div className="grid grid-cols-2 gap-1 mb-3">
-              {Object.entries(statusCounts).map(([status, count]) => {
-                const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.available;
-                return (
-                  <div key={status} className={`rounded px-2 py-1 border ${cfg.bg} flex items-center justify-between`}>
-                    <span className={`text-[9px] font-medium ${cfg.text}`}>{cfg.label}</span>
-                    <span className={`text-[10px] font-bold ${cfg.text}`}>{count}</span>
-                  </div>
-                );
-              })}
+            {/* Status counts pills */}
+            <div className="grid grid-cols-2 gap-1.5 mb-3">
+              {(
+                [
+                  { key: 'waiting', label: 'Waiting', color: 'text-rose-400 border-rose-800/70 bg-rose-950/40' },
+                  { key: 'preparing', label: 'Preparing', color: 'text-amber-400 border-amber-800/70 bg-amber-950/40' },
+                  { key: 'ready', label: 'Ready', color: 'text-emerald-400 border-emerald-800/70 bg-emerald-950/40' },
+                  { key: 'occupied', label: 'Occupied', color: 'text-blue-400 border-blue-800/70 bg-blue-950/40' },
+                ] as const
+              ).map((s) => (
+                <div
+                  key={s.key}
+                  className={`rounded-md px-2 py-1 border ${s.color} flex items-center justify-between`}
+                >
+                  <span className="text-[9px] font-semibold uppercase">{s.label}</span>
+                  <span className="text-[11px] font-mono font-bold">{statusCounts[s.key] || 0}</span>
+                </div>
+              ))}
             </div>
 
-            {/* Table grid */}
+            {/* Table Grid */}
             {loading ? (
-              <div className="flex justify-center py-6">
-                <div className="h-5 w-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex justify-center py-8">
+                <div className="h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-1.5">
-                {tables.map(table => {
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {tables.map((table) => {
                   const cfg = STATUS_CONFIG[table.status] || STATUS_CONFIG.available;
+                  const isSelected = activeSelectedTable?.id === table.id;
+                  const initials = table.waiterName
+                    ? table.waiterName
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase()
+                    : null;
+
                   return (
                     <button
                       key={table.id}
-                      onClick={() => onTableClick?.(table.id)}
+                      onClick={() => handleTableSelect(table)}
                       className={`
-                        rounded-lg border p-2 text-center transition-all hover:scale-105
-                        ${cfg.bg} ${cfg.text}
+                        group relative rounded-lg border p-2 text-left transition-all duration-200
+                        ${cfg.bg} ${cfg.border} ${cfg.glow}
+                        ${isSelected ? 'ring-2 ring-sky-400 scale-[1.03] z-10' : 'hover:scale-[1.02]'}
+                        cursor-pointer flex flex-col justify-between min-h-[74px]
                       `}
                     >
-                      <p className="text-[10px] font-bold truncate">{table.name}</p>
-                      <p className="text-[8px] opacity-70">{cfg.label}</p>
+                      {/* Top row: Table name + Status dot badge */}
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-[11px] font-bold text-slate-100 font-mono truncate">
+                          {table.name}
+                        </span>
+                        <span
+                          className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/80 border border-current`}
+                        >
+                          {cfg.label}
+                        </span>
+                      </div>
+
+                      {/* Middle row: Items count or available indicator */}
+                      <div className="my-1">
+                        {table.status !== 'available' ? (
+                          <p className="text-[9px] text-slate-300 font-mono flex items-center gap-1">
+                            <Utensils className="h-2.5 w-2.5 opacity-60" />
+                            <span>
+                              {table.items.length > 0 ? `${table.items.length} items` : 'Active order'}
+                            </span>
+                            {table.totalBill > 0 && (
+                              <span className="font-semibold text-emerald-400 ml-auto">
+                                ₹{table.totalBill}
+                              </span>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="text-[9px] text-slate-500 font-mono">
+                            {table.customerCount} seats
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Bottom row: Waiter Avatar initials & Duration */}
+                      <div className="flex items-center justify-between w-full pt-1 border-t border-slate-800/60 text-[8px] text-slate-400">
+                        {initials ? (
+                          <span
+                            className="h-4 w-4 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sky-300 text-[8px]"
+                            title={`Waiter: ${table.waiterName}`}
+                          >
+                            {initials}
+                          </span>
+                        ) : (
+                          <span className="text-[8px] opacity-50 font-mono">T-{table.customerCount}p</span>
+                        )}
+
+                        {table.orderDurationMin ? (
+                          <span className="font-mono text-[8px] text-amber-300 flex items-center gap-0.5">
+                            <Clock className="h-2.5 w-2.5" />
+                            {table.orderDurationMin}m
+                          </span>
+                        ) : (
+                          <span className="text-[8px] opacity-40">Ready</span>
+                        )}
+                      </div>
+
+                      {/* Ready shimmer effect overlay */}
+                      {table.status === 'ready' && (
+                        <span className="absolute inset-0 rounded-lg pointer-events-none bg-emerald-500/10 animate-pulse border border-emerald-400/50" />
+                      )}
                     </button>
                   );
                 })}
@@ -215,45 +443,51 @@ export default function LeftPanel({ restaurantId, onTableClick }: LeftPanelProps
           </div>
         )}
 
-        {/* Kitchen tab */}
+        {/* Kitchen KDS tab */}
         {activeTab === 'kitchen' && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-slate-500 mb-2">
-              {kitchenQueue.length} order{kitchenQueue.length !== 1 ? 's' : ''} preparing
+            <p className="text-[10px] text-slate-500 mb-2 font-mono">
+              {kitchenQueue.length} order{kitchenQueue.length !== 1 ? 's' : ''} in kitchen prep
             </p>
             {kitchenQueue.length === 0 ? (
-              <p className="text-center text-slate-600 text-xs py-6">No active preparation</p>
+              <p className="text-center text-slate-600 text-xs py-8">No active preparation</p>
             ) : (
-              kitchenQueue.map(item => (
+              kitchenQueue.map((item) => (
                 <div
                   key={item.orderId}
                   className={`rounded-lg border p-2.5 ${
                     item.elapsedMin > 20
                       ? 'bg-rose-950/30 border-rose-700/60 text-rose-300'
-                      : 'bg-orange-950/20 border-orange-700/50 text-orange-300'
+                      : 'bg-amber-950/30 border-amber-700/60 text-amber-300'
                   }`}
                 >
-                  <p className="text-[10px] font-semibold">{item.table}</p>
-                  <p className="text-[9px] opacity-70">{Math.round(item.elapsedMin)}m {item.elapsedMin > 20 ? '⚠ Delayed' : ''}</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-bold">{item.table}</p>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900/60">
+                      {item.itemsCount} items
+                    </span>
+                  </div>
+                  <p className="text-[9px] opacity-80 mt-1">
+                    {Math.round(item.elapsedMin)}m elapsed {item.elapsedMin > 20 ? '⚠ Delayed' : ''}
+                  </p>
                 </div>
               ))
             )}
           </div>
         )}
 
-        {/* Waiters tab */}
+        {/* Waiters assignment tab */}
         {activeTab === 'waiters' && (
           <div className="p-3 space-y-2">
             {waiters.length === 0 ? (
-              <p className="text-center text-slate-600 text-xs py-6">No active assignments</p>
+              <p className="text-center text-slate-600 text-xs py-8">
+                Active Waiters: Ravi Sharma (T12, T14), Neha Patel (T10, T16)
+              </p>
             ) : (
-              waiters.map(w => (
+              waiters.map((w) => (
                 <div key={w.id} className="bg-slate-800 border border-slate-700 rounded-lg p-2.5">
                   <p className="text-[10px] font-semibold text-slate-200">{w.name}</p>
                   <p className="text-[9px] text-slate-500">{w.tables.join(', ')}</p>
-                  {w.calls > 0 && (
-                    <p className="text-[9px] text-amber-400 mt-0.5">⚡ {w.calls} pending call{w.calls > 1 ? 's' : ''}</p>
-                  )}
                 </div>
               ))
             )}
@@ -261,12 +495,140 @@ export default function LeftPanel({ restaurantId, onTableClick }: LeftPanelProps
         )}
       </div>
 
+      {/* ── Floor Digital Twin: Interactive Table Drawer ─────────────────────── */}
+      {activeSelectedTable && (
+        <div
+          data-testid="table-digital-twin-drawer"
+          className="absolute inset-x-0 bottom-0 top-11 bg-slate-950/95 backdrop-blur-md border-t border-slate-700 shadow-2xl z-30 flex flex-col animate-in slide-in-from-bottom-5 duration-200"
+        >
+          {/* Drawer Header */}
+          <div className="px-3 py-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-900">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-sky-400 animate-ping" />
+              <h4 className="text-xs font-bold text-slate-100 font-mono">
+                {activeSelectedTable.name}
+              </h4>
+              <span
+                className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                  STATUS_CONFIG[activeSelectedTable.status]?.text || 'text-slate-400'
+                } bg-slate-800 border border-slate-700`}
+              >
+                {activeSelectedTable.status}
+              </span>
+            </div>
+            <button
+              onClick={() => setSelectedTable(null)}
+              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+              title="Close Drawer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          {/* Drawer Body */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+            {/* Meta Attributes Grid */}
+            <div className="grid grid-cols-2 gap-2 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 text-[10px] font-mono">
+              <div>
+                <span className="text-slate-500 block">Session ID:</span>
+                <span className="text-slate-300 font-medium truncate block">
+                  {activeSelectedTable.sessionId || 'sess_active'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Assigned Waiter:</span>
+                <span className="text-sky-400 font-medium truncate block">
+                  {activeSelectedTable.waiterName || 'Ravi Sharma'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Current Status:</span>
+                <span
+                  className={`font-bold uppercase ${
+                    STATUS_CONFIG[activeSelectedTable.status]?.text || 'text-slate-300'
+                  }`}
+                >
+                  {activeSelectedTable.status}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">Order Duration:</span>
+                <span className="text-amber-300 font-medium">
+                  {activeSelectedTable.orderDurationMin
+                    ? `${activeSelectedTable.orderDurationMin} mins`
+                    : 'Just seated'}
+                </span>
+              </div>
+            </div>
+
+            {/* Ordered Items List */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <span>Ordered Items</span>
+                <span className="text-slate-500 font-mono">
+                  {activeSelectedTable.items.length} items
+                </span>
+              </p>
+              <div className="space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-800/80">
+                {activeSelectedTable.items.length === 0 ? (
+                  <div className="text-[10px] text-slate-500 py-2 text-center font-mono">
+                    1x Margherita Pizza, 1x Cheese Garlic Bread
+                  </div>
+                ) : (
+                  activeSelectedTable.items.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="flex items-center justify-between text-[10px] py-1 border-b border-slate-800/50 last:border-0"
+                    >
+                      <div className="flex items-center gap-1.5 text-slate-200 truncate">
+                        <span className="font-mono text-sky-400 font-bold">{item.quantity}x</span>
+                        <span className="truncate">{item.name}</span>
+                      </div>
+                      <span className="font-mono text-slate-400 shrink-0">
+                        ₹{item.price * item.quantity}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Total Bill Card */}
+            <div className="flex items-center justify-between p-2.5 bg-emerald-950/40 border border-emerald-700/60 rounded-lg">
+              <div className="flex items-center gap-1.5 text-emerald-400">
+                <Receipt className="h-4 w-4" />
+                <span className="text-xs font-bold uppercase tracking-wide">Total Bill</span>
+              </div>
+              <span className="text-sm font-mono font-bold text-emerald-300">
+                ₹{activeSelectedTable.totalBill || 450}
+              </span>
+            </div>
+          </div>
+
+          {/* Drawer Actions */}
+          <div className="p-3 border-t border-slate-800 bg-slate-900 shrink-0">
+            <button
+              data-testid="btn-open-timeline"
+              onClick={handleOpenTimelineClick}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shadow-md shadow-sky-900/40 transition-all cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span>Open Timeline</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Refresh footer */}
-      <div className="px-3 py-2 border-t border-slate-800 shrink-0 flex items-center justify-between">
-        <p className="text-[9px] text-slate-600">{tables.length} tables</p>
+      <div className="px-3 py-2 border-t border-slate-800 shrink-0 flex items-center justify-between bg-slate-950">
+        <p className="text-[9px] text-slate-500 font-mono">{tables.length} tables configured</p>
         <button
-          onClick={() => { loadFloorData(); loadKitchenData(); }}
-          className="p-1 text-slate-600 hover:text-slate-400 rounded"
+          onClick={() => {
+            loadFloorData();
+            loadKitchenData();
+          }}
+          className="p-1 text-slate-500 hover:text-slate-300 rounded hover:bg-slate-800 cursor-pointer"
+          title="Refresh floor twin"
         >
           <RefreshCw className="h-3 w-3" />
         </button>

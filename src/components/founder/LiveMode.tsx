@@ -1,11 +1,13 @@
 'use client';
 
 /**
- * Phase-19: Founder Control Center — Live Mode
+ * Phase-21: Founder Control Center — Live Mode
  * Main live view: LeftPanel + GraphCanvas + RightPanel
+ * Connects Interactive Digital Twin, Node Highlighting, and Timeline Traces
+ * Strict React Hook Safety Guardrail compliant.
  */
 
-import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { Focus, X } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
@@ -13,12 +15,12 @@ import LeftPanel from './LeftPanel';
 import RightPanel from './RightPanel';
 import type { OrderDotState, SystemEvent } from './types';
 
-// Konva canvas must be dynamically imported (no SSR)
+// Konva canvas dynamically imported (no SSR)
 const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
   ssr: false,
   loading: () => (
     <div className="flex-1 flex items-center justify-center bg-slate-950">
-      <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="h-6 w-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
     </div>
   ),
 });
@@ -38,22 +40,86 @@ export default function LiveMode({
   events: propEvents,
   orderDots: propOrderDots,
 }: LiveModeProps) {
-  // ─── All hooks FIRST ─────────────────────────────────────────────────────
-  const containerRef = useRef<HTMLDivElement>(null);
+  // ─── 1. useState (Rule 1: Hooks Always First) ────────────────────────────
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedDot, setSelectedDot] = useState<OrderDotState | null>(null);
+  const [highlightedNodeId, setHighlightedNodeId] = useState<string | null>(null);
   const [rightPanelTab, setRightPanelTab] = useState<'timeline' | 'inspector' | 'flight'>('timeline');
 
-  // Only subscribe if parent did not provide events
+  // ─── 2. useRef ───────────────────────────────────────────────────────────
+  const containerRef = useRef<HTMLDivElement>(null);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Custom hook for fallback events
   const fallback = useSystemEvents({ restaurantId, enabled: !propEvents });
   const events = propEvents ?? fallback.events;
   const orderDots = propOrderDots ?? fallback.orderDots;
 
-  // Measure container
+  // ─── 3. useMemo ──────────────────────────────────────────────────────────
+  const followedDot = useMemo(
+    () =>
+      orderDots.find(
+        (d) => d.orderId === followingOrderId || d.correlationId === followingOrderId
+      ) ?? null,
+    [orderDots, followingOrderId]
+  );
+
+  // ─── 4. useCallback ──────────────────────────────────────────────────────
+  const handleNodeClick = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setHighlightedNodeId(nodeId);
+    setRightPanelTab('inspector');
+  }, []);
+
+  const handleDotClick = useCallback((dot: OrderDotState) => {
+    setSelectedDot(dot);
+    setRightPanelTab('flight');
+  }, []);
+
+  const handleNodeHighlight = useCallback((nodeId: string) => {
+    setHighlightedNodeId(nodeId);
+    setSelectedNodeId(nodeId);
+
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = setTimeout(() => {
+      setHighlightedNodeId(null);
+    }, 4500);
+  }, []);
+
+  const handleOpenTimelineFromTable = useCallback(
+    (orderId?: string, correlationId?: string) => {
+      if (orderId || correlationId) {
+        // Find if an active dot exists for this order
+        const dot = orderDots.find(
+          (d) =>
+            (orderId && d.orderId === orderId) ||
+            (correlationId && d.correlationId === correlationId)
+        );
+        if (dot) {
+          setSelectedDot(dot);
+          setRightPanelTab('flight');
+        } else {
+          // Open timeline tab
+          setRightPanelTab('timeline');
+        }
+      } else {
+        setRightPanelTab('timeline');
+      }
+    },
+    [orderDots]
+  );
+
+  const handleRightClose = useCallback(() => {
+    setSelectedNodeId(null);
+    setSelectedDot(null);
+    setHighlightedNodeId(null);
+  }, []);
+
+  // ─── 5. useEffect ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return;
-    const obs = new ResizeObserver(entries => {
+    const obs = new ResizeObserver((entries) => {
       const entry = entries[0];
       if (entry) {
         setContainerSize({
@@ -66,36 +132,24 @@ export default function LiveMode({
     return () => obs.disconnect();
   }, []);
 
-  const handleNodeClick = useCallback((nodeId: string) => {
-    setSelectedNodeId(nodeId);
-    setRightPanelTab('inspector');
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+    };
   }, []);
 
-  const handleDotClick = useCallback((dot: OrderDotState) => {
-    setSelectedDot(dot);
-    setRightPanelTab('flight');
-  }, []);
-
-  const handleFollow = useCallback((dot: OrderDotState) => {
-    onFollowOrder(dot.orderId);
-  }, [onFollowOrder]);
-
-  const handleRightClose = useCallback(() => {
-    setSelectedNodeId(null);
-    setSelectedDot(null);
-  }, []);
-
-  const followedDot = useMemo(
-    () => orderDots.find(d => d.orderId === followingOrderId || d.correlationId === followingOrderId) ?? null,
-    [orderDots, followingOrderId]
-  );
-
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* Left Panel: 260px */}
+    <div className="flex h-full overflow-hidden select-none">
+      {/* Left Panel: Floor Digital Twin (260px) */}
       <div className="w-64 shrink-0 border-r border-slate-800 overflow-hidden">
-        <LeftPanel restaurantId={restaurantId} />
+        <LeftPanel
+          restaurantId={restaurantId}
+          onTableClick={(tableId) => {
+            // Optional floor table interaction
+          }}
+          onOpenTimeline={handleOpenTimelineFromTable}
+        />
       </div>
 
       {/* Center: Graph Canvas */}
@@ -107,10 +161,9 @@ export default function LiveMode({
             orderDots={orderDots}
             events={events}
             followingOrderId={followingOrderId}
+            highlightedNodeId={highlightedNodeId}
             onNodeClick={handleNodeClick}
-            onDotClick={(dot) => {
-              handleDotClick(dot);
-            }}
+            onDotClick={handleDotClick}
           />
         )}
 
@@ -123,27 +176,37 @@ export default function LiveMode({
             </span>
             <button
               onClick={() => onFollowOrder(null)}
-              className="text-slate-400 hover:text-white ml-1"
+              className="text-slate-400 hover:text-white ml-1 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
         )}
 
+        {/* Node Highlight Toast Indicator */}
+        {highlightedNodeId && (
+          <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 bg-sky-950/90 border border-sky-500/60 rounded-lg shadow-lg shadow-sky-500/20 z-10 animate-in fade-in">
+            <span className="h-2 w-2 rounded-full bg-sky-400 animate-ping" />
+            <span className="text-xs text-sky-200 font-mono font-bold">
+              Inspecting Node: {highlightedNodeId}
+            </span>
+          </div>
+        )}
+
         {/* Live stats overlay (bottom-left) */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10">
+        <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10 font-mono">
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/90 border border-slate-700 rounded-full">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-slate-300">{orderDots.length} active</span>
+            <span className="text-[10px] text-slate-300">{orderDots.length} active orders</span>
           </div>
           <div className="px-2.5 py-1 bg-slate-900/90 border border-slate-700 rounded-full">
-            <span className="text-[10px] text-slate-400">{events.length} events</span>
+            <span className="text-[10px] text-slate-400">{events.length} events logged</span>
           </div>
         </div>
 
         {/* Zoom hint */}
-        <div className="absolute bottom-3 right-3 text-[9px] text-slate-600 z-10">
-          Scroll to zoom · Drag to pan
+        <div className="absolute bottom-3 right-3 text-[9px] text-slate-600 z-10 font-mono">
+          Scroll to zoom · Drag to pan · Click node or dot to inspect
         </div>
       </div>
 
@@ -153,7 +216,11 @@ export default function LiveMode({
           events={events}
           selectedNodeId={selectedNodeId}
           selectedDot={selectedDot}
+          restaurantId={restaurantId}
           onClose={handleRightClose}
+          onNodeSelect={handleNodeHighlight}
+          activeTab={rightPanelTab}
+          onTabChange={setRightPanelTab}
         />
       </div>
     </div>
