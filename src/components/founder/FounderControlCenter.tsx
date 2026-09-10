@@ -264,7 +264,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         </div>
 
         {/* ── Event Recorder Controls ── */}
-        <div className="hidden lg:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
+        <div className="hidden xl:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
           <button
             onClick={handleToggleRecorder}
             className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
