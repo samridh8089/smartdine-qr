@@ -534,6 +534,7 @@ export default function LeftPanel({
                   return (
                     <button
                       key={table.id}
+                      data-testid={isOccupied ? 'table-card-occupied' : 'table-card-available'}
                       onClick={() => handleTableSelect(table)}
                       className={`
                         group relative rounded-xl border p-2.5 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between
