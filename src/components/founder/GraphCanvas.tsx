@@ -29,6 +29,7 @@ import {
   NODE_MAP,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
+  EVENT_TO_NODE,
 } from './NodeDefinitions';
 import type { OrderDotState, GraphNode, SystemEvent } from './types';
 
@@ -502,11 +503,11 @@ export default function GraphCanvas({
     }
   }, [onStageReady]);
 
-  // Detect new event triggers and animate node (700ms pulse)
+  // Detect new event triggers and animate node (500–700ms pulse)
   useEffect(() => {
     if (events.length > lastEventCountRef.current) {
       const latest = events[events.length - 1];
-      const targetNode = latest.target_node;
+      const targetNode = latest.target_node || EVENT_TO_NODE[latest.event_type];
       if (targetNode) {
         setActiveTriggerNodeId(targetNode);
         if (triggerTimerRef.current) clearTimeout(triggerTimerRef.current);
