@@ -505,9 +505,28 @@ export async function POST(req: Request) {
     });
     timer.end('realtime');
 
-    // ─── Phase-19: Event Bus — fire-and-forget, never awaited ─────────────
+    // ─── Phase-19/21: Event Bus — fire-and-forget, never awaited ─────────────
     if (createdOrder?.id && restaurantId && restaurantId !== 'demo-rest') {
       const correlationId = getOrderCorrelationId(createdOrder.id);
+
+      // 1. checkout_started (represents customer submitting cart → checkout)
+      logSystemEvent({
+        restaurantId,
+        correlationId,
+        orderId: createdOrder.id,
+        tableUuid: tableId && tableId !== 'takeaway' && tableId !== 'reservation' ? tableId : undefined,
+        actorType: 'customer',
+        eventType: 'checkout_started',
+        sourceNode: 'cart',
+        targetNode: 'checkout',
+        metadata: {
+          order_type: orderType,
+          table_name: createdOrder.table_name,
+          items_count: itemsPayload.length,
+        },
+      }).catch(() => {});
+
+      // 2. order_created
       logSystemEvent({
         restaurantId,
         correlationId,
@@ -515,6 +534,8 @@ export async function POST(req: Request) {
         tableUuid: tableId && tableId !== 'takeaway' && tableId !== 'reservation' ? tableId : undefined,
         actorType: 'customer',
         eventType: 'order_created',
+        sourceNode: 'checkout',
+        targetNode: 'order_created',
         durationMs: Math.round(performance.now() - totalStart),
         metadata: {
           order_type: orderType,
@@ -523,8 +544,24 @@ export async function POST(req: Request) {
           items_count: itemsPayload.length,
         },
       }).catch(() => {});
+
+      // 3. inventory_reserved (inventory was reserved right before this event block)
+      logSystemEvent({
+        restaurantId,
+        correlationId,
+        orderId: createdOrder.id,
+        actorType: 'system',
+        eventType: 'inventory_reserved',
+        sourceNode: 'order_created',
+        targetNode: 'inventory',
+        metadata: {
+          items_count: itemsPayload.length,
+          order_type: orderType,
+        },
+      }).catch(() => {});
     }
     // ─────────────────────────────────────────────────────────────────────
+
 
     const res = NextResponse.json({
       success: true,

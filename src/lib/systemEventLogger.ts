@@ -70,7 +70,9 @@ export type SystemEventType =
   // System
   | 'session_closed'
   | 'push_sent'
-  | 'push_failed';
+  | 'push_failed'
+  | 'audit_written';
+
 
 // ─── Node Name Mapping ───────────────────────────────────────────────────────
 
@@ -127,6 +129,7 @@ const EVENT_TARGET_NODE: Partial<Record<SystemEventType, string>> = {
   customer_call_resolved: 'customer_calls',
   push_sent: 'push_notifications',   // FIX: was 'kitchen_queue'
   push_failed: 'push_notifications',
+  audit_written: 'audit_logs',
 };
 
 // ─── Correlation ID Generator ─────────────────────────────────────────────────
@@ -173,7 +176,10 @@ export const ESSENTIAL_SYSTEM_EVENTS = new Set<SystemEventType>([
   'waiter_assigned', 'payment_success', 'payment_failed', 'bill_closed',
   'session_closed', 'inventory_reserved', 'inventory_deducted', 'inventory_rollback',
   'customer_call_accepted', 'customer_call_resolved',
+  // Phase-21 additions
+  'push_sent', 'audit_written', 'checkout_started',
 ]);
+
 
 /**
  * Fire-and-forget system event logger.
