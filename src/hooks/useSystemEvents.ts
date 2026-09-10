@@ -105,10 +105,24 @@ export function useSystemEvents({
     let isMounted = true;
     setConnectionStatus('connecting');
 
-    // 1. Load recent historical events on mount
+    // Helper to safely ingest and deduplicate events
+    const ingestEvent = (newEvent: SystemEvent) => {
+      if (!isMounted || !newEvent || !newEvent.id) return;
+      setEvents((prev) => {
+        if (prev.some((e) => e.id === newEvent.id)) return prev;
+        const updated = [...prev, newEvent];
+        return updated.length > MAX_EVENTS
+          ? updated.slice(updated.length - MAX_EVENTS)
+          : updated;
+      });
+      setTotalEventCount((prev) => prev + 1);
+    };
+
+    // 1. Load recent historical events on mount (with fallback to orders & audit_logs)
     void (async () => {
       try {
-        const { data } = await supabase
+        let loaded = false;
+        const { data, error } = await supabase
           .from('system_events')
           .select('*')
           .eq('restaurant_id', restaurantId)
@@ -118,9 +132,51 @@ export function useSystemEvents({
         if (isMounted && data && data.length > 0) {
           setEvents(data.reverse() as SystemEvent[]);
           setTotalEventCount(data.length);
+          loaded = true;
         }
-      } catch {
-        // silent
+
+        // Fallback: If system_events table is pending/empty, synthesize events from orders
+        if (!loaded && isMounted) {
+          const { data: orderRows } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .order('updated_at', { ascending: false })
+            .limit(50);
+
+          if (isMounted && orderRows && orderRows.length > 0) {
+            const synthesized: SystemEvent[] = orderRows.map((ord: any) => {
+              const status = ord.status || 'created';
+              const evtType = `order_${status}`;
+              const targetNode = EVENT_TO_NODE[evtType] || 'order_created';
+              const orderCorrId = `corr_${ord.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
+
+              return {
+                id: `synth_${ord.id}_${status}`,
+                restaurant_id: restaurantId,
+                correlation_id: orderCorrId,
+                order_id: ord.id,
+                table_uuid: ord.table_id || undefined,
+                actor_type: 'staff',
+                event_type: evtType,
+                source_node: 'order_created',
+                target_node: targetNode,
+                created_at: ord.updated_at || ord.created_at || new Date().toISOString(),
+                metadata: {
+                  table_name: ord.table_name || 'Table',
+                  total: ord.total,
+                  payment_status: ord.payment_status,
+                },
+              };
+            });
+
+            synthesized.sort((a, b) => a.created_at.localeCompare(b.created_at));
+            setEvents(synthesized);
+            setTotalEventCount(synthesized.length);
+          }
+        }
+      } catch (e) {
+        console.error('[useSystemEvents] Historical fetch error:', e);
       }
     })();
 
@@ -128,7 +184,7 @@ export function useSystemEvents({
     const channelName = `founder_events_${restaurantId}`;
 
     // 3. Clean up any existing channel with same topic before subscribing
-    const existing = supabase.getChannels().find(ch => ch.topic === `realtime:${channelName}`);
+    const existing = supabase.getChannels().find((ch) => ch.topic === `realtime:${channelName}`);
     if (existing) {
       supabase.removeChannel(existing);
     }
@@ -136,6 +192,7 @@ export function useSystemEvents({
     // 4. Register all .on() callbacks BEFORE calling .subscribe()
     const channel = supabase
       .channel(channelName)
+      // Transport A: Supabase Postgres Changes on system_events
       .on(
         'postgres_changes',
         {
@@ -145,20 +202,80 @@ export function useSystemEvents({
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         (payload) => {
-          if (!isMounted) return;
-          const newEvent = payload.new as SystemEvent;
-          if (!newEvent || !newEvent.id) return;
-
-          setEvents(prev => {
-            if (prev.some(e => e.id === newEvent.id)) return prev;
-            const updated = [...prev, newEvent];
-            return updated.length > MAX_EVENTS
-              ? updated.slice(updated.length - MAX_EVENTS)
-              : updated;
-          });
-          setTotalEventCount(prev => prev + 1);
+          ingestEvent(payload.new as SystemEvent);
         }
       )
+      // Transport B: Realtime Broadcast on order-status-updated (Instant push fallback)
+      .on('broadcast', { event: 'order-status-updated' }, ({ payload }) => {
+        if (!isMounted || !payload) return;
+        const ordId = payload.orderId || payload.updatedOrder?.id;
+        const newStat = payload.newStatus || payload.updatedOrder?.status || 'preparing';
+        const evtType = `order_${newStat}`;
+        const corrId = ordId
+          ? `corr_${ordId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`
+          : `corr_${Date.now()}`;
+
+        ingestEvent({
+          id: `bc_${ordId || Date.now()}_${newStat}_${Date.now()}`,
+          restaurant_id: restaurantId,
+          correlation_id: corrId,
+          order_id: ordId,
+          actor_type: 'staff',
+          event_type: evtType,
+          target_node: EVENT_TO_NODE[evtType] || 'preparing',
+          created_at: new Date().toISOString(),
+          metadata: {
+            staffName: payload.staffName || 'Staff',
+            batchId: payload.batchId,
+          },
+        });
+      })
+      // Transport C: Realtime Broadcast on new-order
+      .on('broadcast', { event: 'new-order' }, ({ payload }) => {
+        if (!isMounted || !payload) return;
+        const ord = payload.new || payload;
+        const ordId = ord.id;
+        const corrId = ordId
+          ? `corr_${ordId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`
+          : `corr_${Date.now()}`;
+
+        ingestEvent({
+          id: `bc_new_${ordId || Date.now()}_${Date.now()}`,
+          restaurant_id: restaurantId,
+          correlation_id: corrId,
+          order_id: ordId,
+          actor_type: 'customer',
+          event_type: 'order_created',
+          target_node: 'order_created',
+          created_at: new Date().toISOString(),
+          metadata: {
+            table_name: ord.table_name,
+            total: ord.total,
+          },
+        });
+      })
+      // Transport D: Realtime Broadcast on payment-updated
+      .on('broadcast', { event: 'payment-updated' }, ({ payload }) => {
+        if (!isMounted || !payload) return;
+        const ordId = payload.orderId;
+        const corrId = ordId
+          ? `corr_${ordId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`
+          : `corr_${Date.now()}`;
+
+        ingestEvent({
+          id: `bc_pay_${ordId || Date.now()}_${Date.now()}`,
+          restaurant_id: restaurantId,
+          correlation_id: corrId,
+          order_id: ordId,
+          actor_type: 'system',
+          event_type: 'payment_success',
+          target_node: 'payment',
+          created_at: new Date().toISOString(),
+          metadata: {
+            paymentStatus: payload.paymentStatus,
+          },
+        });
+      })
       .subscribe((status) => {
         if (!isMounted) return;
         if (status === 'SUBSCRIBED') {

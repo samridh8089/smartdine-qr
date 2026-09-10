@@ -38,7 +38,8 @@ export async function broadcastOrderRealtimeEvent({
     `live_orders_${restaurantId}`,
     `kds_${restaurantId}`,
     `overview_dashboard_${restaurantId}`,
-    `reports_${restaurantId}`
+    `reports_${restaurantId}`,
+    `founder_events_${restaurantId}`
   ];
 
   if (resolvedOrderId) {

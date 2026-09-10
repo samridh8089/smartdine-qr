@@ -138,11 +138,20 @@ export function generateCorrelationId(): string {
   return id;
 }
 
+/**
+ * Returns a stable correlation ID for an order so its entire lifecycle
+ * (created -> accepted -> preparing -> ready -> served) shares the same ID.
+ */
+export function getOrderCorrelationId(orderId?: string | null): string {
+  if (!orderId) return generateCorrelationId();
+  return `corr_${orderId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
+}
+
 // ─── Main Logger ──────────────────────────────────────────────────────────────
 
 export interface LogSystemEventParams {
   restaurantId: string;
-  correlationId: string;
+  correlationId?: string;
   orderId?: string;
   tableUuid?: string;
   actorType?: 'customer' | 'staff' | 'system' | 'kitchen' | 'waiter' | 'cashier';
@@ -167,6 +176,7 @@ export const ESSENTIAL_SYSTEM_EVENTS = new Set<SystemEventType>([
 /**
  * Fire-and-forget system event logger.
  * Call with .catch(() => {}) — never await in hot paths.
+ * Logs failures clearly to console instead of silently swallowing them.
  *
  * @example
  * logSystemEvent({ restaurantId, correlationId, eventType: 'order_created', orderId }).catch(() => {});
@@ -185,11 +195,12 @@ export async function logSystemEvent(params: LogSystemEventParams): Promise<void
     const client = getAdminClient();
     const resolvedSource = params.sourceNode ?? EVENT_SOURCE_NODE[params.eventType];
     const resolvedTarget = params.targetNode ?? EVENT_TARGET_NODE[params.eventType];
+    const correlationId = params.correlationId || getOrderCorrelationId(params.orderId);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (client.from('system_events') as any).insert({
+    const { error: insertErr } = await (client.from('system_events') as any).insert({
       restaurant_id: params.restaurantId,
-      correlation_id: params.correlationId,
+      correlation_id: correlationId,
       order_id: params.orderId ?? null,
       table_uuid: params.tableUuid ?? null,
       actor_type: params.actorType ?? 'system',
@@ -200,7 +211,11 @@ export async function logSystemEvent(params: LogSystemEventParams): Promise<void
       duration_ms: params.durationMs ?? null,
       metadata: params.metadata ?? {},
     });
-  } catch {
-    // Intentionally silent — event logging must never crash the main flow
+
+    if (insertErr) {
+      console.error('[logSystemEvent] Insert failure:', insertErr.message, insertErr);
+    }
+  } catch (err: unknown) {
+    console.error('[logSystemEvent] Unexpected error during event logging:', err);
   }
 }
