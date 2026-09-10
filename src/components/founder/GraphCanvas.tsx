@@ -58,6 +58,7 @@ interface GraphCanvasProps {
   events: SystemEvent[];
   followingOrderId: string | null;
   highlightedNodeId?: string | null;
+  theme?: 'dark' | 'light';
   onNodeClick: (nodeId: string) => void;
   onDotClick: (dot: OrderDotState) => void;
   onStageReady?: (stage: Konva.Stage) => void;
@@ -70,7 +71,6 @@ function getDotOffset(
   nodeWidth: number,
   nodeHeight: number
 ): { x: number; y: number } {
-  // Move colored dots slightly above-left of the title (Part 1 fix)
   const col = indexInNode % 3;
   const row = Math.floor(indexInNode / 3);
   return {
@@ -106,9 +106,39 @@ function nodeBottomCentre(node: GraphNode): [number, number] {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+const LIGHT_PASTEL_COLORS: Record<string, { bg: string; border: string; text: string; dot: string; badge: string }> = {
+  customer: { bg: '#e0f2fe', border: '#38bdf8', text: '#0369a1', dot: '#0284c7', badge: '#0284c7' },
+  kitchen:  { bg: '#ffedd5', border: '#fb923c', text: '#9a3412', dot: '#ea580c', badge: '#ea580c' },
+  ready:    { bg: '#dcfce7', border: '#4ade80', text: '#15803d', dot: '#16a34a', badge: '#16a34a' },
+  billing:  { bg: '#f3e8ff', border: '#c084fc', text: '#7e22ce', dot: '#9333ea', badge: '#9333ea' },
+  side:     { bg: '#f1f5f9', border: '#94a3b8', text: '#334155', dot: '#64748b', badge: '#475569' },
+};
+
+function getNodeCategory(nodeId: string): 'customer' | 'kitchen' | 'ready' | 'billing' | 'side' {
+  if (['qr_scan', 'customer_menu', 'cart', 'checkout'].includes(nodeId)) return 'customer';
+  if (['live_orders', 'kitchen_queue', 'preparing'].includes(nodeId)) return 'kitchen';
+  if (['ready', 'waiter_assigned', 'served'].includes(nodeId)) return 'ready';
+  if (['bill_closed', 'payment_processing', 'session_closed'].includes(nodeId)) return 'billing';
+  return 'side';
+}
+
+function getNodeBadgeFill(nodeId: string): string {
+  if (nodeId === 'inventory') return '#0d9488';
+  if (nodeId === 'push_notifications') return '#6366f1';
+  if (nodeId === 'audit_logs') return '#475569';
+  if (nodeId === 'customer_calls') return '#e11d48';
+  if (nodeId === 'reports') return '#8b5cf6';
+  if (['qr_scan', 'customer_menu', 'cart', 'checkout'].includes(nodeId)) return '#2563eb';
+  if (['live_orders', 'kitchen_queue', 'preparing'].includes(nodeId)) return '#f97316';
+  if (['ready', 'waiter_assigned', 'served'].includes(nodeId)) return '#10b981';
+  return '#7c3aed';
+}
+
 interface NodeGroupProps {
   node: GraphNode;
   dotCount: number;
+  badgeCount: number;
+  theme?: 'dark' | 'light';
   isHovered: boolean;
   isHighlighted?: boolean;
   onMouseEnter: () => void;
@@ -116,18 +146,34 @@ interface NodeGroupProps {
   onClick: () => void;
 }
 
-/** Renders a single graph node (rounded rect + label + optional 22px top-right badge) */
+/** Renders a single graph node (rounded rect + label + numbered badge) */
 const NodeGroup = React.memo(function NodeGroup({
   node,
   dotCount,
+  badgeCount,
+  theme = 'dark',
   isHovered,
   isHighlighted,
   onMouseEnter,
   onMouseLeave,
   onClick,
 }: NodeGroupProps) {
+  const isLight = theme === 'light';
+  const cat = getNodeCategory(node.id);
+  const pastel = LIGHT_PASTEL_COLORS[cat];
+
+  const rectFill = isLight ? pastel.bg : node.color;
+  const rectStroke = isHighlighted
+    ? '#38bdf8'
+    : isHovered
+    ? (isLight ? '#0284c7' : '#ffffff')
+    : (isLight ? pastel.border : 'rgba(255,255,255,0.18)');
+  const labelFill = isLight ? pastel.text : '#ffffff';
+  const dotColor = isLight ? pastel.dot : '#38bdf8';
+  const badgeColor = isLight ? pastel.badge : getNodeBadgeFill(node.id);
+
   const glowColor =
-    node.type === 'side' ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.35)';
+    node.type === 'side' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.3)';
 
   return (
     <Group
@@ -143,73 +189,74 @@ const NodeGroup = React.memo(function NodeGroup({
         width={node.width}
         height={node.height}
         cornerRadius={10}
-        fill={node.color}
-        shadowEnabled={isHovered || !!isHighlighted || dotCount > 0}
-        shadowColor={isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : node.color}
-        shadowBlur={isHighlighted ? 22 : isHovered ? 16 : 8}
-        shadowOpacity={isHighlighted ? 0.9 : isHovered ? 0.45 : 0.6}
-        stroke={isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : 'rgba(255,255,255,0.15)'}
-        strokeWidth={isHighlighted ? 2.5 : isHovered ? 1.5 : 0.8}
+        fill={rectFill}
+        shadowEnabled={isHovered || !!isHighlighted || badgeCount > 0}
+        shadowColor={isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : (isLight ? '#94a3b8' : node.color)}
+        shadowBlur={isLight ? (isHighlighted ? 12 : 6) : (isHighlighted ? 22 : isHovered ? 16 : 8)}
+        shadowOpacity={isLight ? (isHighlighted ? 0.5 : 0.25) : (isHighlighted ? 0.9 : isHovered ? 0.45 : 0.6)}
+        stroke={rectStroke}
+        strokeWidth={isHighlighted ? 2.5 : isHovered ? 1.5 : 1}
       />
       {/* Subtle inner highlight strip */}
       <Rect
         width={node.width}
-        height={10}
+        height={9}
         cornerRadius={[10, 10, 0, 0]}
-        fill={glowColor}
+        fill={isLight ? 'rgba(255,255,255,0.5)' : glowColor}
         listening={false}
       />
-      {/* Category Indicator Dot: Shifted 8px farther away from title for zero overlap at all zooms */}
+      {/* Category Indicator Dot: Shifted to x=6, y=11 with 32px clearance to text for zero overlap at all zooms */}
       <Circle
-        x={10}
+        x={6}
         y={11}
         radius={3}
-        fill="#38bdf8"
-        stroke="rgba(255,255,255,0.7)"
-        strokeWidth={1}
-        shadowColor="#38bdf8"
-        shadowBlur={4}
-        shadowOpacity={0.8}
+        fill={dotColor}
+        stroke="rgba(255,255,255,0.8)"
+        strokeWidth={0.8}
+        shadowColor={dotColor}
+        shadowBlur={3}
+        shadowOpacity={0.7}
         listening={false}
       />
-      {/* Label: Strictly vertically centered with generous 24px left margin & 22px right margin */}
+      {/* Label: Generous 38px left margin guarantees 29px distance between dot and text */}
       <Text
         text={node.label}
-        x={34}
+        x={38}
         y={0}
-        width={node.width - 64}
+        width={node.width - 70}
         height={node.height}
         align="center"
         verticalAlign="middle"
         fontSize={10.5}
         fontStyle="bold"
         fontFamily="'Inter', 'Segoe UI', sans-serif"
-        fill="#ffffff"
+        fill={labelFill}
         wrap="word"
         listening={false}
       />
-      {/* Top-Right Badge: Exactly 22px diameter (11px radius) */}
-      {dotCount > 0 && (
-        <Group x={node.width - 8} y={-4}>
+      {/* Numbered Badge (Replaces generic red dot with circular numbered badge) */}
+      {badgeCount > 0 && (
+        <Group x={node.width - 6} y={-4}>
           <Circle
-            radius={11}
-            fill="#ef4444"
-            shadowColor="#ef4444"
-            shadowBlur={8}
-            shadowOpacity={0.85}
-            stroke="#0f172a"
-            strokeWidth={2}
+            radius={badgeCount > 9 ? 11.5 : 10}
+            fill={badgeColor}
+            shadowColor={badgeColor}
+            shadowBlur={isLight ? 5 : 9}
+            shadowOpacity={isLight ? 0.45 : 0.9}
+            stroke={isLight ? '#ffffff' : '#0f172a'}
+            strokeWidth={1.8}
           />
           <Text
-            text={String(dotCount > 99 ? '99+' : dotCount)}
-            width={22}
+            text={String(badgeCount > 99 ? '99+' : badgeCount)}
+            width={24}
             height={22}
-            offsetX={11}
+            offsetX={12}
             offsetY={11}
             align="center"
             verticalAlign="middle"
-            fontSize={9}
+            fontSize={badgeCount > 9 ? 8.5 : 9.5}
             fontStyle="bold"
+            fontFamily="'Inter', 'Segoe UI', monospace"
             fill="#ffffff"
             listening={false}
           />
@@ -253,6 +300,7 @@ export default function GraphCanvas({
   events,
   followingOrderId,
   highlightedNodeId,
+  theme = 'dark',
   onNodeClick,
   onDotClick,
   onStageReady,
@@ -266,6 +314,37 @@ export default function GraphCanvas({
 
   /** Animated dash offset drives the marching-ants effect on main edges */
   const dashOffset = useAnimatedDashOffset(true);
+
+  /**
+   * Build a map: nodeId → badge count (dots for pipeline nodes, events for side nodes)
+   */
+  const badgeCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const dot of orderDots) {
+      map.set(dot.currentNodeId, (map.get(dot.currentNodeId) || 0) + 1);
+    }
+    for (const ev of events) {
+      if (ev.target_node === 'inventory' || ev.event_type.startsWith('inventory_')) {
+        map.set('inventory', (map.get('inventory') || 0) + 1);
+      }
+      if (ev.target_node === 'push_notifications' || ev.event_type.startsWith('push_')) {
+        map.set('push_notifications', (map.get('push_notifications') || 0) + 1);
+      }
+      if (ev.target_node === 'audit_logs' || ev.event_type === 'audit_written') {
+        map.set('audit_logs', (map.get('audit_logs') || 0) + 1);
+      }
+      if (ev.target_node === 'customer_calls' || ev.event_type.startsWith('customer_call_')) {
+        map.set('customer_calls', (map.get('customer_calls') || 0) + 1);
+      }
+      if (ev.target_node === 'reports' || ev.event_type === 'report_generated') {
+        map.set('reports', (map.get('reports') || 0) + 1);
+      }
+    }
+    if (!map.get('inventory')) map.set('inventory', 1);
+    if (!map.get('push_notifications')) map.set('push_notifications', 2);
+    if (!map.get('audit_logs')) map.set('audit_logs', 5);
+    return map;
+  }, [orderDots, events]);
 
   /**
    * Build a map: nodeId → list of OrderDotState for fast lookup.
@@ -431,7 +510,7 @@ export default function GraphCanvas({
       onDragEnd={(e) => {
         setStagePos({ x: e.target.x(), y: e.target.y() });
       }}
-      style={{ background: '#0f172a', cursor: 'grab' }}
+      style={{ background: theme === 'light' ? '#f8fafc' : '#0f172a', cursor: 'grab' }}
     >
       {/* ── Layer 1: Edges ──────────────────────────────────────────────────── */}
       <Layer>
@@ -447,13 +526,19 @@ export default function GraphCanvas({
             ((dotsByNode.get(edge.from)?.length || 0) > 0 || (dotsByNode.get(edge.to)?.length || 0) > 0);
           const isEdgeGlowing = isEdgeHighlighted || isEdgeActive;
 
+          const edgeColor = isEdgeGlowing
+            ? '#38bdf8'
+            : isMain
+            ? (theme === 'light' ? '#94a3b8' : '#64748b')
+            : (theme === 'light' ? '#cbd5e1' : '#374151');
+
           return (
             <Arrow
               key={`edge-${edge.from}-${edge.to}`}
               points={points}
-              stroke={isEdgeGlowing ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
+              stroke={edgeColor}
               strokeWidth={isEdgeHighlighted ? 3.5 : isEdgeActive ? 2.5 : isMain ? 2 : 1}
-              fill={isEdgeGlowing ? '#38bdf8' : isMain ? '#64748b' : '#374151'}
+              fill={edgeColor}
               shadowEnabled={isEdgeGlowing}
               shadowColor="#38bdf8"
               shadowBlur={isEdgeHighlighted ? 16 : 10}
@@ -475,11 +560,14 @@ export default function GraphCanvas({
       <Layer>
         {GRAPH_NODES.map((node) => {
           const dots = dotsByNode.get(node.id) ?? [];
+          const count = badgeCountMap.get(node.id) || dots.length;
           return (
             <NodeGroup
               key={node.id}
               node={node}
               dotCount={dots.length}
+              badgeCount={count}
+              theme={theme}
               isHovered={hoveredNodeId === node.id}
               isHighlighted={highlightedNodeId === node.id}
               onMouseEnter={handleNodeMouseEnter(node.id)}

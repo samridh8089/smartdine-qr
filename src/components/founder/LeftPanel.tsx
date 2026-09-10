@@ -114,11 +114,25 @@ export function getKitchenEta(tableStatus: string, orderDurationMin?: number): K
   return null;
 }
 
+export const DEFAULT_KNOWN_TABLES: Array<{ id: string; name: string }> = [
+  { id: 't1', name: 'Table 1' },
+  { id: 't2', name: 'Table 2' },
+  { id: 't3', name: 'Table 3' },
+  { id: 't4', name: 'Table 4' },
+  { id: 't5', name: 'Table 5' },
+  { id: 't6', name: 'Table 6' },
+  { id: 't12', name: 'Table 12' },
+  { id: 't14', name: 'Table 14' },
+  { id: 't16', name: 'Table 16' },
+];
+
 interface LeftPanelProps {
   restaurantId: string;
   selectedOrderId?: string | null;
+  theme?: 'dark' | 'light';
   onTableClick?: (table: ActiveTableDetails) => void;
   onOpenTimeline?: (orderId?: string, correlationId?: string) => void;
+  onCloseDrawer?: () => void;
 }
 
 const STATUS_CONFIG: Record<
@@ -148,13 +162,13 @@ const STATUS_CONFIG: Record<
   },
   occupied: {
     bg: 'bg-blue-950/60',
-    border: 'border-blue-500/70',
-    text: 'text-blue-400',
+    border: 'border-sky-500/70',
+    text: 'text-sky-400',
     label: 'Occupied',
-    glow: 'shadow-[0_0_12px_rgba(59,130,246,0.3)]',
+    glow: 'shadow-[0_0_12px_rgba(56,189,248,0.4)]',
   },
   available: {
-    bg: 'bg-slate-900/50',
+    bg: 'bg-slate-900/60',
     border: 'border-slate-800',
     text: 'text-slate-400',
     label: 'Available',
@@ -162,26 +176,16 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const DEFAULT_KNOWN_TABLES = [
+const DEFAULT_TABLES: Array<{ id: string; name: string }> = [
   { id: 't_1', name: 'Table 1' },
   { id: 't_2', name: 'Table 2' },
   { id: 't_3', name: 'Table 3' },
   { id: 't_4', name: 'Table 4' },
-  { id: 't_5', name: 'Table 5' },
-  { id: 't_6', name: 'Table 6' },
-  { id: 't_7', name: 'Table 7' },
-  { id: 't_8', name: 'Table 8' },
-  { id: 't_9', name: 'Table 9' },
   { id: 't_10', name: 'Table 10' },
   { id: 't_12', name: 'Table 12' },
   { id: 't_13', name: 'Table 13' },
   { id: 't_14', name: 'Table 14' },
   { id: 't_15', name: 'Table 15' },
-  { id: 't_16', name: 'Table 16' },
-  { id: 't_17', name: 'Table 17' },
-  { id: 't_18', name: 'Table 18' },
-  { id: 't_19', name: 'Table 19' },
-  { id: 't_20', name: 'Table 20' },
 ];
 
 type LeftTab = 'floor' | 'kitchen' | 'waiters';
@@ -189,13 +193,16 @@ type LeftTab = 'floor' | 'kitchen' | 'waiters';
 export default function LeftPanel({
   restaurantId,
   selectedOrderId,
+  theme = 'dark',
   onTableClick,
   onOpenTimeline,
+  onCloseDrawer,
 }: LeftPanelProps) {
   // ─── 1. useState (Rule 1: Strict Hook Declaration Order) ──────────────────
   const [activeTab, setActiveTab] = useState<LeftTab>('floor');
   const [tables, setTables] = useState<ActiveTableDetails[]>([]);
   const [selectedTable, setSelectedTable] = useState<ActiveTableDetails | null>(null);
+  const [isDrawerDismissed, setIsDrawerDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [waiters, setWaiters] = useState<
     Array<{ id: string; name: string; tables: string[]; calls: number }>
@@ -223,6 +230,7 @@ export default function LeftPanel({
   }, [tables]);
 
   const activeSelectedTable = useMemo(() => {
+    if (isDrawerDismissed) return null;
     if (selectedTable) {
       return tables.find((t) => t.id === selectedTable.id) || selectedTable;
     }
@@ -237,7 +245,7 @@ export default function LeftPanel({
       );
     }
     return null;
-  }, [selectedTable, selectedOrderId, tables]);
+  }, [isDrawerDismissed, selectedTable, selectedOrderId, tables]);
 
   // ─── 4. useCallback ──────────────────────────────────────────────────────
   const loadFloorData = useCallback(async () => {
@@ -399,11 +407,18 @@ export default function LeftPanel({
 
   const handleTableSelect = useCallback(
     (t: ActiveTableDetails) => {
+      setIsDrawerDismissed(false);
       setSelectedTable(t);
       onTableClick?.(t);
     },
     [onTableClick]
   );
+
+  const handleCloseDrawer = useCallback(() => {
+    setSelectedTable(null);
+    setIsDrawerDismissed(true);
+    onCloseDrawer?.();
+  }, [onCloseDrawer]);
 
   const handleOpenTimelineClick = useCallback(() => {
     if (activeSelectedTable) {
@@ -428,9 +443,13 @@ export default function LeftPanel({
 
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
-    <div className="h-full flex flex-col bg-slate-900 border-r border-slate-800 relative select-none">
+    <div className={`h-full flex flex-col border-r relative select-none ${
+      theme === 'light'
+        ? 'bg-slate-50 border-slate-200 text-slate-800'
+        : 'bg-slate-900 border-slate-800 text-slate-100'
+    }`}>
       {/* Tab switcher */}
-      <div className="flex border-b border-slate-800 shrink-0">
+      <div className={`flex border-b shrink-0 ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
         {(
           [
             { id: 'floor', icon: LayoutGrid, label: 'Floor Twin' },
@@ -546,9 +565,35 @@ export default function LeftPanel({
                             )}
                           </p>
                         ) : (
-                          <p className="text-[9px] text-slate-500 font-mono">
-                            {table.customerCount} seats
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-[9px] text-slate-500 font-mono">
+                              {table.customerCount} seats · Vacant
+                            </p>
+                            <div className="flex items-center gap-1 font-mono text-[7.5px] pt-0.5">
+                              <span
+                                data-testid="btn-card-qr"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-700/60 text-sky-300 hover:bg-sky-900 cursor-pointer flex items-center gap-0.5"
+                                title="Generate QR"
+                              >
+                                <QrCode className="h-2 w-2" /> QR
+                              </span>
+                              <span
+                                data-testid="btn-card-history"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTableSelect(table);
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
+                                title="Table History"
+                              >
+                                <History className="h-2 w-2" /> History
+                              </span>
+                            </div>
+                          </div>
                         )}
                       </div>
 
@@ -651,41 +696,68 @@ export default function LeftPanel({
           </div>
         )}
 
-        {/* Waiters assignment tab */}
+        {/* Waiters dispatch tab */}
         {activeTab === 'waiters' && (
-          <div className="p-3 space-y-2">
-            <div className="space-y-2 font-mono">
-              <div className="bg-slate-800/90 border border-slate-700 rounded-lg p-2.5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-semibold text-slate-200">Ravi Sharma</p>
-                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/60 text-emerald-400 uppercase flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    Delivering
-                  </span>
+          <div className="p-3 space-y-2.5">
+            <p className="text-[10px] text-slate-500 mb-2 font-mono">
+              Staff Movements & Table Dispatches
+            </p>
+            {waiters.map((w) => {
+              const mv = getWaiterMovement(w.tables[0] || 'Table 14', w.name);
+              return (
+                <div
+                  key={w.id}
+                  className="rounded-lg border border-slate-800 bg-slate-950/60 p-2.5 space-y-2 font-mono"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-sky-400">
+                        {w.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .slice(0, 2)}
+                      </div>
+                      <span className="text-xs font-semibold text-slate-200">{w.name}</span>
+                    </div>
+                    {mv && (
+                      <span
+                        className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border uppercase ${
+                          mv.action === 'Delivering'
+                            ? 'bg-emerald-950 text-emerald-400 border-emerald-600'
+                            : mv.action === 'Serving'
+                            ? 'bg-purple-950 text-purple-400 border-purple-600'
+                            : 'bg-sky-950 text-sky-400 border-sky-600'
+                        }`}
+                      >
+                        {mv.action}
+                      </span>
+                    )}
+                  </div>
+
+                  {mv && (
+                    <div className="p-1.5 rounded bg-slate-900 border border-slate-800 flex items-center justify-between text-[9px]">
+                      <span className="text-slate-300 font-bold">{mv.label}</span>
+                      {mv.pulse && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1 border-t border-slate-800/80">
+                    <span>Assigned: {w.tables.join(', ') || 'Floor'}</span>
+                    {w.calls > 0 && (
+                      <span className="text-rose-400 font-bold">{w.calls} calls</span>
+                    )}
+                  </div>
                 </div>
-                <div className="p-1.5 rounded bg-slate-900 border border-slate-700/60 text-[9px] text-emerald-300 font-semibold mb-1">
-                  Ravi Sharma → Table 14 [Delivering]
-                </div>
-                <p className="text-[9px] text-slate-400">Assigned: Table 14, Table 16</p>
-              </div>
-              <div className="bg-slate-800/90 border border-slate-700 rounded-lg p-2.5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-semibold text-slate-200">Neha Patel</p>
-                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-purple-950 border border-purple-500/60 text-purple-300 uppercase">
-                    Serving
-                  </span>
-                </div>
-                <div className="p-1.5 rounded bg-slate-900 border border-slate-700/60 text-[9px] text-purple-300 font-semibold mb-1">
-                  Neha Patel → Table 12 [Serving]
-                </div>
-                <p className="text-[9px] text-slate-400">Assigned: Table 12, Table 4</p>
-              </div>
-            </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* ── Floor Digital Twin: Interactive Table Drawer ─────────────────────── */}
+      {/* ── Interactive Table Digital Twin Drawer ─────────────────────────────── */}
       {activeSelectedTable && (
         <div
           data-testid="table-digital-twin-drawer"
@@ -707,7 +779,8 @@ export default function LeftPanel({
               </span>
             </div>
             <button
-              onClick={() => setSelectedTable(null)}
+              data-testid="btn-close-table-drawer"
+              onClick={handleCloseDrawer}
               className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 cursor-pointer"
               title="Close Drawer"
             >
@@ -888,6 +961,7 @@ export default function LeftPanel({
                 <span>Open Timeline</span>
               </button>
               <button
+                data-testid="btn-open-live-order"
                 onClick={() => {
                   if (typeof window !== 'undefined') {
                     window.open('/dashboard/orders', '_blank');

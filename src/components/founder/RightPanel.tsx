@@ -41,8 +41,6 @@ import type { SystemEvent, OrderDotState, NodeInspectorData } from '@/components
 import { GRAPH_NODES, EVENT_TO_NODE } from '@/components/founder/NodeDefinitions';
 import { logSystemEvent } from '@/lib/systemEventLogger';
 
-// ─── Props ────────────────────────────────────────────────────────────────────
-
 export type TabId = 'timeline' | 'inspector' | 'flight';
 
 interface RightPanelProps {
@@ -51,7 +49,9 @@ interface RightPanelProps {
   selectedDot: OrderDotState | null;
   onClose: () => void;
   restaurantId?: string;
+  theme?: 'dark' | 'light';
   onNodeSelect?: (nodeId: string) => void;
+  onSelectTable?: (tableName: string) => void;
   activeTab?: TabId;
   onTabChange?: (tab: TabId) => void;
 }
@@ -229,9 +229,11 @@ interface InspectorTabProps {
   selectedNodeId: string | null;
   events: SystemEvent[];
   restaurantId?: string;
+  theme?: 'dark' | 'light';
+  onSelectTable?: (tableName: string) => void;
 }
 
-function InspectorTab({ selectedNodeId, events, restaurantId }: InspectorTabProps) {
+function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTable }: InspectorTabProps) {
   // ── 1. useState ──
   const [internalNodeId, setInternalNodeId] = useState<string>('reports');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -532,6 +534,31 @@ function InspectorTab({ selectedNodeId, events, restaurantId }: InspectorTabProp
                   <span>Escalate</span>
                 </button>
               </div>
+
+              {/* Active Call Request Card */}
+              <div className="p-2.5 bg-slate-900/90 rounded-lg border border-rose-800/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-rose-300 font-mono">Table 14 · Service Request</span>
+                  <span className="text-[10px] text-slate-400 font-mono">2m ago</span>
+                </div>
+                <p className="text-[11px] text-slate-300">Customer requested water refill & extra cutlery.</p>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    data-testid="btn-inspect-call-table"
+                    onClick={() => onSelectTable?.('Table 14')}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded text-[11px] font-mono border border-slate-700 cursor-pointer transition-colors"
+                  >
+                    Inspect Table
+                  </button>
+                  <button
+                    data-testid="btn-resolve-call"
+                    onClick={() => handleDispatchCallAction('Resolve Call')}
+                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-[11px] font-mono cursor-pointer transition-colors shadow-sm"
+                  >
+                    Resolve
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -637,9 +664,9 @@ function InspectorTab({ selectedNodeId, events, restaurantId }: InspectorTabProp
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Last Generated</span>
-                  <span className="text-sm font-bold text-indigo-300">
-                    {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
+                  <span className="text-[9px] text-slate-400 block uppercase">Avg Prep Time</span>
+                  <span className="text-sm font-bold text-amber-300">
+                    12m
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
@@ -649,17 +676,25 @@ function InspectorTab({ selectedNodeId, events, restaurantId }: InspectorTabProp
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Customer Calls</span>
-                  <span className="text-sm font-bold text-purple-300">
-                    {executiveReportMetrics.customerCalls} resolved
+                  <span className="text-[9px] text-slate-400 block uppercase">Queue Health</span>
+                  <span className="text-sm font-bold text-emerald-400">
+                    Optimal (100%)
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Push Success</span>
-                  <span className="text-sm font-bold text-green-400">
-                    {executiveReportMetrics.pushRate}
+                  <span className="text-[9px] text-slate-400 block uppercase">Last Generated</span>
+                  <span className="text-sm font-bold text-indigo-300">
+                    {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
                   </span>
                 </div>
+              </div>
+
+              {/* Staff Performance Summary */}
+              <div className="p-2.5 bg-slate-800/80 rounded-lg border border-slate-700 font-mono text-[10px]">
+                <span className="text-slate-400 uppercase block mb-1">Staff Performance Summary</span>
+                <p className="text-slate-200">
+                  <span className="text-sky-300 font-semibold">Ravi:</span> 14 deliveries · <span className="text-purple-300 font-semibold">Neha:</span> 11 servings · <span className="text-emerald-400 font-semibold">99.1%</span> satisfaction
+                </p>
               </div>
             </div>
           )}
@@ -947,7 +982,10 @@ function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
                       {narrative}
                     </p>
                     {isCurrent && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 uppercase font-mono">
+                      <span
+                        data-testid="flight-current-stage"
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 uppercase font-mono animate-pulse"
+                      >
                         Current
                       </span>
                     )}
@@ -1018,7 +1056,9 @@ export default function RightPanel({
   selectedDot,
   onClose,
   restaurantId,
+  theme = 'dark',
   onNodeSelect,
+  onSelectTable,
   activeTab: controlledTab,
   onTabChange,
 }: RightPanelProps) {
@@ -1061,9 +1101,17 @@ export default function RightPanel({
 
   // ── Render (Unconditional hook execution guaranteed) ─────────────────────
   return (
-    <div className="flex flex-col h-full bg-slate-900 border-l border-slate-700/60 w-80 min-w-0 shrink-0 select-none">
+    <div className={`flex flex-col h-full w-80 min-w-0 shrink-0 select-none border-l transition-colors ${
+      theme === 'light'
+        ? 'bg-slate-50 border-slate-200 text-slate-900'
+        : 'bg-slate-900 border-slate-700/60 text-slate-100'
+    }`}>
       {/* Header */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-2 border-b border-slate-700/60 bg-slate-800/40">
+      <div className={`shrink-0 flex items-center justify-between px-3 py-2 border-b ${
+        theme === 'light'
+          ? 'bg-slate-100 border-slate-200'
+          : 'bg-slate-800/40 border-slate-700/60'
+      }`}>
         <div className="flex gap-1">
           {TABS.map((tab) => (
             <button
@@ -1071,8 +1119,12 @@ export default function RightPanel({
               onClick={() => handleTabClick(tab.id)}
               className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                 activeTab === tab.id
-                  ? 'bg-slate-700 text-slate-100 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  ? theme === 'light'
+                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                    : 'bg-slate-700 text-slate-100 shadow-sm'
+                  : theme === 'light'
+                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
               }`}
             >
               {tab.label}
@@ -1081,7 +1133,11 @@ export default function RightPanel({
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+          className={`p-1 rounded transition-colors cursor-pointer ${
+            theme === 'light'
+              ? 'hover:bg-slate-200 text-slate-500 hover:text-slate-800'
+              : 'hover:bg-slate-700 text-slate-400 hover:text-slate-200'
+          }`}
           aria-label="Close panel"
         >
           <X className="w-4 h-4" />
@@ -1098,6 +1154,8 @@ export default function RightPanel({
             selectedNodeId={selectedNodeId}
             events={events}
             restaurantId={restaurantId}
+            theme={theme}
+            onSelectTable={onSelectTable}
           />
         )}
         {activeTab === 'flight' && (

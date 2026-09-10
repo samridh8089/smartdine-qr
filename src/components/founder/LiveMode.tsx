@@ -31,6 +31,7 @@ interface LiveModeProps {
   onFollowOrder: (id: string | null) => void;
   events?: SystemEvent[];
   orderDots?: OrderDotState[];
+  theme?: 'dark' | 'light';
 }
 
 export default function LiveMode({
@@ -39,6 +40,7 @@ export default function LiveMode({
   onFollowOrder,
   events: propEvents,
   orderDots: propOrderDots,
+  theme = 'dark',
 }: LiveModeProps) {
   // ─── 1. useState (Rule 1: Hooks Always First) ────────────────────────────
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
@@ -122,6 +124,13 @@ export default function LiveMode({
     setHighlightedNodeId(null);
   }, []);
 
+  const handleCloseDrawer = useCallback(() => {
+    onFollowOrder(null);
+    setSelectedDot(null);
+    setSelectedNodeId(null);
+    setHighlightedNodeId(null);
+  }, [onFollowOrder]);
+
   // ─── 5. useEffect ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return;
@@ -146,12 +155,14 @@ export default function LiveMode({
 
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
-    <div className="flex h-full overflow-hidden select-none">
+    <div className={`flex h-full overflow-hidden select-none ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>
       {/* Left Panel: Floor Digital Twin (260px) */}
-      <div className="w-64 shrink-0 border-r border-slate-800 overflow-hidden">
+      <div className={`w-64 shrink-0 border-r overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
         <LeftPanel
           restaurantId={restaurantId}
           selectedOrderId={followingOrderId || selectedDot?.orderId || null}
+          theme={theme}
+          onCloseDrawer={handleCloseDrawer}
           onTableClick={(table) => {
             if (table.currentOrderId) {
               onFollowOrder(table.currentOrderId);
@@ -173,7 +184,7 @@ export default function LiveMode({
       </div>
 
       {/* Center: Graph Canvas */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden bg-slate-950">
+      <div ref={containerRef} className={`flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>
         {containerSize.width > 100 && (
           <GraphCanvas
             containerWidth={containerSize.width}
@@ -182,6 +193,7 @@ export default function LiveMode({
             events={events}
             followingOrderId={followingOrderId}
             highlightedNodeId={highlightedNodeId}
+            theme={theme}
             onNodeClick={handleNodeClick}
             onDotClick={handleDotClick}
           />
@@ -208,13 +220,13 @@ export default function LiveMode({
           <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 bg-sky-950/90 border border-sky-500/60 rounded-lg shadow-lg shadow-sky-500/20 z-10 animate-in fade-in">
             <span className="h-2 w-2 rounded-full bg-sky-400 animate-ping" />
             <span className="text-xs text-sky-200 font-mono font-bold">
-              Inspecting Node: {highlightedNodeId}
+              Inspecting {highlightedNodeId}
             </span>
           </div>
         )}
 
-        {/* Live stats overlay (bottom-left) */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10 font-mono">
+        {/* Floating live summary badge */}
+        <div className="absolute bottom-3 left-3 flex items-center gap-2 font-mono z-10">
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/90 border border-slate-700 rounded-full">
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-[10px] text-slate-300">{orderDots.length} active orders</span>
@@ -231,12 +243,13 @@ export default function LiveMode({
       </div>
 
       {/* Right Panel: 340px */}
-      <div className="w-[340px] shrink-0 border-l border-slate-800 overflow-hidden">
+      <div className={`w-[340px] shrink-0 border-l overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
         <RightPanel
           events={events}
           selectedNodeId={selectedNodeId}
           selectedDot={selectedDot}
           restaurantId={restaurantId}
+          theme={theme}
           onClose={handleRightClose}
           onNodeSelect={handleNodeHighlight}
           activeTab={rightPanelTab}
