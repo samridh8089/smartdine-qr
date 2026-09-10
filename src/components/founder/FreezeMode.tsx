@@ -73,6 +73,7 @@ interface FreezeModeProps {
   restaurantId: string;
   events: SystemEvent[];
   theme?: 'dark' | 'light';
+  targetTimestamp?: number | null;
 }
 
 const TABLE_STATUS_COLORS: Record<string, { bg: string; text: string; label: string; border: string }> = {
@@ -84,7 +85,12 @@ const TABLE_STATUS_COLORS: Record<string, { bg: string; text: string; label: str
   closed:       { bg: 'bg-slate-900',      text: 'text-slate-500',   label: 'Closed',    border: 'border-slate-800' },
 };
 
-export default function FreezeMode({ restaurantId, events, theme = 'dark' }: FreezeModeProps) {
+export default function FreezeMode({
+  restaurantId,
+  events,
+  theme = 'dark',
+  targetTimestamp,
+}: FreezeModeProps) {
   // ─── 1. useState (Rule 1: Hooks Always First) ────────────────────────────
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
@@ -189,14 +195,17 @@ export default function FreezeMode({ restaurantId, events, theme = 'dark' }: Fre
     })();
   }, [restaurantId]);
 
-  // Initialize scrubber to latest event on mount
+  // Initialize scrubber to latest event or targetTimestamp on mount
   useEffect(() => {
-    if (events.length > 0) {
+    if (targetTimestamp) {
+      setScrubberMs(targetTimestamp);
+      setDiffT1Ms(Math.max(minTimeMs, targetTimestamp - 10 * 60 * 1000));
+    } else if (events.length > 0) {
       const latestTime = Math.max(...events.map(e => new Date(e.created_at).getTime()));
       setScrubberMs(latestTime);
       setDiffT1Ms(Math.max(minTimeMs, latestTime - 10 * 60 * 1000));
     }
-  }, [events.length, minTimeMs]);
+  }, [targetTimestamp, events.length, minTimeMs]);
 
   // CCTV Timeline playback ticker
   useEffect(() => {
@@ -332,17 +341,17 @@ export default function FreezeMode({ restaurantId, events, theme = 'dark' }: Fre
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
             <span className="font-bold text-cyan-200 uppercase tracking-wide">
-              Snapshot frozen at {formattedScrubberTime}
+              Snapshot frozen at {formattedScrubberTime}.
             </span>
           </div>
           <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-600 text-rose-300 text-[10px] font-bold">
-            Live updates paused
+            Live updates paused.
           </span>
           <span className="text-slate-300 text-[11px] flex items-center gap-1 font-medium">
-            <span className="text-cyan-400">ℹ</span> Click occupied tables to inspect historical state
+            <span className="text-cyan-400">ℹ</span> Click occupied tables to inspect historical state.
           </span>
           <span className="text-purple-300 text-[11px] flex items-center gap-1 font-medium">
-            <span className="text-purple-400">👻</span> Ghost nodes represent future events
+            <span className="text-purple-400">👻</span> Ghost nodes represent future events.
           </span>
         </div>
         <div className="flex items-center gap-2 text-[10px]">

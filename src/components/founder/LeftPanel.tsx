@@ -62,42 +62,52 @@ export function getWaiterMovement(tableName: string, waiterName?: string): Waite
   const clean = tableName.toLowerCase();
   if (clean.includes('14')) {
     return {
-      action: 'Delivering',
-      label: 'Ravi Sharma → Table 14 [Delivering]',
+      action: 'Serving',
+      label: 'Ravi Sharma → Table 14 [Serving · ETA 30s]',
       waiter: 'Ravi Sharma',
       targetTable: 'Table 14',
-      color: 'text-emerald-400 bg-emerald-950/80 border-emerald-500/60',
+      color: 'text-emerald-400 bg-emerald-950/80 border-dashed border-emerald-500/80 shadow-sm shadow-emerald-900/30',
       pulse: true,
     };
   }
   if (clean.includes('12')) {
     return {
-      action: 'Serving',
-      label: 'Neha Patel → Table 12 [Serving]',
-      waiter: 'Neha Patel',
+      action: 'Delivering',
+      label: 'Ravi Sharma → Table 12 [Walking · ETA 45s]',
+      waiter: 'Ravi Sharma',
       targetTable: 'Table 12',
-      color: 'text-purple-400 bg-purple-950/80 border-purple-500/60',
-      pulse: false,
+      color: 'text-purple-300 bg-purple-950/80 border-dashed border-purple-500/80 shadow-sm shadow-purple-900/30',
+      pulse: true,
     };
   }
   if (clean.includes('16')) {
     return {
       action: 'Pickup',
-      label: 'Ravi Sharma → Table 16 [Pickup]',
-      waiter: 'Ravi Sharma',
+      label: 'Neha Patel → Table 16 [Arrived · Serving]',
+      waiter: 'Neha Patel',
       targetTable: 'Table 16',
-      color: 'text-sky-400 bg-sky-950/80 border-sky-500/60',
+      color: 'text-sky-300 bg-sky-950/80 border-dashed border-sky-500/80',
+      pulse: false,
+    };
+  }
+  if (clean.includes('6')) {
+    return {
+      action: 'Assigned',
+      label: 'Ravi Sharma → Table 6 [Completed]',
+      waiter: 'Ravi Sharma',
+      targetTable: 'Table 6',
+      color: 'text-teal-300 bg-teal-950/80 border-teal-500/60',
       pulse: false,
     };
   }
   if (waiterName) {
     return {
       action: 'Assigned',
-      label: `${waiterName} → ${tableName} [Assigned]`,
+      label: `${waiterName} → ${tableName} [Walking · ETA 1m]`,
       waiter: waiterName,
       targetTable: tableName,
-      color: 'text-sky-400 bg-sky-950/80 border-sky-500/60',
-      pulse: false,
+      color: 'text-sky-300 bg-sky-950/80 border-dashed border-sky-500/80',
+      pulse: true,
     };
   }
   return null;

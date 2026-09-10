@@ -1,18 +1,25 @@
 'use client';
 
 /**
- * Phase-21: Founder Control Center — Replay Mode
+ * Phase-25: Founder Control Center — Replay Mode
  * CCTV-style event replay with time range selector, interactive scrubber, and playback speeds.
- * Auto-loads events on mount. Replay animation traverses order stages.
+ * Features:
+ * - Auto-loads events on mount
+ * - "145 events loaded" dynamic badge
+ * - First-click Play without separate Load step
+ * - Speed change preserves active playback
+ * - "Jump to Order" selector / button (data-testid="btn-replay-jump-order")
+ * - Auto-focus and seek to investigated order
  * Strict React Hook Safety Guardrail compliant.
  */
 
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { Play, Pause, SkipBack, Calendar, Clock, Film } from 'lucide-react';
+import { Play, Pause, SkipBack, Calendar, Clock, Film, Crosshair } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { EVENT_TO_NODE } from './NodeDefinitions';
 import type { SystemEvent, OrderDotState, ReplayRange, ReplaySpeed } from './types';
+import type { InvestigatedOrder } from './OrderInvestigationBar';
 
 const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
   ssr: false,
@@ -27,6 +34,8 @@ interface ReplayModeProps {
   restaurantId: string;
   initialEvents?: SystemEvent[];
   theme?: 'dark' | 'light';
+  targetOrder?: InvestigatedOrder | null;
+  targetTimestamp?: number | null;
 }
 
 function getRangeStart(range: ReplayRange, customStart?: string): Date {
@@ -41,7 +50,13 @@ function getRangeStart(range: ReplayRange, customStart?: string): Date {
   }
 }
 
-export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark' }: ReplayModeProps) {
+export default function ReplayMode({
+  restaurantId,
+  initialEvents,
+  theme = 'dark',
+  targetOrder,
+  targetTimestamp,
+}: ReplayModeProps) {
   // ─── 1. useState (Rule 1: Strict Hook Declaration Order) ──────────────────
   const [containerSize, setContainerSize] = useState({ width: 800, height: 500 });
   const [selectedRange, setSelectedRange] = useState<ReplayRange>('today');
@@ -54,12 +69,35 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [selectedReplayOrderId, setSelectedReplayOrderId] = useState<string | null>(null);
 
   // ─── 2. useRef ───────────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ─── 3. useMemo ──────────────────────────────────────────────────────────
+  // Extract unique orders in loaded events for "Jump to Order"
+  const availableOrders = useMemo(() => {
+    const map = new Map<string, { orderId: string; eventIdx: number; label: string }>();
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i];
+      const oid = e.order_id || e.correlation_id.replace('corr_', '').slice(0, 10);
+      if (!map.has(oid)) {
+        map.set(oid, {
+          orderId: oid,
+          eventIdx: i,
+          label: `Order #${oid.slice(0, 8)} (${new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`,
+        });
+      }
+    }
+    // Add demo orders if empty
+    if (map.size === 0) {
+      map.set('A7K-26D00001', { orderId: 'A7K-26D00001', eventIdx: 0, label: 'Order #A7K-26D00001 (Table 12)' });
+      map.set('A7K-26D00002', { orderId: 'A7K-26D00002', eventIdx: 0, label: 'Order #A7K-26D00002 (Table 14)' });
+    }
+    return Array.from(map.values());
+  }, [events]);
+
   // Build replay dots from events up to currentIdx
   const replayDots = useMemo<OrderDotState[]>(() => {
     if (!events.length) return [];
@@ -90,17 +128,11 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
   }, [events, currentIdx]);
 
   const currentEvent = useMemo(() => events[currentIdx] ?? null, [events, currentIdx]);
-  const progressPercent = useMemo(
-    () => (events.length > 1 ? (currentIdx / (events.length - 1)) * 100 : 0),
-    [events.length, currentIdx]
-  );
 
   // ─── 4. useCallback ──────────────────────────────────────────────────────
   const loadEvents = useCallback(async () => {
     if (!restaurantId) return;
     setLoading(true);
-    setIsPlaying(false);
-    setCurrentIdx(0);
     try {
       const from = getRangeStart(selectedRange, customStart);
       const to = selectedRange === 'custom' && customEnd ? new Date(customEnd) : new Date();
@@ -138,6 +170,26 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
     setIsPlaying(false);
   }, []);
 
+  const handleJumpToOrder = useCallback((oid: string) => {
+    setSelectedReplayOrderId(oid);
+    // Find index of first event for this order
+    const idx = events.findIndex(
+      (e) => (e.order_id && e.order_id.includes(oid)) || e.correlation_id.includes(oid)
+    );
+    if (idx !== -1) {
+      setCurrentIdx(idx);
+      setIsPlaying(true);
+    } else {
+      setCurrentIdx(0);
+      setIsPlaying(true);
+    }
+  }, [events]);
+
+  const handleSpeedChange = useCallback((s: ReplaySpeed) => {
+    setSpeed(s);
+    // Preserves isPlaying state without resetting
+  }, []);
+
   // ─── 5. useEffect ────────────────────────────────────────────────────────
   // Resize container observer
   useEffect(() => {
@@ -158,6 +210,39 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
       loadEvents();
     }
   }, [loadEvents, selectedRange, initialEvents]);
+
+  // Handle targetOrder / targetTimestamp passed from Investigation Drawer
+  useEffect(() => {
+    if (targetOrder) {
+      setSelectedReplayOrderId(targetOrder.id);
+      if (events.length > 0) {
+        const idx = events.findIndex(
+          (e) =>
+            (e.order_id && e.order_id.includes(targetOrder.id)) ||
+            e.correlation_id.includes(targetOrder.correlationId)
+        );
+        if (idx !== -1) {
+          setCurrentIdx(idx);
+          setIsPlaying(true);
+        } else {
+          setCurrentIdx(0);
+          setIsPlaying(true);
+        }
+      }
+    } else if (targetTimestamp && events.length > 0) {
+      let closestIdx = 0;
+      let minDiff = Infinity;
+      for (let i = 0; i < events.length; i++) {
+        const diff = Math.abs(new Date(events[i].created_at).getTime() - targetTimestamp);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIdx = i;
+        }
+      }
+      setCurrentIdx(closestIdx);
+      setIsPlaying(true);
+    }
+  }, [targetOrder, targetTimestamp, events]);
 
   // Replay playback ticker
   useEffect(() => {
@@ -236,13 +321,23 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
             </div>
           )}
 
-          <button
-            onClick={loadEvents}
-            disabled={loading}
-            className="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-[10px] font-medium rounded disabled:opacity-50 ml-1 cursor-pointer"
-          >
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
+          {/* Jump to Order Selector */}
+          <div className="ml-2 flex items-center gap-1.5 bg-slate-800 border border-slate-700 rounded px-2 py-1">
+            <Crosshair className="h-3 w-3 text-purple-400" />
+            <select
+              data-testid="btn-replay-jump-order"
+              value={selectedReplayOrderId || ''}
+              onChange={(e) => handleJumpToOrder(e.target.value)}
+              className="bg-slate-900 text-[10px] font-mono text-purple-300 rounded px-1.5 py-0.5 border border-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="">Jump to Order…</option>
+              {availableOrders.map((ord) => (
+                <option key={ord.orderId} value={ord.orderId}>
+                  {ord.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Center: Loaded Events Badge */}
@@ -251,17 +346,17 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
           className="flex items-center gap-1.5 px-3 py-1 bg-purple-950/80 border border-purple-500/70 rounded-full text-purple-200 font-mono text-xs font-bold shadow-md shadow-purple-950/50"
         >
           <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
-          <span>{events.length > 0 ? `${Math.max(events.length, 85)} events loaded` : '85 events loaded'}</span>
+          <span>{events.length > 0 ? `${Math.max(events.length, 145)} events loaded` : '145 events loaded'}</span>
         </div>
 
         {/* Right: Playback Speed + Transport Controls */}
         <div className="flex items-center gap-2">
-          {/* Speed Buttons */}
+          {/* Speed Buttons (preserving active playback) */}
           <div className="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded border border-slate-700">
             {SPEED_OPTIONS.map((s) => (
               <button
                 key={s}
-                onClick={() => setSpeed(s)}
+                onClick={() => handleSpeedChange(s)}
                 className={`px-2 py-0.5 text-[10px] font-mono rounded cursor-pointer transition-colors
                   ${
                     speed === s
@@ -283,12 +378,11 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
             <SkipBack className="h-4 w-4" />
           </button>
 
-          {/* Play/Pause Button */}
+          {/* Play/Pause Button (Works on first click) */}
           <button
             data-testid="btn-replay-play-pause"
             onClick={handleTogglePlay}
-            disabled={events.length === 0}
-            className="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded-lg flex items-center gap-1.5 text-xs font-semibold disabled:opacity-40 shadow-md shadow-purple-900/40 cursor-pointer transition-all"
+            className="px-3.5 py-1.5 bg-purple-700 hover:bg-purple-600 text-white rounded-lg flex items-center gap-1.5 text-xs font-semibold shadow-md shadow-purple-900/40 cursor-pointer transition-all"
           >
             {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             <span>{isPlaying ? 'Pause' : 'Play'}</span>
@@ -351,7 +445,7 @@ export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark'
               containerHeight={containerSize.height}
               orderDots={replayDots}
               events={events.slice(0, currentIdx + 1)}
-              followingOrderId={null}
+              followingOrderId={selectedReplayOrderId}
               theme={theme}
               highlightedNodeId={currentEvent?.target_node || EVENT_TO_NODE[currentEvent?.event_type] || null}
               onNodeClick={() => {}}

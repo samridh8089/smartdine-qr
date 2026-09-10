@@ -29,6 +29,7 @@ import ReplayMode from './ReplayMode';
 import FreezeMode from './FreezeMode';
 import SystemMode from './SystemMode';
 import DebugMode from './DebugMode';
+import OrderInvestigationBar, { InvestigatedOrder } from './OrderInvestigationBar';
 import type { FounderMode } from './types';
 
 interface FounderControlCenterProps {
@@ -71,6 +72,9 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     if (typeof window === 'undefined') return 'dark';
     return (localStorage.getItem('founder_theme') as 'dark' | 'light') || 'dark';
   });
+  const [investigatedOrder, setInvestigatedOrder] = useState<InvestigatedOrder | null>(null);
+  const [replayTargetOrder, setReplayTargetOrder] = useState<InvestigatedOrder | null>(null);
+  const [freezeTargetTimestamp, setFreezeTargetTimestamp] = useState<number | null>(null);
 
   const { events, orderDots, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
     restaurantId,
@@ -140,6 +144,35 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     router.push('/dashboard');
   }, [router]);
 
+  const handleSelectInvestigationOrder = useCallback((order: InvestigatedOrder) => {
+    setInvestigatedOrder(order);
+    setFollowingOrderId(order.id);
+  }, []);
+
+  const handleCloseInvestigationDrawer = useCallback(() => {
+    setInvestigatedOrder(null);
+  }, []);
+
+  const handleReplayOrder = useCallback((order: InvestigatedOrder) => {
+    setReplayTargetOrder(order);
+    handleModeChange('replay');
+  }, [handleModeChange]);
+
+  const handleFreezeMoment = useCallback((timestampMs: number, order: InvestigatedOrder) => {
+    setFreezeTargetTimestamp(timestampMs);
+    handleModeChange('freeze');
+  }, [handleModeChange]);
+
+  const handleOpenTimeline = useCallback((orderId: string, correlationId: string) => {
+    setFollowingOrderId(orderId);
+    handleModeChange('live');
+  }, [handleModeChange]);
+
+  const handleOpenLiveOrder = useCallback((order: InvestigatedOrder) => {
+    setFollowingOrderId(order.id);
+    handleModeChange('live');
+  }, [handleModeChange]);
+
   // Global keyboard shortcuts (Space Pause/Play, L Live, R Replay, F Freeze, Esc Close Drawer/Help)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -155,6 +188,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
       } else if (e.key === 'Escape') {
         setFollowingOrderId(null);
         setHelpOpen(false);
+        setInvestigatedOrder(null);
       } else if (e.key === '?') {
         setHelpOpen((prev) => !prev);
       }
@@ -185,7 +219,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         </div>
 
         {/* Mode tabs */}
-        <div className="flex items-center gap-0.5 bg-slate-800 rounded-lg p-0.5">
+        <div className="flex items-center gap-0.5 bg-slate-800 rounded-lg p-0.5 shrink-0">
           {MODE_CONFIG.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -199,6 +233,21 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               <span className="hidden sm:block">{label}</span>
             </button>
           ))}
+        </div>
+
+        {/* ── Phase-25: Persistent Global Order Investigation Bar ── */}
+        <div className="hidden sm:flex items-center ml-1">
+          <OrderInvestigationBar
+            restaurantId={restaurantId}
+            theme={theme}
+            selectedOrder={investigatedOrder}
+            onSelectOrder={handleSelectInvestigationOrder}
+            onCloseDrawer={handleCloseInvestigationDrawer}
+            onReplayOrder={handleReplayOrder}
+            onFreezeMoment={handleFreezeMoment}
+            onOpenTimeline={handleOpenTimeline}
+            onOpenLiveOrder={handleOpenLiveOrder}
+          />
         </div>
 
         {/* ── Event Recorder Controls ── */}
@@ -327,13 +376,20 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           />
         )}
         {activeMode === 'replay' && (
-          <ReplayMode restaurantId={restaurantId} initialEvents={events} theme={theme} />
+          <ReplayMode
+            restaurantId={restaurantId}
+            initialEvents={events}
+            theme={theme}
+            targetOrder={replayTargetOrder}
+            targetTimestamp={freezeTargetTimestamp}
+          />
         )}
         {activeMode === 'freeze' && (
           <FreezeMode
             restaurantId={restaurantId}
             events={events}
             theme={theme}
+            targetTimestamp={freezeTargetTimestamp}
           />
         )}
         {activeMode === 'system' && (
