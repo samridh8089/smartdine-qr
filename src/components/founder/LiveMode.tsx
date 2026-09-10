@@ -151,8 +151,8 @@ export default function LiveMode({
       <div className="w-[340px] shrink-0 border-l border-slate-800 overflow-hidden">
         <RightPanel
           events={events}
-          selectedNodeId={selectedNodeId}
-          selectedDot={selectedDot}
+          selectedNodeId={selectedNodeId || 'order_created'}
+          selectedDot={selectedDot || (orderDots.length > 0 ? orderDots[0] : null)}
           onClose={handleRightClose}
         />
       </div>
