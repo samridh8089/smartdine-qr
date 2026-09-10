@@ -6,7 +6,7 @@ import { handleApiError } from '@/lib/errors';
 import { reserveInventoryForOrderBatch } from '@/lib/inventoryEngine';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { isSubscriptionExpired } from '@/lib/db';
-import { logSystemEvent, generateCorrelationId } from '@/lib/systemEventLogger';
+import { logSystemEvent, getOrderCorrelationId } from '@/lib/systemEventLogger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -509,7 +509,7 @@ export async function POST(req: Request) {
 
     // ─── Phase-19: Event Bus — fire-and-forget, never awaited ─────────────
     if (createdOrder?.id && restaurantId && restaurantId !== 'demo-rest') {
-      const correlationId = generateCorrelationId();
+      const correlationId = getOrderCorrelationId(createdOrder.id);
       logSystemEvent({
         restaurantId,
         correlationId,

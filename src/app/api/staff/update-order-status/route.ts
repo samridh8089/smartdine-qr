@@ -5,7 +5,7 @@ import { healUnconsumedActiveReservations } from '@/lib/inventoryEngine';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
-import { logSystemEvent, generateCorrelationId, type SystemEventType } from '@/lib/systemEventLogger';
+import { logSystemEvent, getOrderCorrelationId, type SystemEventType } from '@/lib/systemEventLogger';
 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
       // Background reservation healing (non-blocking)
       healUnconsumedActiveReservations(restId).catch(() => {});
 
-      // ─── Phase-19: Event Bus — fire-and-forget ───────────────────────────
+      // ─── Phase-19: Event Bus & Audit Trail ───────────────────────────
       const statusToEvent: Record<string, SystemEventType> = {
         accepted: 'order_accepted',
         preparing: 'order_preparing',
@@ -134,10 +134,29 @@ export async function POST(req: Request) {
         completed: 'order_completed',
       };
       const evtType = statusToEvent[effectiveStatus];
+      const stableCorrId = getOrderCorrelationId(targetOrderId);
+
+      // Write audit log entry (Fix 3)
+      void (async () => {
+        try {
+          const { error: auditErr } = await supabaseAdmin.from('audit_logs').insert({
+            restaurant_id: restId,
+            user_email: staffName,
+            action: `order_status_${effectiveStatus}`,
+            details: `Order #${(targetOrderId || '').slice(0, 8)} transitioned to ${effectiveStatus} by ${staffName}`,
+          });
+          if (auditErr) {
+            console.error('[audit_logs] Insert failure:', auditErr.message, auditErr);
+          }
+        } catch (err: unknown) {
+          console.error('[audit_logs] Exception writing audit log:', err);
+        }
+      })();
+
       if (evtType) {
         logSystemEvent({
           restaurantId: restId,
-          correlationId: generateCorrelationId(),
+          correlationId: stableCorrId,
           orderId: targetOrderId,
           actorType: 'staff',
           eventType: evtType,
