@@ -19,6 +19,7 @@ import {
   ExternalLink,
   QrCode,
   History,
+  MoreVertical,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -220,6 +221,7 @@ export default function LeftPanel({
   const [kitchenQueue, setKitchenQueue] = useState<
     Array<{ orderId: string; table: string; elapsedMin: number; itemsCount: number }>
   >([]);
+  const [menuOpenTableId, setMenuOpenTableId] = useState<string | null>(null);
 
   // ─── 2. useRef ───────────────────────────────────────────────────────────
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -451,6 +453,20 @@ export default function LeftPanel({
     };
   }, [loadFloorData, loadKitchenData]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (menuOpenTableId) {
+          setMenuOpenTableId(null);
+        } else if (activeSelectedTable) {
+          handleCloseDrawer();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeSelectedTable, handleCloseDrawer, menuOpenTableId]);
+
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
     <div className={`h-full flex flex-col border-r relative select-none ${
@@ -545,96 +561,153 @@ export default function LeftPanel({
                       `}
                     >
                       {isOccupied ? (
-                        /* ── Occupied Card: Table, Status pill, Items, Bill, ETA, Waiter, Live pulse ── */
+                        /* ── Occupied Card: Table, Status pill, Items, Bill, ETA, Waiter, Live pulse, 3-dot menu ── */
                         <div className="w-full flex flex-col justify-between h-full space-y-2">
-                          {/* Header: Live Pulse + Table Number + Status Pill */}
+                          {/* Header: Pulsing Live Indicator + Table Number + Status Pill + Three-dot Menu */}
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
                               <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                               </span>
-                              <span className="text-xs font-bold text-slate-100 font-mono tracking-tight">
+                              <span className="text-xs font-bold text-slate-100 font-mono tracking-wide">
                                 {table.name}
                               </span>
                             </div>
-                            <span
-                              className={`text-[8.5px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/90 border border-current shadow-sm`}
-                            >
-                              {cfg.label}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/90 border border-current shadow-sm`}
+                              >
+                                {cfg.label}
+                              </span>
+                              {/* Three-dot menu */}
+                              <div className="relative">
+                                <span
+                                  data-testid={`btn-card-menu-${table.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuOpenTableId(menuOpenTableId === table.id ? null : table.id);
+                                  }}
+                                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center justify-center cursor-pointer"
+                                  title="Actions"
+                                >
+                                  <MoreVertical className="h-3 w-3" />
+                                </span>
+                                {menuOpenTableId === table.id && (
+                                  <div
+                                    data-testid={`dropdown-menu-${table.id}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute right-0 top-6 w-32 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100"
+                                  >
+                                    <button
+                                      type="button"
+                                      data-testid={`menu-qr-${table.id}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpenTableId(null);
+                                        if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
+                                      }}
+                                      className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <QrCode className="h-3 w-3 text-sky-400" /> QR Code
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-testid={`menu-history-${table.id}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMenuOpenTableId(null);
+                                        handleTableSelect(table);
+                                      }}
+                                      className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                      <History className="h-3 w-3 text-amber-400" /> History
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Middle Metrics: Items, Bill, ETA, Waiter */}
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9.5px] font-mono pt-0.5">
-                            <div className="flex items-center gap-1 text-slate-300">
-                              <span className="text-slate-500">Items:</span>
-                              <span className="font-semibold text-slate-200">
-                                {table.items.length > 0 ? table.items.length : 2}
-                              </span>
+                          {/* Middle Metrics: Item count, Bill amount, Kitchen ETA, Waiter name */}
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono pt-1">
+                            <div className="text-slate-300 font-medium">
+                              {table.items.length > 0 ? table.items.length : 2} items
                             </div>
                             <div className="text-right font-bold text-emerald-400">
                               ₹{table.totalBill > 0 ? table.totalBill : 689}
                             </div>
-                            <div className="flex items-center gap-1 text-amber-300">
+                            <div className="flex items-center gap-1 text-amber-300 font-medium">
                               <Clock className="h-2.5 w-2.5" />
                               <span>ETA: {kitchenEta?.etaMin || 6}m</span>
                             </div>
-                            <div className="text-right text-sky-300 font-medium truncate" title={`Waiter: ${table.waiterName || 'Ravi'}`}>
-                              {table.waiterName ? table.waiterName.split(' ')[0] : 'Ravi'}
+                            <div className="text-right text-sky-300 font-medium truncate" title={`Waiter: ${table.waiterName || 'Neha'}`}>
+                              {table.waiterName || 'Neha'}
                             </div>
-                          </div>
-
-                          {/* Footer: Live Order hint */}
-                          <div className="flex items-center justify-between text-[8px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
-                            <span className="text-emerald-400/90 flex items-center gap-1 font-semibold">
-                              ● Live Order
-                            </span>
-                            <span className="text-slate-500 group-hover:text-sky-300 transition-colors">
-                              Inspect →
-                            </span>
                           </div>
                         </div>
                       ) : (
-                        /* ── Available Card: Minimal Table, Seats, QR, History (No Clutter) ── */
-                        <div className="w-full flex flex-col justify-between h-full space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-200 font-mono">
-                              {table.name}
-                            </span>
-                            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700/60 font-mono">
-                              {table.customerCount || 4}p
-                            </span>
+                        /* ── Available Card: Table, Available, Seats, 3-dot menu (Zero Clutter) ── */
+                        <div className="w-full flex items-center justify-between py-1">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-200 font-mono">
+                                {table.name}
+                              </span>
+                              <span className="text-[8.5px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 font-mono uppercase tracking-wider">
+                                Available
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-mono mt-1">
+                              {table.customerCount || 4} Seats
+                            </p>
                           </div>
 
-                          <p className="text-[9px] text-slate-500 font-mono">
-                            Vacant · Ready
-                          </p>
-
-                          {/* Clean minimal secondary actions: QR & History */}
-                          <div className="flex items-center gap-1.5 pt-1">
+                          {/* Three-dot menu */}
+                          <div className="relative">
                             <span
-                              data-testid="btn-card-qr"
+                              data-testid={`btn-card-menu-${table.id}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
+                                setMenuOpenTableId(menuOpenTableId === table.id ? null : table.id);
                               }}
-                              className="flex-1 py-1 text-center rounded bg-slate-800/80 hover:bg-sky-950 border border-slate-700 hover:border-sky-700 text-[8.5px] font-mono text-sky-300 hover:text-white cursor-pointer transition-colors flex items-center justify-center gap-1"
-                              title="Generate QR"
+                              className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center justify-center cursor-pointer"
+                              title="Actions"
                             >
-                              <QrCode className="h-2.5 w-2.5" /> QR
+                              <MoreVertical className="h-3.5 w-3.5" />
                             </span>
-                            <span
-                              data-testid="btn-card-history"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleTableSelect(table);
-                              }}
-                              className="flex-1 py-1 text-center rounded bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-[8.5px] font-mono text-slate-300 hover:text-white cursor-pointer transition-colors flex items-center justify-center gap-1"
-                              title="Table History"
-                            >
-                              <History className="h-2.5 w-2.5" /> History
-                            </span>
+                            {menuOpenTableId === table.id && (
+                              <div
+                                data-testid={`dropdown-menu-${table.id}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="absolute right-0 top-6 w-32 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100"
+                              >
+                                <button
+                                  type="button"
+                                  data-testid={`menu-qr-${table.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuOpenTableId(null);
+                                    if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
+                                  }}
+                                  className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <QrCode className="h-3 w-3 text-sky-400" /> QR Code
+                                </button>
+                                <button
+                                  type="button"
+                                  data-testid={`menu-history-${table.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMenuOpenTableId(null);
+                                    handleTableSelect(table);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <History className="h-3 w-3 text-amber-400" /> History
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
