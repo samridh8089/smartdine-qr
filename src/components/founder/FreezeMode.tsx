@@ -43,6 +43,8 @@ import {
   ArrowRight,
   Focus,
   X,
+  History,
+  ExternalLink,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type {
@@ -93,6 +95,7 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
   const [leftTab, setLeftTab] = useState<'floor' | 'kitchen' | 'waiters' | 'inventory'>('floor');
   const [knownTables, setKnownTables] = useState<Array<{ id: string; name: string }>>([]);
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
+  const [selectedHistoricalTable, setSelectedHistoricalTable] = useState<GhostTableOverlay | null>(null);
 
   // ─── 2. useRef ───────────────────────────────────────────────────────────
   const containerRef = useRef<HTMLDivElement>(null);
@@ -351,7 +354,7 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
       {/* ── Main Work Area: Left Panel + Center Graph + Right Panel ──────── */}
       <div className="flex-1 flex overflow-hidden">
         {/* ── Left Panel: Floor Plan & Subsystems Time Travel (Part E & G) ─ */}
-        <div className="w-72 shrink-0 bg-slate-900/90 border-r border-slate-800 flex flex-col overflow-hidden">
+        <div className="w-72 shrink-0 bg-slate-900/90 border-r border-slate-800 flex flex-col overflow-hidden relative">
           {/* Subsystem tabs */}
           <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
             {([
@@ -401,7 +404,10 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
                     return (
                       <div
                         key={t.tableId}
-                        onClick={() => setSelectedOrderId(`ord_${t.tableName.toLowerCase()}`)}
+                        onClick={() => {
+                          setSelectedHistoricalTable(t);
+                          setSelectedOrderId(`ord_${t.tableName.toLowerCase()}`);
+                        }}
                         className={`relative p-2.5 rounded-lg border flex flex-col justify-between transition-all cursor-pointer ${
                           isOccupied
                             ? `${cfg.bg} border-2 border-sky-400 shadow-[0_0_14px_rgba(56,189,248,0.5)] animate-pulse`
@@ -524,6 +530,139 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
               </div>
             )}
           </div>
+
+          {/* ── Historical Table Digital Twin Drawer ─────────────────────── */}
+          {selectedHistoricalTable && (
+            <div
+              data-testid="historical-table-drawer"
+              className="absolute inset-x-0 bottom-0 top-11 bg-slate-950/95 backdrop-blur-md border-t border-cyan-800/80 shadow-2xl z-30 flex flex-col animate-in slide-in-from-bottom-4 duration-200 select-none"
+            >
+              {/* Drawer Header */}
+              <div className="px-3 py-2.5 border-b border-slate-800 flex items-center justify-between bg-slate-900">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
+                  <h4 className="text-xs font-bold text-slate-100 font-mono">
+                    T-{selectedHistoricalTable.tableName}
+                  </h4>
+                  <span
+                    className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-slate-950 border border-current ${
+                      TABLE_STATUS_COLORS[selectedHistoricalTable.historicalStatus]?.text || 'text-cyan-400'
+                    }`}
+                  >
+                    {selectedHistoricalTable.historicalStatus}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedHistoricalTable(null)}
+                  className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 cursor-pointer"
+                  title="Close Drawer"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Drawer Body */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 font-mono text-[10px]">
+                {/* Meta Attributes Grid */}
+                <div className="grid grid-cols-2 gap-2 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800">
+                  <div>
+                    <span className="text-slate-500 block">Historical Time:</span>
+                    <span className="text-cyan-300 font-medium truncate block">
+                      {formattedScrubberTime}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Order ID:</span>
+                    <span className="text-slate-300 font-medium truncate block">
+                      ord_{selectedHistoricalTable.tableName.toLowerCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Historical Stage:</span>
+                    <span className="text-amber-400 font-bold uppercase block">
+                      {selectedHistoricalTable.historicalStatus}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Estimated Bill:</span>
+                    <span className="text-emerald-400 font-bold block">
+                      ₹{selectedHistoricalTable.tableName.includes('14') ? 458 : selectedHistoricalTable.tableName.includes('12') ? 689 : 350}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ghost Comparison Card */}
+                <div className="p-2.5 rounded-lg bg-purple-950/30 border border-purple-800/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-purple-300 font-bold flex items-center gap-1">
+                      <Layers className="h-3 w-3" /> Ghost Mode Comparison
+                    </span>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-900/60 text-purple-200 border border-purple-700/60">
+                      {ghostModeEnabled ? 'Ghost ON' : 'Ghost OFF'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[9px] pt-1">
+                    <div>
+                      <span className="text-slate-400 block">Snapshot (Then):</span>
+                      <span className="text-cyan-300 font-bold uppercase">{selectedHistoricalTable.historicalStatus}</span>
+                    </div>
+                    <ArrowRight className="h-3 w-3 text-slate-500" />
+                    <div className="text-right">
+                      <span className="text-slate-400 block">Live (Now):</span>
+                      <span className="text-purple-300 font-bold uppercase">{selectedHistoricalTable.currentStatus}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ordered Items Preview */}
+                <div className="space-y-1">
+                  <span className="text-slate-400 block uppercase">Historical Items</span>
+                  <div className="p-2 rounded bg-slate-900 border border-slate-800 space-y-1">
+                    {selectedHistoricalTable.tableName.includes('14') ? (
+                      <>
+                        <div className="flex justify-between text-slate-300">
+                          <span>1x Margherita Pizza (Medium)</span>
+                          <span className="text-slate-400">₹299</span>
+                        </div>
+                        <div className="flex justify-between text-slate-300">
+                          <span>1x Cheese Garlic Bread</span>
+                          <span className="text-slate-400">₹159</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-slate-300">
+                        <span>1x Chef Special Platter</span>
+                        <span className="text-slate-400">₹350</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer Actions */}
+              <div className="p-3 border-t border-slate-800 bg-slate-900 shrink-0 space-y-2">
+                <button
+                  onClick={() => {
+                    setSelectedOrderId(`ord_${selectedHistoricalTable.tableName.toLowerCase()}`);
+                    setDiffModeOpen(false);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg text-xs font-semibold shadow transition-all cursor-pointer font-mono"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  <span>Timeline Shortcut</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined') window.open('/dashboard/orders', '_blank');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-1.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold transition-all cursor-pointer font-mono"
+                >
+                  <ExternalLink className="h-3 w-3 text-amber-400" />
+                  <span>Live Order Shortcut</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Center: GraphCanvas with Historical Order Dots ──────────────── */}

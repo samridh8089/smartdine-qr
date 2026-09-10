@@ -460,8 +460,8 @@ export default function GraphCanvas({
               pointerLength={isMain || isEdgeGlowing ? 8 : 6}
               pointerWidth={isMain || isEdgeGlowing ? 6 : 4}
               dashEnabled
-              dash={isMain || isEdgeActive ? [10, 6] : [5, 5]}
-              dashOffset={isMain || isEdgeActive ? dashOffset : 0}
+              dash={isEdgeGlowing ? [10, 6] : [5, 5]}
+              dashOffset={isEdgeGlowing ? dashOffset : 0}
               lineCap="round"
               lineJoin="round"
               tension={edge.type === 'side' ? 0.4 : 0}
