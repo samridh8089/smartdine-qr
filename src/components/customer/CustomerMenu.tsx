@@ -417,19 +417,24 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         }
         setRestaurant(rest);
 
-        // Phase-21: Establish active correlation ID and emit qr_scanned event
+        // Phase-21: Establish active correlation ID and emit qr_scanned & menu_opened events exactly ONCE per session
         let corrId: string | null = null;
+        let alreadyScanned = false;
+        let alreadyOpened = false;
         if (typeof window !== 'undefined') {
           corrId = sessionStorage.getItem('smartdine_active_correlation_id');
           if (!corrId) {
             corrId = `corr_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
             sessionStorage.setItem('smartdine_active_correlation_id', corrId);
           }
+          alreadyScanned = !!sessionStorage.getItem(`smartdine_qr_scanned_${corrId}`);
+          alreadyOpened = !!sessionStorage.getItem(`smartdine_menu_opened_${corrId}`);
         }
-        if (rest?.id) {
+        if (rest?.id && !alreadyScanned && corrId) {
+          sessionStorage.setItem(`smartdine_qr_scanned_${corrId}`, 'true');
           logSystemEvent({
             restaurantId: rest.id,
-            correlationId: corrId || undefined,
+            correlationId: corrId,
             tableUuid: tableId || undefined,
             actorType: 'customer',
             eventType: 'qr_scanned',
@@ -450,6 +455,20 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           db.getOffers(rest.id).catch(() => [] as Offer[]),
           Promise.resolve(supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle())
         ]);
+
+        if (rest?.id && !alreadyOpened && corrId) {
+          sessionStorage.setItem(`smartdine_menu_opened_${corrId}`, 'true');
+          logSystemEvent({
+            restaurantId: rest.id,
+            correlationId: corrId,
+            tableUuid: tableId || undefined,
+            actorType: 'customer',
+            eventType: 'menu_opened',
+            sourceNode: 'customer_menu',
+            targetNode: 'cart',
+            metadata: { restaurantSlug, tableId: tableId || null, itemCount: rawItems?.length || 0 },
+          }).catch(() => {});
+        }
 
         const spec = parsePlanSpec(planRes.data || { id: planId });
         setPlanSpec(spec);
