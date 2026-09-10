@@ -404,6 +404,7 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
                     return (
                       <div
                         key={t.tableId}
+                        data-testid={t.tableName.includes('14') ? 'freeze-table-14' : `freeze-table-${t.tableId}`}
                         onClick={() => {
                           setSelectedHistoricalTable(t);
                           setSelectedOrderId(`ord_${t.tableName.toLowerCase()}`);
