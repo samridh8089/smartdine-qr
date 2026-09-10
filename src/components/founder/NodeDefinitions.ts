@@ -81,7 +81,7 @@ export const EVENT_TO_NODE: Record<string, string> = {
   order_completed:         'session_closed',
   payment_success:         'payment',
   payment_failed:          'billing',
-  bill_closed:             'session_closed',
+  bill_closed:             'billing',
   session_closed:          'session_closed',
   inventory_reserved:      'inventory',
   inventory_deducted:      'inventory',
@@ -91,10 +91,12 @@ export const EVENT_TO_NODE: Record<string, string> = {
   customer_call_resolved:  'customer_calls',
   push_sent:               'push_notifications',
   push_failed:             'push_notifications',
+  audit_written:           'audit_logs',
   reservation_created:     'order_created',
   reservation_seated:      'live_orders',
   takeaway_created:        'order_created',
 };
+
 
 // ─── Node lookup by ID ────────────────────────────────────────────────────────
 export const NODE_MAP: Record<string, GraphNode> = Object.fromEntries(

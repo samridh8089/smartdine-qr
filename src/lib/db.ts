@@ -9,6 +9,8 @@ import {
   releaseInventoryReservationForOrderBatch,
   transitionOrderBatchLifecycle
 } from './inventoryEngine';
+import { logSystemEvent, getOrderCorrelationId } from './systemEventLogger';
+
 
 async function dispatchFCMNotification(
   restaurantId: string,
@@ -38,6 +40,25 @@ async function dispatchFCMNotification(
         })
       }).catch(() => {});
     } catch (e) {}
+
+    // ── Phase-21: emit push_sent event ──────────────────────────────────────
+    const pushOrderId = extraData?.orderId || null;
+    const pushCorrId = pushOrderId
+      ? getOrderCorrelationId(pushOrderId)
+      : `corr_PUSH_${Date.now()}`;
+    logSystemEvent({
+      restaurantId,
+      correlationId: pushCorrId,
+      orderId: pushOrderId,
+      actorType: 'system',
+      eventType: 'push_sent',
+      sourceNode: 'kitchen_queue',
+      targetNode: 'push_notifications',
+      metadata: { title, roles: targetRoles, requestId: extraData?.requestId || null },
+    }).catch(() => {});
+    // ────────────────────────────────────────────────────────────────────────
+
+
 
     // 2. Dispatch Expo FCM Push for Android Native Devices
     let query = supabase
@@ -3682,6 +3703,23 @@ export const db = {
     }
 
     const createdReq = data[0] as CustomerRequest;
+
+    // ── Phase-21: emit customer_call_accepted event ──────────────────────────
+    logSystemEvent({
+      restaurantId,
+      correlationId: `corr_CALL_${createdReq.id.substring(0, 8)}`,
+      actorType: 'customer',
+      eventType: 'customer_call_accepted',
+      sourceNode: 'served',
+      targetNode: 'customer_calls',
+      metadata: {
+        requestId: createdReq.id,
+        tableId,
+        tableName: table.name,
+        type,
+      },
+    }).catch(() => {});
+    // ────────────────────────────────────────────────────────────────────────
 
     // Dispatch FCM Push Notification to Waiters, Managers & Owners
     const reqTitle = type === 'call_waiter' ? 'WAITER CALL ALERT!' : 'BILL REQUEST ALERT!';

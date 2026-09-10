@@ -136,7 +136,7 @@ export async function POST(req: Request) {
       const evtType = statusToEvent[effectiveStatus];
       const stableCorrId = getOrderCorrelationId(targetOrderId);
 
-      // Write audit log entry (Fix 3)
+      // Write audit log entry + emit audit_logs system event
       void (async () => {
         try {
           const { error: auditErr } = await supabaseAdmin.from('audit_logs').insert({
@@ -147,6 +147,24 @@ export async function POST(req: Request) {
           });
           if (auditErr) {
             console.error('[audit_logs] Insert failure:', auditErr.message, auditErr);
+          } else {
+            // ── Phase-21: emit audit_logs node event ──────────────────────
+            logSystemEvent({
+              restaurantId: restId,
+              correlationId: getOrderCorrelationId(targetOrderId),
+              orderId: targetOrderId,
+              actorType: 'system',
+              eventType: 'audit_written',
+              sourceNode: 'order_created',
+              targetNode: 'audit_logs',
+              metadata: {
+                action: `order_status_${effectiveStatus}`,
+                staffName,
+                auditPhase: 'status_transition',
+              },
+            }).catch(() => {});
+            // ────────────────────────────────────────────────────────────
+
           }
         } catch (err: unknown) {
           console.error('[audit_logs] Exception writing audit log:', err);
@@ -181,6 +199,21 @@ export async function POST(req: Request) {
             metadata: { staffName, phase: 'kitchen_queue_entry' },
           }).catch(() => {});
         }
+
+        // After preparing → inventory consumed by inventoryEngine
+        if (effectiveStatus === 'preparing') {
+          logSystemEvent({
+            restaurantId: restId,
+            correlationId: stableCorrId,
+            orderId: targetOrderId,
+            actorType: 'kitchen',
+            eventType: 'inventory_deducted',
+            sourceNode: 'kitchen_queue',
+            targetNode: 'inventory',
+            metadata: { staffName, phase: 'inventory_consumption' },
+          }).catch(() => {});
+        }
+
 
         // After ready → auto waiter_assigned (waiter will serve next)
         if (effectiveStatus === 'ready') {
