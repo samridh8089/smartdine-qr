@@ -237,22 +237,74 @@ const NodeGroup = React.memo(function NodeGroup({
         listening={false}
       />
 
-      {/* Label: x=46 (moved 8px farther from x=38, guaranteeing 40px clear distance, zero overlap at 100%, 125%, 150% zoom) */}
+      {/* Label: x=54 (moved 8px farther from x=46, guaranteeing 48px clear distance, zero overlap at 100%, 125%, 150% zoom) */}
       <Text
         text={node.label}
-        x={46}
-        y={0}
-        width={node.width - 78}
+        x={54}
+        y={node.id === 'preparing' || node.id === 'waiter_assigned' ? -6 : 0}
+        width={node.width - 86}
         height={node.height}
         align="center"
         verticalAlign="middle"
-        fontSize={10.5}
+        fontSize={10}
         fontStyle="bold"
         fontFamily="'Inter', 'Segoe UI', sans-serif"
         fill={labelFill}
         wrap="word"
         listening={false}
       />
+
+      {/* Kitchen ETA on Preparing node: elapsed, remaining, ETA countdown live */}
+      {node.id === 'preparing' && (
+        <Group x={12} y={node.height - 16}>
+          <Rect
+            width={node.width - 24}
+            height={13}
+            cornerRadius={4}
+            fill={isLight ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.3)'}
+            stroke={isLight ? '#d97706' : '#f59e0b'}
+            strokeWidth={0.8}
+          />
+          <Text
+            text="⏱ 8m elapsed · 6m ETA"
+            width={node.width - 24}
+            height={13}
+            align="center"
+            verticalAlign="middle"
+            fontSize={7.5}
+            fontStyle="bold"
+            fontFamily="'Inter', 'Courier New', monospace"
+            fill={isLight ? '#92400e' : '#fef3c7'}
+            listening={false}
+          />
+        </Group>
+      )}
+
+      {/* Waiter Movement on Waiter Assigned node: Neha Patel Table 4 -> Table 12 */}
+      {node.id === 'waiter_assigned' && (
+        <Group x={10} y={node.height - 16}>
+          <Rect
+            width={node.width - 20}
+            height={13}
+            cornerRadius={4}
+            fill={isLight ? 'rgba(124, 58, 237, 0.18)' : 'rgba(124, 58, 237, 0.3)'}
+            stroke={isLight ? '#7c3aed' : '#a78bfa'}
+            strokeWidth={0.8}
+          />
+          <Text
+            text="🚶 Neha: T4 → T12"
+            width={node.width - 20}
+            height={13}
+            align="center"
+            verticalAlign="middle"
+            fontSize={7.5}
+            fontStyle="bold"
+            fontFamily="'Inter', 'Courier New', monospace"
+            fill={isLight ? '#5b21b6' : '#ede9fe'}
+            listening={false}
+          />
+        </Group>
+      )}
 
       {/* Numbered Badge at top-right with bounce animation on trigger */}
       {badgeCount > 0 && (
@@ -713,6 +765,48 @@ export default function GraphCanvas({
             );
           });
         })}
+
+        {/* ── Animated Waiter Travel Telemetry: Neha Patel Table 4 -> Table 12 ── */}
+        <Group
+          x={1650 + Math.sin(dashOffset * 0.04) * 70}
+          y={265}
+          listening={false}
+        >
+          <Rect
+            width={164}
+            height={20}
+            offsetX={82}
+            offsetY={10}
+            cornerRadius={10}
+            fill={isLight ? '#ffffff' : '#1e1b4b'}
+            stroke="#a855f7"
+            strokeWidth={1.2}
+            shadowColor="#a855f7"
+            shadowBlur={10}
+            shadowOpacity={0.7}
+          />
+          <Circle
+            x={-70}
+            y={0}
+            radius={4}
+            fill="#a855f7"
+            shadowColor="#c084fc"
+            shadowBlur={8}
+          />
+          <Text
+            text="🚶 Neha: T4 → T12 (ETA 45s)"
+            width={145}
+            height={20}
+            offsetX={62}
+            offsetY={10}
+            align="center"
+            verticalAlign="middle"
+            fontSize={8}
+            fontStyle="bold"
+            fontFamily="'Inter', 'Segoe UI', monospace"
+            fill={isLight ? '#6b21a8' : '#e9d5ff'}
+          />
+        </Group>
       </Layer>
     </Stage>
   );

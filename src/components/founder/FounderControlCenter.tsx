@@ -22,6 +22,9 @@ import {
   BookOpen,
   X,
   Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
 } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LiveMode from './LiveMode';
@@ -36,6 +39,81 @@ interface FounderControlCenterProps {
   restaurantId: string;
   profile: { role?: string; full_name?: string; email?: string } | null;
 }
+
+const WALKTHROUGH_STEPS = [
+  {
+    step: 1,
+    id: 'live',
+    title: 'Live Mode & Workflow Graph',
+    subtitle: 'N8N-style workflow graph with real-time reactive order pulses',
+    icon: Activity,
+    iconColor: 'text-sky-400',
+    description: 'Visualizes active orders moving from QR scan through Kitchen prep to Billing. Nodes pulse with cyan electric waves, carry bouncing event badges, and display live ETA tickers.',
+    shortcut: 'L',
+    actionLabel: 'Switch to Live Mode',
+    targetMode: 'live' as FounderMode,
+  },
+  {
+    step: 2,
+    id: 'twin',
+    title: 'Floor Digital Twin',
+    subtitle: 'CCTV-style restaurant floor cards with zero clutter',
+    icon: Sparkles,
+    iconColor: 'text-emerald-400',
+    description: 'Occupied cards highlight table number, live status pill, item count, bill amount, kitchen ETA, and assigned waiter. Available tables show seats and clean 3-dot menus for QR & History.',
+    shortcut: 'Esc / Click',
+    actionLabel: 'Inspect Digital Twin',
+    targetMode: 'live' as FounderMode,
+  },
+  {
+    step: 3,
+    id: 'replay',
+    title: 'CCTV Replay Mode',
+    subtitle: 'Historical event scrubber with instant 1-click playback',
+    icon: RotateCcw,
+    iconColor: 'text-indigo-400',
+    description: 'Auto-loads historical events with dynamic event counts. Features 1x, 2x, 5x playback speeds, stage banners, and smooth camera following for complete historical forensics.',
+    shortcut: 'R / Space',
+    actionLabel: 'Switch to Replay Mode',
+    targetMode: 'replay' as FounderMode,
+  },
+  {
+    step: 4,
+    id: 'freeze',
+    title: 'Freeze Frame & Ghost Mode',
+    subtitle: 'Zero-latency pause state with ghost stage comparison',
+    icon: PauseCircle,
+    iconColor: 'text-cyan-400',
+    description: 'Freezes incoming telemetry to inspect past timestamps. Renders future stages as 25% opacity ghost nodes and computes instant deltas between frozen state and live floor.',
+    shortcut: 'F',
+    actionLabel: 'Switch to Freeze Mode',
+    targetMode: 'freeze' as FounderMode,
+  },
+  {
+    step: 5,
+    id: 'investigation',
+    title: 'Global Order Investigation',
+    subtitle: 'One-click full lifecycle reconstruction across all subsystems',
+    icon: Zap,
+    iconColor: 'text-amber-400',
+    description: 'Search any order by ID, Table, Waiter, or Date. Instantly reconstructs an 11-step audit trail and highlights the exact order synchronously across Floor, Timeline, Inspector, and Flight Recorder.',
+    shortcut: 'Type in Search bar',
+    actionLabel: 'Open Live View to Search',
+    targetMode: 'live' as FounderMode,
+  },
+  {
+    step: 6,
+    id: 'reports',
+    title: 'Executive Operations Reports & Telemetry',
+    subtitle: 'Live KPIs, staff leaderboards, and instant customer call resolution',
+    icon: Network,
+    iconColor: 'text-purple-400',
+    description: 'Always-populated executive operational summary featuring Real-time Revenue, Orders, Prep Times, and Staff Performance. Includes actionable dispatch and resolve triggers for customer calls.',
+    shortcut: 'Click Reports node',
+    actionLabel: 'Open Inspector Telemetry',
+    targetMode: 'live' as FounderMode,
+  },
+];
 
 const MODE_CONFIG: Array<{ id: FounderMode; label: string; icon: typeof Activity }> = [
   { id: 'live',   label: 'Live',   icon: Activity },
@@ -60,6 +138,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const [activeMode, setActiveMode] = useState<FounderMode>(readSavedMode);
   const [followingOrderId, setFollowingOrderId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState<boolean>(false);
+  const [helpStep, setHelpStep] = useState<number>(0);
   const [recorderEnabled, setRecorderEnabled] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('founder_recorder_enabled') !== 'false';
@@ -185,9 +264,10 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-
-      if (e.key === 'l' || e.key === 'L') {
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('toggle-replay-playback'));
+      } else if (e.key === 'l' || e.key === 'L') {
         handleModeChange('live');
       } else if (e.key === 'r' || e.key === 'R') {
         handleModeChange('replay');
@@ -442,21 +522,25 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
       </div>
 
       {/* ── Part 10: Demo Walkthrough Mode Modal ─────────────────────────── */}
+      {/* ── Part 10: Demo Walkthrough Mode Modal ─────────────────────────── */}
       {helpOpen && (
         <div
           data-testid="help-guide-modal"
           className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
         >
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-slate-800 bg-slate-850 flex items-center justify-between">
+            <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-850 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-sky-950/80 border border-sky-600/50 text-sky-400">
                   <BookOpen className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-100">
+                  <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                     Founder Control Center — Interactive Guide
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-950/80 border border-sky-700/60 text-sky-400 font-semibold">
+                      Step {helpStep + 1} of {WALKTHROUGH_STEPS.length}
+                    </span>
                   </h3>
                   <p className="text-[11px] text-slate-400">
                     Mission control flight deck for smart restaurant operations
@@ -464,6 +548,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
                 </div>
               </div>
               <button
+                data-testid="btn-close-help-guide"
                 onClick={() => setHelpOpen(false)}
                 className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer transition-colors"
               >
@@ -471,88 +556,162 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs font-mono">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 1. Live Mode */}
-                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-sky-400 font-bold">
-                    <Activity className="h-4 w-4" />
-                    <span>Live Mode & Pipeline</span>
-                  </div>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Visualizes active orders moving from QR scan through Kitchen prep to Billing. Click glowing dots to trace complete order journey. Click nodes to open telemetry.
-                  </p>
-                </div>
-
-                {/* 2. Interactive Floor Twin */}
-                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                    <Sparkles className="h-4 w-4" />
-                    <span>Interactive Floor Twin</span>
-                  </div>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Click any occupied table to view session ID, assigned waiter, bill amount, ordered items, and kitchen stage pills. Click empty tables to generate QR codes.
-                  </p>
-                </div>
-
-                {/* 3. Actionable Inspector */}
-                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-purple-400 font-bold">
-                    <Network className="h-4 w-4" />
-                    <span>Actionable Inspector</span>
-                  </div>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Inspect telemetry for any subsystem. Customer Calls node includes instant dispatch buttons (&quot;I&apos;m Coming&quot;, &quot;Assign Ravi&quot;), Push alerts, and Executive Reports.
-                  </p>
-                </div>
-
-                {/* 4. CCTV Replay Mode */}
-                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-indigo-400 font-bold">
-                    <RotateCcw className="h-4 w-4" />
-                    <span>CCTV Replay Mode</span>
-                  </div>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Auto-loads today&apos;s events. Scrub through time, choose 1x, 2x, or 5x playback speed, and watch orders traverse the pipeline with glowing camera tracking.
-                  </p>
-                </div>
-
-                {/* 5. Freeze Mode & Time Travel */}
-                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-cyan-400 font-bold">
-                    <PauseCircle className="h-4 w-4" />
-                    <span>Freeze Frame & Diff</span>
-                  </div>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Freezes incoming updates. Scrubber slider reconstructs historical floor occupancy and KDS counts. Ghost Mode and Compare Diff compute state deltas.
-                  </p>
-                </div>
-
-                {/* 6. Frozen Inventory Telemetry */}
-                <div className="p-3.5 rounded-xl bg-slate-850/80 border border-slate-700/80 space-y-1.5">
-                  <div className="flex items-center gap-2 text-teal-400 font-bold">
-                    <Zap className="h-4 w-4" />
-                    <span>Frozen Inventory Telemetry</span>
-                  </div>
-                  <p className="text-slate-300 text-[11px] leading-relaxed">
-                    Permanent frozen inventory engine. Real-time audit logs track reservations on acceptance and recipe deductions on kitchen preparation with idempotency.
-                  </p>
-                </div>
-              </div>
+            {/* Interactive Step Navigation Tabs */}
+            <div className="px-4 py-2 border-b border-slate-800 bg-slate-900/90 flex items-center gap-1.5 overflow-x-auto">
+              {WALKTHROUGH_STEPS.map((s, idx) => {
+                const StepIcon = s.icon;
+                const isActive = helpStep === idx;
+                return (
+                  <button
+                    key={s.id}
+                    data-testid={`walkthrough-step-tab-${idx}`}
+                    onClick={() => setHelpStep(idx)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-mono whitespace-nowrap transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-sky-950 border border-sky-600 text-sky-300 font-bold shadow-sm'
+                        : 'bg-slate-800/60 border border-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    }`}
+                  >
+                    <StepIcon className="h-3 w-3" />
+                    <span>{idx + 1}. {s.title.split(' ')[0]}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {/* Modal Footer */}
+            {/* Active Step Feature Showcase */}
+            {(() => {
+              const currentStep = WALKTHROUGH_STEPS[helpStep] || WALKTHROUGH_STEPS[0];
+              const StepIcon = currentStep.icon;
+              return (
+                <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs font-mono">
+                  <div className="p-4 rounded-xl bg-slate-850/90 border border-slate-700/90 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2.5 rounded-xl bg-slate-800 border border-slate-700 ${currentStep.iconColor}`}>
+                          <StepIcon className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">
+                              Feature {helpStep + 1} of {WALKTHROUGH_STEPS.length}
+                            </span>
+                            <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 border border-amber-800/60 font-mono">
+                              Key: {currentStep.shortcut}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-bold text-slate-100 mt-0.5">
+                            {currentStep.title}
+                          </h4>
+                          <p className="text-[11px] text-slate-400">
+                            {currentStep.subtitle}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-slate-300 text-xs leading-relaxed bg-slate-900/70 p-3 rounded-lg border border-slate-800/80">
+                      {currentStep.description}
+                    </p>
+
+                    <div className="flex items-center justify-end pt-1">
+                      <button
+                        type="button"
+                        data-testid="btn-walkthrough-jump-mode"
+                        onClick={() => {
+                          handleModeChange(currentStep.targetMode);
+                          setHelpOpen(false);
+                        }}
+                        className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-xs transition-colors cursor-pointer shadow-md shadow-sky-950"
+                      >
+                        <span>{currentStep.actionLabel}</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cheatsheet Bar */}
+                  <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-slate-400">
+                        Global Keyboard Shortcuts
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        Press key anywhere to activate
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5 text-center">
+                      {[
+                        { k: 'Space', desc: 'Play / Pause' },
+                        { k: 'L', desc: 'Live Mode' },
+                        { k: 'R', desc: 'Replay' },
+                        { k: 'F', desc: 'Freeze' },
+                        { k: 'T', desc: 'Theme' },
+                        { k: 'Esc', desc: 'Close / Deselect' },
+                        { k: '?', desc: 'Help Guide' },
+                      ].map((sc) => (
+                        <div key={sc.k} className="p-1.5 rounded bg-slate-900/90 border border-slate-800">
+                          <kbd className="block text-[11px] font-bold text-amber-300 font-mono">{sc.k}</kbd>
+                          <span className="text-[9px] text-slate-400 block truncate">{sc.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Modal Footer with Stepper Controls */}
             <div className="px-5 py-3 border-t border-slate-800 bg-slate-850 flex items-center justify-between">
-              <span className="text-[10px] text-slate-500 font-mono">
-                CleverOps Founder Flight Deck v21.4
-              </span>
               <button
-                onClick={() => setHelpOpen(false)}
-                className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold font-mono cursor-pointer transition-colors"
+                type="button"
+                data-testid="btn-walkthrough-prev"
+                disabled={helpStep === 0}
+                onClick={() => setHelpStep((prev) => Math.max(0, prev - 1))}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold font-mono transition-colors ${
+                  helpStep === 0
+                    ? 'opacity-40 cursor-not-allowed text-slate-500 bg-slate-800'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer'
+                }`}
               >
-                Got it
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span>Previous</span>
               </button>
+
+              {/* Step indicator dots */}
+              <div className="flex items-center gap-1.5">
+                {WALKTHROUGH_STEPS.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setHelpStep(idx)}
+                    className={`h-2 rounded-full transition-all cursor-pointer ${
+                      helpStep === idx ? 'w-5 bg-sky-500' : 'w-2 bg-slate-700 hover:bg-slate-600'
+                    }`}
+                    title={`Step ${idx + 1}`}
+                  />
+                ))}
+              </div>
+
+              {helpStep < WALKTHROUGH_STEPS.length - 1 ? (
+                <button
+                  type="button"
+                  data-testid="btn-walkthrough-next"
+                  onClick={() => setHelpStep((prev) => Math.min(WALKTHROUGH_STEPS.length - 1, prev + 1))}
+                  className="flex items-center gap-1 px-3.5 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold font-mono cursor-pointer transition-colors"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="btn-walkthrough-finish"
+                  onClick={() => setHelpOpen(false)}
+                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold font-mono cursor-pointer transition-colors"
+                >
+                  Done
+                </button>
+              )}
             </div>
           </div>
         </div>

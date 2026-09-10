@@ -231,9 +231,10 @@ interface InspectorTabProps {
   restaurantId?: string;
   theme?: 'dark' | 'light';
   onSelectTable?: (tableName: string) => void;
+  onSelectNode?: (nodeId: string) => void;
 }
 
-function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTable }: InspectorTabProps) {
+function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTable, onSelectNode }: InspectorTabProps) {
   // ── 1. useState ──
   const [internalNodeId, setInternalNodeId] = useState<string>('reports');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -403,10 +404,16 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
         } else if (actionName === 'Assign Neha') {
           eventType = 'waiter_assigned';
           metadata = { waiter_name: 'Neha Patel', table: 'Table 12', call_id: 'call_live' };
+        } else if (actionName.toLowerCase().includes('resolve')) {
+          eventType = 'customer_call_resolved';
+          metadata = { resolved_by: 'Staff', table: 'Table 14', resolved_at: new Date().toISOString() };
         } else if (actionName === 'Escalate') {
           eventType = 'customer_call_accepted';
           metadata = { escalated: true, urgency: 'high', manager: 'Admin' };
         }
+
+        // Visibly blink Customer Calls node on graph
+        onSelectNode?.('customer_calls');
 
         await logSystemEvent({
           restaurantId,
@@ -426,7 +433,7 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
         setTimeout(() => setActionFeedback(null), 3500);
       }
     },
-    [restaurantId]
+    [restaurantId, onSelectNode]
   );
 
   // ── 5. useEffect ──

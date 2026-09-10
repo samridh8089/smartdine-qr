@@ -265,6 +265,27 @@ export default function ReplayMode({
     };
   }, [isPlaying, speed, events.length]);
 
+  // Space shortcut & custom event playback toggle
+  useEffect(() => {
+    const handleToggle = () => {
+      handleTogglePlay();
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        handleTogglePlay();
+      }
+    };
+    window.addEventListener('toggle-replay-playback', handleToggle);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('toggle-replay-playback', handleToggle);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleTogglePlay]);
+
   // ─── Helpers ─────────────────────────────────────────────────────────────
   const RANGE_LABELS: Record<ReplayRange, string> = {
     '5min': 'Last 5 min',
