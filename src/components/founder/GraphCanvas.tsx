@@ -31,7 +31,7 @@ import {
   CANVAS_HEIGHT,
   EVENT_TO_NODE,
 } from './NodeDefinitions';
-import type { OrderDotState, GraphNode, SystemEvent } from './types';
+import type { OrderDotState, GraphNode, SystemEvent, SystemErrorItem } from './types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -54,6 +54,9 @@ interface GraphCanvasProps {
   theme?: 'dark' | 'light';
   ghostMode?: boolean;
   futureNodeIds?: Set<string>;
+  activeError?: SystemErrorItem | null;
+  isRetryingError?: boolean;
+  isResolvedError?: boolean;
   onNodeClick: (nodeId: string) => void;
   onDotClick: (dot: OrderDotState) => void;
   onStageReady?: (stage: Konva.Stage) => void;
@@ -141,6 +144,10 @@ interface NodeGroupProps {
   isHighlighted?: boolean;
   isTriggering?: boolean;
   isGhost?: boolean;
+  isErrorNode?: boolean;
+  isRetryingNode?: boolean;
+  isResolvedNode?: boolean;
+  errorTag?: string;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: () => void;
@@ -156,6 +163,10 @@ const NodeGroup = React.memo(function NodeGroup({
   isHighlighted,
   isTriggering,
   isGhost = false,
+  isErrorNode = false,
+  isRetryingNode = false,
+  isResolvedNode = false,
+  errorTag,
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -166,11 +177,23 @@ const NodeGroup = React.memo(function NodeGroup({
 
   // In Light Mode: Node cards are clean #FFFFFF, border #C9D7E6, text #1E293B
   const baseFill = isLight ? '#FFFFFF' : (SOFT_DARK_COLORS[cat] || node.color);
-  const rectFill = isTriggering
+  const rectFill = isRetryingNode
+    ? (isLight ? '#fffbeb' : '#78350f')
+    : isResolvedNode
+    ? (isLight ? '#f0fdf4' : '#064e3b')
+    : isErrorNode
+    ? (isLight ? '#fef2f2' : '#7f1d1d')
+    : isTriggering
     ? (isLight ? '#e0f2fe' : '#0284c7')
     : baseFill;
 
-  const rectStroke = isTriggering
+  const rectStroke = isRetryingNode
+    ? '#F59E0B'
+    : isResolvedNode
+    ? '#10B981'
+    : isErrorNode
+    ? '#EF4444'
+    : isTriggering
     ? '#0EA5E9'
     : isHighlighted
     ? '#0EA5E9'
@@ -179,6 +202,33 @@ const NodeGroup = React.memo(function NodeGroup({
     : isGhost
     ? (isLight ? 'rgba(201, 215, 230, 0.5)' : 'rgba(148, 163, 184, 0.4)')
     : (isLight ? '#C9D7E6' : 'rgba(255,255,255,0.18)');
+
+  const strokeWidthVal = isRetryingNode || isErrorNode
+    ? 3.2
+    : isResolvedNode
+    ? 2.8
+    : isTriggering
+    ? 2.5
+    : isHighlighted
+    ? 2.2
+    : isHovered
+    ? 1.5
+    : 1;
+
+  const shadowEnabledVal = isHovered || !!isHighlighted || !!isTriggering || isErrorNode || isRetryingNode || isResolvedNode;
+  const shadowColorVal = isRetryingNode
+    ? '#F59E0B'
+    : isResolvedNode
+    ? '#10B981'
+    : isErrorNode
+    ? '#EF4444'
+    : isTriggering
+    ? '#0EA5E9'
+    : isHighlighted
+    ? '#0EA5E9'
+    : isHovered
+    ? (isLight ? '#0EA5E9' : '#ffffff')
+    : '#0EA5E9';
 
   const labelFill = isLight ? '#1E293B' : '#ffffff';
   const badgeColor = isLight ? (node.id === 'ready' ? '#22C55E' : node.id === 'preparing' ? '#F59E0B' : pastel.badge) : getNodeBadgeFill(node.id);
@@ -206,12 +256,12 @@ const NodeGroup = React.memo(function NodeGroup({
         height={node.height}
         cornerRadius={10}
         fill={rectFill}
-        shadowEnabled={isHovered || !!isHighlighted || !!isTriggering}
-        shadowColor={isTriggering ? '#0EA5E9' : isHighlighted ? '#0EA5E9' : isHovered ? (isLight ? '#0EA5E9' : '#ffffff') : '#0EA5E9'}
-        shadowBlur={isTriggering ? (isLight ? 15 : 24) : isHighlighted ? (isLight ? 12 : 20) : (isLight ? 7 : 12)}
-        shadowOpacity={isLight ? (isHighlighted || isTriggering ? 0.35 : 0.2) : (isHighlighted || isTriggering ? 0.85 : 0.4)}
+        shadowEnabled={shadowEnabledVal}
+        shadowColor={shadowColorVal}
+        shadowBlur={isErrorNode || isRetryingNode ? 24 : isResolvedNode ? 18 : isTriggering ? (isLight ? 15 : 24) : isHighlighted ? (isLight ? 12 : 20) : (isLight ? 7 : 12)}
+        shadowOpacity={isErrorNode || isRetryingNode ? 0.9 : isResolvedNode ? 0.8 : isLight ? (isHighlighted || isTriggering ? 0.35 : 0.2) : (isHighlighted || isTriggering ? 0.85 : 0.4)}
         stroke={rectStroke}
-        strokeWidth={isTriggering ? 2.5 : isHighlighted ? 2.2 : isHovered ? 1.5 : 1}
+        strokeWidth={strokeWidthVal}
         dash={isGhost ? [4, 4] : undefined}
       />
 
@@ -293,6 +343,82 @@ const NodeGroup = React.memo(function NodeGroup({
         </Group>
       )}
 
+      {/* Error / Retrying / Resolved Pill for Node */}
+      {isErrorNode && errorTag && (
+        <Group x={8} y={node.height - 16}>
+          <Rect
+            width={node.width - 16}
+            height={13}
+            cornerRadius={4}
+            fill={isLight ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.35)'}
+            stroke="#EF4444"
+            strokeWidth={0.8}
+          />
+          <Text
+            text={`⚠️ ${errorTag}`}
+            width={node.width - 16}
+            height={13}
+            align="center"
+            verticalAlign="middle"
+            fontSize={7.5}
+            fontStyle="bold"
+            fontFamily="'Inter', 'Courier New', monospace"
+            fill={isLight ? '#b91c1c' : '#fecaca'}
+            listening={false}
+          />
+        </Group>
+      )}
+
+      {isRetryingNode && (
+        <Group x={8} y={node.height - 16}>
+          <Rect
+            width={node.width - 16}
+            height={13}
+            cornerRadius={4}
+            fill={isLight ? 'rgba(245, 158, 11, 0.18)' : 'rgba(245, 158, 11, 0.35)'}
+            stroke="#F59E0B"
+            strokeWidth={0.8}
+          />
+          <Text
+            text="🔄 Retrying..."
+            width={node.width - 16}
+            height={13}
+            align="center"
+            verticalAlign="middle"
+            fontSize={7.5}
+            fontStyle="bold"
+            fontFamily="'Inter', 'Courier New', monospace"
+            fill={isLight ? '#b45309' : '#fef3c7'}
+            listening={false}
+          />
+        </Group>
+      )}
+
+      {isResolvedNode && (
+        <Group x={8} y={node.height - 16}>
+          <Rect
+            width={node.width - 16}
+            height={13}
+            cornerRadius={4}
+            fill={isLight ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.35)'}
+            stroke="#10B981"
+            strokeWidth={0.8}
+          />
+          <Text
+            text="✅ Restored"
+            width={node.width - 16}
+            height={13}
+            align="center"
+            verticalAlign="middle"
+            fontSize={7.5}
+            fontStyle="bold"
+            fontFamily="'Inter', 'Courier New', monospace"
+            fill={isLight ? '#047857' : '#a7f3d0'}
+            listening={false}
+          />
+        </Group>
+      )}
+
       {/* Numbered Badge at top-right with bounce animation on trigger */}
       {badgeCount > 0 && (
         <Group
@@ -342,6 +468,9 @@ export default function GraphCanvas({
   theme = 'dark',
   ghostMode = false,
   futureNodeIds,
+  activeError,
+  isRetryingError,
+  isResolvedError,
   onNodeClick,
   onDotClick,
   onStageReady,
@@ -640,15 +769,35 @@ export default function GraphCanvas({
           const isEdgeActive =
             ((dotsByNode.get(edge.from)?.length || 0) > 0 || (dotsByNode.get(edge.to)?.length || 0) > 0);
           const isTriggering = activeTriggerNodeId === edge.from || activeTriggerNodeId === edge.to;
-          const isEdgeGlowing = isEdgeHighlighted || isEdgeActive || isTriggering;
           const isEdgeFuture = ghostMode && futureNodeIds && (futureNodeIds.has(edge.from) || futureNodeIds.has(edge.to));
           const edgeOpacity = isEdgeFuture ? 0.25 : 1;
 
-          const edgeColor = isEdgeGlowing
+          // Error Edge Logic (Between Kitchen Queue and Preparing)
+          const isKitchenErrorEdge =
+            (edge.from === 'kitchen_queue' && edge.to === 'preparing') &&
+            (!!activeError || !!isRetryingError || !!isResolvedError);
+
+          const isEdgeGlowing = isEdgeHighlighted || isEdgeActive || isTriggering || isKitchenErrorEdge;
+
+          const edgeColor = isKitchenErrorEdge
+            ? isRetryingError
+              ? '#F59E0B'
+              : isResolvedError
+              ? '#10B981'
+              : '#EF4444'
+            : isEdgeGlowing
             ? '#0EA5E9'
             : isMain
             ? (isLight ? '#94a3b8' : '#475569')
             : (isLight ? '#C9D7E6' : '#334155');
+
+          const shadowColorVal = isKitchenErrorEdge
+            ? isRetryingError
+              ? '#F59E0B'
+              : isResolvedError
+              ? '#10B981'
+              : '#EF4444'
+            : '#0EA5E9';
 
           // Active particle position along the edge
           const midX = (points[0] + points[2]) / 2;
@@ -659,15 +808,15 @@ export default function GraphCanvas({
               <Arrow
                 points={points}
                 stroke={edgeColor}
-                strokeWidth={isTriggering ? 3.5 : isEdgeHighlighted ? 3 : isEdgeActive ? 2.5 : isMain ? 1.8 : 1}
+                strokeWidth={isKitchenErrorEdge ? 3.5 : isTriggering ? 3.5 : isEdgeHighlighted ? 3 : isEdgeActive ? 2.5 : isMain ? 1.8 : 1}
                 fill={edgeColor}
                 shadowEnabled={isEdgeGlowing}
-                shadowColor="#0EA5E9"
-                shadowBlur={isTriggering ? (isLight ? 12 : 18) : isEdgeHighlighted ? (isLight ? 9 : 14) : (isLight ? 5 : 8)}
+                shadowColor={shadowColorVal}
+                shadowBlur={isKitchenErrorEdge ? 16 : isTriggering ? (isLight ? 12 : 18) : isEdgeHighlighted ? (isLight ? 9 : 14) : (isLight ? 5 : 8)}
                 pointerLength={isMain || isEdgeGlowing ? 8 : 6}
                 pointerWidth={isMain || isEdgeGlowing ? 6 : 4}
                 dashEnabled
-                dash={isEdgeFuture ? [4, 4] : isTriggering ? [14, 4] : isEdgeGlowing ? [10, 6] : [5, 5]}
+                dash={isEdgeFuture ? [4, 4] : isKitchenErrorEdge ? [10, 5] : isTriggering ? [14, 4] : isEdgeGlowing ? [10, 6] : [5, 5]}
                 dashOffset={isEdgeGlowing ? dashOffset : 0}
                 lineCap="round"
                 lineJoin="round"
@@ -680,12 +829,41 @@ export default function GraphCanvas({
                 <Circle
                   x={midX + (Math.sin(dashOffset * 0.08) * 35)}
                   y={midY}
-                  radius={isTriggering ? 3.5 : 2.5}
-                  fill="#0EA5E9"
-                  shadowColor="#0EA5E9"
-                  shadowBlur={isTriggering ? (isLight ? 8 : 14) : (isLight ? 4 : 6)}
+                  radius={isKitchenErrorEdge || isTriggering ? 3.5 : 2.5}
+                  fill={edgeColor}
+                  shadowColor={shadowColorVal}
+                  shadowBlur={isKitchenErrorEdge || isTriggering ? (isLight ? 8 : 14) : (isLight ? 4 : 6)}
                   listening={false}
                 />
+              )}
+
+              {/* Edge Error Status Pill Badge */}
+              {isKitchenErrorEdge && (
+                <Group x={midX - 44} y={midY - 11}>
+                  <Rect
+                    width={88}
+                    height={21}
+                    cornerRadius={5}
+                    fill={isRetryingError ? '#F59E0B' : isResolvedError ? '#10B981' : '#EF4444'}
+                    shadowColor={isRetryingError ? '#F59E0B' : isResolvedError ? '#10B981' : '#EF4444'}
+                    shadowBlur={10}
+                    shadowOpacity={0.8}
+                    stroke="#ffffff"
+                    strokeWidth={1}
+                  />
+                  <Text
+                    text={isRetryingError ? '🔄 Retrying...' : isResolvedError ? '✅ Restored' : '⚠️ 504 Timeout'}
+                    width={88}
+                    height={21}
+                    align="center"
+                    verticalAlign="middle"
+                    fontSize={8.5}
+                    fontStyle="bold"
+                    fontFamily="'Inter', 'Courier New', monospace"
+                    fill="#ffffff"
+                    listening={false}
+                  />
+                </Group>
               )}
             </Group>
           );
@@ -698,6 +876,11 @@ export default function GraphCanvas({
           const dots = dotsByNode.get(node.id) ?? [];
           const count = badgeCountMap.get(node.id) || dots.length;
           const isFuture = ghostMode && futureNodeIds ? futureNodeIds.has(node.id) : false;
+          const isErrNode = !!activeError && (node.id === activeError.failedNodeId || node.id === 'kitchen_queue');
+          const isRetryingNode = !!isRetryingError && (node.id === 'kitchen_queue' || node.id === 'preparing');
+          const isResolvedNode = !!isResolvedError && (node.id === 'kitchen_queue' || node.id === 'preparing');
+          const errTag = isErrNode ? '504 Timeout' : undefined;
+
           return (
             <NodeGroup
               key={node.id}
@@ -709,6 +892,10 @@ export default function GraphCanvas({
               isHighlighted={highlightedNodeId === node.id}
               isTriggering={activeTriggerNodeId === node.id}
               isGhost={isFuture}
+              isErrorNode={isErrNode}
+              isRetryingNode={isRetryingNode}
+              isResolvedNode={isResolvedNode}
+              errorTag={errTag}
               onMouseEnter={handleNodeMouseEnter(node.id)}
               onMouseLeave={handleNodeMouseLeave}
               onClick={handleNodeClick(node.id)}

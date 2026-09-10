@@ -89,24 +89,23 @@ export const SEED_INVESTIGATION_ORDERS: InvestigatedOrder[] = [
   },
   {
     id: 'A7K-26D00002',
-    correlationId: 'corr_table14_live',
-    sessionId: 'sess_tbl14_live',
-    tableName: 'Table 14',
+    correlationId: 'corr_A7K-26D00002_err',
+    sessionId: 'sess_tbl12_live',
+    tableName: 'Table 12',
     customerName: 'Priya Mehta',
-    waiterName: 'Ravi Sharma',
+    waiterName: 'Neha Patel',
     chefName: 'Chef Suresh',
     status: 'preparing',
-    createdAt: new Date(Date.now() - 18 * 60 * 1000).toISOString(), // 18 min ago
-    totalAmount: 458.0,
+    createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    totalAmount: 689.0,
     items: [
-      { id: 'item-4', name: 'Dal Makhani', quantity: 1, price: 280.0 },
-      { id: 'item-5', name: 'Tandoori Roti', quantity: 4, price: 25.0 },
-      { id: 'item-6', name: 'Cold Drink', quantity: 2, price: 39.0 },
+      { id: 'item-4', name: 'Farmhouse Pizza (Large)', quantity: 1, price: 449.0 },
+      { id: 'item-5', name: 'Cold Coffee (Sweet)', quantity: 2, price: 120.0 },
     ],
     inventoryDeductions: [
-      { item: 'Black Lentils (Urad)', qty: '180g' },
-      { item: 'Butter', qty: '30g' },
-      { item: 'Wheat Flour', qty: '200g' },
+      { item: 'Pizza Dough', qty: '350g' },
+      { item: 'Mozzarella Cheese', qty: '150g' },
+      { item: 'Cold Brew Extract', qty: '200ml' },
     ],
     pushAlerts: 3,
     paymentMethod: 'Pending (At Table)',
@@ -244,6 +243,8 @@ export default function OrderInvestigationBar({
         order.status.toLowerCase().includes(cleanQ) ||
         order.totalAmount.toString().includes(cleanQ) ||
         order.createdAt.toLowerCase().includes(cleanQ) ||
+        (cleanQ.includes('err') && order.id === 'A7K-26D00002') ||
+        (cleanQ.includes('0007') && order.id === 'A7K-26D00002') ||
         order.items.some((it) => it.name.toLowerCase().includes(cleanQ))
       );
     });
