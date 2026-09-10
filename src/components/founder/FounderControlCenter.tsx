@@ -67,6 +67,10 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     if (typeof window === 'undefined') return 'production';
     return (localStorage.getItem('founder_recorder_mode') as 'production' | 'test') || 'production';
   });
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window === 'undefined') return 'dark';
+    return (localStorage.getItem('founder_theme') as 'dark' | 'light') || 'dark';
+  });
 
   const { events, orderDots, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
     restaurantId,
@@ -118,6 +122,16 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     setHelpOpen((prev) => !prev);
   }, []);
 
+  const handleToggleTheme = useCallback(() => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('founder_theme', next);
+      }
+      return next;
+    });
+  }, []);
+
   const handleExitFounderMode = useCallback(() => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('founder_mode');
@@ -126,11 +140,39 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     router.push('/dashboard');
   }, [router]);
 
+  // Global keyboard shortcuts (Space Pause/Play, L Live, R Replay, F Freeze, Esc Close Drawer/Help)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      if (e.key === 'l' || e.key === 'L') {
+        handleModeChange('live');
+      } else if (e.key === 'r' || e.key === 'R') {
+        handleModeChange('replay');
+      } else if (e.key === 'f' || e.key === 'F') {
+        handleModeChange('freeze');
+      } else if (e.key === 'Escape') {
+        setFollowingOrderId(null);
+        setHelpOpen(false);
+      } else if (e.key === '?') {
+        setHelpOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleModeChange]);
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col w-full h-full bg-slate-950 overflow-hidden">
+    <div className={`flex flex-col w-full h-full overflow-hidden transition-colors ${
+      theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
+    }`}>
       {/* ── Top Bar ──────────────────────────────────────────────────────── */}
-      <div className="h-12 shrink-0 flex items-center gap-4 px-4 bg-slate-900 border-b border-slate-800">
+      <div className={`h-12 shrink-0 flex items-center gap-4 px-4 border-b transition-colors ${
+        theme === 'light' ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900 border-slate-800'
+      }`}>
         {/* Title */}
         <div className="flex items-center gap-2 shrink-0">
           <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
@@ -233,6 +275,20 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             </div>
           )}
 
+          {/* Theme Toggle Button */}
+          <button
+            data-testid="btn-theme-toggle"
+            onClick={handleToggleTheme}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+              theme === 'light'
+                ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 shadow-sm'
+                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+            }`}
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+          >
+            <span>{theme === 'dark' ? '🌙 Dark' : '☀️ Light'}</span>
+          </button>
+
           {/* Help & Guide button */}
           <button
             data-testid="btn-help-guide"
@@ -267,15 +323,17 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             onFollowOrder={handleFollowOrder}
             events={events}
             orderDots={orderDots}
+            theme={theme}
           />
         )}
         {activeMode === 'replay' && (
-          <ReplayMode restaurantId={restaurantId} initialEvents={events} />
+          <ReplayMode restaurantId={restaurantId} initialEvents={events} theme={theme} />
         )}
         {activeMode === 'freeze' && (
           <FreezeMode
             restaurantId={restaurantId}
             events={events}
+            theme={theme}
           />
         )}
         {activeMode === 'system' && (

@@ -26,6 +26,7 @@ const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
 interface ReplayModeProps {
   restaurantId: string;
   initialEvents?: SystemEvent[];
+  theme?: 'dark' | 'light';
 }
 
 function getRangeStart(range: ReplayRange, customStart?: string): Date {
@@ -40,7 +41,7 @@ function getRangeStart(range: ReplayRange, customStart?: string): Date {
   }
 }
 
-export default function ReplayMode({ restaurantId, initialEvents }: ReplayModeProps) {
+export default function ReplayMode({ restaurantId, initialEvents, theme = 'dark' }: ReplayModeProps) {
   // ─── 1. useState (Rule 1: Strict Hook Declaration Order) ──────────────────
   const [containerSize, setContainerSize] = useState({ width: 800, height: 500 });
   const [selectedRange, setSelectedRange] = useState<ReplayRange>('today');
@@ -351,6 +352,7 @@ export default function ReplayMode({ restaurantId, initialEvents }: ReplayModePr
               orderDots={replayDots}
               events={events.slice(0, currentIdx + 1)}
               followingOrderId={null}
+              theme={theme}
               highlightedNodeId={currentEvent?.target_node || EVENT_TO_NODE[currentEvent?.event_type] || null}
               onNodeClick={() => {}}
               onDotClick={() => {}}

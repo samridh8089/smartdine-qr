@@ -72,6 +72,7 @@ const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
 interface FreezeModeProps {
   restaurantId: string;
   events: SystemEvent[];
+  theme?: 'dark' | 'light';
 }
 
 const TABLE_STATUS_COLORS: Record<string, { bg: string; text: string; label: string; border: string }> = {
@@ -83,7 +84,7 @@ const TABLE_STATUS_COLORS: Record<string, { bg: string; text: string; label: str
   closed:       { bg: 'bg-slate-900',      text: 'text-slate-500',   label: 'Closed',    border: 'border-slate-800' },
 };
 
-export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
+export default function FreezeMode({ restaurantId, events, theme = 'dark' }: FreezeModeProps) {
   // ─── 1. useState (Rule 1: Hooks Always First) ────────────────────────────
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
@@ -432,6 +433,10 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
                             <div className="text-[8px] text-amber-300 font-semibold uppercase">
                               Stage: {cfg.label}
                             </div>
+                            <div className="flex items-center justify-between text-[8px] text-slate-400 pt-0.5">
+                              <span className="text-sky-300">Waiter: Ravi</span>
+                              <span className="text-purple-300 font-bold">ETA: 6m</span>
+                            </div>
                           </div>
                         ) : (
                           <p className="text-[9px] font-mono text-slate-500 mt-1">Vacant</p>
@@ -675,6 +680,7 @@ export default function FreezeMode({ restaurantId, events }: FreezeModeProps) {
               orderDots={historicalSnapshot.dots}
               events={events.filter(e => new Date(e.created_at).getTime() <= scrubberMs)}
               followingOrderId={selectedOrderId}
+              theme={theme}
               onNodeClick={() => {}}
               onDotClick={handleSelectDot}
             />
