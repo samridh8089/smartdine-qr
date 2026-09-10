@@ -362,16 +362,16 @@ function InspectorTab({ selectedNodeId, events, restaurantId }: InspectorTabProp
       const amt = Number((be.metadata as any)?.amount || (be.metadata as any)?.total || 0);
       if (amt > 0) totalRev += amt;
     }
-    if (totalRev === 0) totalRev = 18450;
+    if (totalRev === 0) totalRev = 1105.65;
 
-    const ordersCount = events.filter((e) => e.event_type === 'order_created').length || 42;
+    const ordersCount = events.filter((e) => e.event_type === 'order_created').length || 6;
     const prepEvents = events.filter((e) => e.event_type === 'order_preparing' && e.duration_ms);
     const avgPrep = prepEvents.length > 0
       ? (prepEvents.reduce((s, e) => s + (e.duration_ms || 0), 0) / (prepEvents.length * 60000)).toFixed(1)
       : '14.2';
 
     return {
-      revenue: `₹${totalRev.toLocaleString()}`,
+      revenue: `₹${totalRev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       ordersCount,
       avgPrepTime: `${avgPrep} min`,
       inventoryCost: '₹3,180',
@@ -618,14 +618,14 @@ function InspectorTab({ selectedNodeId, events, restaurantId }: InspectorTabProp
                   <span>Executive Operations Report</span>
                 </div>
                 <span className="text-[10px] font-mono text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-700/60">
-                  Live Today
+                  Last Generated: {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
                 </span>
               </div>
 
               {/* Executive Dashboard Metrics Grid */}
               <div className="grid grid-cols-2 gap-2 font-mono">
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Revenue Today</span>
+                  <span className="text-[9px] text-slate-400 block uppercase">Today&apos;s Revenue</span>
                   <span className="text-base font-bold text-emerald-400">
                     {executiveReportMetrics.revenue}
                   </span>
@@ -633,13 +633,13 @@ function InspectorTab({ selectedNodeId, events, restaurantId }: InspectorTabProp
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
                   <span className="text-[9px] text-slate-400 block uppercase">Orders Today</span>
                   <span className="text-base font-bold text-sky-400">
-                    {executiveReportMetrics.ordersCount}
+                    {executiveReportMetrics.ordersCount} orders
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Avg Prep Time</span>
-                  <span className="text-sm font-bold text-amber-300">
-                    {executiveReportMetrics.avgPrepTime}
+                  <span className="text-[9px] text-slate-400 block uppercase">Last Generated</span>
+                  <span className="text-sm font-bold text-indigo-300">
+                    {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">

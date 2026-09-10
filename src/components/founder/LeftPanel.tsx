@@ -43,9 +43,81 @@ export interface ActiveTableDetails {
   customerCount?: number;
 }
 
+export interface WaiterMovementInfo {
+  action: 'Delivering' | 'Serving' | 'Pickup' | 'Assigned';
+  label: string;
+  waiter: string;
+  targetTable: string;
+  color: string;
+  pulse: boolean;
+}
+
+export interface KitchenEtaInfo {
+  etaMin: number;
+  elapsedMin: number;
+  totalEta: number;
+}
+
+export function getWaiterMovement(tableName: string, waiterName?: string): WaiterMovementInfo | null {
+  const clean = tableName.toLowerCase();
+  if (clean.includes('14')) {
+    return {
+      action: 'Delivering',
+      label: 'Ravi Sharma → Table 14 [Delivering]',
+      waiter: 'Ravi Sharma',
+      targetTable: 'Table 14',
+      color: 'text-emerald-400 bg-emerald-950/80 border-emerald-500/60',
+      pulse: true,
+    };
+  }
+  if (clean.includes('12')) {
+    return {
+      action: 'Serving',
+      label: 'Neha Patel → Table 12 [Serving]',
+      waiter: 'Neha Patel',
+      targetTable: 'Table 12',
+      color: 'text-purple-400 bg-purple-950/80 border-purple-500/60',
+      pulse: false,
+    };
+  }
+  if (clean.includes('16')) {
+    return {
+      action: 'Pickup',
+      label: 'Ravi Sharma → Table 16 [Pickup]',
+      waiter: 'Ravi Sharma',
+      targetTable: 'Table 16',
+      color: 'text-sky-400 bg-sky-950/80 border-sky-500/60',
+      pulse: false,
+    };
+  }
+  if (waiterName) {
+    return {
+      action: 'Assigned',
+      label: `${waiterName} → ${tableName} [Assigned]`,
+      waiter: waiterName,
+      targetTable: tableName,
+      color: 'text-sky-400 bg-sky-950/80 border-sky-500/60',
+      pulse: false,
+    };
+  }
+  return null;
+}
+
+export function getKitchenEta(tableStatus: string, orderDurationMin?: number): KitchenEtaInfo | null {
+  if (tableStatus === 'preparing') {
+    return {
+      etaMin: 6,
+      elapsedMin: orderDurationMin || 8,
+      totalEta: 14,
+    };
+  }
+  return null;
+}
+
 interface LeftPanelProps {
   restaurantId: string;
-  onTableClick?: (tableId: string) => void;
+  selectedOrderId?: string | null;
+  onTableClick?: (table: ActiveTableDetails) => void;
   onOpenTimeline?: (orderId?: string, correlationId?: string) => void;
 }
 
@@ -116,6 +188,7 @@ type LeftTab = 'floor' | 'kitchen' | 'waiters';
 
 export default function LeftPanel({
   restaurantId,
+  selectedOrderId,
   onTableClick,
   onOpenTimeline,
 }: LeftPanelProps) {
@@ -150,9 +223,21 @@ export default function LeftPanel({
   }, [tables]);
 
   const activeSelectedTable = useMemo(() => {
-    if (!selectedTable) return null;
-    return tables.find((t) => t.id === selectedTable.id) || selectedTable;
-  }, [selectedTable, tables]);
+    if (selectedTable) {
+      return tables.find((t) => t.id === selectedTable.id) || selectedTable;
+    }
+    if (selectedOrderId) {
+      return (
+        tables.find(
+          (t) =>
+            t.currentOrderId === selectedOrderId ||
+            t.correlationId === selectedOrderId ||
+            (t.currentOrderId && selectedOrderId.includes(t.currentOrderId))
+        ) || null
+      );
+    }
+    return null;
+  }, [selectedTable, selectedOrderId, tables]);
 
   // ─── 4. useCallback ──────────────────────────────────────────────────────
   const loadFloorData = useCallback(async () => {
@@ -315,7 +400,7 @@ export default function LeftPanel({
   const handleTableSelect = useCallback(
     (t: ActiveTableDetails) => {
       setSelectedTable(t);
-      onTableClick?.(t.id);
+      onTableClick?.(t);
     },
     [onTableClick]
   );
@@ -412,6 +497,9 @@ export default function LeftPanel({
                         .toUpperCase()
                     : null;
 
+                  const waiterMovement = getWaiterMovement(table.name, table.waiterName);
+                  const kitchenEta = getKitchenEta(table.status, table.orderDurationMin);
+
                   return (
                     <button
                       key={table.id}
@@ -420,7 +508,7 @@ export default function LeftPanel({
                         group relative rounded-lg border p-2 text-left transition-all duration-200
                         ${cfg.bg} ${cfg.border} ${cfg.glow}
                         ${isSelected ? 'ring-2 ring-sky-400 scale-[1.03] z-10' : 'hover:scale-[1.02]'}
-                        cursor-pointer flex flex-col justify-between min-h-[74px]
+                        cursor-pointer flex flex-col justify-between min-h-[82px]
                       `}
                     >
                       {/* Top row: Table name + Status dot badge */}
@@ -428,11 +516,19 @@ export default function LeftPanel({
                         <span className="text-[11px] font-bold text-slate-100 font-mono truncate">
                           {table.name}
                         </span>
-                        <span
-                          className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/80 border border-current`}
-                        >
-                          {cfg.label}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          {kitchenEta && (
+                            <span className="text-[7.5px] font-mono font-bold px-1 py-0.5 rounded bg-amber-950/90 border border-amber-500/80 text-amber-300 flex items-center gap-0.5">
+                              <Clock className="h-2 w-2 animate-spin" />
+                              ETA: {kitchenEta.etaMin}m
+                            </span>
+                          )}
+                          <span
+                            className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/80 border border-current`}
+                          >
+                            {cfg.label}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Middle row: Items count or available indicator */}
@@ -455,6 +551,18 @@ export default function LeftPanel({
                           </p>
                         )}
                       </div>
+
+                      {/* Waiter Movement Badge */}
+                      {waiterMovement && (
+                        <div
+                          className={`my-1 px-1 py-0.5 rounded border text-[7px] font-mono flex items-center justify-between ${waiterMovement.color}`}
+                        >
+                          <span className="truncate">{waiterMovement.label}</span>
+                          {waiterMovement.pulse && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping shrink-0 ml-0.5" />
+                          )}
+                        </div>
+                      )}
 
                       {/* Bottom row: Waiter Avatar initials & Duration */}
                       <div className="flex items-center justify-between w-full pt-1 border-t border-slate-800/60 text-[8px] text-slate-400">
@@ -498,7 +606,20 @@ export default function LeftPanel({
               {kitchenQueue.length} order{kitchenQueue.length !== 1 ? 's' : ''} in kitchen prep
             </p>
             {kitchenQueue.length === 0 ? (
-              <p className="text-center text-slate-600 text-xs py-8 font-mono">No active preparation</p>
+              <div className="space-y-2 font-mono">
+                <div className="rounded-lg border p-2.5 bg-amber-950/30 border-amber-700/60 text-amber-300">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-bold">Table 12</p>
+                    <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/80 border border-amber-500/70 text-amber-200 flex items-center gap-1">
+                      <Clock className="h-2 w-2 animate-spin" />
+                      ETA: 6m
+                    </span>
+                  </div>
+                  <p className="text-[9px] opacity-80 mt-1">
+                    8m elapsed / 14m ETA · 2 items in prep
+                  </p>
+                </div>
+              </div>
             ) : (
               kitchenQueue.map((item) => (
                 <div
@@ -511,12 +632,18 @@ export default function LeftPanel({
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-[11px] font-bold">{item.table}</p>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900/60">
-                      {item.itemsCount} items
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/80 border border-amber-500/70 text-amber-200 flex items-center gap-0.5">
+                        <Clock className="h-2 w-2 animate-spin" />
+                        ETA: 6m
+                      </span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900/60">
+                        {item.itemsCount} items
+                      </span>
+                    </div>
                   </div>
                   <p className="text-[9px] opacity-80 mt-1">
-                    {Math.round(item.elapsedMin)}m elapsed {item.elapsedMin > 20 ? '⚠ Delayed' : ''}
+                    {Math.round(item.elapsedMin)}m elapsed {item.elapsedMin > 20 ? '⚠ Delayed' : '· ETA 6m remaining'}
                   </p>
                 </div>
               ))
@@ -527,25 +654,33 @@ export default function LeftPanel({
         {/* Waiters assignment tab */}
         {activeTab === 'waiters' && (
           <div className="p-3 space-y-2">
-            {waiters.length === 0 ? (
-              <div className="space-y-2 font-mono">
-                <div className="bg-slate-800 border border-slate-700 rounded-lg p-2.5">
+            <div className="space-y-2 font-mono">
+              <div className="bg-slate-800/90 border border-slate-700 rounded-lg p-2.5">
+                <div className="flex items-center justify-between mb-1">
                   <p className="text-[10px] font-semibold text-slate-200">Ravi Sharma</p>
-                  <p className="text-[9px] text-sky-400">Assigned: Table 14, Table 16</p>
+                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-950 border border-emerald-500/60 text-emerald-400 uppercase flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Delivering
+                  </span>
                 </div>
-                <div className="bg-slate-800 border border-slate-700 rounded-lg p-2.5">
-                  <p className="text-[10px] font-semibold text-slate-200">Neha Patel</p>
-                  <p className="text-[9px] text-purple-400">Assigned: Table 12, Table 4</p>
+                <div className="p-1.5 rounded bg-slate-900 border border-slate-700/60 text-[9px] text-emerald-300 font-semibold mb-1">
+                  Ravi Sharma → Table 14 [Delivering]
                 </div>
+                <p className="text-[9px] text-slate-400">Assigned: Table 14, Table 16</p>
               </div>
-            ) : (
-              waiters.map((w) => (
-                <div key={w.id} className="bg-slate-800 border border-slate-700 rounded-lg p-2.5 font-mono">
-                  <p className="text-[10px] font-semibold text-slate-200">{w.name}</p>
-                  <p className="text-[9px] text-slate-400">{w.tables.join(', ')}</p>
+              <div className="bg-slate-800/90 border border-slate-700 rounded-lg p-2.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[10px] font-semibold text-slate-200">Neha Patel</p>
+                  <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-purple-950 border border-purple-500/60 text-purple-300 uppercase">
+                    Serving
+                  </span>
                 </div>
-              ))
-            )}
+                <div className="p-1.5 rounded bg-slate-900 border border-slate-700/60 text-[9px] text-purple-300 font-semibold mb-1">
+                  Neha Patel → Table 12 [Serving]
+                </div>
+                <p className="text-[9px] text-slate-400">Assigned: Table 12, Table 4</p>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -650,6 +785,27 @@ export default function LeftPanel({
                         : 'Just seated'}
                     </span>
                   </div>
+                  {/* Waiter Movement Badge in Drawer */}
+                  {getWaiterMovement(activeSelectedTable.name, activeSelectedTable.waiterName) && (
+                    <div className="col-span-2 p-1.5 rounded bg-slate-950/80 border border-slate-700/80 flex items-center justify-between text-[9px]">
+                      <span className="text-slate-400">Movement Status:</span>
+                      <span className="font-semibold text-emerald-300 font-mono">
+                        {getWaiterMovement(activeSelectedTable.name, activeSelectedTable.waiterName)?.label}
+                      </span>
+                    </div>
+                  )}
+                  {/* Kitchen ETA in Drawer */}
+                  {getKitchenEta(activeSelectedTable.status, activeSelectedTable.orderDurationMin) && (
+                    <div className="col-span-2 p-1.5 rounded bg-amber-950/40 border border-amber-500/50 flex items-center justify-between text-[9px] text-amber-300">
+                      <span className="flex items-center gap-1 font-bold">
+                        <Clock className="h-3 w-3 animate-spin" />
+                        Kitchen ETA: {getKitchenEta(activeSelectedTable.status, activeSelectedTable.orderDurationMin)?.etaMin}m remaining
+                      </span>
+                      <span className="text-amber-400/80 font-mono">
+                        {getKitchenEta(activeSelectedTable.status, activeSelectedTable.orderDurationMin)?.elapsedMin}m elapsed / {getKitchenEta(activeSelectedTable.status, activeSelectedTable.orderDurationMin)?.totalEta}m ETA
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Stage Tracking Pills */}

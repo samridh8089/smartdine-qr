@@ -72,10 +72,16 @@ export default function LiveMode({
     setRightPanelTab('inspector');
   }, []);
 
-  const handleDotClick = useCallback((dot: OrderDotState) => {
-    setSelectedDot(dot);
-    setRightPanelTab('flight');
-  }, []);
+  const handleDotClick = useCallback(
+    (dot: OrderDotState) => {
+      setSelectedDot(dot);
+      setSelectedNodeId(dot.currentNodeId);
+      setHighlightedNodeId(dot.currentNodeId);
+      onFollowOrder(dot.orderId);
+      setRightPanelTab('flight');
+    },
+    [onFollowOrder]
+  );
 
   const handleNodeHighlight = useCallback((nodeId: string) => {
     setHighlightedNodeId(nodeId);
@@ -145,8 +151,22 @@ export default function LiveMode({
       <div className="w-64 shrink-0 border-r border-slate-800 overflow-hidden">
         <LeftPanel
           restaurantId={restaurantId}
-          onTableClick={(tableId) => {
-            // Optional floor table interaction
+          selectedOrderId={followingOrderId || selectedDot?.orderId || null}
+          onTableClick={(table) => {
+            if (table.currentOrderId) {
+              onFollowOrder(table.currentOrderId);
+              const dot = orderDots.find(
+                (d) =>
+                  d.orderId === table.currentOrderId ||
+                  (table.correlationId && d.correlationId === table.correlationId)
+              );
+              if (dot) {
+                setSelectedDot(dot);
+                setSelectedNodeId(dot.currentNodeId);
+                setHighlightedNodeId(dot.currentNodeId);
+              }
+              setRightPanelTab('flight');
+            }
           }}
           onOpenTimeline={handleOpenTimelineFromTable}
         />
