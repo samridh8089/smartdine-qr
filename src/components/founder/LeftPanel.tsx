@@ -529,7 +529,7 @@ export default function LeftPanel({
                 <div className="h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2.5">
+              <div className="grid grid-cols-1 gap-3">
                 {tables.map((table) => {
                   const cfg = STATUS_CONFIG[table.status] || STATUS_CONFIG.available;
                   const isSelected = activeSelectedTable?.id === table.id;
@@ -553,10 +553,10 @@ export default function LeftPanel({
                       data-testid={isOccupied ? 'table-card-occupied' : 'table-card-available'}
                       onClick={() => handleTableSelect(table)}
                       className={`
-                        group relative rounded-xl border p-2.5 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between
+                        group relative rounded-xl border p-3 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between
                         ${isOccupied
-                          ? `bg-slate-900/90 ${cfg.border} shadow-[0_0_14px_rgba(56,189,248,0.25)] ring-1 ring-sky-500/40 animate-[pulse_4s_ease-in-out_infinite] min-h-[96px]`
-                          : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 min-h-[78px]'}
+                          ? `bg-slate-900/90 ${cfg.border} shadow-[0_0_14px_rgba(56,189,248,0.25)] ring-1 ring-sky-500/40 animate-[pulse_4s_ease-in-out_infinite] min-h-[100px]`
+                          : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 min-h-[82px]'}
                         ${isSelected ? 'ring-2 ring-sky-400 scale-[1.03] z-10' : 'hover:scale-[1.02]'}
                       `}
                     >
@@ -647,7 +647,7 @@ export default function LeftPanel({
                           </div>
                         </div>
                       ) : (
-                        /* ── Available Card: Table, Available, Seats, 3-dot menu (Zero Clutter) ── */
+                        /* ── Available Card: Table, Available, Seats, QR, History, 3-dot menu ── */
                         <div className="w-full flex items-center justify-between py-1">
                           <div>
                             <div className="flex items-center gap-2">
@@ -663,51 +663,75 @@ export default function LeftPanel({
                             </p>
                           </div>
 
-                          {/* Three-dot menu */}
-                          <div className="relative">
+                          {/* Quick Actions: QR, History & Three-dot menu */}
+                          <div className="flex items-center gap-1.5">
                             <span
-                              data-testid={`btn-card-menu-${table.id}`}
+                              data-testid={`btn-quick-qr-${table.id}`}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setMenuOpenTableId(menuOpenTableId === table.id ? null : table.id);
+                                if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
                               }}
-                              className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center justify-center cursor-pointer"
-                              title="Actions"
+                              className="px-2 py-1 rounded bg-slate-800/90 hover:bg-sky-950 border border-slate-700/80 hover:border-sky-600 text-[9px] font-mono text-sky-400 hover:text-white cursor-pointer transition-colors flex items-center gap-1"
+                              title="Generate QR"
                             >
-                              <MoreVertical className="h-3.5 w-3.5" />
+                              <QrCode className="h-2.5 w-2.5" /> QR
                             </span>
-                            {menuOpenTableId === table.id && (
-                              <div
-                                data-testid={`dropdown-menu-${table.id}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="absolute right-0 top-6 w-32 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100"
+                            <span
+                              data-testid={`btn-quick-history-${table.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTableSelect(table);
+                              }}
+                              className="px-2 py-1 rounded bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-[9px] font-mono text-slate-300 hover:text-white cursor-pointer transition-colors flex items-center gap-1"
+                              title="Table History"
+                            >
+                              <History className="h-2.5 w-2.5 text-amber-400" /> History
+                            </span>
+                            <div className="relative">
+                              <span
+                                data-testid={`btn-card-menu-${table.id}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMenuOpenTableId(menuOpenTableId === table.id ? null : table.id);
+                                }}
+                                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center justify-center cursor-pointer"
+                                title="Actions"
                               >
-                                <button
-                                  type="button"
-                                  data-testid={`menu-qr-${table.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setMenuOpenTableId(null);
-                                    if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
-                                  }}
-                                  className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                <MoreVertical className="h-3 w-3" />
+                              </span>
+                              {menuOpenTableId === table.id && (
+                                <div
+                                  data-testid={`dropdown-menu-${table.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="absolute right-0 top-6 w-32 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100"
                                 >
-                                  <QrCode className="h-3 w-3 text-sky-400" /> QR Code
-                                </button>
-                                <button
-                                  type="button"
-                                  data-testid={`menu-history-${table.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setMenuOpenTableId(null);
-                                    handleTableSelect(table);
-                                  }}
-                                  className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
-                                >
-                                  <History className="h-3 w-3 text-amber-400" /> History
-                                </button>
-                              </div>
-                            )}
+                                  <button
+                                    type="button"
+                                    data-testid={`menu-qr-${table.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMenuOpenTableId(null);
+                                      if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
+                                    }}
+                                    className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <QrCode className="h-3 w-3 text-sky-400" /> QR Code
+                                  </button>
+                                  <button
+                                    type="button"
+                                    data-testid={`menu-history-${table.id}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setMenuOpenTableId(null);
+                                      handleTableSelect(table);
+                                    }}
+                                    className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                  >
+                                    <History className="h-3 w-3 text-amber-400" /> History
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )}

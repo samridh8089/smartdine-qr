@@ -422,7 +422,7 @@ export default function ReplayMode({
           </span>
         </div>
 
-        {/* Interactive Scrubbing Slider */}
+        {/* Interactive Scrubbing Slider (Thick h-2.5 with glowing playhead) */}
         <input
           type="range"
           min={0}
@@ -430,7 +430,7 @@ export default function ReplayMode({
           value={currentIdx}
           onChange={(e) => handleScrubberChange(Number(e.target.value))}
           disabled={events.length === 0}
-          className="flex-1 h-1.5 bg-slate-800 accent-purple-500 rounded-lg cursor-pointer transition-all disabled:opacity-30"
+          className="flex-1 h-2.5 bg-slate-800 accent-purple-400 rounded-lg cursor-pointer transition-all disabled:opacity-30 shadow-[0_0_10px_rgba(168,85,247,0.35)]"
         />
 
         <span className="text-[10px] text-slate-400 w-32 text-right shrink-0">
@@ -440,16 +440,16 @@ export default function ReplayMode({
 
       {/* Canvas */}
       <div ref={containerRef} className="flex-1 relative overflow-hidden bg-slate-950">
-        {/* Top Replaying Order Banner */}
-        {currentEvent && (
+        {/* Top Replaying Order Banner (Always visible when events are loaded) */}
+        {(currentEvent || events[0]) && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-slate-900/95 border border-purple-500/70 rounded-full text-xs text-purple-200 font-mono shadow-xl shadow-purple-950/80 flex items-center gap-2.5 z-10 animate-in fade-in">
             <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
             <span className="font-bold text-slate-100">
-              Replaying Order #{currentEvent.order_id ? currentEvent.order_id.slice(0, 8) : currentEvent.correlation_id.replace('corr_', '').slice(0, 8)}
+              Replaying Order #{(currentEvent || events[0]).order_id ? (currentEvent || events[0]).order_id!.slice(0, 8) : (currentEvent || events[0]).correlation_id.replace('corr_', '').slice(0, 8)}
             </span>
             <span className="text-slate-500">·</span>
             <span className="text-purple-300 font-semibold uppercase text-[11px]">
-              Stage: {currentEvent.target_node || EVENT_TO_NODE[currentEvent.event_type] || currentEvent.event_type}
+              Stage: {(currentEvent || events[0]).target_node || EVENT_TO_NODE[(currentEvent || events[0]).event_type] || (currentEvent || events[0]).event_type}
             </span>
           </div>
         )}
