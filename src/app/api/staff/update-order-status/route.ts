@@ -17,7 +17,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const validation = validateSchema(body, {
+    const normalizedBody = {
+      ...body,
+      newStatus: body.newStatus || body.status,
+    };
+
+    const validation = validateSchema(normalizedBody, {
       batchId: { rules: [Validators.string({ max: 100 })], required: false },
       orderId: { rules: [Validators.string({ max: 100 })], required: false },
       newStatus: { rules: [Validators.enum(['accepted', 'received', 'preparing', 'ready', 'served', 'completed', 'cancelled'] as const)], required: true },
@@ -29,7 +34,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
 
-    const { batchId, orderId, newStatus, staffName = 'Staff', cancellationReason } = body;
+    const { batchId, orderId, newStatus, staffName = 'Staff', cancellationReason } = normalizedBody;
 
     if (!batchId && !orderId) {
       return NextResponse.json({ error: 'batchId or orderId is required' }, { status: 400 });
