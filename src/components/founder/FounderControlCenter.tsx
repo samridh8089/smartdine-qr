@@ -239,7 +239,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           />
         )}
         {activeMode === 'replay' && (
-          <ReplayMode restaurantId={restaurantId} />
+          <ReplayMode restaurantId={restaurantId} initialEvents={events} />
         )}
         {activeMode === 'freeze' && (
           <FreezeMode

@@ -25,6 +25,7 @@ const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
 
 interface ReplayModeProps {
   restaurantId: string;
+  initialEvents?: SystemEvent[];
 }
 
 function getRangeStart(range: ReplayRange, customStart?: string): Date {
@@ -39,14 +40,16 @@ function getRangeStart(range: ReplayRange, customStart?: string): Date {
   }
 }
 
-export default function ReplayMode({ restaurantId }: ReplayModeProps) {
+export default function ReplayMode({ restaurantId, initialEvents }: ReplayModeProps) {
   // ─── 1. useState (Rule 1: Strict Hook Declaration Order) ──────────────────
   const [containerSize, setContainerSize] = useState({ width: 800, height: 500 });
   const [selectedRange, setSelectedRange] = useState<ReplayRange>('today');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [speed, setSpeed] = useState<ReplaySpeed>(1);
-  const [events, setEvents] = useState<SystemEvent[]>([]);
+  const [events, setEvents] = useState<SystemEvent[]>(() =>
+    initialEvents && initialEvents.length > 0 ? initialEvents : []
+  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -145,8 +148,12 @@ export default function ReplayMode({ restaurantId }: ReplayModeProps) {
 
   // AUTO-LOAD on mount so Replay Mode is never empty
   useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
+    if (initialEvents && initialEvents.length > 0) {
+      setEvents(initialEvents);
+    } else {
+      loadEvents();
+    }
+  }, [loadEvents, initialEvents]);
 
   // Replay playback ticker
   useEffect(() => {
