@@ -13,7 +13,7 @@ import { Focus, X } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LeftPanel from './LeftPanel';
 import RightPanel from './RightPanel';
-import type { OrderDotState, SystemEvent } from './types';
+import type { OrderDotState, SystemEvent, SystemErrorItem } from './types';
 
 // Konva canvas dynamically imported (no SSR)
 const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
@@ -32,6 +32,10 @@ interface LiveModeProps {
   events?: SystemEvent[];
   orderDots?: OrderDotState[];
   theme?: 'dark' | 'light';
+  activeError?: SystemErrorItem | null;
+  isRetryingError?: boolean;
+  isResolvedError?: boolean;
+  onRetryError?: () => void;
 }
 
 export default function LiveMode({
@@ -41,6 +45,10 @@ export default function LiveMode({
   events: propEvents,
   orderDots: propOrderDots,
   theme = 'dark',
+  activeError,
+  isRetryingError,
+  isResolvedError,
+  onRetryError,
 }: LiveModeProps) {
   // ─── 1. useState (Rule 1: Hooks Always First) ────────────────────────────
   const [containerSize, setContainerSize] = useState({ width: 800, height: 600 });
@@ -179,6 +187,9 @@ export default function LiveMode({
           restaurantId={restaurantId}
           selectedOrderId={followingOrderId || selectedDot?.orderId || null}
           theme={theme}
+          activeError={activeError}
+          isRetryingError={isRetryingError}
+          onRetryError={onRetryError}
           onCloseDrawer={handleCloseDrawer}
           onTableClick={(table) => {
             if (table.currentOrderId) {
@@ -211,6 +222,9 @@ export default function LiveMode({
             followingOrderId={followingOrderId}
             highlightedNodeId={highlightedNodeId}
             theme={theme}
+            activeError={activeError}
+            isRetryingError={isRetryingError}
+            isResolvedError={isResolvedError}
             onNodeClick={handleNodeClick}
             onDotClick={handleDotClick}
           />
@@ -281,6 +295,10 @@ export default function LiveMode({
           selectedDot={selectedDot}
           restaurantId={restaurantId}
           theme={theme}
+          activeError={activeError}
+          isRetryingError={isRetryingError}
+          isResolvedError={isResolvedError}
+          onRetryError={onRetryError}
           onClose={handleRightClose}
           onNodeSelect={handleNodeHighlight}
           activeTab={rightPanelTab}

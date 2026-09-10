@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { EVENT_TO_NODE } from './NodeDefinitions';
 import type { SystemEvent, OrderDotState, ReplayRange, ReplaySpeed } from './types';
 import type { InvestigatedOrder } from './OrderInvestigationBar';
+import { INITIAL_DEMO_ERROR } from './demoErrors';
 
 const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
   ssr: false,
@@ -93,7 +94,7 @@ export default function ReplayMode({
     // Add demo orders if empty
     if (map.size === 0) {
       map.set('A7K-26D00001', { orderId: 'A7K-26D00001', eventIdx: 0, label: 'Order #A7K-26D00001 (Table 12)' });
-      map.set('A7K-26D00002', { orderId: 'A7K-26D00002', eventIdx: 0, label: 'Order #A7K-26D00002 (Table 14)' });
+      map.set('A7K-26D00002', { orderId: 'A7K-26D00002', eventIdx: 0, label: 'Order #A7K-26D00002 (Table 12)' });
     }
     return Array.from(map.values());
   }, [events]);
@@ -491,6 +492,9 @@ export default function ReplayMode({
               followingOrderId={selectedReplayOrderId}
               theme={theme}
               highlightedNodeId={currentEvent?.target_node || EVENT_TO_NODE[currentEvent?.event_type] || null}
+              activeError={currentEvent?.event_type === 'kitchen_timeout' ? INITIAL_DEMO_ERROR : null}
+              isRetryingError={currentEvent?.event_type === 'retry_started'}
+              isResolvedError={currentEvent?.event_type === 'sync_restored' || currentEvent?.event_type === 'order_preparing_resumed'}
               onNodeClick={() => {}}
               onDotClick={() => {}}
             />

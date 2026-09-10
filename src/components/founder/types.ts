@@ -166,3 +166,37 @@ export interface FailureAlert {
 export type ReplayRange = '5min' | '15min' | '1hour' | 'today' | 'custom';
 export type ReplaySpeed = 1 | 2 | 5;
 
+// ─── Error Center & Recovery (Phase-28) ───────────────────────────────────────
+
+export type ErrorSeverity = 'critical' | 'warning' | 'info';
+export type ErrorStatus = 'active' | 'retrying' | 'resolved';
+
+export interface SystemErrorItem {
+  id: string;              // e.g. 'ERR-0007'
+  orderId: string;         // e.g. 'A7K-26D00002'
+  tableName: string;       // e.g. 'Table 12'
+  time: string;            // e.g. '2 min ago'
+  createdAt: string;
+  severity: ErrorSeverity;
+  status: ErrorStatus;
+  title: string;           // e.g. 'Kitchen Update Failed'
+  cause: string;           // e.g. 'Network timeout between Kitchen Queue and Preparing.'
+  impact: string[];        // ['Order delayed', 'Waiter not notified', 'Inventory already reserved']
+  suggestedFix: string;    // 'Retry kitchen synchronization.'
+  correlationId: string;   // 'corr_A7K-26D00002_err'
+  apiEndpoint: string;     // '/api/staff/update-order-status'
+  httpStatus: string;      // '504 Gateway Timeout'
+  retryCount: number;
+  durationMs: number;
+  failedNodeId: string;    // 'kitchen_queue'
+  targetNodeId: string;    // 'order_preparing'
+}
+
+export interface ErrorAnalytics {
+  totalErrorsToday: number;
+  resolvedCount: number;
+  avgRecoveryTimeSec: number;
+  criticalCount: number;
+  recoveryRatePercent: number;
+}
+

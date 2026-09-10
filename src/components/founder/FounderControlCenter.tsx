@@ -6,7 +6,7 @@
  * Session-persistent mode state.
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Activity,
@@ -35,7 +35,10 @@ import SystemMode from './SystemMode';
 import DebugMode from './DebugMode';
 import OrderInvestigationBar, { InvestigatedOrder } from './OrderInvestigationBar';
 import CommandPalette from './CommandPalette';
-import type { FounderMode } from './types';
+import LiveErrorToast from './LiveErrorToast';
+import ErrorCenterPanel from './ErrorCenterPanel';
+import { INITIAL_DEMO_ERROR, RESOLVED_ERRORS_SEED } from './demoErrors';
+import type { FounderMode, SystemErrorItem, SystemEvent } from './types';
 
 interface FounderControlCenterProps {
   restaurantId: string;
@@ -158,11 +161,43 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const [replayTargetOrder, setReplayTargetOrder] = useState<InvestigatedOrder | null>(null);
   const [freezeTargetTimestamp, setFreezeTargetTimestamp] = useState<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
+  const [systemErrors, setSystemErrors] = useState<SystemErrorItem[]>([INITIAL_DEMO_ERROR, ...RESOLVED_ERRORS_SEED]);
+  const [activeError, setActiveError] = useState<SystemErrorItem | null>(INITIAL_DEMO_ERROR);
+  const [selectedErrorId, setSelectedErrorId] = useState<string | null>('ERR-0007');
+  const [errorCenterOpen, setErrorCenterOpen] = useState<boolean>(false);
+  const [isRetryingError, setIsRetryingError] = useState<boolean>(false);
+  const [isResolvedError, setIsResolvedError] = useState<boolean>(false);
+  const [errorEvents, setErrorEvents] = useState<SystemEvent[]>([]);
+
+  // ─── 2. useRef ───────────────────────────────────────────────────────────
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { events, orderDots, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
     restaurantId,
     enabled: true,
   });
+
+  // ─── 3. useMemo ──────────────────────────────────────────────────────────
+  const activeErrorCount = useMemo(() => {
+    return systemErrors.filter((e) => e.status === 'active' || e.status === 'retrying').length;
+  }, [systemErrors]);
+
+  const combinedEvents = useMemo(() => {
+    const initialErrEv: SystemEvent = {
+      id: 'ev_err_kitchen_timeout',
+      restaurant_id: restaurantId,
+      correlation_id: 'corr_A7K-26D00002_err',
+      order_id: 'A7K-26D00002',
+      actor_type: 'kitchen',
+      event_type: 'kitchen_timeout',
+      source_node: 'kitchen_queue',
+      target_node: 'order_preparing',
+      duration_ms: 12450,
+      metadata: { error: '504 Gateway Timeout', table: 'Table 12', item: 'Farmhouse Pizza' },
+      created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    };
+    return [...errorEvents, initialErrEv, ...events];
+  }, [errorEvents, events, restaurantId]);
 
   const statusColor = useMemo(() => {
     if (connectionStatus === 'connected') return 'text-emerald-400';
@@ -267,6 +302,92 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     handleModeChange('live');
   }, [handleModeChange]);
 
+  const handleRetrySync = useCallback((errItem?: SystemErrorItem) => {
+    setIsRetryingError(true);
+    setSystemErrors((prev) =>
+      prev.map((e) => (e.id === (errItem?.id || 'ERR-0007') ? { ...e, status: 'retrying' as const } : e))
+    );
+
+    const retryEvent: SystemEvent = {
+      id: `ev_retry_${Date.now()}`,
+      restaurant_id: restaurantId,
+      correlation_id: errItem?.correlationId || 'corr_A7K-26D00002_err',
+      order_id: errItem?.orderId || 'A7K-26D00002',
+      actor_type: 'system',
+      event_type: 'retry_started',
+      source_node: 'kitchen_queue',
+      target_node: 'order_preparing',
+      duration_ms: 800,
+      metadata: { attempt: '1/3', action: 'retry_kitchen_sync', table: 'Table 12' },
+      created_at: new Date().toISOString(),
+    };
+    setErrorEvents((prev) => [retryEvent, ...prev]);
+
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = setTimeout(() => {
+      setIsRetryingError(false);
+      setIsResolvedError(true);
+
+      const restoredEvent: SystemEvent = {
+        id: `ev_restored_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: errItem?.correlationId || 'corr_A7K-26D00002_err',
+        order_id: errItem?.orderId || 'A7K-26D00002',
+        actor_type: 'system',
+        event_type: 'sync_restored',
+        source_node: 'kitchen_queue',
+        target_node: 'order_preparing',
+        duration_ms: 120,
+        metadata: { http_status: '200 OK', connection: 'restored', table: 'Table 12' },
+        created_at: new Date().toISOString(),
+      };
+
+      const resumedEvent: SystemEvent = {
+        id: `ev_resumed_${Date.now() + 1}`,
+        restaurant_id: restaurantId,
+        correlation_id: errItem?.correlationId || 'corr_A7K-26D00002_err',
+        order_id: errItem?.orderId || 'A7K-26D00002',
+        actor_type: 'kitchen',
+        event_type: 'order_preparing_resumed',
+        source_node: 'kitchen_queue',
+        target_node: 'order_preparing',
+        duration_ms: 450,
+        metadata: { status: 'preparing_active', table: 'Table 12' },
+        created_at: new Date().toISOString(),
+      };
+
+      setErrorEvents((prev) => [resumedEvent, restoredEvent, ...prev]);
+      setSystemErrors((prev) =>
+        prev.map((e) =>
+          e.id === (errItem?.id || 'ERR-0007')
+            ? { ...e, status: 'resolved' as const, httpStatus: '200 OK (Recovered)' }
+            : e
+        )
+      );
+
+      // Auto-resolve activeError state after green feedback
+      setTimeout(() => {
+        setActiveError(null);
+        setIsResolvedError(false);
+      }, 3500);
+    }, 800);
+  }, [restaurantId]);
+
+  const handleTriggerDemoError = useCallback(() => {
+    setActiveError(INITIAL_DEMO_ERROR);
+    setSelectedErrorId('ERR-0007');
+    setIsRetryingError(false);
+    setIsResolvedError(false);
+    setSystemErrors([INITIAL_DEMO_ERROR, ...RESOLVED_ERRORS_SEED]);
+  }, []);
+
+  // Timer cleanup
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, []);
+
   // Global keyboard shortcuts (Ctrl+K Command Palette, Space Pause/Play, L Live, R Replay, F Freeze, T Theme, Esc Close Drawer/Help/Palette)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -351,6 +472,33 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             </button>
           ))}
         </div>
+
+        {/* P0 — Errors Button in Top Bar (alongside Live, Replay, Freeze) */}
+        <button
+          data-testid="btn-errors-panel-toggle"
+          onClick={() => setErrorCenterOpen((prev) => !prev)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border shadow-sm ${
+            errorCenterOpen
+              ? 'bg-rose-600 text-white border-rose-500 shadow-rose-900/50 shadow-md font-bold'
+              : activeError
+              ? 'bg-rose-950/70 border-rose-600 text-rose-300 hover:bg-rose-900/80 animate-pulse'
+              : theme === 'light'
+              ? 'bg-white border-[#CBD5E1] text-[#1E293B] hover:bg-slate-50'
+              : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
+          }`}
+          title="Open Error Investigation Center"
+        >
+          <span>🚨</span>
+          <span>Errors</span>
+          {activeErrorCount > 0 && (
+            <span
+              data-testid="badge-error-count"
+              className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-mono font-extrabold animate-bounce"
+            >
+              {activeErrorCount}
+            </span>
+          )}
+        </button>
 
         {/* 2. Search: Global Order Investigation Bar */}
         <div className="hidden sm:flex items-center ml-1">
@@ -491,9 +639,13 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             restaurantId={restaurantId}
             followingOrderId={followingOrderId}
             onFollowOrder={handleFollowOrder}
-            events={events}
+            events={combinedEvents}
             orderDots={orderDots}
             theme={theme}
+            activeError={activeError}
+            isRetryingError={isRetryingError}
+            isResolvedError={isResolvedError}
+            onRetryError={() => handleRetrySync(activeError || INITIAL_DEMO_ERROR)}
           />
         )}
         {activeMode === 'replay' && (
@@ -765,6 +917,40 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         onToggleTheme={handleToggleTheme}
         theme={theme}
       />
+
+      {/* ── P1: Live Error Toast (Top-Right Alert) ────────────────────────── */}
+      <LiveErrorToast
+        error={activeError}
+        isRetrying={isRetryingError}
+        isResolved={isResolvedError}
+        theme={theme}
+        onInvestigate={(err) => {
+          setSelectedErrorId(err.id);
+          setErrorCenterOpen(true);
+        }}
+        onRetry={handleRetrySync}
+        onDismiss={() => {}}
+      />
+
+      {/* ── P0: Error Center Dashboard & Inspector Drawer ─────────────────── */}
+      {errorCenterOpen && (
+        <ErrorCenterPanel
+          errors={systemErrors}
+          selectedErrorId={selectedErrorId}
+          isRetrying={isRetryingError}
+          isResolved={isResolvedError}
+          theme={theme}
+          onSelectError={(err) => setSelectedErrorId(err.id)}
+          onRetrySync={handleRetrySync}
+          onTriggerDemoError={handleTriggerDemoError}
+          onClose={() => setErrorCenterOpen(false)}
+          onJumpToOrder={(orderId) => {
+            setErrorCenterOpen(false);
+            setFollowingOrderId(orderId);
+            handleModeChange('live');
+          }}
+        />
+      )}
     </div>
   );
 }

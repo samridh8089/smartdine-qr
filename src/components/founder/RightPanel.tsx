@@ -37,7 +37,7 @@ import {
   Send,
   Zap,
 } from 'lucide-react';
-import type { SystemEvent, OrderDotState, NodeInspectorData } from '@/components/founder/types';
+import type { SystemEvent, OrderDotState, NodeInspectorData, SystemErrorItem } from '@/components/founder/types';
 import { GRAPH_NODES, EVENT_TO_NODE } from '@/components/founder/NodeDefinitions';
 import { logSystemEvent } from '@/lib/systemEventLogger';
 
@@ -54,6 +54,10 @@ interface RightPanelProps {
   onSelectTable?: (tableName: string) => void;
   activeTab?: TabId;
   onTabChange?: (tab: TabId) => void;
+  activeError?: SystemErrorItem | null;
+  isRetryingError?: boolean;
+  isResolvedError?: boolean;
+  onRetryError?: () => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -94,6 +98,10 @@ const EVENT_BADGE_COLOR: Record<string, string> = {
   report_generated:       'bg-indigo-700 text-indigo-100',
   customer_call_accepted: 'bg-rose-700 text-rose-100',
   customer_call_resolved: 'bg-emerald-800 text-emerald-100',
+  kitchen_timeout:        'bg-rose-700 text-rose-100 border border-rose-500',
+  retry_started:          'bg-amber-600 text-amber-100 border border-amber-400',
+  sync_restored:          'bg-emerald-600 text-emerald-100 border border-emerald-400',
+  order_preparing_resumed: 'bg-teal-700 text-teal-100 border border-teal-500',
 };
 
 function badgeClass(eventType: string): string {
@@ -764,6 +772,42 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
                   <span className={`font-semibold ${isLight ? 'text-sky-700' : 'text-sky-300'}`}>Ravi:</span> 14 deliveries · <span className={`font-semibold ${isLight ? 'text-purple-700' : 'text-purple-300'}`}>Neha:</span> 11 servings · <span className={`font-semibold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>99.1%</span> satisfaction
                 </p>
               </div>
+
+              {/* P2 — Error Analytics Section in Reports Node */}
+              <div
+                data-testid="reports-error-analytics-card"
+                className={`p-2.5 rounded-lg border font-mono text-[10px] space-y-2 ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/80 rounded-lg border border-slate-700'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`uppercase font-semibold flex items-center gap-1.5 ${isLight ? 'text-[#1E293B]' : 'text-slate-200'}`}>
+                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                    System Error Analytics
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold">
+                    98.4% Recovery Rate
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5 text-center">
+                  <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
+                    <span className="text-[8px] text-slate-400 uppercase block">Total</span>
+                    <span className="text-xs font-bold text-slate-200">7</span>
+                  </div>
+                  <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
+                    <span className="text-[8px] text-emerald-400 uppercase block">Resolved</span>
+                    <span className="text-xs font-bold text-emerald-400">6</span>
+                  </div>
+                  <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
+                    <span className="text-[8px] text-rose-400 uppercase block">Critical</span>
+                    <span className="text-xs font-bold text-rose-400">1</span>
+                  </div>
+                  <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
+                    <span className="text-[8px] text-amber-400 uppercase block">Avg Time</span>
+                    <span className="text-xs font-bold text-amber-400">42s</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -891,6 +935,14 @@ function getEventNarrative(ev: SystemEvent): string {
       return 'FCM Push notification alert sent';
     case 'audit_written':
       return `Audit log recorded: ${meta.action || 'system transition'}`;
+    case 'kitchen_timeout':
+      return `⚠️ Kitchen status sync failed (504 Gateway Timeout)`;
+    case 'retry_started':
+      return `🔄 Kitchen sync retry dispatched (Attempt 1/3)`;
+    case 'sync_restored':
+      return `✅ Kitchen sync restored · Connection established`;
+    case 'order_preparing_resumed':
+      return `👨‍🍳 Order preparing resumed at kitchen station`;
     default:
       return ev.event_type.replace(/_/g, ' ');
   }
@@ -901,9 +953,20 @@ function getEventNarrative(ev: SystemEvent): string {
 interface FlightRecorderTabProps {
   selectedDot: OrderDotState | null;
   events: SystemEvent[];
+  activeError?: SystemErrorItem | null;
+  isRetryingError?: boolean;
+  onRetryError?: () => void;
+  theme?: 'dark' | 'light';
 }
 
-function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
+function FlightRecorderTab({
+  selectedDot,
+  events,
+  activeError,
+  isRetryingError,
+  onRetryError,
+  theme = 'dark',
+}: FlightRecorderTabProps) {
   // ── 1. useState ──
   const [selectedCorrId, setSelectedCorrId] = useState<string | null>(() => selectedDot?.correlationId || null);
   const [showAllEvents, setShowAllEvents] = useState<boolean>(false);
@@ -1119,6 +1182,52 @@ function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
                 );
               })}
             </ol>
+
+            {/* P0 — Flight Recorder Stopped Error State */}
+            {activeError && (effectiveCorrId === activeError.correlationId || activeDotInfo.orderId === activeError.orderId || activeDotInfo.orderId?.includes('A7K-26D00002')) && (
+              <div
+                data-testid="flight-recorder-error-box"
+                className={`mt-4 p-3 rounded-xl border-2 font-mono space-y-2 shadow-lg ${
+                  theme === 'light'
+                    ? 'bg-rose-50 border-rose-400 shadow-rose-100'
+                    : 'bg-rose-950/60 border-rose-500 shadow-rose-950/80'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                    Halted at Kitchen Queue
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-rose-900/80 border border-rose-500 text-rose-200 text-[9px] font-bold">
+                    {activeError.httpStatus}
+                  </span>
+                </div>
+                <div>
+                  <p className={`text-xs font-bold ${theme === 'light' ? 'text-rose-900' : 'text-rose-100'}`}>
+                    {activeError.title}
+                  </p>
+                  <p className={`text-[10px] mt-0.5 ${theme === 'light' ? 'text-rose-700' : 'text-rose-300'}`}>
+                    {activeError.cause}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-rose-500/20 text-[9px]">
+                  <span className={theme === 'light' ? 'text-rose-600' : 'text-rose-400'}>
+                    Duration: {activeError.durationMs}ms · Retries: {activeError.retryCount}/3
+                  </span>
+                  {onRetryError && (
+                    <button
+                      type="button"
+                      data-testid="btn-flight-retry-sync"
+                      onClick={onRetryError}
+                      disabled={isRetryingError}
+                      className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[9px] transition-colors flex items-center gap-1 cursor-pointer shadow-md"
+                    >
+                      {isRetryingError ? '🔄 Retrying...' : '⚡ Retry Sync'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
         <div ref={bottomRef} />
@@ -1146,6 +1255,10 @@ export default function RightPanel({
   onSelectTable,
   activeTab: controlledTab,
   onTabChange,
+  activeError,
+  isRetryingError,
+  isResolvedError,
+  onRetryError,
 }: RightPanelProps) {
   // ── 1. useState (Rule 1: Strict Hook Declaration Order) ───────────────────
   const [internalTab, setInternalTab] = useState<TabId>(() => {
@@ -1234,7 +1347,7 @@ export default function RightPanel({
       {/* Tab content */}
       <div className="flex-1 overflow-hidden">
         {activeTab === 'timeline' && (
-          <TimelineTab events={events} onNodeSelect={onNodeSelect} />
+          <TimelineTab events={events} onNodeSelect={onNodeSelect} theme={theme} />
         )}
         {activeTab === 'inspector' && (
           <InspectorTab
@@ -1246,7 +1359,14 @@ export default function RightPanel({
           />
         )}
         {activeTab === 'flight' && (
-          <FlightRecorderTab selectedDot={selectedDot} events={events} />
+          <FlightRecorderTab
+            selectedDot={selectedDot}
+            events={events}
+            activeError={activeError}
+            isRetryingError={isRetryingError}
+            onRetryError={onRetryError}
+            theme={theme}
+          />
         )}
       </div>
     </div>

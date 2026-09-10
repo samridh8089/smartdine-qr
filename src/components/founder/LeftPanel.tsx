@@ -20,8 +20,10 @@ import {
   QrCode,
   History,
   MoreVertical,
+  AlertTriangle,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import type { SystemErrorItem } from '@/components/founder/types';
 
 export interface TableItemDetail {
   id: string;
@@ -114,24 +116,37 @@ export function getWaiterMovement(tableName: string, waiterName?: string): Waite
   return null;
 }
 
-export function getKitchenEta(tableStatus: string, orderDurationMin?: number): KitchenEtaInfo | null {
+export function getKitchenEta(tableStatus: string, elapsedMin?: number): KitchenEtaInfo | null {
   if (tableStatus === 'preparing') {
+    const elapsed = elapsedMin || 8;
+    const totalEta = 14;
     return {
-      etaMin: 6,
-      elapsedMin: orderDurationMin || 8,
-      totalEta: 14,
+      etaMin: Math.max(1, totalEta - elapsed),
+      elapsedMin: elapsed,
+      totalEta,
+    };
+  }
+  if (tableStatus === 'waiting') {
+    return {
+      etaMin: 18,
+      elapsedMin: elapsedMin || 3,
+      totalEta: 18,
+    };
+  }
+  if (tableStatus === 'occupied') {
+    return {
+      etaMin: 12,
+      elapsedMin: elapsedMin || 14,
+      totalEta: 20,
     };
   }
   return null;
 }
 
 export const DEFAULT_KNOWN_TABLES: Array<{ id: string; name: string }> = [
-  { id: 't1', name: 'Table 1' },
-  { id: 't2', name: 'Table 2' },
-  { id: 't3', name: 'Table 3' },
   { id: 't4', name: 'Table 4' },
-  { id: 't5', name: 'Table 5' },
   { id: 't6', name: 'Table 6' },
+  { id: 't10', name: 'Table 10' },
   { id: 't12', name: 'Table 12' },
   { id: 't14', name: 'Table 14' },
   { id: 't16', name: 'Table 16' },
@@ -141,6 +156,9 @@ interface LeftPanelProps {
   restaurantId: string;
   selectedOrderId?: string | null;
   theme?: 'dark' | 'light';
+  activeError?: SystemErrorItem | null;
+  isRetryingError?: boolean;
+  onRetryError?: () => void;
   onTableClick?: (table: ActiveTableDetails) => void;
   onOpenTimeline?: (orderId?: string, correlationId?: string) => void;
   onCloseDrawer?: () => void;
@@ -205,6 +223,9 @@ export default function LeftPanel({
   restaurantId,
   selectedOrderId,
   theme = 'dark',
+  activeError,
+  isRetryingError,
+  onRetryError,
   onTableClick,
   onOpenTimeline,
   onCloseDrawer,
@@ -661,6 +682,52 @@ export default function LeftPanel({
                               {table.waiterName || 'Neha Patel'}
                             </div>
                           </div>
+
+                          {/* P0 — Demo Error Warning Banner on Table 12 */}
+                          {activeError && table.name.includes('12') && (
+                            <div
+                              data-testid="table-12-error-banner"
+                              className={`mt-2 p-2 rounded-lg border flex items-center justify-between gap-2 text-[10px] font-mono shadow-sm ${
+                                isLight
+                                  ? 'bg-rose-50/90 border-rose-300 text-rose-800'
+                                  : 'bg-rose-950/70 border-rose-600/70 text-rose-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="animate-pulse">⚠️</span>
+                                <div className="truncate">
+                                  <span className="font-bold">Sync Failed</span>
+                                  <span className="opacity-80 ml-1">[{activeError.id}]</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                data-testid="btn-table12-retry-sync"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onRetryError?.();
+                                }}
+                                disabled={isRetryingError}
+                                className={`px-2 py-0.5 rounded text-[9px] font-bold shrink-0 transition-all flex items-center gap-1 shadow-sm cursor-pointer ${
+                                  isRetryingError
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                                }`}
+                              >
+                                {isRetryingError ? (
+                                  <>
+                                    <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                                    <span>Retrying...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw className="h-2.5 w-2.5" />
+                                    <span>Retry Sync</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         /* ── Available Card (Minimal with Icon Buttons) ── */
