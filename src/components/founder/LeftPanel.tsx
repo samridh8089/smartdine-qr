@@ -468,14 +468,16 @@ export default function LeftPanel({
   }, [activeSelectedTable, handleCloseDrawer, menuOpenTableId]);
 
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
+  const isLight = theme === 'light';
+
   return (
     <div className={`h-full flex flex-col border-r relative select-none ${
-      theme === 'light'
-        ? 'bg-slate-50 border-slate-200 text-slate-800'
+      isLight
+        ? 'bg-[#F6F8FB] border-[#D7E3EF] text-[#1E293B]'
         : 'bg-slate-900 border-slate-800 text-slate-100'
     }`}>
       {/* Tab switcher */}
-      <div className={`flex border-b shrink-0 ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
+      <div className={`flex border-b shrink-0 ${isLight ? 'border-[#D7E3EF] bg-[#EEF3F8]' : 'border-slate-800 bg-slate-900'}`}>
         {(
           [
             { id: 'floor', icon: LayoutGrid, label: 'Floor Twin' },
@@ -489,7 +491,11 @@ export default function LeftPanel({
             className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors
               ${
                 activeTab === tab.id
-                  ? 'text-sky-400 border-b-2 border-sky-400 bg-sky-950/20'
+                  ? isLight
+                    ? 'text-[#0EA5E9] border-b-2 border-[#0EA5E9] bg-white font-bold'
+                    : 'text-sky-400 border-b-2 border-sky-400 bg-sky-950/20'
+                  : isLight
+                  ? 'text-[#64748B] hover:text-[#1E293B] hover:bg-white/60'
                   : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
               }`}
           >
@@ -499,52 +505,52 @@ export default function LeftPanel({
         ))}
       </div>
 
+      {/* Main Tab Content */}
       <div className="flex-1 overflow-y-auto">
-        {/* Floor Plan Digital Twin */}
+        {/* Floor Twin tab */}
         {activeTab === 'floor' && (
-          <div className="p-3">
-            {/* Status counts pills */}
-            <div className="grid grid-cols-2 gap-1.5 mb-3 font-mono">
-              {(
-                [
-                  { key: 'waiting', label: 'Waiting', color: 'text-rose-400 border-rose-800/70 bg-rose-950/40' },
-                  { key: 'preparing', label: 'Preparing', color: 'text-amber-400 border-amber-800/70 bg-amber-950/40' },
-                  { key: 'ready', label: 'Ready', color: 'text-emerald-400 border-emerald-800/70 bg-emerald-950/40' },
-                  { key: 'occupied', label: 'Occupied', color: 'text-blue-400 border-blue-800/70 bg-blue-950/40' },
-                ] as const
-              ).map((s) => (
-                <div
-                  key={s.key}
-                  className={`rounded-md px-2 py-1 border ${s.color} flex items-center justify-between`}
-                >
-                  <span className="text-[9px] font-semibold uppercase">{s.label}</span>
-                  <span className="text-[11px] font-bold">{statusCounts[s.key] || 0}</span>
-                </div>
-              ))}
+          <div className="p-3 space-y-3">
+            {/* Legend pills (compact) */}
+            <div className="grid grid-cols-2 gap-1.5 pb-1">
+              <div className={`px-2 py-1 rounded-md border flex items-center justify-between text-[9px] font-mono ${
+                isLight ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-rose-950/50 border-rose-800/60 text-rose-300'
+              }`}>
+                <span className="font-bold">WAITING</span>
+                <span className="font-bold">{statusCounts.waiting}</span>
+              </div>
+              <div className={`px-2 py-1 rounded-md border flex items-center justify-between text-[9px] font-mono ${
+                isLight ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-amber-950/50 border-amber-800/60 text-amber-300'
+              }`}>
+                <span className="font-bold">PREPARING</span>
+                <span className="font-bold">{statusCounts.preparing}</span>
+              </div>
+              <div className={`px-2 py-1 rounded-md border flex items-center justify-between text-[9px] font-mono ${
+                isLight ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-emerald-950/50 border-emerald-800/60 text-emerald-300'
+              }`}>
+                <span className="font-bold">READY</span>
+                <span className="font-bold">{statusCounts.ready}</span>
+              </div>
+              <div className={`px-2 py-1 rounded-md border flex items-center justify-between text-[9px] font-mono ${
+                isLight ? 'bg-sky-50 border-sky-200 text-sky-700' : 'bg-sky-950/50 border-sky-800/60 text-sky-300'
+              }`}>
+                <span className="font-bold">OCCUPIED</span>
+                <span className="font-bold">{statusCounts.occupied}</span>
+              </div>
             </div>
 
-            {/* Table Grid */}
+            {/* Tables Grid */}
             {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center justify-center h-48 text-slate-500 text-xs font-mono">
+                <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                Loading floor...
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3">
                 {tables.map((table) => {
                   const cfg = STATUS_CONFIG[table.status] || STATUS_CONFIG.available;
                   const isSelected = activeSelectedTable?.id === table.id;
-                  const initials = table.waiterName
-                    ? table.waiterName
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                        .slice(0, 2)
-                        .toUpperCase()
-                    : null;
-
                   const waiterMovement = getWaiterMovement(table.name, table.waiterName);
                   const kitchenEta = getKitchenEta(table.status, table.orderDurationMin);
-
                   const isOccupied = table.status !== 'available';
 
                   return (
@@ -553,11 +559,15 @@ export default function LeftPanel({
                       data-testid={isOccupied ? 'table-card-occupied' : 'table-card-available'}
                       onClick={() => handleTableSelect(table)}
                       className={`
-                        group relative rounded-xl border p-3 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between
+                        group relative rounded-xl border p-3 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between shadow-sm
                         ${isOccupied
-                          ? `bg-slate-900/90 ${cfg.border} shadow-[0_0_14px_rgba(56,189,248,0.25)] ring-1 ring-sky-500/40 animate-[pulse_4s_ease-in-out_infinite] min-h-[100px]`
+                          ? isLight
+                            ? 'bg-white border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.2)] ring-1 ring-amber-400 min-h-[100px]'
+                            : `bg-slate-900/90 ${cfg.border} shadow-[0_0_14px_rgba(56,189,248,0.25)] ring-1 ring-sky-500/40 animate-[pulse_4s_ease-in-out_infinite] min-h-[100px]`
+                          : isLight
+                          ? 'bg-white border-[#C9D7E6] hover:border-slate-400 min-h-[72px]'
                           : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 min-h-[82px]'}
-                        ${isSelected ? 'ring-2 ring-sky-400 scale-[1.03] z-10' : 'hover:scale-[1.02]'}
+                        ${isSelected ? 'ring-2 ring-[#0EA5E9] scale-[1.02] z-10' : 'hover:scale-[1.01]'}
                       `}
                     >
                       {isOccupied ? (
@@ -570,13 +580,15 @@ export default function LeftPanel({
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                               </span>
-                              <span className="text-xs font-bold text-slate-100 font-mono tracking-wide">
+                              <span className={`text-xs font-bold font-mono tracking-wide ${isLight ? 'text-[#1E293B]' : 'text-slate-100'}`}>
                                 {table.name}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5">
                               <span
-                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/90 border border-current shadow-sm`}
+                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                  isLight ? 'bg-amber-50 text-amber-800 border border-amber-300' : `${cfg.text} bg-slate-950/90 border border-current shadow-sm`
+                                }`}
                               >
                                 {cfg.label}
                               </span>
@@ -588,7 +600,9 @@ export default function LeftPanel({
                                     e.stopPropagation();
                                     setMenuOpenTableId(menuOpenTableId === table.id ? null : table.id);
                                   }}
-                                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center justify-center cursor-pointer"
+                                  className={`p-1 rounded transition-colors inline-flex items-center justify-center cursor-pointer ${
+                                    isLight ? 'text-[#64748B] hover:text-[#1E293B] hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                  }`}
                                   title="Actions"
                                 >
                                   <MoreVertical className="h-3 w-3" />
@@ -597,7 +611,9 @@ export default function LeftPanel({
                                   <div
                                     data-testid={`dropdown-menu-${table.id}`}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="absolute right-0 top-6 w-32 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100"
+                                    className={`absolute right-0 top-6 w-32 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100 border ${
+                                      isLight ? 'bg-white border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-900 border-slate-700 text-slate-300'
+                                    }`}
                                   >
                                     <button
                                       type="button"
@@ -607,9 +623,9 @@ export default function LeftPanel({
                                         setMenuOpenTableId(null);
                                         if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
                                       }}
-                                      className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                      className="w-full px-2.5 py-1.5 text-left hover:bg-sky-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
                                     >
-                                      <QrCode className="h-3 w-3 text-sky-400" /> QR Code
+                                      <QrCode className="h-3 w-3 text-sky-500" /> QR Code
                                     </button>
                                     <button
                                       type="button"
@@ -619,9 +635,9 @@ export default function LeftPanel({
                                         setMenuOpenTableId(null);
                                         handleTableSelect(table);
                                       }}
-                                      className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                      className="w-full px-2.5 py-1.5 text-left hover:bg-amber-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
                                     >
-                                      <History className="h-3 w-3 text-amber-400" /> History
+                                      <History className="h-3 w-3 text-amber-500" /> History
                                     </button>
                                   </div>
                                 )}
@@ -631,39 +647,41 @@ export default function LeftPanel({
 
                           {/* Middle Metrics: Item count, Bill amount, Kitchen ETA, Waiter name */}
                           <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono pt-1">
-                            <div className="text-slate-300 font-medium">
+                            <div className={isLight ? 'text-[#64748B] font-medium' : 'text-slate-300 font-medium'}>
                               {table.items.length > 0 ? table.items.length : 2} items
                             </div>
-                            <div className="text-right font-bold text-emerald-400">
+                            <div className={`text-right font-bold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
                               ₹{table.totalBill > 0 ? table.totalBill : 689}
                             </div>
-                            <div className="flex items-center gap-1 text-amber-300 font-medium">
+                            <div className={`flex items-center gap-1 font-medium ${isLight ? 'text-amber-600' : 'text-amber-300'}`}>
                               <Clock className="h-2.5 w-2.5" />
                               <span>ETA: {kitchenEta?.etaMin || 6}m</span>
                             </div>
-                            <div className="text-right text-sky-300 font-medium truncate" title={`Waiter: ${table.waiterName || 'Neha'}`}>
-                              {table.waiterName || 'Neha'}
+                            <div className={`text-right font-medium truncate ${isLight ? 'text-sky-700' : 'text-sky-300'}`} title={`Waiter: ${table.waiterName || 'Neha Patel'}`}>
+                              {table.waiterName || 'Neha Patel'}
                             </div>
                           </div>
                         </div>
                       ) : (
-                        /* ── Available Card: Table, Available, Seats, QR, History, 3-dot menu ── */
+                        /* ── Available Card (Minimal with Icon Buttons) ── */
                         <div className="w-full flex items-center justify-between py-1">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-slate-200 font-mono">
+                              <span className={`text-xs font-bold font-mono ${isLight ? 'text-[#1E293B]' : 'text-slate-200'}`}>
                                 {table.name}
                               </span>
-                              <span className="text-[8.5px] font-semibold px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 font-mono uppercase tracking-wider">
+                              <span className={`text-[8.5px] font-semibold px-2 py-0.5 rounded-full font-mono uppercase tracking-wider ${
+                                isLight ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-emerald-950/60 border border-emerald-800/80 text-emerald-400'
+                              }`}>
                                 Available
                               </span>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-mono mt-1">
+                            <p className={`text-[10px] font-mono mt-0.5 ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>
                               {table.customerCount || 4} Seats
                             </p>
                           </div>
 
-                          {/* Quick Actions: QR, History & Three-dot menu */}
+                          {/* Minimal Icon Buttons for Available Table: QR, History & Three-dot menu */}
                           <div className="flex items-center gap-1.5">
                             <span
                               data-testid={`btn-quick-qr-${table.id}`}
@@ -671,10 +689,14 @@ export default function LeftPanel({
                                 e.stopPropagation();
                                 if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
                               }}
-                              className="px-2 py-1 rounded bg-slate-800/90 hover:bg-sky-950 border border-slate-700/80 hover:border-sky-600 text-[9px] font-mono text-sky-400 hover:text-white cursor-pointer transition-colors flex items-center gap-1"
-                              title="Generate QR"
+                              className={`p-1.5 rounded-lg border cursor-pointer transition-colors flex items-center justify-center ${
+                                isLight
+                                  ? 'bg-[#F6F8FB] hover:bg-sky-50 border-[#CBD5E1] text-sky-600'
+                                  : 'bg-slate-800/90 hover:bg-sky-950 border-slate-700/80 text-sky-400 hover:text-white'
+                              }`}
+                              title="Generate QR Code"
                             >
-                              <QrCode className="h-2.5 w-2.5" /> QR
+                              <QrCode className="h-3.5 w-3.5" />
                             </span>
                             <span
                               data-testid={`btn-quick-history-${table.id}`}
@@ -682,10 +704,14 @@ export default function LeftPanel({
                                 e.stopPropagation();
                                 handleTableSelect(table);
                               }}
-                              className="px-2 py-1 rounded bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-[9px] font-mono text-slate-300 hover:text-white cursor-pointer transition-colors flex items-center gap-1"
+                              className={`p-1.5 rounded-lg border cursor-pointer transition-colors flex items-center justify-center ${
+                                isLight
+                                  ? 'bg-[#F6F8FB] hover:bg-amber-50 border-[#CBD5E1] text-amber-600'
+                                  : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700/80 text-slate-300 hover:text-white'
+                              }`}
                               title="Table History"
                             >
-                              <History className="h-2.5 w-2.5 text-amber-400" /> History
+                              <History className="h-3.5 w-3.5" />
                             </span>
                             <div className="relative">
                               <span
@@ -694,16 +720,20 @@ export default function LeftPanel({
                                   e.stopPropagation();
                                   setMenuOpenTableId(menuOpenTableId === table.id ? null : table.id);
                                 }}
-                                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center justify-center cursor-pointer"
+                                className={`p-1.5 rounded-lg transition-colors inline-flex items-center justify-center cursor-pointer ${
+                                  isLight ? 'text-[#64748B] hover:text-[#1E293B] hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                }`}
                                 title="Actions"
                               >
-                                <MoreVertical className="h-3 w-3" />
+                                <MoreVertical className="h-3.5 w-3.5" />
                               </span>
                               {menuOpenTableId === table.id && (
                                 <div
                                   data-testid={`dropdown-menu-${table.id}`}
                                   onClick={(e) => e.stopPropagation()}
-                                  className="absolute right-0 top-6 w-32 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100"
+                                  className={`absolute right-0 top-6 w-32 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100 border ${
+                                    isLight ? 'bg-white border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-900 border-slate-700 text-slate-300'
+                                  }`}
                                 >
                                   <button
                                     type="button"
@@ -713,9 +743,9 @@ export default function LeftPanel({
                                       setMenuOpenTableId(null);
                                       if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
                                     }}
-                                    className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                    className="w-full px-2.5 py-1.5 text-left hover:bg-sky-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
                                   >
-                                    <QrCode className="h-3 w-3 text-sky-400" /> QR Code
+                                    <QrCode className="h-3 w-3 text-sky-500" /> QR Code
                                   </button>
                                   <button
                                     type="button"
@@ -725,9 +755,9 @@ export default function LeftPanel({
                                       setMenuOpenTableId(null);
                                       handleTableSelect(table);
                                     }}
-                                    className="w-full px-2.5 py-1.5 text-left text-slate-300 hover:text-white hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
+                                    className="w-full px-2.5 py-1.5 text-left hover:bg-amber-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
                                   >
-                                    <History className="h-3 w-3 text-amber-400" /> History
+                                    <History className="h-3 w-3 text-amber-500" /> History
                                   </button>
                                 </div>
                               )}

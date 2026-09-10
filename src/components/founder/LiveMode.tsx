@@ -172,9 +172,9 @@ export default function LiveMode({
 
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
-    <div className={`flex h-full overflow-hidden select-none ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>
-      {/* Left Panel: Floor Digital Twin (responsive on mobile, 288px on desktop) */}
-      <div className={`w-full md:w-72 md:shrink-0 border-r overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
+    <div className={`flex h-full overflow-hidden select-none ${theme === 'light' ? 'bg-[#EEF3F8]' : 'bg-slate-950'}`}>
+      {/* Left Panel: Floor Digital Twin (#F6F8FB in light mode) */}
+      <div className={`w-full md:w-72 md:shrink-0 border-r overflow-hidden ${theme === 'light' ? 'border-[#D7E3EF] bg-[#F6F8FB]' : 'border-slate-800 bg-slate-900'}`}>
         <LeftPanel
           restaurantId={restaurantId}
           selectedOrderId={followingOrderId || selectedDot?.orderId || null}
@@ -200,8 +200,8 @@ export default function LiveMode({
         />
       </div>
 
-      {/* Center: Graph Canvas */}
-      <div ref={containerRef} className={`hidden md:flex flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>
+      {/* Center: Graph Canvas (#EEF3F8 in light mode) */}
+      <div ref={containerRef} className={`hidden md:flex flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-[#EEF3F8]' : 'bg-slate-950'}`}>
         {containerSize.width > 100 && (
           <GraphCanvas
             containerWidth={containerSize.width}
@@ -218,14 +218,18 @@ export default function LiveMode({
 
         {/* Follow Mode badge */}
         {followingOrderId && followedDot && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 bg-slate-900/95 border border-emerald-500/50 rounded-full shadow-lg shadow-emerald-500/20 z-10">
-            <Focus className="h-3.5 w-3.5 text-emerald-400" />
-            <span className="text-xs text-emerald-300 font-mono font-medium">
+          <div className={`absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 rounded-full shadow-lg z-10 ${
+            theme === 'light'
+              ? 'bg-white/95 border border-emerald-400 text-emerald-700 shadow-emerald-500/10'
+              : 'bg-slate-900/95 border border-emerald-500/50 text-emerald-300 shadow-emerald-500/20'
+          }`}>
+            <Focus className="h-3.5 w-3.5 text-emerald-500" />
+            <span className="text-xs font-mono font-medium">
               Following {followedDot.shortId}
             </span>
             <button
               onClick={() => onFollowOrder(null)}
-              className="text-slate-400 hover:text-white ml-1 cursor-pointer"
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-white ml-1 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -234,9 +238,13 @@ export default function LiveMode({
 
         {/* Node Highlight Toast Indicator */}
         {highlightedNodeId && (
-          <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 bg-sky-950/90 border border-sky-500/60 rounded-lg shadow-lg shadow-sky-500/20 z-10 animate-in fade-in">
-            <span className="h-2 w-2 rounded-full bg-sky-400 animate-ping" />
-            <span className="text-xs text-sky-200 font-mono font-bold">
+          <div className={`absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-lg shadow-lg z-10 animate-in fade-in ${
+            theme === 'light'
+              ? 'bg-white/95 border border-[#0EA5E9] text-[#0EA5E9] shadow-sky-500/10'
+              : 'bg-sky-950/90 border border-sky-500/60 text-sky-200 shadow-sky-500/20'
+          }`}>
+            <span className="h-2 w-2 rounded-full bg-[#0EA5E9] animate-ping" />
+            <span className="text-xs font-mono font-bold">
               Inspecting {highlightedNodeId}
             </span>
           </div>
@@ -244,23 +252,29 @@ export default function LiveMode({
 
         {/* Floating live summary badge */}
         <div className="absolute bottom-3 left-3 flex items-center gap-2 font-mono z-10">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/90 border border-slate-700 rounded-full">
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-slate-300">{orderDots.length} active orders</span>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border shadow-sm ${
+            theme === 'light' ? 'bg-white/90 border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-900/90 border-slate-700 text-slate-300'
+          }`}>
+            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-semibold">{orderDots.length} active orders</span>
           </div>
-          <div className="px-2.5 py-1 bg-slate-900/90 border border-slate-700 rounded-full">
-            <span className="text-[10px] text-slate-400">{events.length} events logged</span>
+          <div className={`px-2.5 py-1 rounded-full border shadow-sm ${
+            theme === 'light' ? 'bg-white/90 border-[#C9D7E6] text-[#64748B]' : 'bg-slate-900/90 border-slate-700 text-slate-400'
+          }`}>
+            <span className="text-[10px]">{events.length} events logged</span>
           </div>
         </div>
 
         {/* Zoom hint */}
-        <div className="absolute bottom-3 right-3 text-[9px] text-slate-600 z-10 font-mono">
+        <div className={`absolute bottom-3 right-3 text-[9px] z-10 font-mono ${
+          theme === 'light' ? 'text-[#64748B]' : 'text-slate-600'
+        }`}>
           Scroll to zoom · Drag to pan · Click node or dot to inspect
         </div>
       </div>
 
-      {/* Right Panel: 340px (desktop only) */}
-      <div className={`hidden lg:block w-[340px] shrink-0 border-l overflow-hidden ${theme === 'light' ? 'border-slate-200 bg-white' : 'border-slate-800 bg-slate-900'}`}>
+      {/* Right Panel: 340px (desktop only, #F7FAFC in light mode) */}
+      <div className={`hidden lg:block w-[340px] shrink-0 border-l overflow-hidden ${theme === 'light' ? 'border-[#D7E3EF] bg-[#F7FAFC]' : 'border-slate-800 bg-slate-900'}`}>
         <RightPanel
           events={events}
           selectedNodeId={selectedNodeId}

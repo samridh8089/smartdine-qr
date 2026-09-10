@@ -164,24 +164,24 @@ const NodeGroup = React.memo(function NodeGroup({
   const cat = getNodeCategory(node.id);
   const pastel = SOFT_LIGHT_COLORS[cat];
 
-  const baseFill = isLight ? pastel.bg : (SOFT_DARK_COLORS[cat] || node.color);
+  // In Light Mode: Node cards are clean #FFFFFF, border #C9D7E6, text #1E293B
+  const baseFill = isLight ? '#FFFFFF' : (SOFT_DARK_COLORS[cat] || node.color);
   const rectFill = isTriggering
-    ? (isLight ? '#bae6fd' : '#0284c7')
+    ? (isLight ? '#e0f2fe' : '#0284c7')
     : baseFill;
 
   const rectStroke = isTriggering
-    ? '#38bdf8'
+    ? '#0EA5E9'
     : isHighlighted
-    ? '#38bdf8'
+    ? '#0EA5E9'
     : isHovered
-    ? (isLight ? '#0284c7' : '#ffffff')
+    ? (isLight ? '#0EA5E9' : '#ffffff')
     : isGhost
-    ? 'rgba(148, 163, 184, 0.4)'
-    : (isLight ? pastel.border : 'rgba(255,255,255,0.18)');
+    ? (isLight ? 'rgba(201, 215, 230, 0.5)' : 'rgba(148, 163, 184, 0.4)')
+    : (isLight ? '#C9D7E6' : 'rgba(255,255,255,0.18)');
 
-  const labelFill = isLight ? pastel.text : '#ffffff';
-  const dotColor = isLight ? pastel.dot : '#38bdf8';
-  const badgeColor = isLight ? pastel.badge : getNodeBadgeFill(node.id);
+  const labelFill = isLight ? '#1E293B' : '#ffffff';
+  const badgeColor = isLight ? (node.id === 'ready' ? '#22C55E' : node.id === 'preparing' ? '#F59E0B' : pastel.badge) : getNodeBadgeFill(node.id);
 
   const glowColor =
     node.type === 'side' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.25)';
@@ -191,27 +191,27 @@ const NodeGroup = React.memo(function NodeGroup({
       x={node.x}
       y={node.y}
       opacity={isGhost ? 0.25 : 1}
-      scaleX={isTriggering ? 1.05 : 1}
-      scaleY={isTriggering ? 1.05 : 1}
-      offsetX={isTriggering ? (node.width * 0.05) / 2 : 0}
-      offsetY={isTriggering ? (node.height * 0.05) / 2 : 0}
+      scaleX={isHighlighted ? 1.08 : isTriggering ? 1.05 : 1}
+      scaleY={isHighlighted ? 1.08 : isTriggering ? 1.05 : 1}
+      offsetX={isHighlighted ? (node.width * 0.08) / 2 : isTriggering ? (node.width * 0.05) / 2 : 0}
+      offsetY={isHighlighted ? (node.height * 0.08) / 2 : isTriggering ? (node.height * 0.05) / 2 : 0}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
       onTap={onClick}
     >
-      {/* Main node rounded rect */}
+      {/* Main node rounded rect: Glow ONLY on active node. Inactive nodes remain calm */}
       <Rect
         width={node.width}
         height={node.height}
         cornerRadius={10}
         fill={rectFill}
-        shadowEnabled={isHovered || !!isHighlighted || !!isTriggering || badgeCount > 0}
-        shadowColor={isTriggering ? '#38bdf8' : isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : (isLight ? '#94a3b8' : '#0284c7')}
-        shadowBlur={isTriggering ? 26 : isHighlighted ? 18 : isHovered ? 14 : 8}
-        shadowOpacity={isLight ? (isHighlighted ? 0.45 : 0.25) : (isHighlighted || isTriggering ? 0.9 : 0.4)}
+        shadowEnabled={isHovered || !!isHighlighted || !!isTriggering}
+        shadowColor={isTriggering ? '#0EA5E9' : isHighlighted ? '#0EA5E9' : isHovered ? (isLight ? '#0EA5E9' : '#ffffff') : '#0EA5E9'}
+        shadowBlur={isTriggering ? (isLight ? 15 : 24) : isHighlighted ? (isLight ? 12 : 20) : (isLight ? 7 : 12)}
+        shadowOpacity={isLight ? (isHighlighted || isTriggering ? 0.35 : 0.2) : (isHighlighted || isTriggering ? 0.85 : 0.4)}
         stroke={rectStroke}
-        strokeWidth={isTriggering ? 2.8 : isHighlighted ? 2.2 : isHovered ? 1.5 : 1}
+        strokeWidth={isTriggering ? 2.5 : isHighlighted ? 2.2 : isHovered ? 1.5 : 1}
         dash={isGhost ? [4, 4] : undefined}
       />
 
@@ -220,11 +220,11 @@ const NodeGroup = React.memo(function NodeGroup({
         width={node.width}
         height={8}
         cornerRadius={[10, 10, 0, 0]}
-        fill={isLight ? 'rgba(255,255,255,0.4)' : glowColor}
+        fill={isLight ? 'rgba(201, 215, 230, 0.25)' : glowColor}
         listening={false}
       />
 
-      {/* Phase-28: Colored category dots removed completely. Clean label with 16px left/right padding */}
+      {/* Clean label with 16px left/right padding */}
       <Text
         text={node.label}
         x={16}
@@ -569,7 +569,7 @@ export default function GraphCanvas({
   if (containerWidth === 0 || containerHeight === 0) return null;
 
   const isLight = theme === 'light';
-  const gridDotColor = isLight ? '#cbd5e1' : '#1e293b';
+  const gridDotColor = isLight ? '#D7E3EF' : '#1e293b';
 
   return (
     <Stage
@@ -585,7 +585,7 @@ export default function GraphCanvas({
       }}
       style={{
         background: isLight
-          ? 'radial-gradient(ellipse at 50% 30%, #f8fafc 0%, #eef2f6 100%)'
+          ? '#EEF3F8'
           : 'radial-gradient(ellipse at 50% 30%, #0d1527 0%, #060911 100%)',
         cursor: 'grab',
       }}
@@ -595,21 +595,21 @@ export default function GraphCanvas({
         {/* Soft blueprint workflow guide lines (N8N feel) */}
         <Line
           points={[0, 300, CANVAS_WIDTH, 300]}
-          stroke={isLight ? 'rgba(148, 163, 184, 0.18)' : 'rgba(51, 65, 85, 0.28)'}
+          stroke={isLight ? 'rgba(215, 227, 239, 0.7)' : 'rgba(51, 65, 85, 0.28)'}
           strokeWidth={1}
           dash={[6, 12]}
           listening={false}
         />
         <Line
           points={[0, 130, CANVAS_WIDTH, 130]}
-          stroke={isLight ? 'rgba(148, 163, 184, 0.12)' : 'rgba(51, 65, 85, 0.18)'}
+          stroke={isLight ? 'rgba(215, 227, 239, 0.5)' : 'rgba(51, 65, 85, 0.18)'}
           strokeWidth={1}
           dash={[6, 12]}
           listening={false}
         />
         <Line
           points={[0, 480, CANVAS_WIDTH, 480]}
-          stroke={isLight ? 'rgba(148, 163, 184, 0.12)' : 'rgba(51, 65, 85, 0.18)'}
+          stroke={isLight ? 'rgba(215, 227, 239, 0.5)' : 'rgba(51, 65, 85, 0.18)'}
           strokeWidth={1}
           dash={[6, 12]}
           listening={false}
@@ -620,7 +620,7 @@ export default function GraphCanvas({
             key={`grid-${i}`}
             x={pt.x}
             y={pt.y}
-            radius={1.2}
+            radius={1.3}
             fill={gridDotColor}
             listening={false}
           />
@@ -645,10 +645,10 @@ export default function GraphCanvas({
           const edgeOpacity = isEdgeFuture ? 0.25 : 1;
 
           const edgeColor = isEdgeGlowing
-            ? '#38bdf8'
+            ? '#0EA5E9'
             : isMain
             ? (isLight ? '#94a3b8' : '#475569')
-            : (isLight ? '#cbd5e1' : '#334155');
+            : (isLight ? '#C9D7E6' : '#334155');
 
           // Active particle position along the edge
           const midX = (points[0] + points[2]) / 2;
@@ -662,8 +662,8 @@ export default function GraphCanvas({
                 strokeWidth={isTriggering ? 3.5 : isEdgeHighlighted ? 3 : isEdgeActive ? 2.5 : isMain ? 1.8 : 1}
                 fill={edgeColor}
                 shadowEnabled={isEdgeGlowing}
-                shadowColor="#38bdf8"
-                shadowBlur={isTriggering ? 18 : isEdgeHighlighted ? 14 : 8}
+                shadowColor="#0EA5E9"
+                shadowBlur={isTriggering ? (isLight ? 12 : 18) : isEdgeHighlighted ? (isLight ? 9 : 14) : (isLight ? 5 : 8)}
                 pointerLength={isMain || isEdgeGlowing ? 8 : 6}
                 pointerWidth={isMain || isEdgeGlowing ? 6 : 4}
                 dashEnabled
@@ -681,9 +681,9 @@ export default function GraphCanvas({
                   x={midX + (Math.sin(dashOffset * 0.08) * 35)}
                   y={midY}
                   radius={isTriggering ? 3.5 : 2.5}
-                  fill="#38bdf8"
-                  shadowColor="#38bdf8"
-                  shadowBlur={isTriggering ? 14 : 6}
+                  fill="#0EA5E9"
+                  shadowColor="#0EA5E9"
+                  shadowBlur={isTriggering ? (isLight ? 8 : 14) : (isLight ? 4 : 6)}
                   listening={false}
                 />
               )}

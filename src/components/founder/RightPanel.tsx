@@ -107,9 +107,10 @@ const PAGE_SIZE = 200;
 interface TimelineTabProps {
   events: SystemEvent[];
   onNodeSelect?: (nodeId: string) => void;
+  theme?: 'dark' | 'light';
 }
 
-function TimelineTab({ events, onNodeSelect }: TimelineTabProps) {
+function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps) {
   // ── 1. useState ──
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -133,10 +134,12 @@ function TimelineTab({ events, onNodeSelect }: TimelineTabProps) {
     [onNodeSelect]
   );
 
+  const isLight = theme === 'light';
+
   // ── Render ──
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-800">
+    <div className={`flex flex-col h-full overflow-hidden ${isLight ? 'bg-[#F7FAFC]' : ''}`}>
+      <div className={`flex-1 overflow-y-auto divide-y ${isLight ? 'divide-[#D7E3EF]' : 'divide-slate-800'}`}>
         {visible.length === 0 && (
           <div className="flex flex-col items-center justify-center h-48 text-slate-500 text-xs gap-2">
             <Clock className="h-6 w-6 opacity-40" />
@@ -144,16 +147,25 @@ function TimelineTab({ events, onNodeSelect }: TimelineTabProps) {
             <span className="text-[10px] text-slate-600">Scan QR or place an order to trace</span>
           </div>
         )}
-        {visible.map((ev) => {
+        {visible.map((ev, idx) => {
           const expanded = expandedId === ev.id;
+          const isLatest = idx === 0;
           return (
-            <div key={ev.id} className="group animate-in slide-in-from-top-1 duration-200">
+            <div key={ev.id} className={`group animate-in slide-in-from-top-1 duration-200 ${
+              expanded
+                ? isLight ? 'bg-sky-50/80 border-l-2 border-[#0EA5E9]' : 'bg-sky-950/40 border-l-2 border-sky-400'
+                : isLatest
+                ? isLight ? 'bg-white/60' : 'bg-slate-850/40'
+                : ''
+            }`}>
               <button
                 onClick={() => handleEventRowClick(ev)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/60 transition-colors cursor-pointer"
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors cursor-pointer ${
+                  isLight ? 'hover:bg-[#EEF3F8]' : 'hover:bg-slate-800/60'
+                }`}
                 title="Click to pulse graph node and inspect details"
               >
-                <span className="text-[10px] font-mono text-slate-500 shrink-0 w-16">
+                <span className={`text-[10px] font-mono shrink-0 w-16 ${isLight ? 'text-[#64748B]' : 'text-slate-500'}`}>
                   {fmtTime(ev.created_at)}
                 </span>
                 <span
@@ -163,15 +175,18 @@ function TimelineTab({ events, onNodeSelect }: TimelineTabProps) {
                 >
                   {ev.event_type}
                 </span>
-                <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                <span className={`text-[10px] font-mono shrink-0 ${isLight ? 'text-[#1E293B] font-semibold' : 'text-slate-400'}`}>
                   {truncate(ev.correlation_id, 8)}
                 </span>
                 {ev.order_id && (
-                  <span className="text-[10px] text-slate-500 shrink-0">
+                  <span className={`text-[10px] shrink-0 ${isLight ? 'text-[#64748B]' : 'text-slate-500'}`}>
                     #{truncate(ev.order_id, 8)}
                   </span>
                 )}
-                <span className="ml-auto text-slate-600 group-hover:text-slate-400">
+                {isLatest && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#0EA5E9] animate-pulse ml-0.5" title="Latest event" />
+                )}
+                <span className={`ml-auto ${isLight ? 'text-slate-400 group-hover:text-[#1E293B]' : 'text-slate-600 group-hover:text-slate-400'}`}>
                   {expanded ? (
                     <ChevronDown className="w-3 h-3" />
                   ) : (
@@ -180,13 +195,15 @@ function TimelineTab({ events, onNodeSelect }: TimelineTabProps) {
                 </span>
               </button>
               {expanded && (
-                <div className="px-3 pb-3 bg-slate-900/60 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono py-1 border-b border-slate-800">
+                <div className={`px-3 pb-3 animate-in fade-in duration-150 ${isLight ? 'bg-white border-t border-[#D7E3EF]' : 'bg-slate-900/60'}`}>
+                  <div className={`flex items-center justify-between text-[9px] font-mono py-1 border-b ${isLight ? 'border-[#D7E3EF] text-[#64748B]' : 'border-slate-800 text-slate-500'}`}>
                     <span>Source: {ev.source_node || 'system'}</span>
                     <ArrowRight className="h-2.5 w-2.5" />
-                    <span className="text-sky-400">Target: {ev.target_node || 'pipeline'}</span>
+                    <span className="text-[#0EA5E9] font-bold">Target: {ev.target_node || 'pipeline'}</span>
                   </div>
-                  <pre className="text-[10px] text-slate-300 overflow-x-auto whitespace-pre-wrap break-all bg-slate-800 rounded p-2 mt-1 font-mono">
+                  <pre className={`text-[10px] overflow-x-auto whitespace-pre-wrap break-all rounded p-2 mt-1 font-mono border ${
+                    isLight ? 'bg-[#F6F8FB] border-[#D7E3EF] text-[#1E293B]' : 'bg-slate-800 border-slate-700 text-slate-300'
+                  }`}>
                     {JSON.stringify(
                       {
                         id: ev.id,
@@ -210,10 +227,10 @@ function TimelineTab({ events, onNodeSelect }: TimelineTabProps) {
         })}
       </div>
       {hasMore && (
-        <div className="shrink-0 px-3 py-2 border-t border-slate-800">
+        <div className={`shrink-0 px-3 py-2 border-t ${isLight ? 'border-[#D7E3EF]' : 'border-slate-800'}`}>
           <button
             onClick={() => setPage((p) => p + 1)}
-            className="w-full text-xs text-sky-400 hover:text-sky-300 py-1 hover:bg-slate-800 rounded transition-colors font-mono"
+            className="w-full text-xs text-[#0EA5E9] hover:underline py-1 rounded transition-colors font-mono font-semibold"
           >
             Load more ({events.length - visible.length} remaining)
           </button>
@@ -444,17 +461,25 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
   }, [selectedNodeId]);
 
   // ── Render ──
+  const isLight = theme === 'light';
+
   return (
-    <div className="flex flex-col h-full overflow-hidden select-none">
+    <div className={`flex flex-col h-full overflow-hidden select-none ${isLight ? 'bg-[#F7FAFC] text-[#1E293B]' : ''}`}>
       {/* Node selector dropdown */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700">
-        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+      <div className={`shrink-0 flex items-center justify-between px-3 py-2 border-b ${
+        isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/80 border-slate-700'
+      }`}>
+        <span className={`text-[10px] font-semibold uppercase tracking-wider font-mono ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>
           Node Inspector:
         </span>
         <select
           value={activeNodeId}
           onChange={(e) => setInternalNodeId(e.target.value)}
-          className="bg-slate-900 text-xs text-sky-400 font-semibold rounded border border-slate-700 px-2 py-1 focus:outline-none focus:border-sky-500 cursor-pointer"
+          className={`text-xs font-semibold rounded border px-2 py-1 focus:outline-none cursor-pointer ${
+            isLight
+              ? 'bg-white text-sky-600 border-[#C9D7E6]'
+              : 'bg-slate-900 text-sky-400 border-slate-700 focus:border-sky-500'
+          }`}
         >
           {GRAPH_NODES.map((n) => (
             <option key={n.id} value={n.id}>
@@ -465,23 +490,25 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
       </div>
 
       {!nodeData ? (
-        <div className="flex items-center justify-center flex-1 text-slate-500 text-sm font-mono">
+        <div className={`flex items-center justify-center flex-1 text-sm font-mono ${isLight ? 'text-[#64748B]' : 'text-slate-500'}`}>
           Node not found: {activeNodeId}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-800">
+        <div className={`flex-1 overflow-y-auto divide-y ${isLight ? 'divide-[#D7E3EF]' : 'divide-slate-800'}`}>
           {/* Node header */}
-          <div className="px-4 py-3 bg-slate-800/40 flex items-center justify-between">
+          <div className={`px-4 py-3 flex items-center justify-between ${isLight ? 'bg-white' : 'bg-slate-800/40'}`}>
             <div>
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <h3 className={`text-sm font-bold flex items-center gap-2 ${isLight ? 'text-[#1E293B]' : 'text-slate-100'}`}>
                 <span>{nodeData.label}</span>
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <p className={`text-[11px] mt-0.5 ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>
                 {GRAPH_NODES.find((n) => n.id === nodeData.nodeId)?.description ?? ''}
               </p>
             </div>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-sky-300">
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+              isLight ? 'bg-[#F6F8FB] border-[#D7E3EF] text-sky-600 font-bold' : 'bg-slate-800 border-slate-700 text-sky-300'
+            }`}>
               {nodeData.nodeId}
             </span>
           </div>
@@ -661,62 +688,80 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
 
           {/* ── SPECIAL ACTION PANEL 4: Reports Executive Dashboard ──────────── */}
           {activeNodeId === 'reports' && (
-            <div data-testid="reports-executive-dashboard" className="p-3 bg-indigo-950/20 space-y-3">
+            <div data-testid="reports-executive-dashboard" className={`p-3 space-y-3 ${
+              isLight ? 'bg-white rounded-xl border border-[#C9D7E6] shadow-sm' : 'bg-indigo-950/20'
+            }`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-indigo-400 font-bold text-xs">
+                <div className={`flex items-center gap-1.5 font-bold text-xs ${isLight ? 'text-indigo-600' : 'text-indigo-400'}`}>
                   <BarChart3 className="h-4 w-4" />
                   <span>Executive Operations Report</span>
                 </div>
-                <span className="text-[10px] font-mono text-indigo-300 bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-700/60">
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                  isLight ? 'text-indigo-700 bg-indigo-50 border-indigo-200' : 'text-indigo-300 bg-indigo-900/60 border-indigo-700/60'
+                }`}>
                   Last Generated: {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
                 </span>
               </div>
 
               {/* Executive Dashboard Metrics Grid */}
               <div className="grid grid-cols-2 gap-2 font-mono">
-                <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Today&apos;s Revenue</span>
-                  <span className="text-base font-bold text-emerald-400">
+                <div className={`p-2.5 rounded-lg border shadow-xs ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
+                }`}>
+                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Today&apos;s Revenue</span>
+                  <span className={`text-base font-bold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
                     {executiveReportMetrics.revenue}
                   </span>
                 </div>
-                <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Orders Today</span>
-                  <span className="text-base font-bold text-sky-400">
+                <div className={`p-2.5 rounded-lg border shadow-xs ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
+                }`}>
+                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Orders Today</span>
+                  <span className={`text-base font-bold ${isLight ? 'text-sky-600' : 'text-sky-400'}`}>
                     {executiveReportMetrics.ordersCount} orders
                   </span>
                 </div>
-                <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Avg Prep Time</span>
-                  <span className="text-sm font-bold text-amber-300">
+                <div className={`p-2.5 rounded-lg border shadow-xs ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
+                }`}>
+                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Avg Prep Time</span>
+                  <span className={`text-sm font-bold ${isLight ? 'text-amber-600' : 'text-amber-300'}`}>
                     12m
                   </span>
                 </div>
-                <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Inventory Cost</span>
-                  <span className="text-sm font-bold text-teal-300">
+                <div className={`p-2.5 rounded-lg border shadow-xs ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
+                }`}>
+                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Inventory Cost</span>
+                  <span className={`text-sm font-bold ${isLight ? 'text-teal-600' : 'text-teal-300'}`}>
                     {executiveReportMetrics.inventoryCost}
                   </span>
                 </div>
-                <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Queue Health</span>
-                  <span className="text-sm font-bold text-emerald-400">
+                <div className={`p-2.5 rounded-lg border shadow-xs ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
+                }`}>
+                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Queue Health</span>
+                  <span className={`text-sm font-bold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
                     Optimal (100%)
                   </span>
                 </div>
-                <div className="p-2.5 bg-slate-800/90 rounded-lg border border-slate-700">
-                  <span className="text-[9px] text-slate-400 block uppercase">Last Generated</span>
-                  <span className="text-sm font-bold text-indigo-300">
+                <div className={`p-2.5 rounded-lg border shadow-xs ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
+                }`}>
+                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Last Generated</span>
+                  <span className={`text-sm font-bold ${isLight ? 'text-indigo-600' : 'text-indigo-300'}`}>
                     {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
                   </span>
                 </div>
               </div>
 
               {/* Staff Performance Summary */}
-              <div className="p-2.5 bg-slate-800/80 rounded-lg border border-slate-700 font-mono text-[10px]">
-                <span className="text-slate-400 uppercase block mb-1">Staff Performance Summary</span>
-                <p className="text-slate-200">
-                  <span className="text-sky-300 font-semibold">Ravi:</span> 14 deliveries · <span className="text-purple-300 font-semibold">Neha:</span> 11 servings · <span className="text-emerald-400 font-semibold">99.1%</span> satisfaction
+              <div className={`p-2.5 rounded-lg border font-mono text-[10px] ${
+                isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/80 rounded-lg border border-slate-700'
+              }`}>
+                <span className={`uppercase block mb-1 font-semibold ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Staff Performance Summary</span>
+                <p className={isLight ? 'text-[#1E293B]' : 'text-slate-200'}>
+                  <span className={`font-semibold ${isLight ? 'text-sky-700' : 'text-sky-300'}`}>Ravi:</span> 14 deliveries · <span className={`font-semibold ${isLight ? 'text-purple-700' : 'text-purple-300'}`}>Neha:</span> 11 servings · <span className={`font-semibold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>99.1%</span> satisfaction
                 </p>
               </div>
             </div>
@@ -1140,16 +1185,18 @@ export default function RightPanel({
   }, [selectedNodeId, onTabChange]);
 
   // ── Render (Unconditional hook execution guaranteed) ─────────────────────
+  const isLight = theme === 'light';
+
   return (
     <div className={`flex flex-col h-full w-80 min-w-0 shrink-0 select-none border-l transition-colors ${
-      theme === 'light'
-        ? 'bg-slate-50 border-slate-200 text-slate-900'
+      isLight
+        ? 'bg-[#F7FAFC] border-[#D7E3EF] text-[#1E293B]'
         : 'bg-slate-900 border-slate-700/60 text-slate-100'
     }`}>
       {/* Header */}
       <div className={`shrink-0 flex items-center justify-between px-3 py-2 border-b ${
-        theme === 'light'
-          ? 'bg-slate-100 border-slate-200'
+        isLight
+          ? 'bg-[#EEF3F8] border-[#D7E3EF]'
           : 'bg-slate-800/40 border-slate-700/60'
       }`}>
         <div className="flex gap-1">
@@ -1159,11 +1206,11 @@ export default function RightPanel({
               onClick={() => handleTabClick(tab.id)}
               className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                 activeTab === tab.id
-                  ? theme === 'light'
-                    ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
+                  ? isLight
+                    ? 'bg-white text-[#1E293B] shadow-sm border border-[#C9D7E6] font-bold'
                     : 'bg-slate-700 text-slate-100 shadow-sm'
-                  : theme === 'light'
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  : isLight
+                    ? 'text-[#64748B] hover:text-[#1E293B] hover:bg-white/60'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
               }`}
             >
@@ -1174,8 +1221,8 @@ export default function RightPanel({
         <button
           onClick={onClose}
           className={`p-1 rounded transition-colors cursor-pointer ${
-            theme === 'light'
-              ? 'hover:bg-slate-200 text-slate-500 hover:text-slate-800'
+            isLight
+              ? 'hover:bg-slate-200 text-[#64748B] hover:text-[#1E293B]'
               : 'hover:bg-slate-700 text-slate-400 hover:text-slate-200'
           }`}
           aria-label="Close panel"

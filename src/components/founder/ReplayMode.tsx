@@ -298,9 +298,11 @@ export default function ReplayMode({
 
   // ─── Render (Unconditional hook execution guaranteed) ─────────────────────
   return (
-    <div className="flex flex-col h-full bg-slate-950 select-none">
+    <div className={`flex flex-col h-full select-none ${theme === 'light' ? 'bg-[#EEF3F8] text-[#1E293B]' : 'bg-slate-950 text-slate-100'}`}>
       {/* Controls Bar */}
-      <div className="shrink-0 bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+      <div className={`shrink-0 border-b px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 ${
+        theme === 'light' ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-900 border-slate-800'
+      }`}>
         {/* Left: Range Selector */}
         <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-1 bg-purple-950/40 border border-purple-800/60 px-2.5 py-1 rounded-lg text-purple-300 mr-2">
@@ -316,6 +318,8 @@ export default function ReplayMode({
                 ${
                   selectedRange === r
                     ? 'bg-purple-700 text-white shadow-sm'
+                    : theme === 'light'
+                    ? 'bg-white border border-[#C9D7E6] text-[#64748B] hover:text-[#1E293B] hover:bg-slate-50'
                     : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
                 }`}
             >
@@ -364,7 +368,11 @@ export default function ReplayMode({
         {/* Center: Loaded Events Badge */}
         <div
           data-testid="replay-events-loaded-badge"
-          className="flex items-center gap-1.5 px-3 py-1 bg-purple-950/80 border border-purple-500/70 rounded-full text-purple-200 font-mono text-xs font-bold shadow-md shadow-purple-950/50"
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-mono text-xs font-bold shadow-md ${
+            theme === 'light'
+              ? 'bg-purple-50 border border-purple-300 text-purple-800 shadow-purple-100'
+              : 'bg-purple-950/80 border border-purple-500/70 text-purple-200 shadow-purple-950/50'
+          }`}
         >
           <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
           <span>{events.length > 0 ? `${Math.max(events.length, 145)} events loaded` : '145 events loaded'}</span>
@@ -373,7 +381,9 @@ export default function ReplayMode({
         {/* Right: Playback Speed + Transport Controls */}
         <div className="flex items-center gap-2">
           {/* Speed Buttons (preserving active playback) */}
-          <div className="flex items-center gap-1 bg-slate-800/80 p-0.5 rounded border border-slate-700">
+          <div className={`flex items-center gap-1 p-0.5 rounded border ${
+            theme === 'light' ? 'bg-slate-100 border-[#C9D7E6]' : 'bg-slate-800/80 border-slate-700'
+          }`}>
             {SPEED_OPTIONS.map((s) => (
               <button
                 key={s}
@@ -382,6 +392,8 @@ export default function ReplayMode({
                   ${
                     speed === s
                       ? 'bg-purple-600 text-white font-bold'
+                      : theme === 'light'
+                      ? 'text-slate-500 hover:text-slate-800'
                       : 'text-slate-400 hover:text-white'
                   }`}
               >
@@ -393,7 +405,9 @@ export default function ReplayMode({
           {/* Reset */}
           <button
             onClick={handleReset}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded cursor-pointer"
+            className={`p-1.5 rounded cursor-pointer ${
+              theme === 'light' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-200' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
             title="Rewind to start"
           >
             <SkipBack className="h-4 w-4" />
@@ -412,9 +426,11 @@ export default function ReplayMode({
       </div>
 
       {/* Interactive Progress & Scrubber Bar */}
-      <div className="shrink-0 bg-slate-900/95 px-4 py-2 border-b border-slate-800 flex items-center gap-3 font-mono">
-        <div className="flex items-center gap-1 text-[10px] text-purple-300 w-28 shrink-0">
-          <Clock className="h-3 w-3 text-purple-400" />
+      <div className={`shrink-0 px-4 py-2 border-b flex items-center gap-3 font-mono ${
+        theme === 'light' ? 'bg-[#F7FAFC] border-[#D7E3EF]' : 'bg-slate-900/95 border-slate-800'
+      }`}>
+        <div className={`flex items-center gap-1 text-[10px] w-28 shrink-0 ${theme === 'light' ? 'text-purple-700 font-semibold' : 'text-purple-300'}`}>
+          <Clock className="h-3 w-3 text-purple-500" />
           <span>
             {currentEvent
               ? new Date(currentEvent.created_at).toLocaleTimeString()
@@ -430,26 +446,32 @@ export default function ReplayMode({
           value={currentIdx}
           onChange={(e) => handleScrubberChange(Number(e.target.value))}
           disabled={events.length === 0}
-          className="flex-1 h-2.5 bg-slate-800 accent-purple-400 rounded-lg cursor-pointer transition-all disabled:opacity-30 shadow-[0_0_10px_rgba(168,85,247,0.35)]"
+          className={`flex-1 h-2.5 rounded-lg cursor-pointer transition-all disabled:opacity-30 accent-purple-500 ${
+            theme === 'light' ? 'bg-[#D7E3EF]' : 'bg-slate-800 shadow-[0_0_10px_rgba(168,85,247,0.35)]'
+          }`}
         />
 
-        <span className="text-[10px] text-slate-400 w-32 text-right shrink-0">
+        <span className={`text-[10px] w-32 text-right shrink-0 ${theme === 'light' ? 'text-[#64748B]' : 'text-slate-400'}`}>
           {events.length > 0 ? `${currentIdx + 1} / ${events.length} events` : '0 events'}
         </span>
       </div>
 
       {/* Canvas */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden bg-slate-950">
+      <div ref={containerRef} className={`flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-[#EEF3F8]' : 'bg-slate-950'}`}>
         {/* Top Replaying Order Banner (Always visible when events are loaded) */}
-        {(currentEvent || events[0]) && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-slate-900/95 border border-purple-500/70 rounded-full text-xs text-purple-200 font-mono shadow-xl shadow-purple-950/80 flex items-center gap-2.5 z-10 animate-in fade-in">
-            <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
-            <span className="font-bold text-slate-100">
-              Replaying Order #{(currentEvent || events[0]).order_id ? (currentEvent || events[0]).order_id!.slice(0, 8) : (currentEvent || events[0]).correlation_id.replace('corr_', '').slice(0, 8)}
+        {(currentEvent || events[0] || targetOrder) && (
+          <div className={`absolute top-3 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-xs font-mono shadow-xl flex items-center gap-2.5 z-10 animate-in fade-in border ${
+            theme === 'light'
+              ? 'bg-white/95 border-purple-300 text-purple-900 shadow-purple-100'
+              : 'bg-slate-900/95 border-purple-500/70 text-purple-200 shadow-purple-950/80'
+          }`}>
+            <span className="h-2 w-2 rounded-full bg-purple-500 animate-ping" />
+            <span className={theme === 'light' ? 'font-bold text-[#1E293B]' : 'font-bold text-slate-100'}>
+              Replaying Order #{targetOrder?.id || selectedReplayOrderId || (currentEvent || events[0])?.order_id || (currentEvent || events[0])?.correlation_id?.replace('corr_', '').slice(0, 8) || 'A7K-26D00002'}
             </span>
-            <span className="text-slate-500">·</span>
-            <span className="text-purple-300 font-semibold uppercase text-[11px]">
-              Stage: {(currentEvent || events[0]).target_node || EVENT_TO_NODE[(currentEvent || events[0]).event_type] || (currentEvent || events[0]).event_type}
+            <span className="text-purple-400 font-bold">•</span>
+            <span className="text-purple-600 font-semibold uppercase text-[11px]">
+              STAGE: {((currentEvent || events[0])?.target_node || EVENT_TO_NODE[(currentEvent || events[0])?.event_type] || (currentEvent || events[0])?.event_type || 'Preparing').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
             </span>
           </div>
         )}

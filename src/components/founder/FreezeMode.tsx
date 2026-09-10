@@ -295,9 +295,9 @@ export default function FreezeMode({
 
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full w-full bg-slate-950 text-slate-100 overflow-hidden select-none">
+    <div className={`flex flex-col h-full w-full overflow-hidden select-none ${theme === 'light' ? 'bg-[#EEF3F8] text-[#1E293B]' : 'bg-slate-950 text-slate-100'}`}>
       {/* ── Top Bar: Freeze Frame Moment Metrics (Part D) ────────────────── */}
-      <div className="h-14 shrink-0 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between gap-4">
+      <div className={`h-14 shrink-0 px-4 flex items-center justify-between gap-4 border-b ${theme === 'light' ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-900 border-slate-800'}`}>
         {/* Timestamp badge */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2 px-3 py-1.5 bg-cyan-950/60 border border-cyan-700/60 rounded-lg">
@@ -357,30 +357,36 @@ export default function FreezeMode({
       {/* ── Freeze Mode Onboarding Banner ─────────────────────────────────── */}
       <div
         data-testid="snapshot-frozen-banner"
-        className="shrink-0 bg-gradient-to-r from-cyan-950 via-slate-900 to-cyan-950 border-b border-cyan-700/60 px-4 py-2 font-mono text-xs flex flex-wrap items-center justify-between gap-2 shadow-inner"
+        className={`shrink-0 border-b px-4 py-2 font-mono text-xs flex flex-wrap items-center justify-between gap-2 shadow-inner ${
+          theme === 'light'
+            ? 'bg-[#EBF3FA] border-[#C9D7E6] text-[#1E293B]'
+            : 'bg-gradient-to-r from-cyan-950 via-slate-900 to-cyan-950 border-cyan-700/60 text-slate-100'
+        }`}
       >
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
-            <span className="font-bold text-cyan-200 tracking-wide">
+            <span className={`font-bold tracking-wide ${theme === 'light' ? 'text-[#0EA5E9]' : 'text-cyan-200'}`}>
               Snapshot frozen at {formattedScrubberTime}
             </span>
           </div>
-          <span className="text-cyan-400 font-bold">•</span>
+          <span className={theme === 'light' ? 'text-slate-400 font-bold' : 'text-cyan-400 font-bold'}>•</span>
           <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-600 text-rose-300 text-[10px] font-bold">
             Live updates paused
           </span>
-          <span className="text-cyan-400 font-bold">•</span>
-          <span className="text-slate-300 text-[11px] font-medium">
-            Click occupied tables to inspect historical state
+          <span className={theme === 'light' ? 'text-slate-400 font-bold' : 'text-cyan-400 font-bold'}>•</span>
+          <span className={theme === 'light' ? 'text-[#1E293B] text-[11px] font-medium' : 'text-slate-300 text-[11px] font-medium'}>
+            Click occupied tables
           </span>
-          <span className="text-cyan-400 font-bold">•</span>
-          <span className="text-purple-300 text-[11px] font-medium">
-            Ghost nodes represent future events.
+          <span className={theme === 'light' ? 'text-slate-400 font-bold' : 'text-cyan-400 font-bold'}>•</span>
+          <span className={theme === 'light' ? 'text-purple-600 text-[11px] font-medium' : 'text-purple-300 text-[11px] font-medium'}>
+            Ghost nodes show future events.
           </span>
         </div>
         <div className="flex items-center gap-2 text-[10px]">
-          <span className="text-cyan-300 font-semibold bg-cyan-950 px-2.5 py-0.5 rounded border border-cyan-800">
+          <span className={`font-semibold px-2.5 py-0.5 rounded border ${
+            theme === 'light' ? 'bg-white text-sky-700 border-[#C9D7E6]' : 'text-cyan-300 bg-cyan-950 border-cyan-800'
+          }`}>
             [Frozen]
           </span>
         </div>
@@ -389,7 +395,9 @@ export default function FreezeMode({
       {/* ── Main Work Area: Left Panel + Center Graph + Right Panel ──────── */}
       <div className="flex-1 flex overflow-hidden">
         {/* ── Left Panel: Floor Plan & Subsystems Time Travel (Part E & G) ─ */}
-        <div className="w-72 shrink-0 bg-slate-900/90 border-r border-slate-800 flex flex-col overflow-hidden relative">
+        <div className={`w-72 shrink-0 border-r flex flex-col overflow-hidden relative ${
+          theme === 'light' ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-900/90 border-slate-800'
+        }`}>
           {/* Subsystem tabs */}
           <div className="flex border-b border-slate-800 shrink-0 bg-slate-900">
             {([
@@ -706,7 +714,9 @@ export default function FreezeMode({
         </div>
 
         {/* ── Center: GraphCanvas with Historical Order Dots ──────────────── */}
-        <div ref={containerRef} className="flex-1 relative bg-slate-950 overflow-hidden">
+        <div ref={containerRef} className={`flex-1 relative overflow-hidden ${
+          theme === 'light' ? 'bg-[#EEF3F8]' : 'bg-slate-950'
+        }`}>
           {containerSize.width > 100 && (
             <GraphCanvas
               containerWidth={containerSize.width}
@@ -745,7 +755,9 @@ export default function FreezeMode({
         </div>
 
         {/* ── Right Panel: Journey Inspector OR Event Diff Compare ────────── */}
-        <div className="w-80 shrink-0 bg-slate-900/90 border-l border-slate-800 flex flex-col overflow-hidden">
+        <div className={`w-80 shrink-0 border-l flex flex-col overflow-hidden ${
+          theme === 'light' ? 'bg-[#F7FAFC] border-[#D7E3EF]' : 'bg-slate-900/90 border-slate-800'
+        }`}>
           {diffModeOpen ? (
             /* Event Difference Mode (Part H) */
             <div className="flex flex-col h-full overflow-hidden">
