@@ -166,6 +166,64 @@ export async function POST(req: Request) {
             cancellationReason: cancellationReason || null,
           },
         }).catch(() => {});
+
+        // ── Secondary cascade events for full pipeline coverage ──────────────
+        // After accepted → order moves to Kitchen Queue
+        if (effectiveStatus === 'accepted') {
+          logSystemEvent({
+            restaurantId: restId,
+            correlationId: stableCorrId,
+            orderId: targetOrderId,
+            actorType: 'kitchen',
+            eventType: 'order_preparing',  // Represents entering kitchen queue
+            sourceNode: 'live_orders',
+            targetNode: 'kitchen_queue',
+            metadata: { staffName, phase: 'kitchen_queue_entry' },
+          }).catch(() => {});
+        }
+
+        // After ready → auto waiter_assigned (waiter will serve next)
+        if (effectiveStatus === 'ready') {
+          logSystemEvent({
+            restaurantId: restId,
+            correlationId: stableCorrId,
+            orderId: targetOrderId,
+            actorType: 'waiter',
+            eventType: 'waiter_assigned',
+            sourceNode: 'ready',
+            targetNode: 'waiter_assigned',
+            metadata: { staffName, autoAssigned: true },
+          }).catch(() => {});
+        }
+
+        // After served → billing initiated
+        if (effectiveStatus === 'served') {
+          logSystemEvent({
+            restaurantId: restId,
+            correlationId: stableCorrId,
+            orderId: targetOrderId,
+            actorType: 'system',
+            eventType: 'bill_closed',
+            sourceNode: 'served',
+            targetNode: 'billing',
+            metadata: { staffName, billingPhase: 'bill_generated' },
+          }).catch(() => {});
+        }
+
+        // After completed → session closed
+        if (effectiveStatus === 'completed') {
+          logSystemEvent({
+            restaurantId: restId,
+            correlationId: stableCorrId,
+            orderId: targetOrderId,
+            actorType: 'system',
+            eventType: 'session_closed',
+            sourceNode: 'payment',
+            targetNode: 'session_closed',
+            metadata: { staffName },
+          }).catch(() => {});
+        }
+        // ────────────────────────────────────────────────────────────────────
       }
       // ─────────────────────────────────────────────────────────────────────
     }
