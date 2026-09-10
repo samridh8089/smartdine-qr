@@ -716,66 +716,9 @@ export default function GraphCanvas({
         })}
       </Layer>
 
-      {/* ── Layer 3: Order Dots with Continuous Halo ────────────────────────── */}
+      {/* ── Layer 3: Dynamic Telemetry (Waiter Movement & Arrival Pulse) ───── */}
       <Layer>
-        {GRAPH_NODES.map((node) => {
-          const dots = dotsByNode.get(node.id) ?? [];
-          const cx = nodeCentre(node).x;
-          const cy = nodeCentre(node).y;
-
-          return dots.map((dot, idx) => {
-            const offset = getDotOffset(idx, node.width, node.height);
-            const dx = cx + offset.x;
-            const dy = cy + offset.y;
-            const isFollowed = dot.orderId === followingOrderId;
-
-            return (
-              <Group
-                key={dot.orderId}
-                x={dx}
-                y={dy}
-                onClick={handleDotClick(dot)}
-                onTap={handleDotClick(dot)}
-              >
-                {/* Continuous halo ring for selected / followed order */}
-                {isFollowed && (
-                  <Circle
-                    radius={DOT_RADIUS + 5}
-                    fill="transparent"
-                    stroke="#38bdf8"
-                    strokeWidth={1.8}
-                    shadowColor="#38bdf8"
-                    shadowBlur={10}
-                    listening={false}
-                  />
-                )}
-                {/* Dot circle */}
-                <Circle
-                  radius={DOT_RADIUS}
-                  fill={dot.color}
-                  shadowColor={dot.color}
-                  shadowBlur={12}
-                  shadowOpacity={0.8}
-                  shadowEnabled
-                  stroke={isFollowed ? '#ffffff' : 'rgba(255,255,255,0.4)'}
-                  strokeWidth={isFollowed ? 1.5 : 0.8}
-                />
-                {/* Short ID label below dot */}
-                <Text
-                  text={dot.shortId}
-                  fontSize={9}
-                  fontFamily="'JetBrains Mono', 'Fira Code', monospace"
-                  fill="#f1f5f9"
-                  align="center"
-                  width={40}
-                  offsetX={20}
-                  y={DOT_RADIUS + 2}
-                  listening={false}
-                />
-              </Group>
-            );
-          });
-        })}
+        {/* Phase-28: No colored circles inside any node. Clean numbered badge only. */}
 
         {/* ── Animated Waiter Travel Route & Pulse: Neha Patel Table 4 -> Table 12 ── */}
         <Line
