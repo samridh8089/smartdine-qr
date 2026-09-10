@@ -51,8 +51,8 @@ export function useRestaurant() {
 }
 
 const ALLOWED_PATHS: Record<string, string[]> = {
-  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder'],
-  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder'],
+  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder', '/dashboard/founder/control-center'],
+  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder', '/dashboard/founder/control-center'],
   supervisor: ['/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu'],
   waiter: ['/dashboard/orders', '/dashboard/tables'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu'],
@@ -314,6 +314,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'M') {
         e.preventDefault();
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('founder_mode', 'true');
+        }
         router.push('/dashboard/founder/control-center');
       }
     };
@@ -364,6 +367,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Full RBAC navigation guard enforcing ALLOWED_PATHS[dbRole]
   useEffect(() => {
+    // Phase-19 Hotfix-R2: Bypass every dashboard redirect when pathname starts with /dashboard/founder
+    if (pathname?.startsWith('/dashboard/founder')) {
+      return;
+    }
+
     if (!loading && profile) {
       const allowed = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'];
       if (!allowed.includes(pathname)) {
@@ -507,6 +515,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 setLogoTapCount(nextCount);
                 if (nextCount >= 5) {
                   setLogoTapCount(0);
+                  if (typeof window !== 'undefined') {
+                    sessionStorage.setItem('founder_mode', 'true');
+                  }
                   router.push('/dashboard/founder/control-center');
                 } else {
                   logoTapTimerRef.current = setTimeout(() => setLogoTapCount(0), 3000);

@@ -33,9 +33,10 @@ export default function FounderControlCenterPage() {
   const router = useRouter();
   // All hooks FIRST — React Hook Safety Rule
   const { restaurant, profile, dbRole } = useRestaurant();
+  const [hasFounderSession, setHasFounderSession] = useState<boolean>(false);
 
-  // Access control check
-  const isAuthorized = useMemo(() => {
+  // Access control check: authorized role
+  const isRoleAuthorized = useMemo(() => {
     if (!profile) return false;
     return (
       dbRole === 'super_admin' ||
@@ -44,6 +45,22 @@ export default function FounderControlCenterPage() {
       dbRole === 'manager'
     );
   }, [profile, dbRole]);
+
+  const isAuthorized = hasFounderSession || isRoleAuthorized;
+
+  // Check sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('founder_mode') === 'true') {
+      setHasFounderSession(true);
+    }
+  }, []);
+
+  // Once authorized via role, persist founder session in sessionStorage
+  useEffect(() => {
+    if (isRoleAuthorized && typeof window !== 'undefined') {
+      sessionStorage.setItem('founder_mode', 'true');
+    }
+  }, [isRoleAuthorized]);
 
   useEffect(() => {
     if (profile && !isAuthorized) {

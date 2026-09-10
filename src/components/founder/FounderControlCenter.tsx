@@ -7,7 +7,8 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Activity, RotateCcw, PauseCircle, Network, Bug, Wifi, WifiOff, Zap } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Activity, RotateCcw, PauseCircle, Network, Bug, Wifi, WifiOff, Zap, LogOut } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LiveMode from './LiveMode';
 import ReplayMode from './ReplayMode';
@@ -31,11 +32,16 @@ const MODE_CONFIG: Array<{ id: FounderMode; label: string; icon: typeof Activity
 
 function readSavedMode(): FounderMode {
   if (typeof window === 'undefined') return 'live';
-  return (sessionStorage.getItem('founder_mode') as FounderMode) || 'live';
+  const tab = sessionStorage.getItem('founder_active_tab');
+  if (tab && ['live', 'replay', 'freeze', 'system', 'debug'].includes(tab)) {
+    return tab as FounderMode;
+  }
+  return 'live';
 }
 
 export default function FounderControlCenter({ restaurantId, profile }: FounderControlCenterProps) {
   // ─── All hooks FIRST (React Hook Safety Rule) ────────────────────────────
+  const router = useRouter();
   const [activeMode, setActiveMode] = useState<FounderMode>(readSavedMode);
   const [followingOrderId, setFollowingOrderId] = useState<string | null>(null);
   const [recorderEnabled, setRecorderEnabled] = useState<boolean>(() => {
@@ -68,7 +74,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const handleModeChange = useCallback((mode: FounderMode) => {
     setActiveMode(mode);
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('founder_mode', mode);
+      sessionStorage.setItem('founder_active_tab', mode);
     }
   }, []);
 
@@ -92,6 +98,14 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
       localStorage.setItem('founder_recorder_mode', mode);
     }
   }, []);
+
+  const handleExitFounderMode = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('founder_mode');
+      sessionStorage.removeItem('founder_active_tab');
+    }
+    router.push('/dashboard');
+  }, [router]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -199,6 +213,17 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               </p>
             </div>
           )}
+
+          {/* Exit Founder Mode */}
+          <button
+            onClick={handleExitFounderMode}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/50 hover:bg-rose-600 border border-rose-800/60 hover:border-rose-500 rounded-lg transition-all shadow-sm cursor-pointer ml-1"
+            title="Exit Founder Control Center"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Exit Founder Mode</span>
+            <span className="sm:hidden">Exit</span>
+          </button>
         </div>
       </div>
 
