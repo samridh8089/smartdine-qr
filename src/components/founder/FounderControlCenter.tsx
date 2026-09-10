@@ -72,6 +72,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     if (typeof window === 'undefined') return 'dark';
     return (localStorage.getItem('founder_theme') as 'dark' | 'light') || 'dark';
   });
+  const [confirmExitOpen, setConfirmExitOpen] = useState<boolean>(false);
   const [investigatedOrder, setInvestigatedOrder] = useState<InvestigatedOrder | null>(null);
   const [replayTargetOrder, setReplayTargetOrder] = useState<InvestigatedOrder | null>(null);
   const [freezeTargetTimestamp, setFreezeTargetTimestamp] = useState<number | null>(null);
@@ -136,6 +137,13 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     });
   }, []);
 
+  const handleSetTheme = useCallback((newTheme: 'dark' | 'light') => {
+    setTheme(newTheme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('founder_theme', newTheme);
+    }
+  }, []);
+
   const handleExitFounderMode = useCallback(() => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('founder_mode');
@@ -173,7 +181,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     handleModeChange('live');
   }, [handleModeChange]);
 
-  // Global keyboard shortcuts (Space Pause/Play, L Live, R Replay, F Freeze, Esc Close Drawer/Help)
+  // Global keyboard shortcuts (Space Pause/Play, L Live, R Replay, F Freeze, T Theme, Esc Close Drawer/Help)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
@@ -185,10 +193,13 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         handleModeChange('replay');
       } else if (e.key === 'f' || e.key === 'F') {
         handleModeChange('freeze');
+      } else if (e.key === 't' || e.key === 'T') {
+        handleToggleTheme();
       } else if (e.key === 'Escape') {
         setFollowingOrderId(null);
         setHelpOpen(false);
         setInvestigatedOrder(null);
+        setConfirmExitOpen(false);
       } else if (e.key === '?') {
         setHelpOpen((prev) => !prev);
       }
@@ -196,7 +207,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleModeChange]);
+  }, [handleModeChange, handleToggleTheme]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
@@ -324,19 +335,43 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             </div>
           )}
 
-          {/* Theme Toggle Button */}
-          <button
+          {/* Segmented Theme Switch (200ms animated thumb, shortcut T) */}
+          <div
             data-testid="btn-theme-toggle"
-            onClick={handleToggleTheme}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+            className={`relative flex items-center rounded-full p-0.5 border select-none shadow-inner transition-colors ${
               theme === 'light'
-                ? 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200 shadow-sm'
-                : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                ? 'bg-slate-200 border-slate-300'
+                : 'bg-slate-800 border-slate-700'
             }`}
-            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            title="Toggle theme (Shortcut: T)"
           >
-            <span>{theme === 'dark' ? '🌙 Dark' : '☀️ Light'}</span>
-          </button>
+            {/* Animated sliding thumb (200ms) */}
+            <div
+              className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-full transition-all duration-200 shadow-md ${
+                theme === 'dark'
+                  ? 'left-0.5 bg-slate-700 border border-slate-600'
+                  : 'left-[calc(50%+1px)] bg-amber-300 border border-amber-200'
+              }`}
+            />
+            <button
+              data-testid="theme-toggle-dark"
+              onClick={() => handleSetTheme('dark')}
+              className={`relative z-10 px-2.5 py-1 text-[11px] font-semibold rounded-full transition-colors cursor-pointer ${
+                theme === 'dark' ? 'text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              🌙 Dark
+            </button>
+            <button
+              data-testid="theme-toggle-light"
+              onClick={() => handleSetTheme('light')}
+              className={`relative z-10 px-2.5 py-1 text-[11px] font-semibold rounded-full transition-colors cursor-pointer ${
+                theme === 'light' ? 'text-slate-900 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              ☀️ Light
+            </button>
+          </div>
 
           {/* Help & Guide button */}
           <button
@@ -350,16 +385,20 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             <span className="sm:hidden">Help</span>
           </button>
 
-          {/* Exit Founder Mode */}
-          <button
-            onClick={handleExitFounderMode}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/50 hover:bg-rose-600 border border-rose-800/60 hover:border-rose-500 rounded-lg transition-all shadow-sm cursor-pointer"
-            title="Exit Founder Control Center"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Exit Founder Mode</span>
-            <span className="sm:hidden">Exit</span>
-          </button>
+          {/* Separate visual group: ≥24px spacing from Exit Founder Mode */}
+          <div className="ml-6 pl-6 border-l border-slate-800 flex items-center">
+            {/* Sticky/Prominent Exit Founder Mode with premium red outline, hover glow & danger confirmation */}
+            <button
+              data-testid="btn-exit-founder-mode"
+              onClick={() => setConfirmExitOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/50 hover:bg-rose-600 border border-rose-600/70 hover:border-rose-400 hover:shadow-[0_0_15px_rgba(244,63,94,0.4)] rounded-lg transition-all duration-200 shadow-sm cursor-pointer"
+              title="Exit Founder Control Center"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Exit Founder Mode</span>
+              <span className="sm:hidden">Exit</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -511,6 +550,45 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
                 className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold font-mono cursor-pointer transition-colors"
               >
                 Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Danger Exit Confirmation Modal ────────────────────────────── */}
+      {confirmExitOpen && (
+        <div
+          data-testid="confirm-exit-modal"
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
+        >
+          <div className="bg-slate-900 border border-rose-800/80 rounded-2xl max-w-md w-full shadow-2xl shadow-rose-950/50 overflow-hidden flex flex-col p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-950/80 border border-rose-700/60 text-rose-400">
+                <LogOut className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">Exit Founder Mode?</h3>
+                <p className="text-xs text-slate-400">Return to standard dashboard</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-300 font-mono leading-relaxed">
+              Are you sure you want to exit the Founder Control Center flight deck? You will be redirected to the normal restaurant operational dashboard.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                data-testid="btn-cancel-exit"
+                onClick={() => setConfirmExitOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold font-mono cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                data-testid="btn-confirm-exit"
+                onClick={handleExitFounderMode}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold font-mono cursor-pointer transition-colors shadow-md shadow-rose-900/50"
+              >
+                Confirm Exit
               </button>
             </div>
           </div>

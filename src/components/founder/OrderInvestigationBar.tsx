@@ -40,6 +40,7 @@ import type { SystemEvent } from './types';
 export interface InvestigatedOrder {
   id: string; // e.g. A7K-26D00001 or ord_table12
   correlationId: string;
+  sessionId?: string; // e.g. sess_tbl12_live
   tableName: string;
   customerName: string;
   waiterName: string;
@@ -61,6 +62,7 @@ export const SEED_INVESTIGATION_ORDERS: InvestigatedOrder[] = [
   {
     id: 'A7K-26D00001',
     correlationId: 'corr_a7k_26d00001_demo',
+    sessionId: 'sess_tbl12_live',
     tableName: 'Table 12',
     customerName: 'Rohan Verma',
     waiterName: 'Ravi Sharma',
@@ -88,6 +90,7 @@ export const SEED_INVESTIGATION_ORDERS: InvestigatedOrder[] = [
   {
     id: 'A7K-26D00002',
     correlationId: 'corr_table14_live',
+    sessionId: 'sess_tbl14_live',
     tableName: 'Table 14',
     customerName: 'Priya Mehta',
     waiterName: 'Ravi Sharma',
@@ -112,6 +115,7 @@ export const SEED_INVESTIGATION_ORDERS: InvestigatedOrder[] = [
   {
     id: 'A7K-26D00003',
     correlationId: 'corr_table16_ready',
+    sessionId: 'sess_tbl16_live',
     tableName: 'Table 16',
     customerName: 'Vikram Singh',
     waiterName: 'Neha Patel',
@@ -136,6 +140,7 @@ export const SEED_INVESTIGATION_ORDERS: InvestigatedOrder[] = [
   {
     id: 'A7K-26D00004',
     correlationId: 'corr_table6_recent',
+    sessionId: 'sess_tbl6_live',
     tableName: 'Table 6',
     customerName: 'Amit Sharma',
     waiterName: 'Ravi Sharma',
@@ -228,14 +233,18 @@ export default function OrderInvestigationBar({
 
       if (!q) return true;
 
+      const cleanQ = q.replace(/^#/, '');
       return (
-        order.id.toLowerCase().includes(q) ||
-        order.correlationId.toLowerCase().includes(q) ||
-        order.tableName.toLowerCase().includes(q) ||
-        order.customerName.toLowerCase().includes(q) ||
-        order.waiterName.toLowerCase().includes(q) ||
-        order.status.toLowerCase().includes(q) ||
-        order.items.some((it) => it.name.toLowerCase().includes(q))
+        order.id.toLowerCase().includes(cleanQ) ||
+        order.correlationId.toLowerCase().includes(cleanQ) ||
+        (order.sessionId && order.sessionId.toLowerCase().includes(cleanQ)) ||
+        order.tableName.toLowerCase().includes(cleanQ) ||
+        order.customerName.toLowerCase().includes(cleanQ) ||
+        order.waiterName.toLowerCase().includes(cleanQ) ||
+        order.status.toLowerCase().includes(cleanQ) ||
+        order.totalAmount.toString().includes(cleanQ) ||
+        order.createdAt.toLowerCase().includes(cleanQ) ||
+        order.items.some((it) => it.name.toLowerCase().includes(cleanQ))
       );
     });
   }, [allOrders, query, dateFilter]);
@@ -378,7 +387,7 @@ export default function OrderInvestigationBar({
             setQuery(e.target.value);
             setIsOpenDropdown(true);
           }}
-          placeholder="Investigate Order #, Table, Waiter, Customer… ('/')"
+          placeholder="Search Order ID / Session / Table / Waiter / Customer / Date / Bill... ('/')"
           className={`w-64 sm:w-80 md:w-96 pl-8 pr-16 py-1.5 text-xs font-mono rounded-lg border transition-all shadow-inner focus:outline-none focus:ring-1 ${
             isLight
               ? 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:ring-sky-500/20'
@@ -559,6 +568,17 @@ export default function OrderInvestigationBar({
                 <span className="text-[9px] text-slate-500 uppercase block">Kitchen Chef</span>
                 <span className="text-xs font-bold text-amber-300 block">{selectedOrder.chefName}</span>
                 <span className="text-[10px] text-slate-400">KDS Station #1</span>
+              </div>
+
+              <div className="col-span-2 p-2 bg-slate-850/80 rounded-lg border border-slate-800 flex items-center justify-between text-[10px]">
+                <div>
+                  <span className="text-slate-500 mr-1.5">Session:</span>
+                  <span className="text-teal-300 font-semibold">{selectedOrder.sessionId || 'sess_tbl12_live'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 mr-1.5">Audit Trail:</span>
+                  <span className="text-purple-300 font-semibold">{selectedOrder.auditTrailId}</span>
+                </div>
               </div>
             </div>
 
