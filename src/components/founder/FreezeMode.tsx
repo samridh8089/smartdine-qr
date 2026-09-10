@@ -362,21 +362,21 @@ export default function FreezeMode({
         <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
-            <span className="font-bold text-cyan-200 uppercase tracking-wide">
+            <span className="font-bold text-cyan-200 tracking-wide">
               Snapshot frozen at {formattedScrubberTime}
             </span>
           </div>
-          <span className="text-cyan-500/70 font-bold">·</span>
+          <span className="text-cyan-400 font-bold">•</span>
           <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-600 text-rose-300 text-[10px] font-bold">
-            Live updates paused.
+            Live updates paused
           </span>
-          <span className="text-cyan-500/70 font-bold">·</span>
-          <span className="text-slate-300 text-[11px] flex items-center gap-1 font-medium">
-            <span className="text-cyan-400">ℹ</span> Click occupied tables to inspect historical state.
+          <span className="text-cyan-400 font-bold">•</span>
+          <span className="text-slate-300 text-[11px] font-medium">
+            Click occupied tables to inspect historical state
           </span>
-          <span className="text-cyan-500/70 font-bold">·</span>
-          <span className="text-purple-300 text-[11px] flex items-center gap-1 font-medium">
-            <span className="text-purple-400">👻</span> Ghost nodes represent future events.
+          <span className="text-cyan-400 font-bold">•</span>
+          <span className="text-purple-300 text-[11px] font-medium">
+            Ghost nodes represent future events.
           </span>
         </div>
         <div className="flex items-center gap-2 text-[10px]">
