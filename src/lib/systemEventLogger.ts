@@ -71,7 +71,9 @@ export type SystemEventType =
   | 'session_closed'
   | 'push_sent'
   | 'push_failed'
-  | 'audit_written';
+  | 'audit_written'
+  | 'report_generated';
+
 
 
 // ─── Node Name Mapping ───────────────────────────────────────────────────────
@@ -89,7 +91,7 @@ const EVENT_SOURCE_NODE: Partial<Record<SystemEventType, string>> = {
   order_served: 'waiter_assigned',
   payment_success: 'billing',
   payment_failed: 'billing',
-  bill_closed: 'payment',
+  bill_closed: 'served',
   session_closed: 'payment',
   inventory_reserved: 'order_created',
   inventory_deducted: 'preparing',
@@ -100,6 +102,7 @@ const EVENT_SOURCE_NODE: Partial<Record<SystemEventType, string>> = {
   reservation_seated: 'order_created',
   push_sent: 'push_notifications',
   push_failed: 'push_notifications',
+  report_generated: 'session_closed',
 };
 
 const EVENT_TARGET_NODE: Partial<Record<SystemEventType, string>> = {
@@ -120,7 +123,7 @@ const EVENT_TARGET_NODE: Partial<Record<SystemEventType, string>> = {
   reservation_seated: 'live_orders',
   payment_success: 'payment',        // FIX: was 'session_closed' — payment event should land at payment node
   payment_failed: 'billing',
-  bill_closed: 'session_closed',
+  bill_closed: 'billing',
   session_closed: 'session_closed',
   inventory_reserved: 'inventory',
   inventory_deducted: 'inventory',
@@ -130,7 +133,9 @@ const EVENT_TARGET_NODE: Partial<Record<SystemEventType, string>> = {
   push_sent: 'push_notifications',   // FIX: was 'kitchen_queue'
   push_failed: 'push_notifications',
   audit_written: 'audit_logs',
+  report_generated: 'reports',
 };
+
 
 // ─── Correlation ID Generator ─────────────────────────────────────────────────
 
@@ -179,7 +184,9 @@ export const ESSENTIAL_SYSTEM_EVENTS = new Set<SystemEventType>([
   // Phase-21 additions
   'push_sent', 'audit_written', 'checkout_started',
   'qr_scanned', 'menu_opened', 'cart_updated',
+  'report_generated',
 ]);
+
 
 
 /**
