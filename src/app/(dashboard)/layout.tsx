@@ -456,6 +456,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isCurrentRouteLocked = Boolean(routeLockInfo && planSpec.features[routeLockInfo.key] === false);
 
   const isExpired = restaurant ? isSubscriptionExpired(restaurant) : false;
+  const isFounderRoute = pathname?.startsWith('/dashboard/founder');
+
+  if (isFounderRoute) {
+    return (
+      <RestaurantContext.Provider value={{ restaurant, profile, activeRole, dbRole, planSpec, refresh: checkAuth, alarmMuted, setAlarmMuted }}>
+        <PreviewModeProvider>
+          <div className="fixed inset-0 w-full h-full bg-slate-950 text-slate-100 overflow-hidden z-50">
+            {children}
+          </div>
+        </PreviewModeProvider>
+      </RestaurantContext.Provider>
+    );
+  }
 
   return (
     <RestaurantContext.Provider value={{ restaurant, profile, activeRole, dbRole, planSpec, refresh: checkAuth, alarmMuted, setAlarmMuted }}>
