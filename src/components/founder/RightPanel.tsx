@@ -147,7 +147,7 @@ function TimelineTab({ events, onNodeSelect }: TimelineTabProps) {
         {visible.map((ev) => {
           const expanded = expandedId === ev.id;
           return (
-            <div key={ev.id} className="group">
+            <div key={ev.id} className="group animate-in slide-in-from-top-1 duration-200">
               <button
                 onClick={() => handleEventRowClick(ev)}
                 className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/60 transition-colors cursor-pointer"
@@ -854,6 +854,7 @@ interface FlightRecorderTabProps {
 function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
   // ── 1. useState ──
   const [selectedCorrId, setSelectedCorrId] = useState<string | null>(() => selectedDot?.correlationId || null);
+  const [showAllEvents, setShowAllEvents] = useState<boolean>(false);
 
   // ── 2. useRef ──
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -971,86 +972,102 @@ function FlightRecorderTab({ selectedDot, events }: FlightRecorderTabProps) {
         {journey.length === 0 ? (
           <p className="text-slate-500 text-sm text-center mt-8 font-mono">No events found</p>
         ) : (
-          <ol className="relative border-l border-slate-700 ml-2 space-y-0">
-            {journey.map((ev, idx) => {
-              const isCurrent = idx === journey.length - 1;
-              const narrative = getEventNarrative(ev);
+          <div className="space-y-2">
+            {/* Collapsible accordion for older events if > 5 */}
+            {journey.length > 5 && (
+              <button
+                onClick={() => setShowAllEvents((prev) => !prev)}
+                className="w-full py-1 px-2 mb-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700 text-sky-400 rounded text-[10px] font-mono flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+              >
+                <span>{showAllEvents ? '▴ Collapse older steps' : `▾ Show ${journey.length - 4} earlier lifecycle events`}</span>
+              </button>
+            )}
 
-              return (
-                <li
-                  key={ev.id}
-                  className={`ml-4 pb-4 relative transition-all ${
-                    isCurrent
-                      ? 'bg-sky-950/30 p-2.5 rounded-lg border border-sky-500/50 shadow-md shadow-sky-950/50'
-                      : ''
-                  }`}
-                >
-                  {/* Dot on the timeline */}
-                  <span
-                    className={`absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${
-                      isCurrent ? 'bg-sky-400 animate-pulse' : 'bg-slate-600'
+            <ol className="relative border-l border-slate-700 ml-2 space-y-0">
+              {(showAllEvents || journey.length <= 5 ? journey : journey.slice(-4)).map((ev, idx, arr) => {
+                const isCurrent = idx === arr.length - 1;
+                const narrative = getEventNarrative(ev);
+
+                return (
+                  <li
+                    key={ev.id}
+                    className={`ml-4 pb-4 relative transition-all ${
+                      isCurrent
+                        ? 'bg-sky-950/40 p-3 rounded-xl border-2 border-sky-400/80 shadow-lg shadow-sky-950/60 ring-1 ring-sky-400/50'
+                        : ''
                     }`}
-                  />
-
-                  {/* Narrative Headline */}
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <p className={`text-xs font-semibold font-mono ${isCurrent ? 'text-sky-200 font-bold' : 'text-slate-200'}`}>
-                      {narrative}
-                    </p>
-                    {isCurrent && (
-                      <span
-                        data-testid="flight-current-stage"
-                        className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 uppercase font-mono animate-pulse"
-                      >
-                        Current
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {fmtTime(ev.created_at)}
-                    </span>
+                  >
+                    {/* Dot on the timeline */}
                     <span
-                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-medium ${badgeClass(
-                        ev.event_type
-                      )}`}
-                    >
-                      {ev.event_type}
-                    </span>
-                    {ev.duration_ms !== undefined && (
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {ev.duration_ms}ms
-                      </span>
-                    )}
-                  </div>
+                      className={`absolute -left-[21px] top-1 w-3 h-3 rounded-full border-2 border-slate-900 ${
+                        isCurrent ? 'bg-sky-400 animate-ping' : 'bg-slate-600'
+                      }`}
+                    />
 
-                  {/* source → target */}
-                  {(ev.source_node || ev.target_node) && (
-                    <div className="flex items-center gap-1 mt-1 text-[10px] font-mono">
-                      {ev.source_node && (
-                        <span className="text-slate-500">{ev.source_node}</span>
-                      )}
-                      {ev.source_node && ev.target_node && (
-                        <ArrowRight className="w-3 h-3 text-slate-600" />
-                      )}
-                      {ev.target_node && (
-                        <span className="text-sky-400 font-medium">{ev.target_node}</span>
+                    {/* Narrative Headline */}
+                    <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                      <p className={`text-xs font-semibold font-mono ${isCurrent ? 'text-sky-100 font-bold' : 'text-slate-200'}`}>
+                        {narrative}
+                      </p>
+                      {isCurrent && (
+                        <span
+                          data-testid="flight-current-stage"
+                          className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-sky-500/30 text-sky-200 border border-sky-400 uppercase font-mono shadow-[0_0_12px_rgba(56,189,248,0.5)] animate-pulse shrink-0"
+                        >
+                          ● Live Stage
+                        </span>
                       )}
                     </div>
-                  )}
 
-                  {/* Actor */}
-                  {ev.actor_type && (
-                    <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
-                      Actor: {ev.actor_type}
-                      {ev.actor_id ? ` (${truncate(ev.actor_id, 10)})` : ''}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 my-1">
+                      <span className="text-[10px] font-mono text-slate-400">
+                        {fmtTime(ev.created_at)}
+                      </span>
+                      <span
+                        className={`text-[9.5px] px-2 py-0.5 rounded font-mono font-semibold border border-white/10 ${badgeClass(
+                          ev.event_type
+                        )}`}
+                      >
+                        {ev.event_type}
+                      </span>
+                      {ev.duration_ms !== undefined && (
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {ev.duration_ms}ms
+                        </span>
+                      )}
+                    </div>
+
+                    {/* source → target */}
+                    {(ev.source_node || ev.target_node) && (
+                      <div className="flex items-center gap-1.5 mt-1 text-[10px] font-mono">
+                        {ev.source_node && (
+                          <span className="text-slate-400 font-medium">{ev.source_node}</span>
+                        )}
+                        {ev.source_node && ev.target_node && (
+                          <ArrowRight className="w-3 h-3 text-sky-500" />
+                        )}
+                        {ev.target_node && (
+                          <span className="text-sky-300 font-bold">{ev.target_node}</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Actor Avatar Chip */}
+                    {ev.actor_type && (
+                      <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-mono">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-1">
+                          {ev.actor_type === 'waiter' ? '👤 Waiter' : ev.actor_type === 'kitchen' ? '👨‍🍳 Kitchen' : ev.actor_type === 'customer' ? '📱 Guest' : '⚙️ Engine'}:
+                          <span className="text-sky-400 font-medium">
+                            {String((ev.metadata as any)?.waiter_name || (ev.actor_id ? truncate(ev.actor_id, 10) : 'CleverOps'))}
+                          </span>
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
         )}
         <div ref={bottomRef} />
       </div>

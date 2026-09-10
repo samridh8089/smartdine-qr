@@ -157,6 +157,28 @@ export default function FreezeMode({
     return ((clamped - minTimeMs) / (maxTimeMs - minTimeMs)) * 100;
   }, [minTimeMs, maxTimeMs, scrubberMs]);
 
+  // Future unreached nodes for Ghost Mode (25% opacity)
+  const futureNodeIds = useMemo<Set<string>>(() => {
+    const reached = new Set<string>();
+    for (const e of events) {
+      if (new Date(e.created_at).getTime() <= scrubberMs) {
+        if (e.target_node) reached.add(e.target_node);
+        if (e.source_node) reached.add(e.source_node);
+      }
+    }
+    const future = new Set<string>();
+    const pipeline = [
+      'qr_scan', 'customer_menu', 'cart', 'checkout',
+      'live_orders', 'kitchen_queue', 'preparing',
+      'ready', 'waiter_assigned', 'served',
+      'billing', 'payment', 'session_closed', 'reports',
+    ];
+    for (const nid of pipeline) {
+      if (!reached.has(nid)) future.add(nid);
+    }
+    return future;
+  }, [events, scrubberMs]);
+
   // ─── 4. useCallback ──────────────────────────────────────────────────────
   const handleSeekMs = useCallback((newMs: number) => {
     setScrubberMs(Math.max(minTimeMs, Math.min(maxTimeMs, newMs)));
@@ -337,25 +359,28 @@ export default function FreezeMode({
         data-testid="snapshot-frozen-banner"
         className="shrink-0 bg-gradient-to-r from-cyan-950 via-slate-900 to-cyan-950 border-b border-cyan-700/60 px-4 py-2 font-mono text-xs flex flex-wrap items-center justify-between gap-2 shadow-inner"
       >
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
             <span className="font-bold text-cyan-200 uppercase tracking-wide">
-              Snapshot frozen at {formattedScrubberTime}.
+              Snapshot frozen at {formattedScrubberTime}
             </span>
           </div>
+          <span className="text-cyan-500/70 font-bold">·</span>
           <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-600 text-rose-300 text-[10px] font-bold">
             Live updates paused.
           </span>
+          <span className="text-cyan-500/70 font-bold">·</span>
           <span className="text-slate-300 text-[11px] flex items-center gap-1 font-medium">
             <span className="text-cyan-400">ℹ</span> Click occupied tables to inspect historical state.
           </span>
+          <span className="text-cyan-500/70 font-bold">·</span>
           <span className="text-purple-300 text-[11px] flex items-center gap-1 font-medium">
             <span className="text-purple-400">👻</span> Ghost nodes represent future events.
           </span>
         </div>
         <div className="flex items-center gap-2 text-[10px]">
-          <span className="text-cyan-300 font-semibold bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+          <span className="text-cyan-300 font-semibold bg-cyan-950 px-2.5 py-0.5 rounded border border-cyan-800">
             [Frozen]
           </span>
         </div>
@@ -690,6 +715,8 @@ export default function FreezeMode({
               events={events.filter(e => new Date(e.created_at).getTime() <= scrubberMs)}
               followingOrderId={selectedOrderId}
               theme={theme}
+              ghostMode={ghostModeEnabled}
+              futureNodeIds={futureNodeIds}
               onNodeClick={() => {}}
               onDotClick={handleSelectDot}
             />

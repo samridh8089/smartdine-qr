@@ -51,6 +51,8 @@ interface GraphCanvasProps {
   followingOrderId: string | null;
   highlightedNodeId?: string | null;
   theme?: 'dark' | 'light';
+  ghostMode?: boolean;
+  futureNodeIds?: Set<string>;
   onNodeClick: (nodeId: string) => void;
   onDotClick: (dot: OrderDotState) => void;
   onStageReady?: (stage: Konva.Stage) => void;
@@ -137,6 +139,7 @@ interface NodeGroupProps {
   isHovered: boolean;
   isHighlighted?: boolean;
   isTriggering?: boolean;
+  isGhost?: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: () => void;
@@ -151,6 +154,7 @@ const NodeGroup = React.memo(function NodeGroup({
   isHovered,
   isHighlighted,
   isTriggering,
+  isGhost = false,
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -161,7 +165,7 @@ const NodeGroup = React.memo(function NodeGroup({
 
   const baseFill = isLight ? pastel.bg : (SOFT_DARK_COLORS[cat] || node.color);
   const rectFill = isTriggering
-    ? (isLight ? '#bae6fd' : '#0369a1')
+    ? (isLight ? '#bae6fd' : '#0284c7')
     : baseFill;
 
   const rectStroke = isTriggering
@@ -170,6 +174,8 @@ const NodeGroup = React.memo(function NodeGroup({
     ? '#38bdf8'
     : isHovered
     ? (isLight ? '#0284c7' : '#ffffff')
+    : isGhost
+    ? 'rgba(148, 163, 184, 0.4)'
     : (isLight ? pastel.border : 'rgba(255,255,255,0.18)');
 
   const labelFill = isLight ? pastel.text : '#ffffff';
@@ -183,10 +189,11 @@ const NodeGroup = React.memo(function NodeGroup({
     <Group
       x={node.x}
       y={node.y}
-      scaleX={isTriggering ? 1.04 : 1}
-      scaleY={isTriggering ? 1.04 : 1}
-      offsetX={isTriggering ? (node.width * 0.04) / 2 : 0}
-      offsetY={isTriggering ? (node.height * 0.04) / 2 : 0}
+      opacity={isGhost ? 0.25 : 1}
+      scaleX={isTriggering ? 1.05 : 1}
+      scaleY={isTriggering ? 1.05 : 1}
+      offsetX={isTriggering ? (node.width * 0.05) / 2 : 0}
+      offsetY={isTriggering ? (node.height * 0.05) / 2 : 0}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
@@ -200,10 +207,11 @@ const NodeGroup = React.memo(function NodeGroup({
         fill={rectFill}
         shadowEnabled={isHovered || !!isHighlighted || !!isTriggering || badgeCount > 0}
         shadowColor={isTriggering ? '#38bdf8' : isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : (isLight ? '#94a3b8' : '#0284c7')}
-        shadowBlur={isTriggering ? 20 : isHighlighted ? 18 : isHovered ? 14 : 8}
-        shadowOpacity={isLight ? (isHighlighted ? 0.45 : 0.25) : (isHighlighted || isTriggering ? 0.85 : 0.4)}
+        shadowBlur={isTriggering ? 26 : isHighlighted ? 18 : isHovered ? 14 : 8}
+        shadowOpacity={isLight ? (isHighlighted ? 0.45 : 0.25) : (isHighlighted || isTriggering ? 0.9 : 0.4)}
         stroke={rectStroke}
-        strokeWidth={isTriggering ? 2.5 : isHighlighted ? 2.2 : isHovered ? 1.5 : 1}
+        strokeWidth={isTriggering ? 2.8 : isHighlighted ? 2.2 : isHovered ? 1.5 : 1}
+        dash={isGhost ? [4, 4] : undefined}
       />
 
       {/* Subtle inner highlight strip */}
@@ -215,7 +223,7 @@ const NodeGroup = React.memo(function NodeGroup({
         listening={false}
       />
 
-      {/* Category Indicator Dot: x=6, y=11 with 29px+ distance to text */}
+      {/* Category Indicator Dot: x=6, y=11 */}
       <Circle
         x={6}
         y={11}
@@ -229,12 +237,12 @@ const NodeGroup = React.memo(function NodeGroup({
         listening={false}
       />
 
-      {/* Label: Generous 38px left margin guarantees 29px clear distance */}
+      {/* Label: x=46 (moved 8px farther from x=38, guaranteeing 40px clear distance, zero overlap at 100%, 125%, 150% zoom) */}
       <Text
         text={node.label}
-        x={38}
+        x={46}
         y={0}
-        width={node.width - 70}
+        width={node.width - 78}
         height={node.height}
         align="center"
         verticalAlign="middle"
@@ -246,15 +254,20 @@ const NodeGroup = React.memo(function NodeGroup({
         listening={false}
       />
 
-      {/* Numbered Badge at top-right (no text overlap, verified at 100%, 125%, 150% zoom) */}
+      {/* Numbered Badge at top-right with bounce animation on trigger */}
       {badgeCount > 0 && (
-        <Group x={node.width - 6} y={-4}>
+        <Group
+          x={node.width - 6}
+          y={isTriggering ? -10 : -4}
+          scaleX={isTriggering ? 1.25 : 1}
+          scaleY={isTriggering ? 1.25 : 1}
+        >
           <Circle
             radius={badgeCount > 9 ? 11.5 : 10}
             fill={badgeColor}
             shadowColor={badgeColor}
-            shadowBlur={isLight ? 4 : 8}
-            shadowOpacity={isLight ? 0.4 : 0.8}
+            shadowBlur={isTriggering ? 14 : isLight ? 4 : 8}
+            shadowOpacity={isLight ? 0.4 : 0.85}
             stroke={isLight ? '#ffffff' : '#0f172a'}
             strokeWidth={1.8}
           />
@@ -288,6 +301,8 @@ export default function GraphCanvas({
   followingOrderId,
   highlightedNodeId,
   theme = 'dark',
+  ghostMode = false,
+  futureNodeIds,
   onNodeClick,
   onDotClick,
   onStageReady,
@@ -515,7 +530,7 @@ export default function GraphCanvas({
   if (containerWidth === 0 || containerHeight === 0) return null;
 
   const isLight = theme === 'light';
-  const gridDotColor = isLight ? '#e2e8f0' : '#1e293b';
+  const gridDotColor = isLight ? '#cbd5e1' : '#1e293b';
 
   return (
     <Stage
@@ -562,6 +577,8 @@ export default function GraphCanvas({
             ((dotsByNode.get(edge.from)?.length || 0) > 0 || (dotsByNode.get(edge.to)?.length || 0) > 0);
           const isTriggering = activeTriggerNodeId === edge.from || activeTriggerNodeId === edge.to;
           const isEdgeGlowing = isEdgeHighlighted || isEdgeActive || isTriggering;
+          const isEdgeFuture = ghostMode && futureNodeIds && (futureNodeIds.has(edge.from) || futureNodeIds.has(edge.to));
+          const edgeOpacity = isEdgeFuture ? 0.25 : 1;
 
           const edgeColor = isEdgeGlowing
             ? '#38bdf8'
@@ -574,19 +591,19 @@ export default function GraphCanvas({
           const midY = (points[1] + points[3]) / 2;
 
           return (
-            <Group key={`edge-group-${edge.from}-${edge.to}`}>
+            <Group key={`edge-group-${edge.from}-${edge.to}`} opacity={edgeOpacity}>
               <Arrow
                 points={points}
                 stroke={edgeColor}
-                strokeWidth={isEdgeHighlighted || isTriggering ? 3 : isEdgeActive ? 2.5 : isMain ? 1.8 : 1}
+                strokeWidth={isTriggering ? 3.5 : isEdgeHighlighted ? 3 : isEdgeActive ? 2.5 : isMain ? 1.8 : 1}
                 fill={edgeColor}
                 shadowEnabled={isEdgeGlowing}
                 shadowColor="#38bdf8"
-                shadowBlur={isEdgeHighlighted || isTriggering ? 14 : 8}
+                shadowBlur={isTriggering ? 18 : isEdgeHighlighted ? 14 : 8}
                 pointerLength={isMain || isEdgeGlowing ? 8 : 6}
                 pointerWidth={isMain || isEdgeGlowing ? 6 : 4}
                 dashEnabled
-                dash={isEdgeGlowing ? [10, 6] : [5, 5]}
+                dash={isEdgeFuture ? [4, 4] : isTriggering ? [14, 4] : isEdgeGlowing ? [10, 6] : [5, 5]}
                 dashOffset={isEdgeGlowing ? dashOffset : 0}
                 lineCap="round"
                 lineJoin="round"
@@ -597,12 +614,12 @@ export default function GraphCanvas({
               {/* Active Flow Moving Particle */}
               {isEdgeGlowing && (
                 <Circle
-                  x={midX + (Math.sin(dashOffset * 0.05) * 20)}
+                  x={midX + (Math.sin(dashOffset * 0.08) * 35)}
                   y={midY}
-                  radius={2.5}
+                  radius={isTriggering ? 3.5 : 2.5}
                   fill="#38bdf8"
                   shadowColor="#38bdf8"
-                  shadowBlur={6}
+                  shadowBlur={isTriggering ? 14 : 6}
                   listening={false}
                 />
               )}
@@ -616,6 +633,7 @@ export default function GraphCanvas({
         {GRAPH_NODES.map((node) => {
           const dots = dotsByNode.get(node.id) ?? [];
           const count = badgeCountMap.get(node.id) || dots.length;
+          const isFuture = ghostMode && futureNodeIds ? futureNodeIds.has(node.id) : false;
           return (
             <NodeGroup
               key={node.id}
@@ -626,6 +644,7 @@ export default function GraphCanvas({
               isHovered={hoveredNodeId === node.id}
               isHighlighted={highlightedNodeId === node.id}
               isTriggering={activeTriggerNodeId === node.id}
+              isGhost={isFuture}
               onMouseEnter={handleNodeMouseEnter(node.id)}
               onMouseLeave={handleNodeMouseLeave}
               onClick={handleNodeClick(node.id)}

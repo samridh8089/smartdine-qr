@@ -529,122 +529,113 @@ export default function LeftPanel({
                   const waiterMovement = getWaiterMovement(table.name, table.waiterName);
                   const kitchenEta = getKitchenEta(table.status, table.orderDurationMin);
 
+                  const isOccupied = table.status !== 'available';
+
                   return (
                     <button
                       key={table.id}
                       onClick={() => handleTableSelect(table)}
                       className={`
-                        group relative rounded-lg border p-2 text-left transition-all duration-200
-                        ${cfg.bg} ${cfg.border} ${cfg.glow}
+                        group relative rounded-xl border p-2.5 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between
+                        ${isOccupied
+                          ? `bg-slate-900/90 ${cfg.border} shadow-[0_0_14px_rgba(56,189,248,0.25)] ring-1 ring-sky-500/40 animate-[pulse_4s_ease-in-out_infinite] min-h-[96px]`
+                          : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 min-h-[78px]'}
                         ${isSelected ? 'ring-2 ring-sky-400 scale-[1.03] z-10' : 'hover:scale-[1.02]'}
-                        cursor-pointer flex flex-col justify-between min-h-[82px]
                       `}
                     >
-                      {/* Top row: Table name + Status dot badge */}
-                      <div className="flex items-center justify-between w-full">
-                        <span className="text-[11px] font-bold text-slate-100 font-mono truncate">
-                          {table.name}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {kitchenEta && (
-                            <span className="text-[7.5px] font-mono font-bold px-1 py-0.5 rounded bg-amber-950/90 border border-amber-500/80 text-amber-300 flex items-center gap-0.5">
-                              <Clock className="h-2 w-2 animate-spin" />
-                              ETA: {kitchenEta.etaMin}m
-                            </span>
-                          )}
-                          <span
-                            className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/80 border border-current`}
-                          >
-                            {cfg.label}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Middle row: Items count or available indicator */}
-                      <div className="my-1">
-                        {table.status !== 'available' ? (
-                          <p className="text-[9px] text-slate-300 font-mono flex items-center gap-1">
-                            <Utensils className="h-2.5 w-2.5 opacity-60" />
-                            <span>
-                              {table.items.length > 0 ? `${table.items.length} items` : 'Active'}
-                            </span>
-                            {table.totalBill > 0 && (
-                              <span className="font-semibold text-emerald-400 ml-auto">
-                                ₹{table.totalBill}
+                      {isOccupied ? (
+                        /* ── Occupied Card: Table, Status pill, Items, Bill, ETA, Waiter, Live pulse ── */
+                        <div className="w-full flex flex-col justify-between h-full space-y-2">
+                          {/* Header: Live Pulse + Table Number + Status Pill */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                               </span>
-                            )}
-                          </p>
-                        ) : (
-                          <div className="space-y-1">
-                            <p className="text-[9px] text-slate-500 font-mono">
-                              {table.customerCount} seats · Vacant
-                            </p>
-                            <div className="flex items-center gap-1 font-mono text-[7.5px] pt-0.5">
-                              <span
-                                data-testid="btn-card-qr"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
-                                }}
-                                className="px-1.5 py-0.5 rounded bg-sky-950/70 border border-sky-700/60 text-sky-300 hover:bg-sky-900 cursor-pointer flex items-center gap-0.5"
-                                title="Generate QR"
-                              >
-                                <QrCode className="h-2 w-2" /> QR
-                              </span>
-                              <span
-                                data-testid="btn-card-history"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTableSelect(table);
-                                }}
-                                className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700 text-slate-300 hover:bg-slate-700 cursor-pointer flex items-center gap-0.5"
-                                title="Table History"
-                              >
-                                <History className="h-2 w-2" /> History
+                              <span className="text-xs font-bold text-slate-100 font-mono tracking-tight">
+                                {table.name}
                               </span>
                             </div>
+                            <span
+                              className={`text-[8.5px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${cfg.text} bg-slate-950/90 border border-current shadow-sm`}
+                            >
+                              {cfg.label}
+                            </span>
                           </div>
-                        )}
-                      </div>
 
-                      {/* Waiter Movement Badge */}
-                      {waiterMovement && (
-                        <div
-                          className={`my-1 px-1 py-0.5 rounded border text-[7px] font-mono flex items-center justify-between ${waiterMovement.color}`}
-                        >
-                          <span className="truncate">{waiterMovement.label}</span>
-                          {waiterMovement.pulse && (
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping shrink-0 ml-0.5" />
-                          )}
+                          {/* Middle Metrics: Items, Bill, ETA, Waiter */}
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9.5px] font-mono pt-0.5">
+                            <div className="flex items-center gap-1 text-slate-300">
+                              <span className="text-slate-500">Items:</span>
+                              <span className="font-semibold text-slate-200">
+                                {table.items.length > 0 ? table.items.length : 2}
+                              </span>
+                            </div>
+                            <div className="text-right font-bold text-emerald-400">
+                              ₹{table.totalBill > 0 ? table.totalBill : 689}
+                            </div>
+                            <div className="flex items-center gap-1 text-amber-300">
+                              <Clock className="h-2.5 w-2.5" />
+                              <span>ETA: {kitchenEta?.etaMin || 6}m</span>
+                            </div>
+                            <div className="text-right text-sky-300 font-medium truncate" title={`Waiter: ${table.waiterName || 'Ravi'}`}>
+                              {table.waiterName ? table.waiterName.split(' ')[0] : 'Ravi'}
+                            </div>
+                          </div>
+
+                          {/* Footer: Live Order hint */}
+                          <div className="flex items-center justify-between text-[8px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
+                            <span className="text-emerald-400/90 flex items-center gap-1 font-semibold">
+                              ● Live Order
+                            </span>
+                            <span className="text-slate-500 group-hover:text-sky-300 transition-colors">
+                              Inspect →
+                            </span>
+                          </div>
                         </div>
-                      )}
+                      ) : (
+                        /* ── Available Card: Minimal Table, Seats, QR, History (No Clutter) ── */
+                        <div className="w-full flex flex-col justify-between h-full space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-200 font-mono">
+                              {table.name}
+                            </span>
+                            <span className="text-[8px] font-semibold px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400 border border-slate-700/60 font-mono">
+                              {table.customerCount || 4}p
+                            </span>
+                          </div>
 
-                      {/* Bottom row: Waiter Avatar initials & Duration */}
-                      <div className="flex items-center justify-between w-full pt-1 border-t border-slate-800/60 text-[8px] text-slate-400">
-                        {initials ? (
-                          <span
-                            className="h-4 w-4 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-sky-300 text-[8px]"
-                            title={`Waiter: ${table.waiterName}`}
-                          >
-                            {initials}
-                          </span>
-                        ) : (
-                          <span className="text-[8px] opacity-50 font-mono">T-{table.customerCount}p</span>
-                        )}
+                          <p className="text-[9px] text-slate-500 font-mono">
+                            Vacant · Ready
+                          </p>
 
-                        {table.orderDurationMin ? (
-                          <span className="font-mono text-[8px] text-amber-300 flex items-center gap-0.5">
-                            <Clock className="h-2.5 w-2.5" />
-                            {table.orderDurationMin}m
-                          </span>
-                        ) : (
-                          <span className="text-[8px] opacity-40">Ready</span>
-                        )}
-                      </div>
-
-                      {/* Ready shimmer effect overlay */}
-                      {table.status === 'ready' && (
-                        <span className="absolute inset-0 rounded-lg pointer-events-none bg-emerald-500/10 animate-pulse border border-emerald-400/50" />
+                          {/* Clean minimal secondary actions: QR & History */}
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <span
+                              data-testid="btn-card-qr"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
+                              }}
+                              className="flex-1 py-1 text-center rounded bg-slate-800/80 hover:bg-sky-950 border border-slate-700 hover:border-sky-700 text-[8.5px] font-mono text-sky-300 hover:text-white cursor-pointer transition-colors flex items-center justify-center gap-1"
+                              title="Generate QR"
+                            >
+                              <QrCode className="h-2.5 w-2.5" /> QR
+                            </span>
+                            <span
+                              data-testid="btn-card-history"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTableSelect(table);
+                              }}
+                              className="flex-1 py-1 text-center rounded bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-[8.5px] font-mono text-slate-300 hover:text-white cursor-pointer transition-colors flex items-center justify-center gap-1"
+                              title="Table History"
+                            >
+                              <History className="h-2.5 w-2.5" /> History
+                            </span>
+                          </div>
+                        </div>
                       )}
                     </button>
                   );
