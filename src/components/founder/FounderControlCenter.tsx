@@ -314,35 +314,37 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className={`flex flex-col w-full h-full overflow-hidden transition-colors ${
-      theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-slate-950 text-slate-100'
+      theme === 'light' ? 'bg-[#EEF3F8] text-[#1E293B]' : 'bg-slate-950 text-slate-100'
     }`}>
-      {/* ── Top Bar ──────────────────────────────────────────────────────── */}
+      {/* ── Top Bar (Strict Order: Live → Replay → Freeze → System → Debug → Search → Theme → Help → Exit) ── */}
       <div
         data-testid="founder-top-bar"
-        className={`h-12 shrink-0 flex items-center gap-3 px-4 border-b transition-colors overflow-x-auto lg:overflow-visible ${
-        theme === 'light' ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900 border-slate-800'
+        className={`h-14 shrink-0 flex items-center gap-3 px-4 border-b transition-colors overflow-x-auto lg:overflow-visible ${
+        theme === 'light' ? 'bg-[#F6F8FB] border-[#D7E3EF] shadow-sm text-[#1E293B]' : 'bg-slate-900 border-slate-800 text-slate-100'
       }`}>
         {/* Title */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-          <span className="text-xs font-bold text-slate-100 tracking-wide hidden sm:block">
+        <div className="flex items-center gap-2 shrink-0 mr-1">
+          <div className="h-2.5 w-2.5 rounded-full bg-rose-500 animate-pulse" />
+          <span className={`text-xs font-bold tracking-wide hidden sm:block ${theme === 'light' ? 'text-[#1E293B]' : 'text-slate-100'}`}>
             Founder Control Center
           </span>
-          <span className="text-xs font-bold text-slate-100 tracking-wide sm:hidden">
+          <span className={`text-xs font-bold tracking-wide sm:hidden ${theme === 'light' ? 'text-[#1E293B]' : 'text-slate-100'}`}>
             FCC
           </span>
         </div>
 
-        {/* Mode tabs */}
-        <div className="flex items-center gap-0.5 bg-slate-800 rounded-lg p-0.5 shrink-0">
+        {/* 1. Mode tabs: Live → Replay → Freeze → System → Debug */}
+        <div className={`flex items-center gap-0.5 rounded-lg p-0.5 shrink-0 border ${
+          theme === 'light' ? 'bg-[#E2E8F0] border-[#CBD5E1]' : 'bg-slate-800 border-slate-700/60'
+        }`}>
           {MODE_CONFIG.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => handleModeChange(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all
                 ${activeMode === id
-                  ? 'bg-slate-700 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}
+                  ? theme === 'light' ? 'bg-white text-[#1E293B] shadow-sm font-bold' : 'bg-slate-700 text-white shadow-sm font-bold'
+                  : theme === 'light' ? 'text-[#64748B] hover:text-[#1E293B] hover:bg-white/60' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}
             >
               <Icon className="h-3.5 w-3.5" />
               <span className="hidden sm:block">{label}</span>
@@ -350,7 +352,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           ))}
         </div>
 
-        {/* ── Phase-25: Persistent Global Order Investigation Bar ── */}
+        {/* 2. Search: Global Order Investigation Bar */}
         <div className="hidden sm:flex items-center ml-1">
           <OrderInvestigationBar
             restaurantId={restaurantId}
@@ -365,74 +367,29 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           />
         </div>
 
-        {/* Phase-28: Global Command Palette Trigger Button (Ctrl+K / Cmd+K) */}
+        {/* Command Palette Trigger Button (Ctrl+K / Cmd+K) */}
         <button
           data-testid="btn-command-palette-trigger"
           onClick={() => setCommandPaletteOpen(true)}
-          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 text-xs bg-slate-800/80 hover:bg-slate-700 border border-slate-700/80 rounded-lg text-slate-300 hover:text-white transition-all shadow-sm cursor-pointer ml-1"
+          className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-lg transition-all shadow-sm cursor-pointer ml-1 ${
+            theme === 'light'
+              ? 'bg-white hover:bg-slate-50 border-[#C9D7E6] text-[#1E293B]'
+              : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700/80 text-slate-300 hover:text-white'
+          }`}
           title="Command Palette (Ctrl+K or Cmd+K)"
         >
           <Command className="h-3.5 w-3.5 text-sky-400" />
-          <span className="font-mono text-[10px] text-slate-400">Ctrl+K</span>
+          <span className={`font-mono text-[10px] ${theme === 'light' ? 'text-[#64748B]' : 'text-slate-400'}`}>Ctrl+K</span>
         </button>
 
-        {/* ── Event Recorder Controls ── */}
-        <div className="hidden 2xl:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
-          <button
-            onClick={handleToggleRecorder}
-            className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
-              recorderEnabled
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/50'
-                : 'bg-slate-700 text-slate-400'
-            }`}
-            title={recorderEnabled ? 'Click to turn Event Recorder OFF' : 'Click to turn Event Recorder ON'}
-          >
-            <div className={`h-1.5 w-1.5 rounded-full ${recorderEnabled ? 'bg-white animate-pulse' : 'bg-slate-500'}`} />
-            <span>Recorder: {recorderEnabled ? 'ON' : 'OFF'}</span>
-          </button>
-
-          {recorderEnabled && (
-            <div className="flex items-center bg-slate-900 rounded p-0.5 text-[9px] font-mono border border-slate-700/50">
-              <button
-                onClick={() => handleSetRecorderMode('production')}
-                className={`px-1.5 py-0.5 rounded transition-colors ${
-                  recorderMode === 'production'
-                    ? 'bg-blue-600 text-white font-bold'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Production mode: Essential events only (orders, transitions, payments)"
-              >
-                Prod (Essential)
-              </button>
-              <button
-                onClick={() => handleSetRecorderMode('test')}
-                className={`px-1.5 py-0.5 rounded transition-colors ${
-                  recorderMode === 'test'
-                    ? 'bg-purple-600 text-white font-bold'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-                title="Test mode: Verbose (QR scan, cart update, API timings)"
-              >
-                Test (Verbose)
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Right side: connection + stats */}
+        {/* Right side controls */}
         <div className="ml-auto flex items-center gap-3 shrink-0">
-          {/* Total events */}
-          <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 rounded-full">
-            <Zap className="h-3 w-3 text-amber-400" />
-            <span className="text-[10px] text-slate-400 font-mono">
-              {totalEventCount.toLocaleString()} events
-            </span>
-          </div>
-
           {/* Realtime connection status */}
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 ${statusColor}`}>
+          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
+            theme === 'light' ? 'bg-white border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-800 border-slate-700'
+          } ${statusColor}`}>
             {isConnected
-              ? <Wifi className="h-3.5 w-3.5" />
+              ? <Wifi className="h-3.5 w-3.5 text-emerald-500" />
               : <WifiOff className="h-3.5 w-3.5" />
             }
             <span className="text-[10px] font-medium hidden sm:block">{statusLabel}</span>
@@ -441,73 +398,83 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             )}
           </div>
 
-          {/* Restaurant info */}
-          {profile && (
-            <div className="hidden lg:block text-right">
-              <p className="text-[9px] text-slate-500 truncate max-w-32">
-                {profile.full_name || profile.email || 'Founder'}
-              </p>
-            </div>
-          )}
-
-          {/* Segmented Theme Switch (200ms animated thumb, shortcut T) */}
+          {/* 3. Theme: One animated segmented control pill (200ms sliding thumb, T shortcut, localStorage persistence, ≥24px from Help) */}
           <div
             data-testid="btn-theme-toggle"
-            className={`relative flex items-center rounded-full p-0.5 border select-none shadow-inner transition-colors ${
+            role="switch"
+            aria-checked={theme === 'dark'}
+            tabIndex={0}
+            onClick={handleToggleTheme}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleToggleTheme();
+              }
+            }}
+            className={`relative flex items-center h-8 w-36 rounded-full p-0.5 border cursor-pointer select-none transition-colors duration-200 mr-6 ${
               theme === 'light'
-                ? 'bg-slate-200 border-slate-300'
+                ? 'bg-[#E2E8F0] border-[#CBD5E1]'
                 : 'bg-slate-800 border-slate-700'
             }`}
-            title="Toggle theme (Shortcut: T)"
+            title="Toggle theme: Dark / Light (Shortcut: T)"
           >
-            {/* Animated sliding thumb (200ms) */}
+            {/* Sliding Thumb (200ms) */}
             <div
               className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-full transition-all duration-200 shadow-md ${
                 theme === 'dark'
-                  ? 'left-0.5 bg-slate-700 border border-slate-600'
-                  : 'left-[calc(50%+1px)] bg-amber-300 border border-amber-200'
+                  ? 'left-0.5 bg-slate-900 border border-slate-700 shadow-slate-950/50'
+                  : 'left-[calc(50%+1px)] bg-white border border-[#CBD5E1] shadow-sm'
               }`}
             />
-            <button
-              data-testid="theme-toggle-dark"
-              onClick={() => handleSetTheme('dark')}
-              className={`relative z-10 px-2.5 py-1 text-[11px] font-semibold rounded-full transition-colors cursor-pointer ${
+            {/* Dark Side */}
+            <div
+              className={`relative z-10 flex-1 flex items-center justify-center gap-1 text-[11px] font-semibold transition-colors duration-200 ${
                 theme === 'dark' ? 'text-white font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              🌙 Dark
-            </button>
-            <button
-              data-testid="theme-toggle-light"
-              onClick={() => handleSetTheme('light')}
-              className={`relative z-10 px-2.5 py-1 text-[11px] font-semibold rounded-full transition-colors cursor-pointer ${
-                theme === 'light' ? 'text-slate-900 font-bold' : 'text-slate-400 hover:text-slate-200'
+              <span>🌙</span>
+              <span>Dark</span>
+            </div>
+            {/* Light Side */}
+            <div
+              className={`relative z-10 flex-1 flex items-center justify-center gap-1 text-[11px] font-semibold transition-colors duration-200 ${
+                theme === 'light' ? 'text-[#1E293B] font-bold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              ☀️ Light
-            </button>
+              <span>☀️</span>
+              <span>Light</span>
+            </div>
           </div>
 
-          {/* Help & Guide button */}
+          {/* 4. Help: Help & Guide button */}
           <button
             data-testid="btn-help-guide"
             onClick={handleToggleHelp}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-300 hover:text-white bg-sky-950/60 hover:bg-sky-600 border border-sky-800/60 hover:border-sky-500 rounded-lg transition-all shadow-sm cursor-pointer ml-1"
-            title="Open Interactive Demo & Walkthrough Guide"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer border ${
+              theme === 'light'
+                ? 'bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 hover:border-sky-300'
+                : 'text-sky-300 hover:text-white bg-sky-950/60 hover:bg-sky-600 border-sky-800/60 hover:border-sky-500'
+            }`}
+            title="Open Interactive Demo & Walkthrough Guide (Shortcut: ?)"
           >
             <HelpCircle className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Help & Guide</span>
             <span className="sm:hidden">Help</span>
           </button>
 
-          {/* Separate visual group: ≥24px spacing from Exit Founder Mode */}
-          <div className="ml-6 pl-6 border-l border-slate-800 flex items-center">
-            {/* Sticky/Prominent Exit Founder Mode with premium red outline, hover glow & danger confirmation */}
+          {/* 5. Exit: Separate visual group (≥24px spacing from Help) */}
+          <div className={`ml-6 pl-6 border-l flex items-center ${
+            theme === 'light' ? 'border-[#D7E3EF]' : 'border-slate-800'
+          }`}>
             <button
               data-testid="btn-exit-founder-mode"
               onClick={() => setConfirmExitOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/50 hover:bg-rose-600 border border-rose-600/70 hover:border-rose-400 hover:shadow-[0_0_15px_rgba(244,63,94,0.4)] rounded-lg transition-all duration-200 shadow-sm cursor-pointer"
-              title="Exit Founder Control Center"
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 shadow-sm cursor-pointer border ${
+                theme === 'light'
+                  ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-600 hover:text-white hover:border-rose-600 hover:shadow-[0_0_12px_rgba(244,63,94,0.3)]'
+                  : 'text-rose-300 hover:text-white bg-rose-950/50 hover:bg-rose-600 border-rose-600/70 hover:border-rose-400 hover:shadow-[0_0_15px_rgba(244,63,94,0.4)]'
+              }`}
+              title="Exit Founder Control Center (Shortcut: Esc)"
             >
               <LogOut className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Exit Founder Mode</span>
