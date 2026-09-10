@@ -377,7 +377,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         </button>
 
         {/* ── Event Recorder Controls ── */}
-        <div className="hidden xl:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
+        <div className="hidden 2xl:flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 rounded-lg px-2.5 py-1">
           <button
             onClick={handleToggleRecorder}
             className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
@@ -422,7 +422,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         {/* Right side: connection + stats */}
         <div className="ml-auto flex items-center gap-3 shrink-0">
           {/* Total events */}
-          <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 rounded-full">
+          <div className="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 bg-slate-800 rounded-full">
             <Zap className="h-3 w-3 text-amber-400" />
             <span className="text-[10px] text-slate-400 font-mono">
               {totalEventCount.toLocaleString()} events
