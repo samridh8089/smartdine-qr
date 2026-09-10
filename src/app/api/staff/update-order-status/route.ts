@@ -5,6 +5,7 @@ import { healUnconsumedActiveReservations } from '@/lib/inventoryEngine';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
+import { logSystemEvent, generateCorrelationId, type SystemEventType } from '@/lib/systemEventLogger';
 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -122,6 +123,32 @@ export async function POST(req: Request) {
 
       // Background reservation healing (non-blocking)
       healUnconsumedActiveReservations(restId).catch(() => {});
+
+      // ─── Phase-19: Event Bus — fire-and-forget ───────────────────────────
+      const statusToEvent: Record<string, SystemEventType> = {
+        accepted: 'order_accepted',
+        preparing: 'order_preparing',
+        ready: 'order_ready',
+        served: 'order_served',
+        cancelled: 'order_cancelled',
+        completed: 'order_completed',
+      };
+      const evtType = statusToEvent[effectiveStatus];
+      if (evtType) {
+        logSystemEvent({
+          restaurantId: restId,
+          correlationId: generateCorrelationId(),
+          orderId: targetOrderId,
+          actorType: 'staff',
+          eventType: evtType,
+          metadata: {
+            staffName,
+            batchId: batchId || null,
+            cancellationReason: cancellationReason || null,
+          },
+        }).catch(() => {});
+      }
+      // ─────────────────────────────────────────────────────────────────────
     }
 
     const t_end = performance.now();
