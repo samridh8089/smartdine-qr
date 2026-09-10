@@ -153,6 +153,23 @@ export default function LiveMode({
     };
   }, []);
 
+  // Synchronize followingOrderId with selectedDot and flight tab
+  useEffect(() => {
+    if (followingOrderId) {
+      const dot = orderDots.find(
+        (d) => d.orderId === followingOrderId || d.correlationId === followingOrderId
+      );
+      if (dot) {
+        setSelectedDot(dot);
+        setSelectedNodeId(dot.currentNodeId);
+        setHighlightedNodeId(dot.currentNodeId);
+        setRightPanelTab('flight');
+      } else {
+        setRightPanelTab('timeline');
+      }
+    }
+  }, [followingOrderId, orderDots]);
+
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
     <div className={`flex h-full overflow-hidden select-none ${theme === 'light' ? 'bg-slate-100' : 'bg-slate-950'}`}>

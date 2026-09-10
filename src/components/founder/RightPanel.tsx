@@ -602,6 +602,22 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
                   </span>
                 </div>
               </div>
+
+              {/* Inventory Lifecycle Actions Animation */}
+              <div className="flex items-center gap-1.5 pt-1 text-[9px] font-mono">
+                <span className="px-2 py-0.5 rounded bg-teal-950/80 border border-teal-500/80 text-teal-300 font-bold flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-teal-400 animate-ping" />
+                  Reserve
+                </span>
+                <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/80 text-amber-300 font-bold flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  Deduct
+                </span>
+                <span className="px-2 py-0.5 rounded bg-sky-950/80 border border-sky-500/80 text-sky-300 font-bold flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+                  Restore
+                </span>
+              </div>
             </div>
           )}
 

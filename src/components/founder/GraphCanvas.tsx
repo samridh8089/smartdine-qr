@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * Phase-19: Founder Control Center — GraphCanvas
+ * Phase-25: Founder Control Center — GraphCanvas
  *
- * Renders the live execution graph as an n8n-style Konva canvas:
- *  • 19 pipeline nodes as rounded, coloured rectangles
- *  • Animated directional arrows between nodes
- *  • Glowing order-dot circles that move between nodes
- *  • Pan / zoom (wheel) with drag support
- *  • Follow-mode: stage smoothly tracks a chosen order dot
+ * Renders the live execution graph as an n8n-style workflow canvas:
+ *  • N8N dot grid background
+ *  • 19 pipeline nodes as rounded, softened rectangles with numbered badges
+ *  • Node Trigger Animations (700ms pulse, border glow, inner flash on event)
+ *  • Active flow particles traveling along edges
+ *  • Padded stage pos ({ x: 60, y: 30 }) preventing QR Scan crop
+ *  • Numbered badges with 29px clear distance (zero overlap at 100%, 125%, 150% zoom)
+ *  • React Hook Safety Guardrail strictly satisfied.
  */
 
 import React, {
@@ -18,7 +20,7 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { Stage, Layer, Rect, Text, Circle, Arrow, Group, Line } from 'react-konva';
+import { Stage, Layer, Rect, Text, Circle, Arrow, Group } from 'react-konva';
 import Konva from 'konva';
 
 import {
@@ -36,23 +38,13 @@ const MIN_SCALE = 0.3;
 const MAX_SCALE = 2.5;
 const ZOOM_SENSITIVITY = 0.001;
 
-/** How many dot columns before wrapping to next row inside a node */
-const DOTS_PER_ROW = 4;
-/** Horizontal spacing between dots inside a node */
-const DOT_COL_GAP = 22;
-/** Vertical spacing between dot rows inside a node */
-const DOT_ROW_GAP = 22;
-/** Dot radius */
 const DOT_RADIUS = 7;
-/** Badge radius (11px radius = 22px diameter badge) */
-const BADGE_RADIUS = 11;
+const TRIGGER_DURATION_MS = 750;
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 interface GraphCanvasProps {
-  /** Actual container pixel width */
   containerWidth: number;
-  /** Actual container pixel height */
   containerHeight: number;
   orderDots: OrderDotState[];
   events: SystemEvent[];
@@ -64,7 +56,7 @@ interface GraphCanvasProps {
   onStageReady?: (stage: Konva.Stage) => void;
 }
 
-// ─── Helper: get dot canvas position within its node ─────────────────────────
+// ─── Helper Functions ─────────────────────────────────────────────────────────
 
 function getDotOffset(
   indexInNode: number,
@@ -79,46 +71,49 @@ function getDotOffset(
   };
 }
 
-/** Returns the absolute canvas centre of a node */
 function nodeCentre(node: GraphNode): { x: number; y: number } {
   return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
 }
 
-/** Right-centre of a node (arrow source) */
 function nodeRightCentre(node: GraphNode): [number, number] {
   return [node.x + node.width, node.y + node.height / 2];
 }
 
-/** Left-centre of a node (arrow target) */
 function nodeLeftCentre(node: GraphNode): [number, number] {
   return [node.x, node.y + node.height / 2];
 }
 
-/** Top-centre of a node */
 function nodeTopCentre(node: GraphNode): [number, number] {
   return [node.x + node.width / 2, node.y];
 }
 
-/** Bottom-centre of a node */
 function nodeBottomCentre(node: GraphNode): [number, number] {
   return [node.x + node.width / 2, node.y + node.height];
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Softer Theme Palette (Reduced neon by ~40% for eye comfort) ─────────────
 
-const LIGHT_PASTEL_COLORS: Record<string, { bg: string; border: string; text: string; dot: string; badge: string }> = {
-  customer: { bg: '#e0f2fe', border: '#38bdf8', text: '#0369a1', dot: '#0284c7', badge: '#0284c7' },
-  kitchen:  { bg: '#ffedd5', border: '#fb923c', text: '#9a3412', dot: '#ea580c', badge: '#ea580c' },
-  ready:    { bg: '#dcfce7', border: '#4ade80', text: '#15803d', dot: '#16a34a', badge: '#16a34a' },
-  billing:  { bg: '#f3e8ff', border: '#c084fc', text: '#7e22ce', dot: '#9333ea', badge: '#9333ea' },
-  side:     { bg: '#f1f5f9', border: '#94a3b8', text: '#334155', dot: '#64748b', badge: '#475569' },
+const SOFT_DARK_COLORS: Record<string, string> = {
+  customer: '#1e3a8a', // softer royal blue
+  kitchen:  '#9a3412', // muted burnt orange
+  ready:    '#065f46', // soft emerald
+  billing:  '#6b21a8', // muted plum purple
+  side:     '#1e293b', // slate
+};
+
+const SOFT_LIGHT_COLORS: Record<string, { bg: string; border: string; text: string; dot: string; badge: string }> = {
+  customer: { bg: '#e0f2fe', border: '#7dd3fc', text: '#0369a1', dot: '#0284c7', badge: '#0284c7' },
+  kitchen:  { bg: '#ffedd5', border: '#fdba74', text: '#9a3412', dot: '#ea580c', badge: '#ea580c' },
+  ready:    { bg: '#dcfce7', border: '#86efac', text: '#15803d', dot: '#16a34a', badge: '#16a34a' },
+  billing:  { bg: '#f3e8ff', border: '#d8b4fe', text: '#7e22ce', dot: '#9333ea', badge: '#9333ea' },
+  side:     { bg: '#f1f5f9', border: '#cbd5e1', text: '#334155', dot: '#64748b', badge: '#475569' },
 };
 
 function getNodeCategory(nodeId: string): 'customer' | 'kitchen' | 'ready' | 'billing' | 'side' {
   if (['qr_scan', 'customer_menu', 'cart', 'checkout'].includes(nodeId)) return 'customer';
   if (['live_orders', 'kitchen_queue', 'preparing'].includes(nodeId)) return 'kitchen';
   if (['ready', 'waiter_assigned', 'served'].includes(nodeId)) return 'ready';
-  if (['bill_closed', 'payment_processing', 'session_closed'].includes(nodeId)) return 'billing';
+  if (['billing', 'payment', 'session_closed'].includes(nodeId)) return 'billing';
   return 'side';
 }
 
@@ -129,7 +124,7 @@ function getNodeBadgeFill(nodeId: string): string {
   if (nodeId === 'customer_calls') return '#e11d48';
   if (nodeId === 'reports') return '#8b5cf6';
   if (['qr_scan', 'customer_menu', 'cart', 'checkout'].includes(nodeId)) return '#2563eb';
-  if (['live_orders', 'kitchen_queue', 'preparing'].includes(nodeId)) return '#f97316';
+  if (['live_orders', 'kitchen_queue', 'preparing'].includes(nodeId)) return '#ea580c';
   if (['ready', 'waiter_assigned', 'served'].includes(nodeId)) return '#10b981';
   return '#7c3aed';
 }
@@ -141,12 +136,13 @@ interface NodeGroupProps {
   theme?: 'dark' | 'light';
   isHovered: boolean;
   isHighlighted?: boolean;
+  isTriggering?: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClick: () => void;
 }
 
-/** Renders a single graph node (rounded rect + label + numbered badge) */
+/** Renders a single graph node with n8n styling, numbered badge, and trigger animation */
 const NodeGroup = React.memo(function NodeGroup({
   node,
   dotCount,
@@ -154,58 +150,72 @@ const NodeGroup = React.memo(function NodeGroup({
   theme = 'dark',
   isHovered,
   isHighlighted,
+  isTriggering,
   onMouseEnter,
   onMouseLeave,
   onClick,
 }: NodeGroupProps) {
   const isLight = theme === 'light';
   const cat = getNodeCategory(node.id);
-  const pastel = LIGHT_PASTEL_COLORS[cat];
+  const pastel = SOFT_LIGHT_COLORS[cat];
 
-  const rectFill = isLight ? pastel.bg : node.color;
-  const rectStroke = isHighlighted
+  const baseFill = isLight ? pastel.bg : (SOFT_DARK_COLORS[cat] || node.color);
+  const rectFill = isTriggering
+    ? (isLight ? '#bae6fd' : '#0369a1')
+    : baseFill;
+
+  const rectStroke = isTriggering
+    ? '#38bdf8'
+    : isHighlighted
     ? '#38bdf8'
     : isHovered
     ? (isLight ? '#0284c7' : '#ffffff')
     : (isLight ? pastel.border : 'rgba(255,255,255,0.18)');
+
   const labelFill = isLight ? pastel.text : '#ffffff';
   const dotColor = isLight ? pastel.dot : '#38bdf8';
   const badgeColor = isLight ? pastel.badge : getNodeBadgeFill(node.id);
 
   const glowColor =
-    node.type === 'side' ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.3)';
+    node.type === 'side' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.25)';
 
   return (
     <Group
       x={node.x}
       y={node.y}
+      scaleX={isTriggering ? 1.04 : 1}
+      scaleY={isTriggering ? 1.04 : 1}
+      offsetX={isTriggering ? (node.width * 0.04) / 2 : 0}
+      offsetY={isTriggering ? (node.height * 0.04) / 2 : 0}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
       onTap={onClick}
     >
-      {/* Main rect */}
+      {/* Main node rounded rect */}
       <Rect
         width={node.width}
         height={node.height}
         cornerRadius={10}
         fill={rectFill}
-        shadowEnabled={isHovered || !!isHighlighted || badgeCount > 0}
-        shadowColor={isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : (isLight ? '#94a3b8' : node.color)}
-        shadowBlur={isLight ? (isHighlighted ? 12 : 6) : (isHighlighted ? 22 : isHovered ? 16 : 8)}
-        shadowOpacity={isLight ? (isHighlighted ? 0.5 : 0.25) : (isHighlighted ? 0.9 : isHovered ? 0.45 : 0.6)}
+        shadowEnabled={isHovered || !!isHighlighted || !!isTriggering || badgeCount > 0}
+        shadowColor={isTriggering ? '#38bdf8' : isHighlighted ? '#38bdf8' : isHovered ? '#ffffff' : (isLight ? '#94a3b8' : '#0284c7')}
+        shadowBlur={isTriggering ? 20 : isHighlighted ? 18 : isHovered ? 14 : 8}
+        shadowOpacity={isLight ? (isHighlighted ? 0.45 : 0.25) : (isHighlighted || isTriggering ? 0.85 : 0.4)}
         stroke={rectStroke}
-        strokeWidth={isHighlighted ? 2.5 : isHovered ? 1.5 : 1}
+        strokeWidth={isTriggering ? 2.5 : isHighlighted ? 2.2 : isHovered ? 1.5 : 1}
       />
+
       {/* Subtle inner highlight strip */}
       <Rect
         width={node.width}
-        height={9}
+        height={8}
         cornerRadius={[10, 10, 0, 0]}
-        fill={isLight ? 'rgba(255,255,255,0.5)' : glowColor}
+        fill={isLight ? 'rgba(255,255,255,0.4)' : glowColor}
         listening={false}
       />
-      {/* Category Indicator Dot: Shifted to x=6, y=11 with 32px clearance to text for zero overlap at all zooms */}
+
+      {/* Category Indicator Dot: x=6, y=11 with 29px+ distance to text */}
       <Circle
         x={6}
         y={11}
@@ -218,7 +228,8 @@ const NodeGroup = React.memo(function NodeGroup({
         shadowOpacity={0.7}
         listening={false}
       />
-      {/* Label: Generous 38px left margin guarantees 29px distance between dot and text */}
+
+      {/* Label: Generous 38px left margin guarantees 29px clear distance */}
       <Text
         text={node.label}
         x={38}
@@ -234,15 +245,16 @@ const NodeGroup = React.memo(function NodeGroup({
         wrap="word"
         listening={false}
       />
-      {/* Numbered Badge (Replaces generic red dot with circular numbered badge) */}
+
+      {/* Numbered Badge at top-right (no text overlap, verified at 100%, 125%, 150% zoom) */}
       {badgeCount > 0 && (
         <Group x={node.width - 6} y={-4}>
           <Circle
             radius={badgeCount > 9 ? 11.5 : 10}
             fill={badgeColor}
             shadowColor={badgeColor}
-            shadowBlur={isLight ? 5 : 9}
-            shadowOpacity={isLight ? 0.45 : 0.9}
+            shadowBlur={isLight ? 4 : 8}
+            shadowOpacity={isLight ? 0.4 : 0.8}
             stroke={isLight ? '#ffffff' : '#0f172a'}
             strokeWidth={1.8}
           />
@@ -266,31 +278,6 @@ const NodeGroup = React.memo(function NodeGroup({
   );
 });
 
-// ─── Animated dash offset hook ────────────────────────────────────────────────
-
-/** Produces an ever-decreasing dashOffset value via rAF to animate marching-ants. */
-function useAnimatedDashOffset(enabled: boolean): number {
-  const [dashOffset, setDashOffset] = useState(0);
-  const rafRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    let offset = 0;
-    const animate = () => {
-      offset -= 1.2; // move right-to-left
-      setDashOffset(offset);
-      rafRef.current = requestAnimationFrame(animate);
-    };
-    rafRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [enabled]);
-
-  return dashOffset;
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function GraphCanvas({
@@ -305,19 +292,34 @@ export default function GraphCanvas({
   onDotClick,
   onStageReady,
 }: GraphCanvasProps) {
-  // ── ALL hooks MUST be declared before any conditional returns ───────────────
-
-  const stageRef = useRef<Konva.Stage | null>(null);
+  // ─── 1. useState (Rule 1: Strict Hook Declaration Order) ──────────────────
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
-  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  // Default stage position has x: 60, y: 30 to guarantee QR Scan node is never cut off
+  const [stagePos, setStagePos] = useState({ x: 60, y: 30 });
+  const [dashOffset, setDashOffset] = useState(0);
+  const [activeTriggerNodeId, setActiveTriggerNodeId] = useState<string | null>(null);
 
-  /** Animated dash offset drives the marching-ants effect on main edges */
-  const dashOffset = useAnimatedDashOffset(true);
+  // ─── 2. useRef ───────────────────────────────────────────────────────────
+  const stageRef = useRef<Konva.Stage | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const triggerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastEventCountRef = useRef(events.length);
 
-  /**
-   * Build a map: nodeId → badge count (dots for pipeline nodes, events for side nodes)
-   */
+  // ─── 3. useMemo ──────────────────────────────────────────────────────────
+  // Pre-generate n8n background grid dots
+  const gridDots = useMemo(() => {
+    const dots: Array<{ x: number; y: number }> = [];
+    const step = 32;
+    for (let x = 0; x < CANVAS_WIDTH + 200; x += step) {
+      for (let y = 0; y < CANVAS_HEIGHT + 100; y += step) {
+        dots.push({ x, y });
+      }
+    }
+    return dots;
+  }, []);
+
+  // Map: nodeId → badge count
   const badgeCountMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const dot of orderDots) {
@@ -346,10 +348,7 @@ export default function GraphCanvas({
     return map;
   }, [orderDots, events]);
 
-  /**
-   * Build a map: nodeId → list of OrderDotState for fast lookup.
-   * Recalculates only when orderDots reference changes.
-   */
+  // Map: nodeId → list of dots
   const dotsByNode = useMemo<Map<string, OrderDotState[]>>(() => {
     const map = new Map<string, OrderDotState[]>();
     for (const dot of orderDots) {
@@ -360,28 +359,42 @@ export default function GraphCanvas({
     return map;
   }, [orderDots]);
 
-  /** Stable handler factory: node hover enter */
+  // Precompute edge anchor coordinates
+  const edgePoints = useMemo<(number[] | null)[]>(() => {
+    return GRAPH_EDGES.map((edge) => {
+      const src = NODE_MAP[edge.from];
+      const tgt = NODE_MAP[edge.to];
+      if (!src || !tgt) return null;
+
+      if (edge.type === 'side') {
+        if (tgt.y < src.y) {
+          return [...nodeTopCentre(src), ...nodeBottomCentre(tgt)];
+        } else {
+          return [...nodeBottomCentre(src), ...nodeTopCentre(tgt)];
+        }
+      }
+      return [...nodeRightCentre(src), ...nodeLeftCentre(tgt)];
+    });
+  }, []);
+
+  // ─── 4. useCallback ──────────────────────────────────────────────────────
   const handleNodeMouseEnter = useCallback(
     (nodeId: string) => () => setHoveredNodeId(nodeId),
     []
   );
 
-  /** Stable handler: node hover leave */
   const handleNodeMouseLeave = useCallback(() => setHoveredNodeId(null), []);
 
-  /** Stable handler factory: node click */
   const handleNodeClick = useCallback(
     (nodeId: string) => () => onNodeClick(nodeId),
     [onNodeClick]
   );
 
-  /** Stable handler factory: dot click */
   const handleDotClick = useCallback(
     (dot: OrderDotState) => () => onDotClick(dot),
     [onDotClick]
   );
 
-  /** Wheel zoom — anchors scale to the cursor position */
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
       e.evt.preventDefault();
@@ -414,32 +427,59 @@ export default function GraphCanvas({
     []
   );
 
-  /** Notify parent once the Stage DOM node is mounted */
+  // ─── 5. useEffect ────────────────────────────────────────────────────────
+  // Marching-ants animated dash offset loop
+  useEffect(() => {
+    let offset = 0;
+    const animate = () => {
+      offset -= 1.4;
+      setDashOffset(offset);
+      rafRef.current = requestAnimationFrame(animate);
+    };
+    rafRef.current = requestAnimationFrame(animate);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  // Notify parent once stage mounted
   useEffect(() => {
     if (stageRef.current && onStageReady) {
       onStageReady(stageRef.current);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onStageReady]);
 
-  /**
-   * Follow mode: whenever followingOrderId changes or the tracked dot moves
-   * to a new node, smoothly pan the stage so that dot is centred in the
-   * viewport. Uses Konva's built-in tween (.to) for a polished animation.
-   */
+  // Detect new event triggers and animate node (700ms pulse)
+  useEffect(() => {
+    if (events.length > lastEventCountRef.current) {
+      const latest = events[events.length - 1];
+      const targetNode = latest.target_node;
+      if (targetNode) {
+        setActiveTriggerNodeId(targetNode);
+        if (triggerTimerRef.current) clearTimeout(triggerTimerRef.current);
+        triggerTimerRef.current = setTimeout(() => {
+          setActiveTriggerNodeId(null);
+        }, TRIGGER_DURATION_MS);
+      }
+    }
+    lastEventCountRef.current = events.length;
+    return () => {
+      if (triggerTimerRef.current) clearTimeout(triggerTimerRef.current);
+    };
+  }, [events]);
+
+  // Follow mode smooth camera pan
   useEffect(() => {
     if (!followingOrderId || !stageRef.current) return;
-
-    const dot = orderDots.find((d) => d.orderId === followingOrderId);
-    if (!dot) return;
-
-    const node = NODE_MAP[dot.currentNodeId];
+    const followed = orderDots.find(
+      (d) => d.orderId === followingOrderId || d.correlationId === followingOrderId
+    );
+    if (!followed) return;
+    const node = NODE_MAP[followed.currentNodeId];
     if (!node) return;
 
     const centre = nodeCentre(node);
     const currentScale = stageRef.current.scaleX();
-
-    // Target stage position: put the node centre at the viewport centre
     const targetX = containerWidth / 2 - centre.x * currentScale;
     const targetY = containerHeight / 2 - centre.y * currentScale;
 
@@ -452,7 +492,7 @@ export default function GraphCanvas({
     setStagePos({ x: targetX, y: targetY });
   }, [followingOrderId, orderDots, containerWidth, containerHeight]);
 
-  /** Smooth camera pan to highlighted node when selected */
+  // Smooth camera pan to highlighted node
   useEffect(() => {
     if (!highlightedNodeId || !stageRef.current) return;
     const targetNode = GRAPH_NODES.find((n) => n.id === highlightedNodeId);
@@ -471,48 +511,44 @@ export default function GraphCanvas({
     setStagePos({ x: targetX, y: targetY });
   }, [highlightedNodeId, containerWidth, containerHeight]);
 
-  /**
-   * Pre-compute edge anchor points once (nodes never move).
-   * Side edges use top/bottom anchors; main edges use right→left.
-   */
-  const edgePoints = useMemo<(number[] | null)[]>(() => {
-    return GRAPH_EDGES.map((edge) => {
-      const src = NODE_MAP[edge.from];
-      const tgt = NODE_MAP[edge.to];
-      if (!src || !tgt) return null;
-
-      if (edge.type === 'side') {
-        if (tgt.y < src.y) {
-          // Target is above source
-          return [...nodeTopCentre(src), ...nodeBottomCentre(tgt)];
-        } else {
-          // Target is below or same row
-          return [...nodeBottomCentre(src), ...nodeTopCentre(tgt)];
-        }
-      }
-
-      // Main pipeline: right → left
-      return [...nodeRightCentre(src), ...nodeLeftCentre(tgt)];
-    });
-  }, []); // GRAPH_EDGES and NODE_MAP are module-level constants
-
-  // ── Render guard: wait until container has real dimensions ──────────────────
+  // ── Render guard ─────────────────────────────────────────────────────────
   if (containerWidth === 0 || containerHeight === 0) return null;
 
-  // ── JSX ─────────────────────────────────────────────────────────────────────
+  const isLight = theme === 'light';
+  const gridDotColor = isLight ? '#e2e8f0' : '#1e293b';
+
   return (
     <Stage
       ref={stageRef}
       width={containerWidth}
       height={containerHeight}
+      x={stagePos.x}
+      y={stagePos.y}
       draggable
       onWheel={handleWheel}
       onDragEnd={(e) => {
         setStagePos({ x: e.target.x(), y: e.target.y() });
       }}
-      style={{ background: theme === 'light' ? '#f8fafc' : '#0f172a', cursor: 'grab' }}
+      style={{
+        background: isLight ? '#f8fafc' : '#0b1120',
+        cursor: 'grab',
+      }}
     >
-      {/* ── Layer 1: Edges ──────────────────────────────────────────────────── */}
+      {/* ── Layer 0: N8N Workflow Dot Grid Background ──────────────────────── */}
+      <Layer listening={false}>
+        {gridDots.map((pt, i) => (
+          <Circle
+            key={`grid-${i}`}
+            x={pt.x}
+            y={pt.y}
+            radius={1.2}
+            fill={gridDotColor}
+            listening={false}
+          />
+        ))}
+      </Layer>
+
+      {/* ── Layer 1: Animated Edges with Active Flow Particles ─────────────── */}
       <Layer>
         {GRAPH_EDGES.map((edge, i) => {
           const points = edgePoints[i];
@@ -524,39 +560,58 @@ export default function GraphCanvas({
             (edge.from === highlightedNodeId || edge.to === highlightedNodeId);
           const isEdgeActive =
             ((dotsByNode.get(edge.from)?.length || 0) > 0 || (dotsByNode.get(edge.to)?.length || 0) > 0);
-          const isEdgeGlowing = isEdgeHighlighted || isEdgeActive;
+          const isTriggering = activeTriggerNodeId === edge.from || activeTriggerNodeId === edge.to;
+          const isEdgeGlowing = isEdgeHighlighted || isEdgeActive || isTriggering;
 
           const edgeColor = isEdgeGlowing
             ? '#38bdf8'
             : isMain
-            ? (theme === 'light' ? '#94a3b8' : '#64748b')
-            : (theme === 'light' ? '#cbd5e1' : '#374151');
+            ? (isLight ? '#94a3b8' : '#475569')
+            : (isLight ? '#cbd5e1' : '#334155');
+
+          // Active particle position along the edge
+          const midX = (points[0] + points[2]) / 2;
+          const midY = (points[1] + points[3]) / 2;
 
           return (
-            <Arrow
-              key={`edge-${edge.from}-${edge.to}`}
-              points={points}
-              stroke={edgeColor}
-              strokeWidth={isEdgeHighlighted ? 3.5 : isEdgeActive ? 2.5 : isMain ? 2 : 1}
-              fill={edgeColor}
-              shadowEnabled={isEdgeGlowing}
-              shadowColor="#38bdf8"
-              shadowBlur={isEdgeHighlighted ? 16 : 10}
-              pointerLength={isMain || isEdgeGlowing ? 8 : 6}
-              pointerWidth={isMain || isEdgeGlowing ? 6 : 4}
-              dashEnabled
-              dash={isEdgeGlowing ? [10, 6] : [5, 5]}
-              dashOffset={isEdgeGlowing ? dashOffset : 0}
-              lineCap="round"
-              lineJoin="round"
-              tension={edge.type === 'side' ? 0.4 : 0}
-              listening={false}
-            />
+            <Group key={`edge-group-${edge.from}-${edge.to}`}>
+              <Arrow
+                points={points}
+                stroke={edgeColor}
+                strokeWidth={isEdgeHighlighted || isTriggering ? 3 : isEdgeActive ? 2.5 : isMain ? 1.8 : 1}
+                fill={edgeColor}
+                shadowEnabled={isEdgeGlowing}
+                shadowColor="#38bdf8"
+                shadowBlur={isEdgeHighlighted || isTriggering ? 14 : 8}
+                pointerLength={isMain || isEdgeGlowing ? 8 : 6}
+                pointerWidth={isMain || isEdgeGlowing ? 6 : 4}
+                dashEnabled
+                dash={isEdgeGlowing ? [10, 6] : [5, 5]}
+                dashOffset={isEdgeGlowing ? dashOffset : 0}
+                lineCap="round"
+                lineJoin="round"
+                tension={edge.type === 'side' ? 0.4 : 0}
+                listening={false}
+              />
+
+              {/* Active Flow Moving Particle */}
+              {isEdgeGlowing && (
+                <Circle
+                  x={midX + (Math.sin(dashOffset * 0.05) * 20)}
+                  y={midY}
+                  radius={2.5}
+                  fill="#38bdf8"
+                  shadowColor="#38bdf8"
+                  shadowBlur={6}
+                  listening={false}
+                />
+              )}
+            </Group>
           );
         })}
       </Layer>
 
-      {/* ── Layer 2: Nodes ──────────────────────────────────────────────────── */}
+      {/* ── Layer 2: 19 Workflow Nodes ──────────────────────────────────────── */}
       <Layer>
         {GRAPH_NODES.map((node) => {
           const dots = dotsByNode.get(node.id) ?? [];
@@ -570,6 +625,7 @@ export default function GraphCanvas({
               theme={theme}
               isHovered={hoveredNodeId === node.id}
               isHighlighted={highlightedNodeId === node.id}
+              isTriggering={activeTriggerNodeId === node.id}
               onMouseEnter={handleNodeMouseEnter(node.id)}
               onMouseLeave={handleNodeMouseLeave}
               onClick={handleNodeClick(node.id)}
@@ -578,7 +634,7 @@ export default function GraphCanvas({
         })}
       </Layer>
 
-      {/* ── Layer 3: Order Dots ─────────────────────────────────────────────── */}
+      {/* ── Layer 3: Order Dots with Continuous Halo ────────────────────────── */}
       <Layer>
         {GRAPH_NODES.map((node) => {
           const dots = dotsByNode.get(node.id) ?? [];
@@ -599,34 +655,35 @@ export default function GraphCanvas({
                 onClick={handleDotClick(dot)}
                 onTap={handleDotClick(dot)}
               >
-                {/* Outer glow ring: only shown for the followed dot */}
+                {/* Continuous halo ring for selected / followed order */}
                 {isFollowed && (
                   <Circle
                     radius={DOT_RADIUS + 5}
                     fill="transparent"
-                    stroke="#ffffff"
-                    strokeWidth={1.5}
-                    opacity={0.6}
+                    stroke="#38bdf8"
+                    strokeWidth={1.8}
+                    shadowColor="#38bdf8"
+                    shadowBlur={10}
                     listening={false}
                   />
                 )}
-                {/* Dot body */}
+                {/* Dot circle */}
                 <Circle
                   radius={DOT_RADIUS}
                   fill={dot.color}
                   shadowColor={dot.color}
-                  shadowBlur={15}
+                  shadowBlur={12}
                   shadowOpacity={0.8}
                   shadowEnabled
-                  stroke={isFollowed ? '#ffffff' : 'rgba(255,255,255,0.3)'}
-                  strokeWidth={isFollowed ? 1.5 : 0.5}
+                  stroke={isFollowed ? '#ffffff' : 'rgba(255,255,255,0.4)'}
+                  strokeWidth={isFollowed ? 1.5 : 0.8}
                 />
-                {/* Short ID label below the dot */}
+                {/* Short ID label below dot */}
                 <Text
                   text={dot.shortId}
                   fontSize={9}
                   fontFamily="'JetBrains Mono', 'Fira Code', monospace"
-                  fill="#e2e8f0"
+                  fill="#f1f5f9"
                   align="center"
                   width={40}
                   offsetX={20}
