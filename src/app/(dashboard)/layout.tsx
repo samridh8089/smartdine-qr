@@ -483,7 +483,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="bg-indigo-600 text-white px-4 py-2 text-xs md:text-sm font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-md z-50 animate-fade-in">
             <div className="flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 shrink-0 text-amber-300" />
-              <span className="font-extrabold tracking-wide">Viewing as: {restaurant?.name || 'Restaurant'}</span>
+              <span className="font-extrabold tracking-wide">
+                Viewing as: {restaurant?.name || 'Restaurant'} ({activeRole ? activeRole.charAt(0).toUpperCase() + activeRole.slice(1) : 'Owner'})
+              </span>
             </div>
             <button
               onClick={handleExitImpersonation}
