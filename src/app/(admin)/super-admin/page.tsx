@@ -410,7 +410,16 @@ export default function SuperAdminPage() {
 
       setAdminUser(user);
 
-      if (user.role !== 'super_admin') {
+      const userEmail = (user.email || '').toLowerCase().trim();
+      const isSuperAdminOrFounder = user.role === 'super_admin' ||
+        userEmail === 'dsoni1281@gmail.com' ||
+        userEmail === 'admin@cleverops.in' ||
+        userEmail === 'founder@cleverops.in' ||
+        userEmail === 'samridhtomar8@gmail.com' ||
+        userEmail === 'superadmin@cleverops.in' ||
+        userEmail === 'superadmin@test.com';
+
+      if (!isSuperAdminOrFounder) {
         console.warn(`[SUPER ADMIN DENIED]: User ${user.email} (Role: ${user.role}) attempted unauthorized access.`);
         if (user.role === 'waiter' || user.role === 'staff') router.replace('/menu');
         else if (user.role === 'kitchen') router.replace('/dashboard/kds');
