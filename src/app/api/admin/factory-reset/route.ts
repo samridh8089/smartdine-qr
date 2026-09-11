@@ -69,6 +69,91 @@ export async function POST(req: Request) {
       });
     }
 
+    // If body.action === 'create-test-order', provision 1 test item & 1 live order to verify operational pipeline
+    if (body.action === 'create-test-order') {
+      let { data: cat } = await (admin.from('categories') as any)
+        .select('*')
+        .eq('restaurant_id', RESTAURANT_ID)
+        .limit(1)
+        .maybeSingle();
+
+      if (!cat) {
+        const { data: newCat } = await (admin.from('categories') as any).insert({
+          restaurant_id: RESTAURANT_ID,
+          name: 'Specialties',
+          display_order: 1
+        }).select().single();
+        cat = newCat;
+      }
+
+      let { data: item } = await (admin.from('menu_items') as any)
+        .select('*')
+        .eq('restaurant_id', RESTAURANT_ID)
+        .limit(1)
+        .maybeSingle();
+
+      if (!item) {
+        const { data: newItem } = await (admin.from('menu_items') as any).insert({
+          restaurant_id: RESTAURANT_ID,
+          category_id: cat?.id,
+          name: 'Signature Masala Chai',
+          description: 'Aromatic traditional spiced tea',
+          price: 40,
+          is_veg: true,
+          is_available: true
+        }).select().single();
+        item = newItem;
+      }
+
+      const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+      const { data: newOrder, error: orderErr } = await (admin.from('orders') as any).insert({
+        restaurant_id: RESTAURANT_ID,
+        order_number: orderNumber,
+        customer_name: 'Aarav Sharma (Founder Test)',
+        customer_phone: '9876543210',
+        order_type: 'takeaway',
+        status: 'new',
+        payment_status: 'pending',
+        subtotal: 80,
+        total_amount: 80,
+        tax_amount: 0,
+        discount_amount: 0
+      }).select().single();
+
+      if (newOrder) {
+        await (admin.from('order_items') as any).insert({
+          order_id: newOrder.id,
+          menu_item_id: item?.id,
+          name: item?.name || 'Signature Masala Chai',
+          quantity: 2,
+          price: 40,
+          total_price: 80,
+          notes: 'Less sugar'
+        });
+
+        await (admin.from('system_events') as any).insert({
+          restaurant_id: RESTAURANT_ID,
+          order_id: newOrder.id,
+          correlation_id: `corr_${newOrder.id}`,
+          actor_type: 'customer',
+          event_type: 'order_created',
+          source_node: 'checkout',
+          target_node: 'order_created',
+          duration_ms: 120,
+          metadata: { order_number: orderNumber, total: 80, customer: 'Aarav Sharma' }
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: 'create-test-order',
+        order: newOrder,
+        menuItem: item,
+        category: cat,
+        error: orderErr?.message
+      });
+    }
+
     // ── COMPLETE FACTORY RESET EXECUTION ─────────────────────────────────────
     const results: Record<string, any> = {};
 
