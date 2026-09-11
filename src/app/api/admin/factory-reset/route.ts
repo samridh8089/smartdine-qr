@@ -254,6 +254,40 @@ export async function POST(req: Request) {
       results.idempotency_keys = { error: e.message };
     }
 
+    // 18. Reset table_states and table_assignments in restaurants.settings
+    try {
+      const { data: rest } = await admin
+        .from('restaurants')
+        .select('settings')
+        .eq('id', RESTAURANT_ID)
+        .single();
+      if (rest?.settings) {
+        const updatedSettings = {
+          ...rest.settings,
+          table_states: {},
+          table_assignments: [],
+        };
+        await admin
+          .from('restaurants')
+          .update({ settings: updatedSettings })
+          .eq('id', RESTAURANT_ID);
+        results.restaurant_settings = { success: true, table_states: {} };
+      }
+    } catch (e: any) {
+      results.restaurant_settings = { error: e.message };
+    }
+
+    // 19. Reset all physical tables to available
+    try {
+      await admin
+        .from('tables')
+        .update({ status: 'available' })
+        .eq('restaurant_id', RESTAURANT_ID);
+      results.tables_reset = { success: true };
+    } catch (e: any) {
+      results.tables_reset = { error: e.message };
+    }
+
     // Verify row counts after reset
     const finalCounts: Record<string, number | null> = {};
     const tablesToCheck = [

@@ -300,7 +300,7 @@ export default function FreezeMode({
         <div className="h-12 w-12 rounded-full bg-cyan-950/40 border border-cyan-800/60 flex items-center justify-center text-cyan-400">
           <Clock className="h-6 w-6 opacity-60" />
         </div>
-        <p className="text-sm font-mono font-semibold">Create your first order to use time travel.</p>
+        <p className="text-sm font-mono font-semibold">Create your first order to use Time Travel.</p>
         <p className="text-xs text-slate-500 font-mono">No historical snapshot</p>
       </div>
     );
