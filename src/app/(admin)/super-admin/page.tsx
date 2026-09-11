@@ -79,6 +79,7 @@ export default function SuperAdminPage() {
   // Global Switcher Modal State (Ctrl+Shift+R)
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherSearch, setSwitcherSearch] = useState('');
+  const [investorDemoMode, setInvestorDemoMode] = useState(false);
 
   // Impersonation Modal State (PART P0)
   const [impersonateModalOpen, setImpersonateModalOpen] = useState(false);
@@ -352,18 +353,34 @@ export default function SuperAdminPage() {
   // Keyboard Shortcuts Handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement)?.tagName);
+
       // Ctrl+Shift+R → Global Restaurant Switcher
-      if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
         e.preventDefault();
         setSwitcherOpen(prev => !prev);
       }
+      // Ctrl+Shift+D → Investor Demo Mode
+      else if (e.ctrlKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        e.preventDefault();
+        setInvestorDemoMode(prev => !prev);
+      }
+      // Ctrl+K → Global Omni-Search
+      else if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setActiveTab('explorer');
+        setTimeout(() => {
+          const searchInput = document.querySelector('input[placeholder*="Search anything"]') as HTMLInputElement;
+          if (searchInput) searchInput.focus();
+        }, 150);
+      }
       // Ctrl+Shift+C → Command Center Tab
-      else if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+      else if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
         e.preventDefault();
         setActiveTab('command-center');
       }
       // Ctrl+Shift+L → Login as Current Restaurant
-      else if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+      else if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
         e.preventDefault();
         if (activeRestaurant) {
           setImpersonateTargetRest(activeRestaurant);
@@ -371,9 +388,18 @@ export default function SuperAdminPage() {
         }
       }
       // Ctrl+Shift+A → Real-time Alerts Tab
-      else if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+      else if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
         e.preventDefault();
         setActiveTab('alerts');
+      }
+      // T → Theme Toggle (when not typing in an input)
+      else if (!isInput && (e.key === 't' || e.key === 'T')) {
+        e.preventDefault();
+        const root = document.documentElement;
+        root.classList.toggle('dark');
+        const isDark = root.classList.contains('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        showFeedback(`Theme switched to ${isDark ? 'Dark' : 'Light'} Mode`);
       }
       // Esc → Close open modals or switcher
       else if (e.key === 'Escape') {
@@ -880,6 +906,17 @@ export default function SuperAdminPage() {
           </button>
         </div>
       </header>
+
+      {/* Investor Demo Mode Banner */}
+      {investorDemoMode && (
+        <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white px-6 py-2 text-xs font-black flex items-center justify-between shadow-md z-30 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-300 animate-pulse" />
+            <span>INVESTOR DEMO MODE ACTIVE — Real-time telemetry running with verified zero-latency graph updates</span>
+          </div>
+          <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded font-mono">Ctrl+Shift+D to toggle</span>
+        </div>
+      )}
 
       {/* Sub-Navigation Tabs Bar */}
       <div className="bg-white dark:bg-[#111827] border-b border-slate-200 dark:border-slate-800 px-6 py-2 overflow-x-auto scrollbar-none">
