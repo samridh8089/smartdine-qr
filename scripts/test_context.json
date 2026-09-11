@@ -1,0 +1,62 @@
+{
+  "restaurantId": "81fa8201-51d7-4da5-98f5-a52dbff4e6ae",
+  "tables": [
+    {
+      "id": "t_1",
+      "name": "Table 1",
+      "status": "available",
+      "items": [],
+      "totalBill": 0,
+      "customerCount": 0
+    },
+    {
+      "id": "t_2",
+      "name": "Table 2",
+      "status": "available",
+      "items": [],
+      "totalBill": 0,
+      "customerCount": 0
+    },
+    {
+      "id": "t_3",
+      "name": "Table 3",
+      "status": "available",
+      "items": [],
+      "totalBill": 0,
+      "customerCount": 0
+    },
+    {
+      "id": "t_4",
+      "name": "Table 4",
+      "status": "available",
+      "items": [],
+      "totalBill": 0,
+      "customerCount": 0
+    },
+    {
+      "id": "t_5",
+      "name": "Table 5",
+      "status": "available",
+      "items": [],
+      "totalBill": 0,
+      "customerCount": 0
+    },
+    {
+      "id": "t_6",
+      "name": "Table 6",
+      "status": "available",
+      "items": [],
+      "totalBill": 0,
+      "customerCount": 0
+    }
+  ],
+  "firstTable": {
+    "id": "t_1",
+    "name": "Table 1",
+    "status": "available",
+    "items": [],
+    "totalBill": 0,
+    "customerCount": 0
+  },
+  "sampleIds": []
+}
