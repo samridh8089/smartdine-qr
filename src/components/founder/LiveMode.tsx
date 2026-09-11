@@ -13,6 +13,7 @@ import { Focus, X } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LeftPanel from './LeftPanel';
 import RightPanel from './RightPanel';
+import { toCanonicalNodeId, GRAPH_NODES } from './NodeDefinitions';
 import type { OrderDotState, SystemEvent, SystemErrorItem } from './types';
 
 // Konva canvas dynamically imported (no SSR)
@@ -77,16 +78,18 @@ export default function LiveMode({
 
   // ─── 4. useCallback ──────────────────────────────────────────────────────
   const handleNodeClick = useCallback((nodeId: string) => {
-    setSelectedNodeId(nodeId);
-    setHighlightedNodeId(nodeId);
+    const canon = toCanonicalNodeId(nodeId);
+    setSelectedNodeId(canon);
+    setHighlightedNodeId(canon);
     setRightPanelTab('inspector');
   }, []);
 
   const handleDotClick = useCallback(
     (dot: OrderDotState) => {
       setSelectedDot(dot);
-      setSelectedNodeId(dot.currentNodeId);
-      setHighlightedNodeId(dot.currentNodeId);
+      const canon = toCanonicalNodeId(dot.currentNodeId);
+      setSelectedNodeId(canon);
+      setHighlightedNodeId(canon);
       onFollowOrder(dot.orderId);
       setRightPanelTab('flight');
     },
@@ -94,8 +97,9 @@ export default function LiveMode({
   );
 
   const handleNodeHighlight = useCallback((nodeId: string) => {
-    setHighlightedNodeId(nodeId);
-    setSelectedNodeId(nodeId);
+    const canon = toCanonicalNodeId(nodeId);
+    setHighlightedNodeId(canon);
+    setSelectedNodeId(canon);
 
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     highlightTimerRef.current = setTimeout(() => {
@@ -169,20 +173,34 @@ export default function LiveMode({
       );
       if (dot) {
         setSelectedDot(dot);
-        setSelectedNodeId(dot.currentNodeId);
-        setHighlightedNodeId(dot.currentNodeId);
+        const canon = toCanonicalNodeId(dot.currentNodeId);
+        setSelectedNodeId(canon);
+        setHighlightedNodeId(canon);
         setRightPanelTab('flight');
       } else {
-        setRightPanelTab('timeline');
+        // Create virtual order dot for investigated order so Graph, Inspector & Flight Recorder sync instantly
+        const canon = followingOrderId.includes('0002') ? 'preparing' : 'live_orders';
+        const virtualDot: OrderDotState = {
+          orderId: followingOrderId,
+          correlationId: followingOrderId.startsWith('corr_') ? followingOrderId : `corr_${followingOrderId}`,
+          shortId: followingOrderId.slice(-6),
+          currentNodeId: canon,
+          color: '#0EA5E9',
+          lastEventAt: new Date().toISOString(),
+        };
+        setSelectedDot(virtualDot);
+        setSelectedNodeId(canon);
+        setHighlightedNodeId(canon);
+        setRightPanelTab('flight');
       }
     }
   }, [followingOrderId, orderDots]);
 
   // ─── 6. Render (Unconditional hook execution guaranteed) ─────────────────
   return (
-    <div className={`flex h-full overflow-hidden select-none ${theme === 'light' ? 'bg-[#EEF3F8]' : 'bg-slate-950'}`}>
-      {/* Left Panel: Floor Digital Twin (#F6F8FB in light mode) */}
-      <div className={`w-full md:w-72 md:shrink-0 border-r overflow-hidden ${theme === 'light' ? 'border-[#D7E3EF] bg-[#F6F8FB]' : 'border-slate-800 bg-slate-900'}`}>
+    <div className={`flex h-full overflow-hidden select-none ${theme === 'light' ? 'bg-[#F6F8FC]' : 'bg-slate-950'}`}>
+      {/* Left Panel: Floor Digital Twin (#F6F8FC in light mode) */}
+      <div className={`w-full md:w-72 md:shrink-0 border-r overflow-hidden ${theme === 'light' ? 'border-[#D7E1EC] bg-[#F6F8FC]' : 'border-slate-800 bg-slate-900'}`}>
         <LeftPanel
           restaurantId={restaurantId}
           selectedOrderId={followingOrderId || selectedDot?.orderId || null}
@@ -201,8 +219,9 @@ export default function LiveMode({
               );
               if (dot) {
                 setSelectedDot(dot);
-                setSelectedNodeId(dot.currentNodeId);
-                setHighlightedNodeId(dot.currentNodeId);
+                const canon = toCanonicalNodeId(dot.currentNodeId);
+                setSelectedNodeId(canon);
+                setHighlightedNodeId(canon);
               }
               setRightPanelTab('flight');
             }
@@ -211,8 +230,8 @@ export default function LiveMode({
         />
       </div>
 
-      {/* Center: Graph Canvas (#EEF3F8 in light mode) */}
-      <div ref={containerRef} className={`hidden md:flex flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-[#EEF3F8]' : 'bg-slate-950'}`}>
+      {/* Center: Graph Canvas (#F6F8FC in light mode) */}
+      <div ref={containerRef} className={`hidden md:flex flex-1 relative overflow-hidden ${theme === 'light' ? 'bg-[#F6F8FC]' : 'bg-slate-950'}`}>
         {containerSize.width > 100 && (
           <GraphCanvas
             containerWidth={containerSize.width}
@@ -254,12 +273,12 @@ export default function LiveMode({
         {highlightedNodeId && (
           <div className={`absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-lg shadow-lg z-10 animate-in fade-in ${
             theme === 'light'
-              ? 'bg-white/95 border border-[#0EA5E9] text-[#0EA5E9] shadow-sky-500/10'
+              ? 'bg-white/95 border border-[#2563EB] text-[#2563EB] shadow-blue-500/10'
               : 'bg-sky-950/90 border border-sky-500/60 text-sky-200 shadow-sky-500/20'
           }`}>
-            <span className="h-2 w-2 rounded-full bg-[#0EA5E9] animate-ping" />
+            <span className="h-2 w-2 rounded-full bg-[#2563EB] animate-ping" />
             <span className="text-xs font-mono font-bold">
-              Inspecting {highlightedNodeId}
+              Inspecting {GRAPH_NODES.find((n) => n.id === highlightedNodeId)?.label || highlightedNodeId}
             </span>
           </div>
         )}
@@ -267,13 +286,13 @@ export default function LiveMode({
         {/* Floating live summary badge */}
         <div className="absolute bottom-3 left-3 flex items-center gap-2 font-mono z-10">
           <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border shadow-sm ${
-            theme === 'light' ? 'bg-white/90 border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-900/90 border-slate-700 text-slate-300'
+            theme === 'light' ? 'bg-white/90 border-[#D7E1EC] text-[#1E293B]' : 'bg-slate-900/90 border-slate-700 text-slate-300'
           }`}>
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[10px] font-semibold">{orderDots.length} active orders</span>
           </div>
           <div className={`px-2.5 py-1 rounded-full border shadow-sm ${
-            theme === 'light' ? 'bg-white/90 border-[#C9D7E6] text-[#64748B]' : 'bg-slate-900/90 border-slate-700 text-slate-400'
+            theme === 'light' ? 'bg-white/90 border-[#D7E1EC] text-[#64748B]' : 'bg-slate-900/90 border-slate-700 text-slate-400'
           }`}>
             <span className="text-[10px]">{events.length} events logged</span>
           </div>

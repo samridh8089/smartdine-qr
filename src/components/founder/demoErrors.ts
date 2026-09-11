@@ -27,7 +27,7 @@ export const INITIAL_DEMO_ERROR: SystemErrorItem = {
   retryCount: 0,
   durationMs: 12450,
   failedNodeId: 'kitchen_queue',
-  targetNodeId: 'order_preparing',
+  targetNodeId: 'preparing',
 };
 
 export const RESOLVED_ERRORS_SEED: SystemErrorItem[] = [
