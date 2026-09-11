@@ -1,5 +1,7 @@
 @echo off
 cd /d c:\Users\admin\smartdine-qr
-git add .
-git commit -m "fix(super-admin): fix TS2352 type cast, use profiles for staff, remove invalid columns, restaurant switcher demo fallback"
+git add src/app/(dashboard)/dashboard/page.tsx
+git add src/app/api/admin/bulk-operations/route.ts
+git commit -m "fix(broadcast): overhaul announcement banner design, Lucide Megaphone icon, high contrast light/dark mode, exact text rendering, and unique broadcast ID"
 git push origin main
+

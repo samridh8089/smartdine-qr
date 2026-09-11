@@ -229,7 +229,8 @@ export default function FloorCanvas({
       if (it.is_archived) return false;
       const zoneId = it.zone_id || 'zone_indoor';
       if (collapsedZones[zoneId]) return false;
-      return zoneId === selectedZoneFilter;
+      const isGeneralMatch = (selectedZoneFilter === 'general' || selectedZoneFilter === 'zone_general') && (zoneId === 'general' || zoneId === 'zone_general');
+      return zoneId === selectedZoneFilter || isGeneralMatch;
     });
   }, [items, selectedZoneFilter, collapsedZones]);
 

@@ -1858,7 +1858,7 @@ export default function OrdersPage() {
                           return (
                             <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-stone-200">
                               <User className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                              <span className="truncate">{cName || 'Walk-in Guest'}</span>
+                              <span className="truncate">{cName || 'Guest'}</span>
                               {cPhone && <span className="text-[11px] text-stone-500 font-mono shrink-0">({cPhone})</span>}
                             </div>
                           );
@@ -3663,8 +3663,7 @@ export default function OrdersPage() {
                             className={`p-3 rounded-xl text-left border transition-all cursor-pointer relative flex flex-col justify-between gap-2.5 ${
                               isSelected
                                 ? 'bg-stone-900 text-white border-stone-900 dark:bg-stone-100 dark:text-stone-950 dark:border-stone-100 ring-2 ring-stone-900/20 shadow-sm'
-                                : isOccupied
-                                ? 'bg-stone-50/60 dark:bg-stone-900/30 border-stone-200/60 dark:border-stone-800/60 opacity-40 cursor-not-allowed pointer-events-none'
+                                : isOccupied ? 'opacity-40 cursor-not-allowed pointer-events-none bg-stone-50/60 dark:bg-stone-900/30 border-stone-200/60 dark:border-stone-800/60'
                                 : isBestFit
                                 ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 hover:border-emerald-500 shadow-2xs'
                                 : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800 hover:border-stone-400'
