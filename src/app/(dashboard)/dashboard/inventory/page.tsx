@@ -240,8 +240,8 @@ export default function InventoryDashboardPage() {
   // Purchase Modal
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [isSubmittingPurchase, setIsSubmittingPurchase] = useState(false);
-  const submittingPurchaseRef = useRef(false);
-  const purchaseIdempotencyRef = useRef<string | null>(null);
+  const [isImportingAiDraft, setIsImportingAiDraft] = useState(false);
+  const [isSavingItem, setIsSavingItem] = useState(false);
   const [purchaseForm, setPurchaseForm] = useState({
     supplier_name: '',
     invoice_number: '',
@@ -265,6 +265,12 @@ export default function InventoryDashboardPage() {
 
   // Analytics Filter
   const [analyticsSelectedItemId, setAnalyticsSelectedItemId] = useState<string>('all');
+
+  // In-flight Mutex Refs
+  const submittingPurchaseRef = useRef(false);
+  const purchaseIdempotencyRef = useRef<string | null>(null);
+  const importingAiDraftRef = useRef(false);
+  const savingItemRef = useRef(false);
 
   // Prevent background page shift when Recipe Modal is open
   useEffect(() => {
@@ -469,8 +475,10 @@ export default function InventoryDashboardPage() {
   // Item Save Handler
   const handleSaveItem = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (savingItemRef.current || isSavingItem) return;
+
     const formData = new FormData(e.currentTarget);
-    const name = formData.get('name') as string;
+    const name = (formData.get('name') as string || '').trim();
     const category = formData.get('category') as string;
     let unit = itemUnitType === 'custom' ? customUnitName.trim() : itemUnitType;
     const current_stock = Number(formData.get('current_stock') || 0);
@@ -480,6 +488,18 @@ export default function InventoryDashboardPage() {
     const sku = formData.get('sku') as string;
 
     if (!name || !unit) return alert('Please fill in Item Name and Unit');
+
+    // Duplicate check for new items
+    if (!editingItem) {
+      const cleanName = name.toLowerCase();
+      const duplicate = items.find(i => (i.name || '').trim().toLowerCase() === cleanName);
+      if (duplicate) {
+        return alert(`An item named "${name}" already exists in inventory. Please edit that item or use a different name.`);
+      }
+    }
+
+    savingItemRef.current = true;
+    setIsSavingItem(true);
 
     try {
       if (editingItem) {
@@ -543,6 +563,9 @@ export default function InventoryDashboardPage() {
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Error saving item');
+    } finally {
+      savingItemRef.current = false;
+      setIsSavingItem(false);
     }
   };
 
@@ -610,11 +633,32 @@ export default function InventoryDashboardPage() {
 
   // Quick Raw Item Creator from Recipe Editor
   const handleCreateQuickItem = async () => {
-    if (!quickItemName.trim()) return alert('Please enter item name');
+    const cleanName = quickItemName.trim();
+    if (!cleanName) return alert('Please enter item name');
+
+    // Check if item already exists - reuse it instead of creating a duplicate!
+    const existing = items.find(i => (i.name || '').trim().toLowerCase() === cleanName.toLowerCase());
+    if (existing) {
+      if (targetIngredientIndex !== null && recipeIngredients[targetIngredientIndex]) {
+        const updated = [...recipeIngredients];
+        updated[targetIngredientIndex] = {
+          ...updated[targetIngredientIndex],
+          inventory_item_id: existing.id,
+          ingredientName: existing.name,
+          unit: existing.unit,
+          isMatched: true
+        };
+        setRecipeIngredients(updated);
+      }
+      setShowQuickItemModal(false);
+      setQuickItemName('');
+      return;
+    }
+
     try {
       const { data: created, error } = await supabase.from('inventory_items').insert({
         restaurant_id: restaurantId,
-        name: quickItemName.trim(),
+        name: cleanName,
         category: 'General',
         unit: quickItemUnit,
         current_stock: 1000,
@@ -1031,15 +1075,24 @@ export default function InventoryDashboardPage() {
     }
   };
 
-  // AI Recipe Generator Call
-  const handleGenerateAiRecipe = async () => {
-    if (!aiDishInput) return alert('Please enter a dish name');
+  // AI Recipe Generator Call (Single-click support with optional dishNameOverride)
+  const handleGenerateAiRecipe = async (dishNameOverride?: string) => {
+    const dishToUse = (typeof dishNameOverride === 'string' && dishNameOverride.trim())
+      ? dishNameOverride.trim()
+      : aiDishInput.trim();
+
+    if (!dishToUse) return alert('Please enter a dish name');
+
+    if (dishNameOverride && dishNameOverride.trim() !== aiDishInput) {
+      setAiDishInput(dishNameOverride.trim());
+    }
+
     setAiGenerating(true);
     try {
       const res = await fetch('/api/ai-recipe/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dishName: aiDishInput, restaurantId })
+        body: JSON.stringify({ dishName: dishToUse, restaurantId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to generate AI recipe');
@@ -1054,49 +1107,80 @@ export default function InventoryDashboardPage() {
     }
   };
 
-  // Apply AI Draft Recipe to Recipe Editor & Auto-link/Create Inventory Items
+  // Apply AI Draft Recipe to Recipe Editor & Auto-link/Create Inventory Items (Protected by In-Flight Mutex & Strict Deduplication)
   const handleAcceptAiDraft = async () => {
     if (!aiDraftRecipe || !restaurantId) return;
 
+    // Mutex lock to prevent duplicate/double clicks from creating duplicate inventory items
+    if (importingAiDraftRef.current || isImportingAiDraft) {
+      console.warn('[AI Recipe] Duplicate import blocked by in-flight lock.');
+      return;
+    }
+
+    importingAiDraftRef.current = true;
+    setIsImportingAiDraft(true);
+
     try {
-      // 1. Fetch latest raw inventory items
+      // 1. Fetch latest raw inventory items fresh from Supabase to prevent stale cache
       const { data: latestItems } = await supabase
         .from('inventory_items')
         .select('*')
         .eq('restaurant_id', restaurantId);
 
-      const existingItems = latestItems || [];
-      const updatedItemsList = [...existingItems];
+      const existingItems = latestItems ? [...latestItems] : [];
       const mappedIngredients: any[] = [];
+
+      // Helper to find existing match by exact or normalized name
+      const findExistingMatch = (raw: string) => {
+        const norm = raw.trim().toLowerCase();
+        return existingItems.find(i => (i.name || '').trim().toLowerCase() === norm);
+      };
 
       for (const ing of (aiDraftRecipe.ingredients || [])) {
         const rawName = (ing.name || '').trim();
         if (!rawName) continue;
 
-        // Case-insensitive exact name match
-        let matched = existingItems.find(i => i.name.trim().toLowerCase() === rawName.toLowerCase());
+        // Check if already matched in existingItems (or created earlier in this very loop!)
+        let matched = findExistingMatch(rawName);
 
         if (!matched) {
-          // Auto-create missing ingredient in inventory_items with ₹0 price, 0 stock
-          const newUnit = ing.suggestedUnit || 'gram';
-          const { data: createdItem } = await supabase
+          // Double check database in case another concurrent process inserted it
+          const { data: dbItem } = await supabase
             .from('inventory_items')
-            .insert({
-              restaurant_id: restaurantId,
-              name: rawName,
-              unit: newUnit,
-              current_stock: 0,
-              minimum_stock: 0,
-              opening_stock: 0,
-              cost_per_unit: 0,
-              is_active: true
-            })
-            .select()
-            .single();
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .ilike('name', rawName)
+            .limit(1)
+            .maybeSingle();
 
-          if (createdItem) {
-            matched = createdItem;
-            updatedItemsList.push(createdItem);
+          if (dbItem) {
+            matched = dbItem;
+            existingItems.push(dbItem);
+          } else {
+            // Auto-create missing ingredient in inventory_items with ₹0 price, 0 stock
+            const newUnit = ing.suggestedUnit || 'gram';
+            const { data: createdItem, error: createErr } = await supabase
+              .from('inventory_items')
+              .insert({
+                restaurant_id: restaurantId,
+                name: rawName,
+                unit: newUnit,
+                current_stock: 0,
+                minimum_stock: 0,
+                opening_stock: 0,
+                cost_per_unit: 0,
+                is_active: true
+              })
+              .select()
+              .single();
+
+            if (createErr) {
+              console.warn('[AI Recipe] Notice during auto-create:', createErr);
+            } else if (createdItem) {
+              matched = createdItem;
+              // CRITICAL: Push to in-memory pool so subsequent loop iterations reuse this item!
+              existingItems.push(createdItem);
+            }
           }
         }
 
@@ -1111,7 +1195,7 @@ export default function InventoryDashboardPage() {
         }
       }
 
-      setItems(updatedItemsList);
+      setItems(existingItems);
       setRecipeIngredients(mappedIngredients);
       setRecipeServingSize(aiDraftRecipe.servingSize || '1 Portion');
       setRecipeSteps(aiDraftRecipe.preparationSteps || '');
@@ -1134,6 +1218,9 @@ export default function InventoryDashboardPage() {
     } catch (err: any) {
       console.error('Error importing draft into recipe editor:', err);
       alert('Error importing draft: ' + (err.message || 'Failed to import'));
+    } finally {
+      importingAiDraftRef.current = false;
+      setIsImportingAiDraft(false);
     }
   };
 
@@ -2290,7 +2377,20 @@ export default function InventoryDashboardPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => setShowItemModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer">Cancel</button>
-                    <button type="submit" className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500">Save Item</button>
+                    <button 
+                      type="submit" 
+                      disabled={isSavingItem}
+                      className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                    >
+                      {isSavingItem ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>Save Item</span>
+                      )}
+                    </button>
                   </div>
                 </div>
               </form>
@@ -2505,10 +2605,14 @@ export default function InventoryDashboardPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => {
-                      setAiDishInput(selectedMenuItemForRecipe.name);
-                      handleGenerateAiRecipe();
+                      const dishName = selectedMenuItemForRecipe?.name || '';
+                      setAiDishInput(dishName);
                       setShowAiModal(true);
+                      if (dishName) {
+                        handleGenerateAiRecipe(dishName);
+                      }
                     }}
                     className="flex items-center gap-1 bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-600 cursor-pointer shadow-xs"
                   >
@@ -3026,12 +3130,19 @@ export default function InventoryDashboardPage() {
                     placeholder="Enter Dish Name (e.g. Paneer Butter Masala)"
                     value={aiDishInput}
                     onChange={e => setAiDishInput(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !aiGenerating && aiDishInput.trim()) {
+                        e.preventDefault();
+                        handleGenerateAiRecipe();
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold"
                   />
                   <button
-                    onClick={handleGenerateAiRecipe}
-                    disabled={aiGenerating}
-                    className="bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    type="button"
+                    onClick={() => handleGenerateAiRecipe()}
+                    disabled={aiGenerating || !aiDishInput.trim()}
+                    className="bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {aiGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Generate'}
                   </button>
@@ -3067,10 +3178,22 @@ export default function InventoryDashboardPage() {
               </div>
 
               <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2 bg-slate-50 dark:bg-slate-800/80 flex-shrink-0">
-                <button onClick={() => setShowAiModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer">Cancel</button>
+                <button type="button" onClick={() => setShowAiModal(false)} disabled={isImportingAiDraft} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer disabled:opacity-50">Cancel</button>
                 {aiDraftRecipe && (
-                  <button onClick={handleAcceptAiDraft} className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500">
-                    Import Draft into Recipe Editor →
+                  <button 
+                    type="button"
+                    onClick={handleAcceptAiDraft} 
+                    disabled={isImportingAiDraft}
+                    className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  >
+                    {isImportingAiDraft ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Importing Ingredients...</span>
+                      </>
+                    ) : (
+                      <span>Import Draft into Recipe Editor →</span>
+                    )}
                   </button>
                 )}
               </div>

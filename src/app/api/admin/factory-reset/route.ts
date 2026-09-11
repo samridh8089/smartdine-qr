@@ -69,6 +69,88 @@ export async function POST(req: Request) {
       });
     }
 
+    // If body.action === 'deduplicate-inventory', clean up any duplicate rows in inventory_items
+    if (body.action === 'deduplicate-inventory') {
+      const { data: allItems } = await (admin.from('inventory_items') as any)
+        .select('*')
+        .eq('restaurant_id', RESTAURANT_ID)
+        .order('created_at', { ascending: true });
+
+      const nameMap = new Map<string, any[]>();
+      (allItems || []).forEach((item: any) => {
+        const canonical = (item.name || '').trim().toLowerCase();
+        if (!nameMap.has(canonical)) {
+          nameMap.set(canonical, []);
+        }
+        nameMap.get(canonical)!.push(item);
+      });
+
+      const duplicatesCleaned: any[] = [];
+      const idsToDelete: string[] = [];
+
+      for (const [canonical, group] of nameMap.entries()) {
+        if (group.length > 1) {
+          const [primary, ...dupes] = group;
+          const dupeIds = dupes.map((d: any) => d.id);
+          idsToDelete.push(...dupeIds);
+          duplicatesCleaned.push({
+            name: primary.name,
+            primaryId: primary.id,
+            removedCount: dupes.length,
+            removedIds: dupeIds
+          });
+
+          for (const dId of dupeIds) {
+            try {
+              await (admin.from('inventory_recipe_ingredients') as any)
+                .update({ inventory_item_id: primary.id })
+                .eq('inventory_item_id', dId);
+            } catch (_) {}
+
+            try {
+              await (admin.from('inventory_transactions') as any)
+                .update({ inventory_item_id: primary.id })
+                .eq('inventory_item_id', dId);
+            } catch (_) {}
+          }
+        }
+      }
+
+      if (idsToDelete.length > 0) {
+        await (admin.from('inventory_items') as any)
+          .delete()
+          .in('id', idsToDelete);
+      }
+
+      const { data: remainingItems } = await (admin.from('inventory_items') as any)
+        .select('id, name, unit, current_stock')
+        .eq('restaurant_id', RESTAURANT_ID)
+        .order('name', { ascending: true });
+
+      return NextResponse.json({
+        success: true,
+        action: 'deduplicate-inventory',
+        cleanedCount: idsToDelete.length,
+        details: duplicatesCleaned,
+        remainingCount: remainingItems?.length || 0,
+        remainingItems
+      });
+    }
+
+    // If body.action === 'get-inventory', return all current inventory items
+    if (body.action === 'get-inventory') {
+      const { data: items } = await (admin.from('inventory_items') as any)
+        .select('id, name, unit, current_stock, cost_per_unit, category')
+        .eq('restaurant_id', RESTAURANT_ID)
+        .order('name', { ascending: true });
+
+      return NextResponse.json({
+        success: true,
+        count: items?.length || 0,
+        items
+      });
+    }
+
     // If body.action === 'create-test-order', provision 1 test item & 1 live order to verify operational pipeline
     if (body.action === 'create-test-order') {
       let { data: cat } = await (admin.from('categories') as any)
