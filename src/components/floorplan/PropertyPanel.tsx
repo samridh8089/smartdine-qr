@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Copy, Trash2, RotateCw, QrCode, Split, 
-  Plus, Minus, X, Check, ArrowRight, MapPin, AlertCircle
+  Plus, Minus, X, Check, ArrowRight, MapPin, AlertCircle,
+  Lock, Unlock, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { FloorPlanItem, TableShape, RestaurantZone } from './types';
 
@@ -15,9 +16,26 @@ interface PropertyPanelProps {
   onDuplicate: (item: FloorPlanItem) => void;
   onDelete: (id: string) => void;
   onSplit?: (mergedItem: FloorPlanItem) => void;
+  onBringForward?: (id: string) => void;
+  onSendBackward?: (id: string) => void;
   onClose: () => void;
   onViewQR?: (item: FloorPlanItem) => void;
 }
+
+const AVAILABLE_SHAPES: Array<{ shape: TableShape; label: string }> = [
+  { shape: 'two_seater', label: '2-Seater' },
+  { shape: 'square', label: 'Square' },
+  { shape: 'circle', label: 'Round' },
+  { shape: 'rectangle', label: 'Rectangle' },
+  { shape: 'oval', label: 'Oval' },
+  { shape: 'booth', label: 'Booth' },
+  { shape: 'l_booth', label: 'L-Booth' },
+  { shape: 'u_booth', label: 'U-Booth' },
+  { shape: 'sofa_lounge', label: 'Sofa' },
+  { shape: 'window_bench', label: 'Bench' },
+  { shape: 'vip_lounge', label: 'VIP' },
+  { shape: 'bar_table', label: 'Bar High' }
+];
 
 export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   item,
@@ -27,6 +45,8 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   onDuplicate,
   onDelete,
   onSplit,
+  onBringForward,
+  onSendBackward,
   onClose,
   onViewQR
 }) => {
@@ -53,7 +73,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   // ALL HOOKS STRICTLY ABOVE CONDITIONAL RETURNS
   if (!item) {
     return (
-      <div className="hidden md:flex w-72 bg-white border-l border-[#E7E5E4] p-5 flex-col items-center justify-center text-center select-none shrink-0 shadow-sm">
+      <div className="hidden md:flex w-72 bg-white border-l border-[#E7E5E4] p-5 flex-col items-center justify-center text-center select-none shrink-0 shadow-xs">
         <p className="text-xs font-medium text-[#737373]">
           Select any table or fixture on the canvas to inspect and edit its properties.
         </p>
@@ -62,6 +82,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   }
 
   const isTable = item.kind === 'table';
+  const isLocked = Boolean(item.isLocked);
 
   const handleWidthChange = (val: string) => {
     setLocalWidth(val);
@@ -145,7 +166,7 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
   };
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[82vh] rounded-t-2xl shadow-2xl border-t border-[#E7E5E4] md:static md:inset-auto md:max-h-none md:w-72 md:rounded-none md:shadow-sm md:border-t-0 md:border-l bg-white flex flex-col h-auto md:h-full select-none overflow-y-auto shrink-0 transition-all">
+    <div className="fixed inset-x-0 bottom-0 z-40 max-h-[82vh] rounded-t-2xl shadow-2xl border-t border-[#E7E5E4] md:static md:inset-auto md:max-h-none md:w-72 md:rounded-none md:shadow-xs md:border-t-0 md:border-l bg-white flex flex-col h-auto md:h-full select-none overflow-y-auto shrink-0 transition-all">
       {/* Mobile Drawer Pull Handle */}
       <div className="pt-2 pb-1 flex items-center justify-center md:hidden">
         <div className="w-10 h-1 bg-stone-300 rounded-full" />
@@ -154,9 +175,17 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
       {/* Header */}
       <div className="p-3.5 border-b border-[#EFEDE8] flex items-center justify-between">
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#171717]">
-            {isTable ? `Table ${item.display_number || item.tableNumber || item.name}` : item.name}
-          </h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[#171717]">
+              {isTable ? `Table ${item.display_number || item.tableNumber || item.name}` : item.name}
+            </h2>
+            {isLocked && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                <Lock className="w-2.5 h-2.5" />
+                Locked
+              </span>
+            )}
+          </div>
           <span className="text-[10px] text-[#737373] uppercase tracking-wider">
             {isTable ? `${item.shape || 'rectangle'} table` : 'fixture'}
           </span>
@@ -171,6 +200,45 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
       </div>
 
       <div className="p-4 space-y-4 text-xs">
+        {/* Layering & Lock Quick Bar */}
+        <div className="flex items-center gap-1.5 bg-[#FAFAF9] p-1.5 rounded-lg border border-[#E7E5E4]">
+          <button
+            type="button"
+            onClick={() => onUpdate({ isLocked: !isLocked })}
+            className={`flex-1 flex items-center justify-center gap-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-all cursor-pointer ${
+              isLocked
+                ? 'bg-amber-500 text-white shadow-2xs'
+                : 'bg-white text-stone-700 hover:text-stone-900 border border-stone-200 shadow-2xs'
+            }`}
+            title={isLocked ? 'Unlock object (Enable drag and resize)' : 'Lock object in place (Prevent accidental movement)'}
+          >
+            {isLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+            <span>{isLocked ? 'Locked' : 'Lock'}</span>
+          </button>
+
+          {onBringForward && (
+            <button
+              type="button"
+              onClick={() => onBringForward(item.id)}
+              className="p-1.5 bg-white text-stone-700 hover:text-stone-900 border border-stone-200 rounded-md hover:bg-stone-50 transition-colors cursor-pointer"
+              title="Bring Forward (Higher Layer)"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {onSendBackward && (
+            <button
+              type="button"
+              onClick={() => onSendBackward(item.id)}
+              className="p-1.5 bg-white text-stone-700 hover:text-stone-900 border border-stone-200 rounded-md hover:bg-stone-50 transition-colors cursor-pointer"
+              title="Send Backward (Lower Layer)"
+            >
+              <ArrowDown className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
         {/* Identifier / Name */}
         <div>
           <label className="block text-[11px] font-semibold text-[#525252] uppercase tracking-wider mb-1.5">
@@ -261,21 +329,22 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
         {isTable && (
           <div>
             <label className="block text-[11px] font-semibold text-[#525252] uppercase tracking-wider mb-1.5">
-              Table Shape
+              Table Shape &amp; Style
             </label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['square', 'rectangle', 'circle', 'oval', 'booth'] as TableShape[]).map((shp) => (
+            <div className="grid grid-cols-3 gap-1.5 max-h-36 overflow-y-auto p-1 bg-[#FAFAF9] border border-[#E7E5E4] rounded-lg">
+              {AVAILABLE_SHAPES.map((shp) => (
                 <button
-                  key={shp}
+                  key={shp.shape}
                   type="button"
-                  onClick={() => onUpdate({ shape: shp })}
-                  className={`px-2 py-1.5 rounded-md border text-[11px] capitalize font-medium transition-colors cursor-pointer ${
-                    item.shape === shp
-                      ? 'border-[#171717] bg-[#171717] text-white'
-                      : 'border-[#E7E5E4] bg-[#FAFAF9] text-[#525252] hover:bg-white hover:text-[#171717]'
+                  onClick={() => onUpdate({ shape: shp.shape })}
+                  className={`px-1.5 py-1.5 rounded-md text-[10px] font-semibold transition-all cursor-pointer truncate ${
+                    item.shape === shp.shape
+                      ? 'border border-[#171717] bg-[#171717] text-white shadow-2xs'
+                      : 'border border-transparent bg-white text-stone-700 hover:border-stone-300'
                   }`}
+                  title={shp.label}
                 >
-                  {shp}
+                  {shp.label}
                 </button>
               ))}
             </div>
@@ -295,7 +364,8 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                 value={localWidth}
                 onChange={(e) => handleWidthChange(e.target.value)}
                 onBlur={handleWidthBlur}
-                className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
+                disabled={isLocked}
+                className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717] disabled:opacity-50"
               />
             </div>
             <div>
@@ -305,7 +375,8 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
                 value={localHeight}
                 onChange={(e) => handleHeightChange(e.target.value)}
                 onBlur={handleHeightBlur}
-                className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717]"
+                disabled={isLocked}
+                className="w-full px-2.5 py-1.5 border border-[#E7E5E4] rounded-md bg-[#FAFAF9] text-[#171717] font-medium focus:bg-white focus:outline-none focus:border-[#171717] disabled:opacity-50"
               />
             </div>
           </div>
@@ -328,13 +399,15 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
               max="360"
               step="5"
               value={item.rotation || 0}
+              disabled={isLocked}
               onChange={(e) => onUpdate({ rotation: Number(e.target.value) })}
-              className="flex-1 accent-[#171717]"
+              className="flex-1 accent-[#171717] disabled:opacity-50"
             />
             <button
               type="button"
+              disabled={isLocked}
               onClick={() => onUpdate({ rotation: ((item.rotation || 0) + 45) % 360 })}
-              className="px-2 py-1 border border-[#E7E5E4] rounded-md hover:border-[#171717] bg-[#FAFAF9] text-[10px] font-semibold hover:bg-white transition-colors cursor-pointer"
+              className="px-2 py-1 border border-[#E7E5E4] rounded-md hover:border-[#171717] bg-[#FAFAF9] text-[10px] font-semibold hover:bg-white transition-colors cursor-pointer disabled:opacity-50"
             >
               +45°
             </button>
@@ -401,9 +474,10 @@ export const PropertyPanel: React.FC<PropertyPanelProps> = ({
           </button>
           <button
             type="button"
+            disabled={isLocked}
             onClick={() => onDelete(item.id)}
-            className="flex items-center justify-center p-2 rounded-md border border-[#E7E5E4] text-[#737373] hover:text-[#171717] hover:border-[#171717] hover:bg-[#F5F5F4] transition-colors cursor-pointer"
-            title="Delete Object"
+            className="flex items-center justify-center p-2 rounded-md border border-[#E7E5E4] text-[#737373] hover:text-[#171717] hover:border-[#171717] hover:bg-[#F5F5F4] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            title={isLocked ? 'Cannot delete locked object. Unlock it first.' : 'Delete Object'}
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>

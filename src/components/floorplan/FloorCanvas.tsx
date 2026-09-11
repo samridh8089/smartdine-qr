@@ -6,7 +6,8 @@ import Konva from 'konva';
 import { 
   ZoomIn, ZoomOut, RotateCcw, Grid, Undo2, Redo2, 
   Save, Eye, Edit3, Plus, Layers, AlertCircle, Compass, X,
-  TrendingUp, Users, ChevronDown, ChevronRight
+  TrendingUp, Users, ChevronDown, ChevronRight,
+  Lock, Unlock, ArrowUp, ArrowDown, Copy, Trash2
 } from 'lucide-react';
 
 import { FloorPlanItem, TableShape, FloorPlanBlueprint } from './types';
@@ -90,8 +91,9 @@ export const DEFAULT_INITIAL_ITEMS: FloorPlanItem[] = [
   { id: 'furn-kitchen', tableNumber: '', name: 'Kitchen Pass', kind: 'furniture', furnitureType: 'kitchen', x: 620, y: 190, width: 180, height: 80, rotation: 0, seats: 0, status: 'available' },
   { id: 'furn-pos', tableNumber: '', name: 'Cash Counter / POS', kind: 'furniture', furnitureType: 'cash_counter', x: 620, y: 320, width: 130, height: 50, rotation: 0, seats: 0, status: 'available' },
   { id: 'furn-waiting', tableNumber: '', name: 'Guest Waiting Lounge', kind: 'furniture', furnitureType: 'waiting_area', x: 620, y: 420, width: 150, height: 75, rotation: 0, seats: 0, status: 'available' },
-  { id: 'furn-door', tableNumber: '', name: 'Main Entrance', kind: 'furniture', furnitureType: 'door', x: 620, y: 530, width: 80, height: 50, rotation: 0, seats: 0, status: 'available' },
-  { id: 'furn-washroom', tableNumber: '', name: 'Restrooms', kind: 'furniture', furnitureType: 'washroom', x: 440, y: 490, width: 100, height: 75, rotation: 0, seats: 0, status: 'available' }
+  { id: 'furn-door', tableNumber: '', name: 'Main Entrance', kind: 'furniture', furnitureType: 'entrance_door', x: 620, y: 530, width: 80, height: 50, rotation: 0, seats: 0, status: 'available' },
+  { id: 'furn-washroom', tableNumber: '', name: 'Restrooms', kind: 'furniture', furnitureType: 'washroom', x: 440, y: 490, width: 100, height: 75, rotation: 0, seats: 0, status: 'available' },
+  { id: 'furn-plant', tableNumber: '', name: 'Indoor Botanical Planter', kind: 'furniture', furnitureType: 'plant_large', x: 535, y: 80, width: 60, height: 60, rotation: 0, seats: 0, status: 'available' }
 ];
 
 export default function FloorCanvas({
@@ -350,14 +352,39 @@ export default function FloorCanvas({
   }, [items, updateItemsWithHistory]);
 
   const handleDeleteItem = useCallback((id: string) => {
+    const target = items.find((it) => it.id === id);
+    if (target?.isLocked) return;
     const updated = items.filter((it) => it.id !== id);
     updateItemsWithHistory(updated);
     if (selectedId === id) setSelectedId(null);
   }, [items, selectedId, updateItemsWithHistory]);
 
-  // Table Drag with Bounding Box Collision Detection
+  const handleBringForward = useCallback((id: string) => {
+    const idx = items.findIndex((it) => it.id === id);
+    if (idx < 0 || idx >= items.length - 1) return;
+    const newItems = [...items];
+    const [moved] = newItems.splice(idx, 1);
+    newItems.splice(idx + 1, 0, moved);
+    updateItemsWithHistory(newItems);
+  }, [items, updateItemsWithHistory]);
+
+  const handleSendBackward = useCallback((id: string) => {
+    const idx = items.findIndex((it) => it.id === id);
+    if (idx <= 0) return;
+    const newItems = [...items];
+    const [moved] = newItems.splice(idx, 1);
+    newItems.splice(idx - 1, 0, moved);
+    updateItemsWithHistory(newItems);
+  }, [items, updateItemsWithHistory]);
+
+  const handleToggleLock = useCallback((id: string) => {
+    const updated = items.map((it) => (it.id === id ? { ...it, isLocked: !it.isLocked } : it));
+    updateItemsWithHistory(updated);
+  }, [items, updateItemsWithHistory]);
+
+  // Table & Furniture Drag with Smart Alignment Guides and Bounding Box Collision Detection
   const handleItemDragMove = useCallback((item: FloorPlanItem, e: any) => {
-    if (!isEditable) return;
+    if (!isEditable || item.isLocked) return;
     const node = e.target;
     let newX = node.x();
     let newY = node.y();
@@ -365,8 +392,54 @@ export default function FloorCanvas({
     if (snapGrid) {
       newX = Math.round(newX / 20) * 20;
       newY = Math.round(newY / 20) * 20;
-      node.position({ x: newX, y: newY });
     }
+
+    // Smart Alignment Guide Calculation
+    const guides: GuideLine[] = [];
+    const itemW = item.width || 80;
+    const itemH = item.height || 80;
+    const itemCenterX = newX + itemW / 2;
+    const itemCenterY = newY + itemH / 2;
+    const itemRight = newX + itemW;
+    const itemBottom = newY + itemH;
+    const SNAP_THRESH = 6;
+
+    for (const other of items) {
+      if (other.id === item.id) continue;
+      const otherW = other.width || 80;
+      const otherH = other.height || 80;
+      const otherCenterX = other.x + otherW / 2;
+      const otherCenterY = other.y + otherH / 2;
+      const otherRight = other.x + otherW;
+      const otherBottom = other.y + otherH;
+
+      // Vertical guide lines (X alignments)
+      if (Math.abs(newX - other.x) < SNAP_THRESH) {
+        newX = other.x;
+        guides.push({ id: `snap_vl_${other.id}`, points: [newX, 0, newX, 2400], orientation: 'vertical' });
+      } else if (Math.abs(itemCenterX - otherCenterX) < SNAP_THRESH) {
+        newX = otherCenterX - itemW / 2;
+        guides.push({ id: `snap_vc_${other.id}`, points: [otherCenterX, 0, otherCenterX, 2400], orientation: 'vertical' });
+      } else if (Math.abs(itemRight - otherRight) < SNAP_THRESH) {
+        newX = otherRight - itemW;
+        guides.push({ id: `snap_vr_${other.id}`, points: [otherRight, 0, otherRight, 2400], orientation: 'vertical' });
+      }
+
+      // Horizontal guide lines (Y alignments)
+      if (Math.abs(newY - other.y) < SNAP_THRESH) {
+        newY = other.y;
+        guides.push({ id: `snap_ht_${other.id}`, points: [0, newY, 3000, newY], orientation: 'horizontal' });
+      } else if (Math.abs(itemCenterY - otherCenterY) < SNAP_THRESH) {
+        newY = otherCenterY - itemH / 2;
+        guides.push({ id: `snap_hc_${other.id}`, points: [0, otherCenterY, 3000, otherCenterY], orientation: 'horizontal' });
+      } else if (Math.abs(itemBottom - otherBottom) < SNAP_THRESH) {
+        newY = otherBottom - itemH;
+        guides.push({ id: `snap_hb_${other.id}`, points: [0, otherBottom, 3000, otherBottom], orientation: 'horizontal' });
+      }
+    }
+
+    node.position({ x: newX, y: newY });
+    setGuideLines(guides.slice(0, 4));
 
     const currentItemState: FloorPlanItem = {
       ...item,
@@ -383,7 +456,8 @@ export default function FloorCanvas({
   }, [isEditable, snapGrid, items]);
 
   const handleItemDragEnd = useCallback((item: FloorPlanItem, e: any) => {
-    if (!isEditable) return;
+    if (!isEditable || item.isLocked) return;
+    setGuideLines([]);
     const node = e.target;
     const newX = snapGrid ? Math.round(node.x() / 20) * 20 : Math.round(node.x());
     const newY = snapGrid ? Math.round(node.y() / 20) * 20 : Math.round(node.y());
@@ -745,7 +819,7 @@ export default function FloorCanvas({
     }
   }, [propZones, restaurantId]);
 
-  // Keyboard Shortcuts: Ctrl+Z (Undo), Ctrl+Shift+Z / Ctrl+Y (Redo), Ctrl+S (Save Layout)
+  // Keyboard Shortcuts: Ctrl+Z (Undo), Ctrl+Shift+Z / Ctrl+Y (Redo), Ctrl+S (Save), Ctrl+D (Duplicate), Ctrl+L (Lock)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -762,6 +836,16 @@ export default function FloorCanvas({
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         handleManualSave();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        if (selectedItem && isEditable) {
+          handleDuplicateItem(selectedItem);
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        if (selectedId && isEditable) {
+          handleToggleLock(selectedId);
+        }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         const tag = (document.activeElement as HTMLElement)?.tagName;
         if (tag !== 'INPUT' && tag !== 'TEXTAREA' && selectedId && isEditable) {
@@ -772,7 +856,7 @@ export default function FloorCanvas({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo, selectedId, isEditable, handleDeleteItem, handleManualSave]);
+  }, [handleUndo, handleRedo, selectedId, selectedItem, isEditable, handleDeleteItem, handleManualSave, handleDuplicateItem, handleToggleLock]);
 
   return (
     <div
@@ -1109,6 +1193,7 @@ export default function FloorCanvas({
                       );
                       updateItemsWithHistory(updated);
                     }}
+                    onDragMove={(e) => handleItemDragMove(furn, e)}
                     onDragEnd={(e) => handleItemDragEnd(furn, e)}
                   />
                 ))}
@@ -1139,6 +1224,7 @@ export default function FloorCanvas({
               <SelectionBox
                 selectedId={selectedId}
                 isEditable={isEditable}
+                isLocked={Boolean(selectedItem?.isLocked)}
                 onTransformEnd={(newAttrs) => handleUpdateItem(newAttrs)}
               />
             </Layer>
@@ -1196,6 +1282,68 @@ export default function FloorCanvas({
                 <span>Map</span>
               </button>
             )}
+          {/* Floating Canvas Quick-Bar for Selected Object in Edit Mode */}
+          {isEditable && selectedItem && (
+            <div
+              className="absolute z-20 flex items-center bg-stone-900/95 text-white rounded-lg shadow-xl border border-stone-700/80 p-1 gap-0.5 backdrop-blur-xs transition-all pointer-events-auto select-none"
+              style={{
+                left: Math.max(12, Math.min((canvasDimensions.width || 800) - 190, selectedItem.x * scale + stagePos.x)),
+                top: Math.max(10, selectedItem.y * scale + stagePos.y - 42)
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleToggleLock(selectedItem.id)}
+                className={`p-1.5 rounded hover:bg-stone-800 transition-colors cursor-pointer ${
+                  selectedItem.isLocked ? 'text-amber-400 font-bold' : 'text-stone-300 hover:text-white'
+                }`}
+                title={selectedItem.isLocked ? 'Unlock Object (Ctrl+L)' : 'Lock Object in Place (Ctrl+L)'}
+              >
+                {selectedItem.isLocked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
+              </button>
+
+              <div className="w-px h-3.5 bg-stone-700 mx-0.5" />
+
+              <button
+                type="button"
+                onClick={() => handleBringForward(selectedItem.id)}
+                className="p-1.5 rounded hover:bg-stone-800 text-stone-300 hover:text-white transition-colors cursor-pointer"
+                title="Bring Forward"
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSendBackward(selectedItem.id)}
+                className="p-1.5 rounded hover:bg-stone-800 text-stone-300 hover:text-white transition-colors cursor-pointer"
+                title="Send Backward"
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+              </button>
+
+              <div className="w-px h-3.5 bg-stone-700 mx-0.5" />
+
+              <button
+                type="button"
+                onClick={() => handleDuplicateItem(selectedItem)}
+                className="p-1.5 rounded hover:bg-stone-800 text-stone-300 hover:text-white transition-colors cursor-pointer"
+                title="Duplicate Object (Ctrl+D)"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+
+              <button
+                type="button"
+                disabled={selectedItem.isLocked}
+                onClick={() => handleDeleteItem(selectedItem.id)}
+                className="p-1.5 rounded hover:bg-red-900/60 text-stone-300 hover:text-red-300 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                title={selectedItem.isLocked ? 'Unlock to delete' : 'Delete Object (Del)'}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           </div>
         </div>
 
@@ -1209,6 +1357,8 @@ export default function FloorCanvas({
             onDuplicate={handleDuplicateItem}
             onDelete={handleDeleteItem}
             onSplit={handleSplitTable}
+            onBringForward={handleBringForward}
+            onSendBackward={handleSendBackward}
             onClose={() => setSelectedId(null)}
             onViewQR={(t) => handleOpenQRModal(t)}
           />
