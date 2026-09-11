@@ -77,6 +77,7 @@ export default function DashboardPage() {
     occupancyRate: 0
   });
   const [loading, setLoading] = useState(() => !hasCachedData);
+  const [announcementDismissed, setAnnouncementDismissed] = useState(false);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const backgroundTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -474,6 +475,35 @@ export default function DashboardPage() {
           {new Date().toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
         </div>
       </div>
+
+      {/* Super Admin Global Announcement Banner */}
+      {!announcementDismissed && restaurant?.settings?.broadcast_announcement?.message && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900/40 via-purple-900/30 to-slate-900/50 border border-indigo-500/40 shadow-xl flex items-start justify-between gap-4 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-start gap-3.5">
+            <span className="text-2xl p-1 bg-indigo-500/20 rounded-xl">📢</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-indigo-400 uppercase tracking-wider">Super Admin Announcement</span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {restaurant.settings.broadcast_announcement.created_at
+                    ? new Date(restaurant.settings.broadcast_announcement.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : 'Recent'}
+                </span>
+              </div>
+              <p className="text-sm font-semibold mt-1 text-slate-100 leading-relaxed">
+                {restaurant.settings.broadcast_announcement.message}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAnnouncementDismissed(true)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors text-xs shrink-0 cursor-pointer"
+            title="Dismiss announcement"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Top Row: Revenue & Core Stats (4 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

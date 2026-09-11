@@ -126,6 +126,50 @@ export async function POST(req: Request) {
         });
       }
       affected = restaurantIds.length;
+
+      // 1. Update restaurant settings with broadcast announcement for owner dashboard
+      try {
+        const { data: currentRests } = await supabaseAdmin
+          .from('restaurants')
+          .select('id, settings')
+          .in('id', restaurantIds);
+
+        if (currentRests && currentRests.length > 0) {
+          for (const rest of currentRests) {
+            const updatedSettings = {
+              ...(rest.settings || {}),
+              broadcast_announcement: {
+                message,
+                author: adminEmail,
+                created_at: nowIso
+              }
+            };
+            await supabaseAdmin
+              .from('restaurants')
+              .update({ settings: updatedSettings })
+              .eq('id', rest.id);
+          }
+        }
+      } catch (e) {
+        console.warn('[Broadcast settings update]:', e);
+      }
+
+      // 2. Insert into system_events for live telemetry and timeline
+      try {
+        const systemEvents = restaurantIds.map((rId: string) => ({
+          restaurant_id: rId,
+          event_type: 'broadcast_announcement',
+          actor_type: 'super_admin',
+          actor_id: adminEmail,
+          source_node: 'command_center',
+          target_node: 'dashboard',
+          metadata: { message, broadcast_by: adminEmail },
+          correlation_id: `corr_bcast_${Date.now()}`
+        }));
+        await supabaseAdmin.from('system_events').insert(systemEvents);
+      } catch (e) {
+        console.warn('[Broadcast system_events insert]:', e);
+      }
     }
 
     if (auditEntries.length > 0) {
