@@ -135,6 +135,28 @@ export async function POST(req: Request) {
       if (error) throw error;
       result = data;
       auditDetails = `Updated Table "${data.name}"`;
+    } else if (entityType === 'order') {
+      const orderUpdates: any = { updated_at: new Date().toISOString() };
+      if (updates.status !== undefined) orderUpdates.status = updates.status;
+      if (updates.payment_status !== undefined) orderUpdates.payment_status = updates.payment_status;
+      if (updates.action === 'refund') {
+        orderUpdates.payment_status = 'refunded';
+        orderUpdates.status = 'cancelled';
+      } else if (updates.action === 'cancel') {
+        orderUpdates.status = 'cancelled';
+      } else if (updates.action === 'reopen') {
+        orderUpdates.status = 'accepted';
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from('orders')
+        .update(orderUpdates)
+        .eq('id', entityId)
+        .select()
+        .single();
+      if (error) throw error;
+      result = data;
+      auditDetails = `Updated Order "${data.order_number || data.id}" (Status: ${data.status}, Action: ${updates.action || 'status_update'}). Reason: ${reason || 'Founder Command Center operation'}`;
     }
 
     // Insert audit log

@@ -94,7 +94,7 @@ async function captureAllProofs() {
     const ownerBtn = btns.find(el => el.textContent.includes('Open Owner Portal'));
     if (ownerBtn) ownerBtn.click();
   });
-  await page.waitForFunction(() => !document.body.innerText.includes('Loading CleverOps...'), { timeout: 25000 });
+  await page.waitForFunction(() => window.location.pathname === '/dashboard' && document.body.innerText.includes('Viewing as: The Foody Hub (Owner)'), { timeout: 25000 });
   await new Promise(r => setTimeout(r, 2000));
   console.log('Current URL after owner impersonation:', page.url());
   console.log('Capturing 05_owner_impersonation.png...');
@@ -107,9 +107,7 @@ async function captureAllProofs() {
     const exitBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Exit Impersonation'));
     if (exitBtn) exitBtn.click();
   });
-  await new Promise(r => setTimeout(r, 2000));
-  await page.goto(`${PROD_URL}/super-admin`, { waitUntil: 'networkidle2', timeout: 60000 });
-  await page.waitForFunction(() => document.body.innerText.includes('FOUNDER EDITION'), { timeout: 35000 });
+  await page.waitForFunction(() => window.location.pathname.includes('/super-admin') && document.body.innerText.includes('FOUNDER EDITION'), { timeout: 25000 });
   await new Promise(r => setTimeout(r, 2000));
 
   // PROOF 6: Kitchen Impersonation
@@ -127,8 +125,8 @@ async function captureAllProofs() {
     const kBtn = btns.find(el => el.textContent.includes('Open Kitchen Portal'));
     if (kBtn) kBtn.click();
   });
-  await page.waitForFunction(() => !document.body.innerText.includes('Loading CleverOps...'), { timeout: 25000 });
-  await new Promise(r => setTimeout(r, 2500));
+  await page.waitForFunction(() => window.location.pathname.includes('/kds') && document.body.innerText.includes('Viewing as: The Foody Hub (Kitchen)'), { timeout: 25000 });
+  await new Promise(r => setTimeout(r, 2000));
   console.log('Current URL after kitchen impersonation:', page.url());
   console.log('Capturing 06_kitchen_impersonation.png...');
   await page.screenshot({ path: path.join(OUTPUT_DIR, '06_kitchen_impersonation.png') });
@@ -139,9 +137,7 @@ async function captureAllProofs() {
     const exitBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Exit Impersonation'));
     if (exitBtn) exitBtn.click();
   });
-  await new Promise(r => setTimeout(r, 2000));
-  await page.goto(`${PROD_URL}/super-admin`, { waitUntil: 'networkidle2', timeout: 60000 });
-  await page.waitForFunction(() => document.body.innerText.includes('FOUNDER EDITION'), { timeout: 35000 });
+  await page.waitForFunction(() => window.location.pathname.includes('/super-admin') && document.body.innerText.includes('FOUNDER EDITION'), { timeout: 25000 });
   await new Promise(r => setTimeout(r, 2000));
 
   // PROOF 7: Waiter Impersonation
@@ -159,8 +155,8 @@ async function captureAllProofs() {
     const wBtn = btns.find(el => el.textContent.includes('Open Waiter Portal'));
     if (wBtn) wBtn.click();
   });
-  await page.waitForFunction(() => !document.body.innerText.includes('Loading CleverOps...'), { timeout: 25000 });
-  await new Promise(r => setTimeout(r, 2500));
+  await page.waitForFunction(() => window.location.pathname.includes('/orders') && document.body.innerText.includes('Viewing as: The Foody Hub (Waiter)'), { timeout: 25000 });
+  await new Promise(r => setTimeout(r, 2000));
   console.log('Current URL after waiter impersonation:', page.url());
   console.log('Capturing 07_waiter_impersonation.png...');
   await page.screenshot({ path: path.join(OUTPUT_DIR, '07_waiter_impersonation.png') });
@@ -171,6 +167,7 @@ async function captureAllProofs() {
     const exitBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Exit Impersonation'));
     if (exitBtn) exitBtn.click();
   });
+  await page.waitForFunction(() => window.location.pathname.includes('/super-admin') && document.body.innerText.includes('FOUNDER EDITION'), { timeout: 25000 });
   await new Promise(r => setTimeout(r, 2000));
 
   // PROOF 8: Customer Menu Impersonation
