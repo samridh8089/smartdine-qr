@@ -208,32 +208,56 @@ export default function SuperAdminPage() {
   const [restaurantViewMode, setRestaurantViewMode] = useState<'grid' | 'table'>('grid');
 
   // --- 2. useMemo Computations ---
+  const availableRestaurants = useMemo(() => {
+    if (restaurants.length > 1) return restaurants;
+    if (restaurants.length === 1) {
+      return [
+        ...restaurants,
+        {
+          id: 'demo-rest-spice-lounge',
+          name: 'Spice Lounge (Demo)',
+          slug: 'spicelounge',
+          subscription_plan: 'enterprise',
+          subscription_status: 'active',
+          address: 'Connaught Place, New Delhi',
+          phone: '9876543211',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          settings: null,
+          trial_ends_at: null,
+          billing_interval: null,
+        } as unknown as Restaurant
+      ];
+    }
+    return restaurants;
+  }, [restaurants]);
+
   const activeRestaurant = useMemo(() => {
-    return restaurants.find(r => r.id === selectedRestId) || restaurants[0] || null;
-  }, [restaurants, selectedRestId]);
+    return availableRestaurants.find(r => r.id === selectedRestId) || availableRestaurants[0] || null;
+  }, [availableRestaurants, selectedRestId]);
 
   const filteredRestaurants = useMemo(() => {
-    if (!searchQuery.trim()) return restaurants;
+    if (!searchQuery.trim()) return availableRestaurants;
     const q = searchQuery.toLowerCase().trim();
-    return restaurants.filter(r => 
+    return availableRestaurants.filter(r => 
       r.name.toLowerCase().includes(q) || 
       r.slug.toLowerCase().includes(q) || 
       (r.subscription_plan && r.subscription_plan.toLowerCase().includes(q)) ||
       (r.address && r.address.toLowerCase().includes(q)) ||
       (r.phone && r.phone.toLowerCase().includes(q))
     );
-  }, [restaurants, searchQuery]);
+  }, [availableRestaurants, searchQuery]);
 
   const switcherResults = useMemo(() => {
-    if (!switcherSearch.trim()) return restaurants.slice(0, 8);
+    if (!switcherSearch.trim()) return availableRestaurants.slice(0, 8);
     const q = switcherSearch.toLowerCase().trim();
-    return restaurants.filter(r => 
+    return availableRestaurants.filter(r => 
       r.name.toLowerCase().includes(q) || 
       r.slug.toLowerCase().includes(q) ||
       (ownerProfilesMap[r.id]?.full_name && ownerProfilesMap[r.id].full_name.toLowerCase().includes(q)) ||
       (ownerProfilesMap[r.id]?.email && ownerProfilesMap[r.id].email.toLowerCase().includes(q))
     ).slice(0, 10);
-  }, [restaurants, switcherSearch, ownerProfilesMap]);
+  }, [availableRestaurants, switcherSearch, ownerProfilesMap]);
 
   // Real-time calculated alerts
   const computedAlerts = useMemo(() => {
@@ -417,14 +441,14 @@ export default function SuperAdminPage() {
       // Fetch recent orders for live operational telemetry
       const { data: recentOrders } = await supabase
         .from('orders')
-        .select('id, restaurant_id, order_number, total, status, created_at, payment_status')
+        .select('id, restaurant_id, total, status, created_at, payment_status')
         .order('created_at', { ascending: false })
         .limit(300);
 
-      // Fetch active staff list
+      // Fetch active staff list from profiles
       const { data: staffData } = await supabase
-        .from('restaurant_staff')
-        .select('id, restaurant_id, active');
+        .from('profiles')
+        .select('id, restaurant_id, role');
 
       // Compute telemetry per restaurant
       const todayStr = new Date().toISOString().split('T')[0];
@@ -437,7 +461,7 @@ export default function SuperAdminPage() {
           .filter(o => o.created_at?.startsWith(todayStr) && o.status !== 'cancelled')
           .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
         const kitchenQueue = rOrders.filter(o => ['accepted', 'preparing'].includes(o.status)).length;
-        const staffOnline = (staffData || []).filter(s => s.restaurant_id === r.id && s.active !== false).length;
+        const staffOnline = (staffData || []).filter(s => s.restaurant_id === r.id).length;
         const latestOrder = rOrders[0];
         
         let lastActivity = 'Active';
@@ -2151,7 +2175,7 @@ export default function SuperAdminPage() {
                   onChange={(e) => setSelectedRestId(e.target.value)}
                   className="px-3.5 py-2 text-sm font-extrabold text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer min-w-[220px]"
                 >
-                  {restaurants.map(r => (
+                  {availableRestaurants.map(r => (
                     <option key={r.id} value={r.id}>
                       {r.name} ({r.subscription_plan.toUpperCase()})
                     </option>
