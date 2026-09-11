@@ -18,8 +18,6 @@ import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { dashboardStore } from '@/lib/dashboardStore';
-import { usePreviewMode } from '@/context/PreviewModeContext';
-import { DEMO_ORDERS } from '@/lib/demoPreviewData';
 
 export interface ParsedReservation {
   date: string;
@@ -116,7 +114,6 @@ export default function OrdersPage() {
   const orderIdParam = searchParams.get('id');
 
   const { restaurant, profile, activeRole } = useRestaurant();
-  const { isPreviewMode } = usePreviewMode();
   const restId = restaurant?.id || profile?.restaurant_id;
   const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
   const [orders, setOrders] = useState<Order[]>(() => initialCachedOrders || []);
@@ -134,61 +131,8 @@ export default function OrdersPage() {
   const optimisticStatusMapRef = useRef<Record<string, Order['status']>>({});
 
   const effectiveOrders = useMemo<Order[]>(() => {
-    if (orders && orders.length > 0) return orders;
-    if (isPreviewMode) {
-      return DEMO_ORDERS.map((d, i) => ({
-        id: d.id,
-        restaurant_id: restId || 'demo-rest',
-        table_id: `tbl-${i}`,
-        table_name: d.tableDisplay,
-        order_type: d.orderType as any,
-        status: d.status as any,
-        special_instructions: d.customerNote,
-        subtotal: d.subtotal,
-        gst: d.gst,
-        service_charge: 0,
-        total: d.total,
-        grand_total: d.total,
-        created_at: new Date(Date.now() - d.elapsedMinutes * 60000).toISOString(),
-        daily_sequence: 30 + i,
-        customer_arrival_minutes: 20,
-        items: [
-          {
-            id: `item-${d.id}-1`,
-            order_id: d.id,
-            menu_item_id: `mi-${i}`,
-            menu_item_name: d.itemsSummary,
-            quantity: d.itemsCount || 1,
-            price: d.subtotal,
-            status: d.status
-          }
-        ],
-        batches: [
-          {
-            id: `batch-${d.id}-1`,
-            order_id: d.id,
-            batch_number: 1,
-            status: d.status as any,
-            created_at: new Date(Date.now() - d.elapsedMinutes * 60000).toISOString(),
-            updated_at: new Date(Date.now() - d.elapsedMinutes * 60000).toISOString(),
-            special_instructions: d.customerNote,
-            items: [
-              {
-                id: `item-${d.id}-1`,
-                order_id: d.id,
-                menu_item_id: `mi-${i}`,
-                menu_item_name: d.itemsSummary,
-                quantity: d.itemsCount || 1,
-                price: d.subtotal,
-                status: d.status
-              }
-            ]
-          }
-        ]
-      }));
-    }
-    return [];
-  }, [orders, isPreviewMode, restId]);
+    return orders || [];
+  }, [orders]);
 
   const rawSelectedOrder = (selectedOrderId ? effectiveOrders.find(o => o.id === selectedOrderId || getFormattedOrderId(o, restaurant?.name || '', effectiveOrders) === selectedOrderId) : null) || (effectiveOrders.length > 0 ? effectiveOrders[0] : null);
   const selectedOrder = useMemo(() => {
@@ -1533,7 +1477,7 @@ export default function OrdersPage() {
       setSeatGuestModalOpen(false);
       setReservationToSeat(null);
       setSelectedTableForSeat('');
-      if (restaurant?.id && !isPreviewMode) {
+      if (restaurant?.id) {
         await safeReloadOrders(restaurant.id);
       }
     } catch (err: any) {

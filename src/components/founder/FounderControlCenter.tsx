@@ -26,6 +26,7 @@ import {
   ChevronRight,
   ArrowRight,
   Command,
+  CheckCircle2,
 } from 'lucide-react';
 import { useSystemEvents } from '@/hooks/useSystemEvents';
 import LiveMode from './LiveMode';
@@ -37,7 +38,7 @@ import OrderInvestigationBar, { InvestigatedOrder } from './OrderInvestigationBa
 import CommandPalette from './CommandPalette';
 import LiveErrorToast from './LiveErrorToast';
 import ErrorCenterPanel from './ErrorCenterPanel';
-import { INITIAL_DEMO_ERROR, RESOLVED_ERRORS_SEED } from './demoErrors';
+import { INITIAL_DEMO_ERROR, RESOLVED_ERRORS_SEED, createSimulatedRuntimeError } from './demoErrors';
 import type { FounderMode, SystemErrorItem, SystemEvent } from './types';
 
 interface FounderControlCenterProps {
@@ -161,9 +162,9 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const [replayTargetOrder, setReplayTargetOrder] = useState<InvestigatedOrder | null>(null);
   const [freezeTargetTimestamp, setFreezeTargetTimestamp] = useState<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
-  const [systemErrors, setSystemErrors] = useState<SystemErrorItem[]>([INITIAL_DEMO_ERROR, ...RESOLVED_ERRORS_SEED]);
-  const [activeError, setActiveError] = useState<SystemErrorItem | null>(INITIAL_DEMO_ERROR);
-  const [selectedErrorId, setSelectedErrorId] = useState<string | null>('ERR-0007');
+  const [systemErrors, setSystemErrors] = useState<SystemErrorItem[]>([]);
+  const [activeError, setActiveError] = useState<SystemErrorItem | null>(null);
+  const [selectedErrorId, setSelectedErrorId] = useState<string | null>(null);
   const [errorCenterOpen, setErrorCenterOpen] = useState<boolean>(false);
   const [isRetryingError, setIsRetryingError] = useState<boolean>(false);
   const [isResolvedError, setIsResolvedError] = useState<boolean>(false);
@@ -186,21 +187,8 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   }, [systemErrors]);
 
   const combinedEvents = useMemo(() => {
-    const initialErrEv: SystemEvent = {
-      id: 'ev_err_kitchen_timeout',
-      restaurant_id: restaurantId,
-      correlation_id: 'corr_A7K-26D00002_err',
-      order_id: 'A7K-26D00002',
-      actor_type: 'kitchen',
-      event_type: 'kitchen_timeout',
-      source_node: 'kitchen_queue',
-      target_node: 'preparing',
-      duration_ms: 12450,
-      metadata: { error: '504 Gateway Timeout', table: 'Table 12', item: 'Farmhouse Pizza' },
-      created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    };
-    return [...errorEvents, initialErrEv, ...events];
-  }, [errorEvents, events, restaurantId]);
+    return [...errorEvents, ...events];
+  }, [errorEvents, events]);
 
   const statusColor = useMemo(() => {
     if (connectionStatus === 'connected') return 'text-emerald-400';
@@ -451,13 +439,29 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     handleModeChange('live');
   }, [restaurantId, handleModeChange]);
 
-  const handleTriggerDemoError = useCallback(() => {
-    setActiveError(INITIAL_DEMO_ERROR);
-    setSelectedErrorId('ERR-0007');
+  const handleSimulateError = useCallback(() => {
+    const simErr = createSimulatedRuntimeError();
+    setActiveError(simErr);
+    setSelectedErrorId(simErr.id);
     setIsRetryingError(false);
     setIsResolvedError(false);
-    setSystemErrors([INITIAL_DEMO_ERROR, ...RESOLVED_ERRORS_SEED]);
-  }, []);
+    setSystemErrors([simErr]);
+
+    const simEvent: SystemEvent = {
+      id: `ev_sim_${Date.now()}`,
+      restaurant_id: restaurantId,
+      correlation_id: simErr.correlationId,
+      order_id: simErr.orderId,
+      actor_type: 'kitchen',
+      event_type: 'kitchen_timeout',
+      source_node: 'kitchen_queue',
+      target_node: 'preparing',
+      duration_ms: 12450,
+      metadata: { error: '504 Gateway Timeout', table: simErr.tableName },
+      created_at: new Date().toISOString(),
+    };
+    setErrorEvents((prev) => [simEvent, ...prev]);
+  }, [restaurantId]);
 
   // 60-Second Investor Demo Automated Walkthrough (P3)
   const startInvestorDemo = useCallback(() => {
@@ -557,13 +561,13 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     // 16s: Kitchen Queue -> Error simulation
     scheduleStep(16000, () => {
       setInvestorDemoStep('5. Outage Alert: ERR-0007 504 Timeout at Kitchen Queue');
-      handleTriggerDemoError();
+      handleSimulateError();
     });
 
     // 22s: Error Remediation (Retry Sync)
     scheduleStep(22000, () => {
       setInvestorDemoStep('6. Auto-Remediation: Retry Sync restores socket channel (200 OK)');
-      handleRetrySync(INITIAL_DEMO_ERROR);
+      handleRetrySync();
     });
 
     // 29s: Waiter Assigned & Push Sent
@@ -644,7 +648,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         setInvestorDemoStep('');
       }, 3500);
     });
-  }, [restaurantId, handleModeChange, handleTriggerDemoError, handleRetrySync]);
+  }, [restaurantId, handleModeChange, handleSimulateError, handleRetrySync]);
 
   // Timer cleanup
   useEffect(() => {
@@ -765,6 +769,28 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               <span className="hidden sm:block">{label}</span>
             </button>
           ))}
+        </div>
+
+        {/* Top Badges: Active Orders, Events, Errors */}
+        <div className="hidden lg:flex items-center gap-1.5 font-mono text-[11px] shrink-0 ml-1">
+          <span data-testid="badge-top-active-orders" className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${
+            theme === 'light' ? 'bg-white border-[#D7E1EC] text-[#1E293B]' : 'bg-slate-800/90 border-slate-700/80 text-slate-300'
+          }`}>
+            <span className="text-slate-400 font-semibold">Active Orders:</span>
+            <span className="font-bold text-sky-400">{orderDots.length}</span>
+          </span>
+          <span data-testid="badge-top-events" className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${
+            theme === 'light' ? 'bg-white border-[#D7E1EC] text-[#1E293B]' : 'bg-slate-800/90 border-slate-700/80 text-slate-300'
+          }`}>
+            <span className="text-slate-400 font-semibold">Events:</span>
+            <span className="font-bold text-emerald-400">{totalEventCount}</span>
+          </span>
+          <span data-testid="badge-top-errors" className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${
+            theme === 'light' ? 'bg-white border-[#D7E1EC] text-[#1E293B]' : 'bg-slate-800/90 border-slate-700/80 text-slate-300'
+          }`}>
+            <span className="text-slate-400 font-semibold">Errors:</span>
+            <span className={`font-bold ${activeErrorCount > 0 ? 'text-rose-400' : 'text-slate-400'}`}>{activeErrorCount}</span>
+          </span>
         </div>
 
         {/* P0 — Errors Button in Top Bar (alongside Live, Replay, Freeze) */}
@@ -957,7 +983,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             activeError={activeError}
             isRetryingError={isRetryingError}
             isResolvedError={isResolvedError}
-            onRetryError={() => handleRetrySync(activeError || INITIAL_DEMO_ERROR)}
+            onRetryError={() => handleRetrySync(activeError || undefined)}
           />
         )}
         {activeMode === 'replay' && (
@@ -984,6 +1010,49 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           <DebugMode restaurantId={restaurantId} events={events} />
         )}
       </div>
+
+      {/* ── First Run Onboarding Card ────────────────────────────────────── */}
+      {activeMode === 'live' && orderDots.length === 0 && events.length === 0 && (
+        <div
+          data-testid="first-run-onboarding-card"
+          className={`absolute bottom-6 right-6 z-30 w-84 p-4 rounded-xl border shadow-2xl backdrop-blur-md font-mono space-y-3 ${
+            theme === 'light'
+              ? 'bg-white/95 border-emerald-300 text-slate-900 shadow-emerald-900/10'
+              : 'bg-slate-900/95 border-emerald-600/50 text-slate-100 shadow-slate-950/80'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-emerald-400" />
+              <span className="text-xs font-bold font-mono">Welcome to CleverOps</span>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-semibold">
+              Fresh Setup
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Your restaurant is freshly initialized with zero historical data. Complete the quickstart checklist:
+          </p>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex items-center gap-2 text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              <span>Database schema & floor tables intact</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-300">
+              <span className="h-3.5 w-3.5 rounded-full border border-sky-400 flex items-center justify-center text-[9px] text-sky-400 font-bold shrink-0">1</span>
+              <span>Scan table QR code to open menu</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-400">
+              <span className="h-3.5 w-3.5 rounded-full border border-slate-600 flex items-center justify-center text-[9px] text-slate-400 font-bold shrink-0">2</span>
+              <span>Place first live order</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-400">
+              <span className="h-3.5 w-3.5 rounded-full border border-slate-600 flex items-center justify-center text-[9px] text-slate-400 font-bold shrink-0">3</span>
+              <span>Follow order across workflow pipeline</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Part 10: Demo Walkthrough Mode Modal ─────────────────────────── */}
       {helpOpen && (
@@ -1258,7 +1327,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           onNotifyWaiter={handleNotifyWaiter}
           onNotifyOwner={handleNotifyOwner}
           onViewLogs={handleViewLogs}
-          onTriggerDemoError={handleTriggerDemoError}
+          onSimulateError={handleSimulateError}
           onClose={() => setErrorCenterOpen(false)}
           onJumpToOrder={(orderId) => {
             setErrorCenterOpen(false);

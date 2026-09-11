@@ -18,9 +18,7 @@ import {
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { dashboardStore } from '@/lib/dashboardStore';
-import { usePreviewMode } from '@/context/PreviewModeContext';
 import FloorCanvasWrapper from '@/components/floorplan/FloorCanvasWrapper';
-import { DEFAULT_INITIAL_ITEMS } from '@/components/floorplan/FloorCanvas';
 import { FloorPlanItem } from '@/components/floorplan/types';
 
 export default function TablesPage() {
@@ -62,7 +60,6 @@ export default function TablesPage() {
   });
 
   const [nowTime, setNowTime] = useState(Date.now());
-  const { isPreviewMode } = usePreviewMode();
   const [viewMode, setViewMode] = useState<'floorplan' | 'grid'>('floorplan');
   const [floorPlanMode, setFloorPlanMode] = useState<'view' | 'edit'>('view');
 
@@ -94,11 +91,8 @@ export default function TablesPage() {
         qrCodeUrl: qrCodes[t.id]
       }));
     }
-    if (isPreviewMode) {
-      return DEFAULT_INITIAL_ITEMS;
-    }
     return [];
-  }, [tables, qrCodes, isPreviewMode]);
+  }, [tables, qrCodes]);
 
   useEffect(() => {
     const timer = setInterval(() => {

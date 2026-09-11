@@ -1936,7 +1936,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
         {/* Food Items list */}
         <div className="space-y-4">
-          {filteredItems.length === 0 ? (
+          {menuItems.length === 0 ? (
+            <div className="text-center py-16 px-4 space-y-3" data-testid="empty-menu-message">
+              <UtensilsCrossed className="h-10 w-10 mx-auto text-slate-300 dark:text-slate-600" />
+              <p className="text-base font-bold text-slate-700 dark:text-slate-300">No menu items yet.</p>
+              <p className="text-xs text-slate-400">Please check back shortly or ask your server for assistance.</p>
+            </div>
+          ) : filteredItems.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-xs">
               No dishes found matching your selection.
             </div>

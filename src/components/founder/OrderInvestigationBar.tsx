@@ -57,109 +57,8 @@ export interface InvestigatedOrder {
   auditTrailId: string;
 }
 
-// Seed / Mock orders for investor demo (works for queries days earlier, e.g. A7K-26D00001, Table 12, Ravi Sharma)
-export const SEED_INVESTIGATION_ORDERS: InvestigatedOrder[] = [
-  {
-    id: 'A7K-26D00001',
-    correlationId: 'corr_a7k_26d00001_demo',
-    sessionId: 'sess_tbl12_live',
-    tableName: 'Table 12',
-    customerName: 'Rohan Verma',
-    waiterName: 'Ravi Sharma',
-    chefName: 'Chef Suresh',
-    status: 'completed',
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 + 14 * 3600 * 1000).toISOString(), // 3 days ago 2 PM
-    completedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 + 14.8 * 3600 * 1000).toISOString(),
-    totalAmount: 689.0,
-    items: [
-      { id: 'item-1', name: 'Paneer Butter Masala', quantity: 1, price: 320.0 },
-      { id: 'item-2', name: 'Butter Naan', quantity: 3, price: 60.0 },
-      { id: 'item-3', name: 'Jeera Rice', quantity: 1, price: 189.0 },
-    ],
-    inventoryDeductions: [
-      { item: 'Paneer Cubes', qty: '200g' },
-      { item: 'Butter', qty: '40g' },
-      { item: 'Basmati Rice', qty: '150g' },
-      { item: 'Cream', qty: '50ml' },
-    ],
-    pushAlerts: 4,
-    paymentMethod: 'UPI / QR',
-    transactionId: 'UPI-TXN-98421045',
-    auditTrailId: 'AUD-20260907-8821',
-  },
-  {
-    id: 'A7K-26D00002',
-    correlationId: 'corr_A7K-26D00002_err',
-    sessionId: 'sess_tbl12_live',
-    tableName: 'Table 12',
-    customerName: 'Priya Mehta',
-    waiterName: 'Neha Patel',
-    chefName: 'Chef Suresh',
-    status: 'preparing',
-    createdAt: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
-    totalAmount: 689.0,
-    items: [
-      { id: 'item-4', name: 'Farmhouse Pizza (Large)', quantity: 1, price: 449.0 },
-      { id: 'item-5', name: 'Cold Coffee (Sweet)', quantity: 2, price: 120.0 },
-    ],
-    inventoryDeductions: [
-      { item: 'Pizza Dough', qty: '350g' },
-      { item: 'Mozzarella Cheese', qty: '150g' },
-      { item: 'Cold Brew Extract', qty: '200ml' },
-    ],
-    pushAlerts: 3,
-    paymentMethod: 'Pending (At Table)',
-    auditTrailId: 'AUD-20260910-1042',
-  },
-  {
-    id: 'A7K-26D00003',
-    correlationId: 'corr_table16_ready',
-    sessionId: 'sess_tbl16_live',
-    tableName: 'Table 16',
-    customerName: 'Vikram Singh',
-    waiterName: 'Neha Patel',
-    chefName: 'Chef Ramesh',
-    status: 'ready',
-    createdAt: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
-    totalAmount: 540.0,
-    items: [
-      { id: 'item-7', name: 'Chicken Biryani', quantity: 1, price: 380.0 },
-      { id: 'item-8', name: 'Mirchi Ka Salan', quantity: 1, price: 90.0 },
-      { id: 'item-9', name: 'Raita', quantity: 1, price: 70.0 },
-    ],
-    inventoryDeductions: [
-      { item: 'Chicken Breast', qty: '250g' },
-      { item: 'Basmati Rice', qty: '200g' },
-      { item: 'Curd / Yogurt', qty: '100g' },
-    ],
-    pushAlerts: 3,
-    paymentMethod: 'Card / POS',
-    auditTrailId: 'AUD-20260910-1011',
-  },
-  {
-    id: 'A7K-26D00004',
-    correlationId: 'corr_table6_recent',
-    sessionId: 'sess_tbl6_live',
-    tableName: 'Table 6',
-    customerName: 'Amit Sharma',
-    waiterName: 'Ravi Sharma',
-    chefName: 'Chef Suresh',
-    status: 'served',
-    createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    totalAmount: 320.0,
-    items: [
-      { id: 'item-10', name: 'Veg Hakka Noodles', quantity: 1, price: 220.0 },
-      { id: 'item-11', name: 'Veg Manchurian Gravy', quantity: 1, price: 100.0 },
-    ],
-    inventoryDeductions: [
-      { item: 'Noodles', qty: '150g' },
-      { item: 'Mixed Veggies', qty: '120g' },
-    ],
-    pushAlerts: 2,
-    paymentMethod: 'Cash',
-    auditTrailId: 'AUD-20260910-0955',
-  },
-];
+// Seed / Mock orders for investor demo (cleared for factory reset)
+export const SEED_INVESTIGATION_ORDERS: InvestigatedOrder[] = [];
 
 interface OrderInvestigationBarProps {
   restaurantId: string;
@@ -447,7 +346,7 @@ export default function OrderInvestigationBar({
           <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60 font-mono text-xs">
             {filteredOrders.length === 0 ? (
               <div className="p-4 text-center text-slate-500 text-xs">
-                No orders match &quot;{query}&quot;
+                No matching order found.
               </div>
             ) : (
               filteredOrders.map((ord) => (

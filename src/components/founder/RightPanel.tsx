@@ -258,9 +258,11 @@ interface InspectorTabProps {
   theme?: 'dark' | 'light';
   onSelectTable?: (tableName: string) => void;
   onSelectNode?: (nodeId: string) => void;
+  activeError?: SystemErrorItem | null;
+  isResolvedError?: boolean;
 }
 
-function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTable, onSelectNode }: InspectorTabProps) {
+function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTable, onSelectNode, activeError, isResolvedError }: InspectorTabProps) {
   // ── 1. useState ──
   const [internalNodeId, setInternalNodeId] = useState<string>('reports');
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -400,21 +402,22 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
       const amt = Number((be.metadata as any)?.amount || (be.metadata as any)?.total || 0);
       if (amt > 0) totalRev += amt;
     }
-    if (totalRev === 0) totalRev = 1105.65;
 
-    const ordersCount = events.filter((e) => e.event_type === 'order_created').length || 6;
+    const ordersCount = events.filter((e) => e.event_type === 'order_created').length;
     const prepEvents = events.filter((e) => e.event_type === 'order_preparing' && e.duration_ms);
     const avgPrep = prepEvents.length > 0
-      ? (prepEvents.reduce((s, e) => s + (e.duration_ms || 0), 0) / (prepEvents.length * 60000)).toFixed(1)
-      : '14.2';
+      ? `${(prepEvents.reduce((s, e) => s + (e.duration_ms || 0), 0) / (prepEvents.length * 60000)).toFixed(1)} min`
+      : '—';
+
+    const pushEvents = events.filter((e) => e.event_type === 'push_sent');
 
     return {
-      revenue: `₹${totalRev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      revenue: totalRev > 0 ? `₹${totalRev.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0',
       ordersCount,
-      avgPrepTime: `${avgPrep} min`,
-      inventoryCost: '₹3,180',
-      customerCalls: customerCallsCount || 5,
-      pushRate: '99.1%',
+      avgPrepTime: avgPrep,
+      queueStatus: ordersCount > 0 ? 'Optimal' : 'Empty',
+      customerCalls: customerCallsCount || 0,
+      pushRate: pushEvents.length > 0 ? '100%' : '—',
     };
   }, [events, customerCallsCount]);
 
@@ -716,7 +719,7 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
                 <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                   isLight ? 'text-indigo-700 bg-indigo-50 border-indigo-200' : 'text-indigo-300 bg-indigo-900/60 border-indigo-700/60'
                 }`}>
-                  Last Generated: {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
+                  Last Generated: {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '—'}
                 </span>
               </div>
 
@@ -743,23 +746,23 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
                 }`}>
                   <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Avg Prep Time</span>
                   <span className={`text-sm font-bold ${isLight ? 'text-amber-600' : 'text-amber-300'}`}>
-                    12m
-                  </span>
-                </div>
-                <div className={`p-2.5 rounded-lg border shadow-xs ${
-                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
-                }`}>
-                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Inventory Cost</span>
-                  <span className={`text-sm font-bold ${isLight ? 'text-teal-600' : 'text-teal-300'}`}>
-                    {executiveReportMetrics.inventoryCost}
+                    {executiveReportMetrics.avgPrepTime}
                   </span>
                 </div>
                 <div className={`p-2.5 rounded-lg border shadow-xs ${
                   isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
                 }`}>
                   <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Queue Health</span>
-                  <span className={`text-sm font-bold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
-                    Optimal (100%)
+                  <span className={`text-sm font-bold ${executiveReportMetrics.queueStatus === 'Empty' ? 'text-slate-400' : isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
+                    {executiveReportMetrics.queueStatus}
+                  </span>
+                </div>
+                <div className={`p-2.5 rounded-lg border shadow-xs ${
+                  isLight ? 'bg-[#F6F8FB] border-[#D7E3EF]' : 'bg-slate-800/90 rounded-lg border border-slate-700'
+                }`}>
+                  <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Customer Calls</span>
+                  <span className={`text-sm font-bold ${isLight ? 'text-rose-600' : 'text-rose-300'}`}>
+                    {executiveReportMetrics.customerCalls}
                   </span>
                 </div>
                 <div className={`p-2.5 rounded-lg border shadow-xs ${
@@ -767,7 +770,7 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
                 }`}>
                   <span className={`text-[9px] block uppercase font-medium ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Last Generated</span>
                   <span className={`text-sm font-bold ${isLight ? 'text-indigo-600' : 'text-indigo-300'}`}>
-                    {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '5m ago'}
+                    {nodeData.lastEventAt ? relativeTime(nodeData.lastEventAt) : '—'}
                   </span>
                 </div>
               </div>
@@ -778,7 +781,13 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
               }`}>
                 <span className={`uppercase block mb-1 font-semibold ${isLight ? 'text-[#64748B]' : 'text-slate-400'}`}>Staff Performance Summary</span>
                 <p className={isLight ? 'text-[#1E293B]' : 'text-slate-200'}>
-                  <span className={`font-semibold ${isLight ? 'text-sky-700' : 'text-sky-300'}`}>Ravi:</span> 14 deliveries · <span className={`font-semibold ${isLight ? 'text-purple-700' : 'text-purple-300'}`}>Neha:</span> 11 servings · <span className={`font-semibold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>99.1%</span> satisfaction
+                  {events.some((e) => e.actor_type === 'staff') ? (
+                    <>
+                      <span className={`font-semibold ${isLight ? 'text-sky-700' : 'text-sky-300'}`}>Active Staff:</span> On duty · <span className={`font-semibold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>100%</span> response rate
+                    </>
+                  ) : (
+                    <span className="text-slate-500">—</span>
+                  )}
                 </p>
               </div>
 
@@ -791,29 +800,33 @@ function InspectorTab({ selectedNodeId, events, restaurantId, theme, onSelectTab
               >
                 <div className="flex items-center justify-between">
                   <span className={`uppercase font-semibold flex items-center gap-1.5 ${isLight ? 'text-[#1E293B]' : 'text-slate-200'}`}>
-                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                    <span className={`h-2 w-2 rounded-full ${activeError ? 'bg-rose-500 animate-pulse' : 'bg-emerald-400'}`} />
                     System Error Analytics
                   </span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold">
-                    98.4% Recovery Rate
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                    activeError
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                  }`}>
+                    {activeError ? 'Investigating' : '100% Operational'}
                   </span>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5 text-center">
                   <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
                     <span className="text-[8px] text-slate-400 uppercase block">Total</span>
-                    <span className="text-xs font-bold text-slate-200">7</span>
+                    <span className="text-xs font-bold text-slate-200">{activeError ? 1 : 0}</span>
                   </div>
                   <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
                     <span className="text-[8px] text-emerald-400 uppercase block">Resolved</span>
-                    <span className="text-xs font-bold text-emerald-400">6</span>
+                    <span className="text-xs font-bold text-emerald-400">{isResolvedError ? 1 : 0}</span>
                   </div>
                   <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
                     <span className="text-[8px] text-rose-400 uppercase block">Critical</span>
-                    <span className="text-xs font-bold text-rose-400">1</span>
+                    <span className="text-xs font-bold text-rose-400">{activeError?.severity === 'critical' ? 1 : 0}</span>
                   </div>
                   <div className={`p-1.5 rounded border ${isLight ? 'bg-white border-[#CBD5E1]' : 'bg-slate-900 border-slate-700'}`}>
                     <span className="text-[8px] text-amber-400 uppercase block">Avg Time</span>
-                    <span className="text-xs font-bold text-amber-400">42s</span>
+                    <span className="text-xs font-bold text-amber-400">—</span>
                   </div>
                 </div>
               </div>
@@ -1086,7 +1099,7 @@ function FlightRecorderTab({
     return (
       <div className="flex flex-col items-center justify-center h-full gap-2 text-slate-500">
         <Clock className="w-8 h-8 opacity-30" />
-        <p className="text-sm font-mono">Click an order dot to open Flight Recorder</p>
+        <p className="text-sm font-mono">Waiting for first order.</p>
       </div>
     );
   }
@@ -1408,6 +1421,8 @@ export default function RightPanel({
             theme={theme}
             onSelectTable={onSelectTable}
             onSelectNode={onNodeSelect}
+            activeError={activeError}
+            isResolvedError={isResolvedError}
           />
         )}
         {activeTab === 'flight' && (
