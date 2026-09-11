@@ -267,77 +267,138 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
 
       {/* View 1: Plans Cards */}
       {activeTab === 'plans' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
           {plans.map((plan) => {
             const activeCount = usageCounts[plan.id] || 0;
-            const isSystemDefault = ['starter', 'pro', 'premium', 'custom'].includes(plan.id);
+            const isEnterprise = plan.id === 'custom' || plan.id === 'enterprise';
+            const planName = isEnterprise ? 'ENTERPRISE' : plan.name;
+            const isSystemDefault = ['starter', 'pro', 'premium', 'custom', 'enterprise'].includes(plan.id);
 
             return (
-              <Card key={plan.id} className={`relative flex flex-col justify-between transition-all dark:bg-slate-900 ${plan.is_popular ? 'border-2 border-gray-950 dark:border-white shadow-lg' : 'border border-slate-200 dark:border-slate-800'}`}>
+              <Card 
+                key={plan.id} 
+                className={`relative flex flex-col justify-between transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl rounded-[18px] backdrop-blur-md bg-white/90 dark:bg-slate-900/90 ${
+                  plan.is_popular 
+                    ? 'border-2 border-indigo-600 dark:border-indigo-400 shadow-lg ring-2 ring-indigo-500/20' 
+                    : 'border border-slate-200/80 dark:border-slate-800/80 shadow-sm'
+                }`}
+              >
                 {plan.is_popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-950 text-white dark:bg-white dark:text-gray-950 text-[10px] font-bold uppercase px-3 py-0.5 rounded-full shadow">
-                    Most Popular
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                    ⭐ Most Popular
                   </div>
                 )}
 
-                <CardContent className="p-6 space-y-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">{plan.name}</h4>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">{plan.description}</p>
+                <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between gap-2 pt-1">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-wider truncate">
+                          {planName}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-relaxed">
+                          {isEnterprise 
+                            ? 'Custom tailored enterprise suite for multi-outlet groups & high-volume dining chains'
+                            : plan.description}
+                        </p>
+                      </div>
+                      <Badge variant={plan.is_active ? 'success' : 'neutral'} className="shrink-0 text-[10px] font-bold">
+                        {plan.is_active ? 'Active' : 'Disabled'}
+                      </Badge>
                     </div>
-                    <Badge variant={plan.is_active ? 'success' : 'neutral'}>
-                      {plan.is_active ? 'Active' : 'Disabled'}
-                    </Badge>
-                  </div>
 
-                  <div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-slate-900 dark:text-white">₹{plan.price_monthly.toLocaleString('en-IN')}</span>
-                      <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">/ month</span>
+                    <div className="py-1">
+                      {isEnterprise ? (
+                        <div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">Custom Pricing</span>
+                          </div>
+                          <span className="inline-block mt-1 text-[11px] font-extrabold uppercase text-indigo-600 dark:text-indigo-400 tracking-wider bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-900/50">
+                            Contact Sales
+                          </span>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-black text-slate-900 dark:text-white">₹{plan.price_monthly.toLocaleString('en-IN')}</span>
+                            <span className="text-xs font-bold text-slate-400">/ month</span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 font-medium mt-0.5">₹{plan.price_yearly.toLocaleString('en-IN')} billed annually</p>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">₹{plan.price_yearly.toLocaleString('en-IN')} billed annually</p>
-                  </div>
 
-                  {/* Subscribers badge */}
-                  <div className="bg-slate-50 dark:bg-slate-950/60 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-500 dark:text-slate-400">Subscribed Tenants:</span>
-                    <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{activeCount} Restaurant{activeCount === 1 ? '' : 's'}</span>
-                  </div>
+                    {/* Subscribers badge */}
+                    <div className="bg-slate-50 dark:bg-slate-950/70 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                      <span className="font-semibold text-slate-500 dark:text-slate-400 text-[11px]">Subscribed Tenants:</span>
+                      <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-xs">{activeCount} Restaurant{activeCount === 1 ? '' : 's'}</span>
+                    </div>
 
-                  {/* Highlights Summary */}
-                  <div className="space-y-2 text-xs border-t border-b border-slate-100 dark:border-slate-800 py-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Max Tables:</span>
-                      <span className="font-bold text-slate-900 dark:text-white">{plan.limits.tables === null ? 'Unlimited' : plan.limits.tables}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Staff Accounts:</span>
-                      <span className="font-bold text-slate-900 dark:text-white">{plan.limits.staff_accounts === null ? 'Unlimited' : plan.limits.staff_accounts}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Inventory Items:</span>
-                      <span className="font-bold text-slate-900 dark:text-white">{plan.limits.inventory_items === null ? 'Unlimited' : plan.limits.inventory_items}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">AI Menu Credits:</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {!plan.features?.ai_menu || plan.ai_limits?.ai_menu_analysis === 0 ? 'LOCKED (0)' : plan.ai_limits?.ai_menu_analysis === null ? 'Unlimited' : `${plan.ai_limits?.ai_menu_analysis} credits`}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">AI Recipe Credits:</span>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {!plan.features?.ai_recipe || plan.ai_limits?.ai_recipe_generation === 0 ? 'LOCKED (0)' : plan.ai_limits?.ai_recipe_generation === null ? 'Unlimited' : `${plan.ai_limits?.ai_recipe_generation} credits`}
-                      </span>
+                    {/* Highlights Summary */}
+                    <div className="space-y-2 text-xs border-t border-b border-slate-100 dark:border-slate-800/80 py-3.5">
+                      {isEnterprise ? (
+                        <>
+                          <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span>Unlimited Tables</span>
+                          </div>
+                          <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span>Unlimited Staff</span>
+                          </div>
+                          <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span>Unlimited Inventory</span>
+                          </div>
+                          <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span>White Label</span>
+                          </div>
+                          <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span>Priority Support</span>
+                          </div>
+                          <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                            <span>Dedicated Success Manager</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500 font-medium">Max Tables:</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{plan.limits.tables === null ? 'Unlimited' : plan.limits.tables}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500 font-medium">Staff Accounts:</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{plan.limits.staff_accounts === null ? 'Unlimited' : plan.limits.staff_accounts}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500 font-medium">Inventory Items:</span>
+                            <span className="font-bold text-slate-900 dark:text-white">{plan.limits.inventory_items === null ? 'Unlimited' : plan.limits.inventory_items}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500 font-medium">AI Menu Credits:</span>
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {!plan.features?.ai_menu || plan.ai_limits?.ai_menu_analysis === 0 ? 'LOCKED (0)' : plan.ai_limits?.ai_menu_analysis === null ? 'Unlimited' : `${plan.ai_limits?.ai_menu_analysis} credits`}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500 font-medium">AI Recipe Credits:</span>
+                            <span className="font-bold text-slate-900 dark:text-white">
+                              {!plan.features?.ai_recipe || plan.ai_limits?.ai_recipe_generation === 0 ? 'LOCKED (0)' : plan.ai_limits?.ai_recipe_generation === null ? 'Unlimited' : `${plan.ai_limits?.ai_recipe_generation} credits`}
+                            </span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="space-y-2 pt-1">
+                  <div className="space-y-2 pt-2">
                     <Button
                       onClick={() => handleOpenEditModal(plan)}
-                      className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2"
+                      className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-2 rounded-xl transition-all"
                     >
                       <Edit3 className="h-3.5 w-3.5 mr-1.5" /> Edit Plan & Entitlements
                     </Button>
@@ -345,14 +406,18 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => handleDuplicatePlan(plan)}
-                        className="flex items-center justify-center gap-1 py-1.5 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-[11px] rounded-lg transition-colors"
+                        className="flex items-center justify-center gap-1 py-2 px-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-[11px] rounded-lg transition-colors"
                       >
                         <Copy className="h-3 w-3" /> Duplicate
                       </button>
                       <button
                         onClick={() => handleDeletePlan(plan)}
                         disabled={isSystemDefault || activeCount > 0}
-                        className={`flex items-center justify-center gap-1 py-1.5 px-2 font-semibold text-[11px] rounded-lg transition-colors ${isSystemDefault || activeCount > 0 ? 'bg-slate-50 dark:bg-slate-950 text-slate-300 dark:text-slate-700 cursor-not-allowed' : 'bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:border-rose-900'}`}
+                        className={`flex items-center justify-center gap-1 py-2 px-2 font-semibold text-[11px] rounded-lg transition-colors ${
+                          isSystemDefault || activeCount > 0 
+                            ? 'bg-slate-50 dark:bg-slate-950 text-slate-300 dark:text-slate-700 cursor-not-allowed' 
+                            : 'bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:border-rose-900'
+                        }`}
                       >
                         <Trash2 className="h-3 w-3" /> Delete
                       </button>
@@ -373,12 +438,17 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
               <thead>
                 <tr className="bg-slate-900 text-white">
                   <th className="p-4 font-bold uppercase tracking-wider text-xs">Feature / Entitlement</th>
-                  {plans.map(p => (
-                    <th key={p.id} className="p-4 text-center font-extrabold text-sm border-l border-slate-800">
-                      {p.name}
-                      <div className="text-xs font-normal text-indigo-400 mt-0.5">₹{p.price_monthly}/mo</div>
-                    </th>
-                  ))}
+                  {plans.map(p => {
+                    const isEnt = p.id === 'custom' || p.id === 'enterprise';
+                    return (
+                      <th key={p.id} className="p-4 text-center font-extrabold text-sm border-l border-slate-800">
+                        {isEnt ? 'ENTERPRISE' : p.name}
+                        <div className="text-xs font-normal text-indigo-400 mt-0.5">
+                          {isEnt ? 'Custom Pricing' : `₹${p.price_monthly}/mo`}
+                        </div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">

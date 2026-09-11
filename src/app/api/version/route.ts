@@ -10,7 +10,8 @@ export async function GET() {
     commit,
     buildTime: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'production',
+    phase: 'PHASE-31-SUPER-ADMIN-COMMAND-CENTER',
     onboardingZeroFailureApplied: true,
-    version: '2026.08.24-v2-production'
+    version: '2026.09.11-v31-founder-command-center'
   });
 }
