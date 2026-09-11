@@ -47,23 +47,22 @@ export async function GET(req: Request) {
         .from('orders')
         .select(`
           id,
-          order_number,
           table_id,
           table_name,
           status,
           total,
           subtotal,
-          customer_name,
-          customer_phone,
+          special_instructions,
           created_at,
           updated_at,
+          order_type,
+          payment_status,
           order_items (
             id,
             menu_item_id,
             menu_item_name,
             quantity,
             price,
-            status,
             notes,
             is_cancelled
           ),
@@ -84,9 +83,8 @@ export async function GET(req: Request) {
       // 2. Real tables
       supabaseAdmin
         .from('tables')
-        .select('id, name, capacity, is_archived, sort_order')
+        .select('id, name')
         .eq('restaurant_id', restaurantId)
-        .eq('is_archived', false)
         .order('name', { ascending: true }),
 
       // 3. Real system events
@@ -111,7 +109,27 @@ export async function GET(req: Request) {
       console.error('[live-sync] tables error:', tablesRes.error.message);
     }
 
-    const activeOrders = ordersRes.data || [];
+    const activeOrders = (ordersRes.data || []).map((ord: any) => {
+      let customerName = 'Guest';
+      let customerPhone = '';
+      if (ord.special_instructions) {
+        try {
+          const parsed = JSON.parse(ord.special_instructions);
+          if (parsed.name) customerName = parsed.name;
+          if (parsed.phone) customerPhone = parsed.phone;
+        } catch (_) {
+          if (typeof ord.special_instructions === 'string' && ord.special_instructions.trim()) {
+            customerName = ord.special_instructions.slice(0, 20);
+          }
+        }
+      }
+      return {
+        ...ord,
+        order_number: `#${ord.id.slice(-4).toUpperCase()}`,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+      };
+    });
     const rawTables = tablesRes.data || [];
     const events = eventsRes.data || [];
     const staff = staffRes.data || [];
