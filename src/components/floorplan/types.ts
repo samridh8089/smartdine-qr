@@ -3,7 +3,22 @@
 
 export type { RestaurantZone } from '@/lib/db';
 
-export type TableShape = 'square' | 'rectangle' | 'circle' | 'oval' | 'booth';
+export type TableShape = 
+  | 'square' 
+  | 'rectangle' 
+  | 'circle' 
+  | 'oval' 
+  | 'booth'
+  | 'two_seater'
+  | 'six_seater'
+  | 'eight_seater'
+  | 'ten_seater'
+  | 'l_booth'
+  | 'u_booth'
+  | 'sofa_lounge'
+  | 'window_bench'
+  | 'vip_lounge'
+  | 'bar_table';
 
 export type FurnitureType = 
   | 'counter' 
@@ -14,7 +29,37 @@ export type FurnitureType =
   | 'door' 
   | 'divider' 
   | 'cash_counter'
-  | 'sofa';
+  | 'sofa'
+  // Kitchen additions
+  | 'service_counter'
+  | 'kitchen_pass'
+  | 'stove'
+  | 'fryer'
+  | 'pizza_oven'
+  | 'sink'
+  | 'refrigerator'
+  | 'prep_counter'
+  | 'storage_rack'
+  // Structure additions
+  | 'entrance_door'
+  | 'double_door'
+  | 'sliding_door'
+  | 'window'
+  | 'divider_wall'
+  | 'curved_wall'
+  | 'glass_partition'
+  // Utilities additions
+  | 'pos'
+  | 'accessible_washroom'
+  | 'emergency_exit'
+  | 'fire_extinguisher'
+  // Decor additions
+  | 'plant_small'
+  | 'plant_large'
+  | 'flower_pot'
+  | 'water_feature'
+  | 'pillar'
+  | 'decorative_partition';
 
 export type TableOperationalStatus = 'available' | 'occupied' | 'reserved' | 'cleaning' | 'merged';
 
@@ -32,6 +77,8 @@ export interface FloorPlanItem {
   rotation: number;
   seats: number;
   status: TableOperationalStatus;
+  isLocked?: boolean;
+  zIndex?: number;
   
   // Real restaurant mapping
   dbTableId?: string;

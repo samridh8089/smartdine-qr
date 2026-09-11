@@ -7,6 +7,7 @@ import Konva from 'konva';
 interface SelectionBoxProps {
   selectedId: string | null;
   isEditable: boolean;
+  isLocked?: boolean;
   onTransformEnd: (newAttrs: {
     x: number;
     y: number;
@@ -19,6 +20,7 @@ interface SelectionBoxProps {
 export const SelectionBox: React.FC<SelectionBoxProps> = ({
   selectedId,
   isEditable,
+  isLocked = false,
   onTransformEnd
 }) => {
   const trRef = useRef<Konva.Transformer>(null);
@@ -38,7 +40,7 @@ export const SelectionBox: React.FC<SelectionBoxProps> = ({
     }
     trRef.current.nodes([]);
     trRef.current.getLayer()?.batchDraw();
-  }, [selectedId, isEditable]);
+  }, [selectedId, isEditable, isLocked]);
 
   if (!isEditable) return null;
 
@@ -52,20 +54,24 @@ export const SelectionBox: React.FC<SelectionBoxProps> = ({
         }
         return newBox;
       }}
-      rotateEnabled={true}
-      resizeEnabled={true}
+      rotateEnabled={!isLocked}
+      resizeEnabled={!isLocked}
       keepRatio={false}
-      enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right', 'top-center', 'bottom-center']}
-      borderStroke="#171717"
-      borderStrokeWidth={1.5}
-      borderDash={[3, 3]}
+      enabledAnchors={
+        isLocked
+          ? []
+          : ['top-left', 'top-right', 'bottom-left', 'bottom-right', 'middle-left', 'middle-right', 'top-center', 'bottom-center']
+      }
+      borderStroke={isLocked ? '#F59E0B' : '#171717'}
+      borderStrokeWidth={isLocked ? 1.5 : 1.8}
+      borderDash={isLocked ? [3, 3] : [4, 4]}
       anchorFill="#FFFFFF"
-      anchorStroke="#171717"
+      anchorStroke={isLocked ? '#F59E0B' : '#171717'}
       anchorStrokeWidth={1.5}
       anchorSize={10}
       anchorCornerRadius={3}
       onTransformEnd={() => {
-        if (!trRef.current) return;
+        if (!trRef.current || isLocked) return;
         const node = trRef.current.nodes()[0];
         if (!node) return;
 
