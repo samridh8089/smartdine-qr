@@ -26,16 +26,17 @@ export async function GET(req: Request) {
     const restaurantId = searchParams.get('restaurantId');
     const limit = parseInt(searchParams.get('limit') || '200', 10);
 
-    if (!restaurantId || typeof restaurantId !== 'string') {
-      return NextResponse.json({ error: 'restaurantId required' }, { status: 400 });
-    }
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabaseAdmin.from('system_events') as any)
+    let query = (supabaseAdmin.from('system_events') as any)
       .select('*')
-      .eq('restaurant_id', restaurantId)
       .order('created_at', { ascending: false })
       .limit(limit);
+
+    if (restaurantId && restaurantId !== 'all') {
+      query = query.eq('restaurant_id', restaurantId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

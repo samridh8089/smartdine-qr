@@ -433,6 +433,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/super-admin');
   };
 
+  const handleSwitchPortal = async (newRole: 'owner' | 'kitchen' | 'waiter' | 'customer') => {
+    if (!restaurant) return;
+    if (newRole === 'customer') {
+      window.open(`/menu/${restaurant.slug}`, '_blank');
+      return;
+    }
+    const currentImp = sessionStorage.getItem('smartdine_impersonated_profile');
+    if (currentImp) {
+      try {
+        const p = JSON.parse(currentImp);
+        p.role = newRole;
+        sessionStorage.setItem('smartdine_impersonated_profile', JSON.stringify(p));
+        setDbRole(newRole);
+        setActiveRole(newRole);
+      } catch (e) {}
+    }
+    try {
+      fetch('/api/admin/impersonate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetRestaurantId: restaurant.id, targetRole: newRole })
+      }).catch(() => {});
+    } catch (e) {}
+
+    if (newRole === 'kitchen') router.push('/dashboard/kds');
+    else if (newRole === 'waiter') router.push('/dashboard/orders');
+    else router.push('/dashboard');
+  };
+
+  const handleReturnToSuperAdmin = () => {
+    router.push('/super-admin');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -480,19 +513,58 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <MockBanner />
 
         {isImpersonating && (
-          <div className="bg-indigo-600 text-white px-4 py-2 text-xs md:text-sm font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-md z-50 animate-fade-in">
-            <div className="flex items-center gap-2">
+          <div className="bg-indigo-700 dark:bg-indigo-950 text-white px-4 py-2 text-xs md:text-sm font-bold flex flex-col md:flex-row items-center justify-between gap-3 shadow-lg z-50 animate-fade-in border-b border-indigo-500/30">
+            <div className="flex items-center gap-2 shrink-0">
               <ShieldAlert className="h-4 w-4 shrink-0 text-amber-300" />
               <span className="font-extrabold tracking-wide">
                 Viewing as: {restaurant?.name || 'Restaurant'} ({activeRole ? activeRole.charAt(0).toUpperCase() + activeRole.slice(1) : 'Owner'})
               </span>
             </div>
-            <button
-              onClick={handleExitImpersonation}
-              className="bg-white text-indigo-700 hover:bg-slate-100 px-3.5 py-1 rounded-lg font-black text-xs shadow-sm transition-all whitespace-nowrap cursor-pointer hover:scale-105"
-            >
-              Exit Impersonation
-            </button>
+
+            {/* Portal Quick Switcher Buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] uppercase font-mono text-indigo-200 hidden lg:inline mr-1">Switch Portal:</span>
+              <button
+                onClick={() => handleSwitchPortal('owner')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${activeRole === 'owner' ? 'bg-white text-indigo-900 shadow-sm' : 'bg-indigo-800/80 hover:bg-indigo-800 text-white'}`}
+              >
+                Owner
+              </button>
+              <button
+                onClick={() => handleSwitchPortal('kitchen')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${activeRole === 'kitchen' ? 'bg-white text-indigo-900 shadow-sm' : 'bg-indigo-800/80 hover:bg-indigo-800 text-white'}`}
+              >
+                Kitchen
+              </button>
+              <button
+                onClick={() => handleSwitchPortal('waiter')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${activeRole === 'waiter' ? 'bg-white text-indigo-900 shadow-sm' : 'bg-indigo-800/80 hover:bg-indigo-800 text-white'}`}
+              >
+                Waiter
+              </button>
+              <button
+                onClick={() => handleSwitchPortal('customer')}
+                className="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-800/80 hover:bg-indigo-800 text-white transition-all flex items-center gap-1"
+              >
+                Customer Menu ↗
+              </button>
+            </div>
+
+            {/* Return to Super Admin & Exit Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleReturnToSuperAdmin}
+                className="bg-indigo-800/90 hover:bg-indigo-800 border border-indigo-400/40 text-white px-3 py-1 rounded-lg font-bold text-xs shadow-sm transition-all whitespace-nowrap cursor-pointer"
+              >
+                Return to Super Admin
+              </button>
+              <button
+                onClick={handleExitImpersonation}
+                className="bg-white text-indigo-950 hover:bg-slate-100 px-3 py-1 rounded-lg font-black text-xs shadow-sm transition-all whitespace-nowrap cursor-pointer hover:scale-105"
+              >
+                Exit
+              </button>
+            </div>
           </div>
         )}
 
