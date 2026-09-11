@@ -308,9 +308,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, []);
 
-  // Phase-19: Ctrl+Shift+M keyboard shortcut → Founder Control Center
+  // Phase-19 & Phase-31: Keyboard shortcuts (Ctrl+Shift+M for Founder Control Center, Esc for Exit Impersonation)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isImpersonating) {
+        handleExitImpersonation();
+        return;
+      }
       if (e.ctrlKey && e.shiftKey && e.key === 'M') {
         e.preventDefault();
         if (typeof window !== 'undefined') {
@@ -321,7 +325,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [router]);
+  }, [router, isImpersonating]);
 
   // Global Realtime Alarm Listener
   useEffect(() => {
@@ -478,14 +482,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {isImpersonating && (
           <div className="bg-indigo-600 text-white px-4 py-2 text-xs md:text-sm font-bold flex flex-col sm:flex-row items-center justify-between gap-2 shadow-md z-50 animate-fade-in">
             <div className="flex items-center gap-2">
-              <ShieldAlert className="h-4 w-4 shrink-0" />
-              <span>SUPER ADMIN IMPERSONATION ACTIVE — Viewing as {restaurant?.name} ({profile?.full_name})</span>
+              <ShieldAlert className="h-4 w-4 shrink-0 text-amber-300" />
+              <span className="font-extrabold tracking-wide">Viewing as: {restaurant?.name || 'Restaurant'}</span>
             </div>
             <button
               onClick={handleExitImpersonation}
               className="bg-white text-indigo-700 hover:bg-slate-100 px-3.5 py-1 rounded-lg font-black text-xs shadow-sm transition-all whitespace-nowrap cursor-pointer hover:scale-105"
             >
-              Exit Impersonation →
+              Exit Impersonation
             </button>
           </div>
         )}

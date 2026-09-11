@@ -34,21 +34,59 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Target restaurant not found' }, { status: 404 });
     }
 
-    // 3. Fetch owner profile for this restaurant
-    const { data: ownerProf } = await supabaseAdmin
+    const targetRole = body.targetRole || 'owner';
+
+    // 3. Fetch role-specific profile for this restaurant
+    const { data: roleProf } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('restaurant_id', targetRestaurantId)
-      .eq('role', 'owner')
+      .eq('role', targetRole)
       .maybeSingle();
+
+    // Fallback if not specifically found
+    let profileToUse = roleProf;
+    if (!profileToUse) {
+      if (targetRole === 'kitchen') {
+        profileToUse = {
+          id: `impersonated_kitchen_${rest.id}`,
+          full_name: `${rest.name} Kitchen (Impersonated)`,
+          email: `${rest.slug}_kitchen@cleverops.in`,
+          role: 'kitchen',
+          restaurant_id: rest.id
+        };
+      } else if (targetRole === 'waiter') {
+        profileToUse = {
+          id: `impersonated_waiter_${rest.id}`,
+          full_name: `${rest.name} Waiter (Impersonated)`,
+          email: `${rest.slug}_waiter@cleverops.in`,
+          role: 'waiter',
+          restaurant_id: rest.id
+        };
+      } else {
+        const { data: anyOwner } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .eq('restaurant_id', targetRestaurantId)
+          .eq('role', 'owner')
+          .maybeSingle();
+        profileToUse = anyOwner || {
+          id: `impersonated_owner_${rest.id}`,
+          full_name: `${rest.name} Owner (Impersonated)`,
+          email: rest.phone ? `${rest.slug}@cleverops.in` : 'owner@cleverops.in',
+          role: 'owner',
+          restaurant_id: rest.id
+        };
+      }
+    }
 
     // 4. Record security audit log entry
     try {
       await supabaseAdmin.from('audit_logs').insert({
         restaurant_id: targetRestaurantId,
-        user_email: adminEmail || 'system',
+        user_email: adminEmail || 'Founder',
         action: 'SUPER_ADMIN_IMPERSONATION',
-        details: `Super Admin (${adminEmail || 'system'}) opened session for restaurant "${rest.name}" (ID: ${rest.id})`
+        details: `Super Admin (${adminEmail || 'Founder'}) opened ${targetRole.toUpperCase()} Portal for restaurant "${rest.name}" (ID: ${rest.id})`
       });
     } catch (auditErr) {
       console.warn('[Impersonation Audit Notice]:', auditErr);
@@ -56,15 +94,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Impersonation active for ${rest.name}`,
+      message: `Impersonation active for ${rest.name} (${targetRole})`,
       restaurant: rest,
-      ownerProfile: ownerProf || {
-        id: `impersonated_${rest.id}`,
-        full_name: `${rest.name} Owner (Impersonated)`,
-        email: rest.phone ? `${rest.slug}@cleverops.in` : 'owner@cleverops.in',
-        role: 'owner',
-        restaurant_id: rest.id
-      }
+      targetRole,
+      ownerProfile: profileToUse
     });
   } catch (err: any) {
     return handleApiError('Admin-Impersonate', err, 'Failed to initialize impersonation session', 500);

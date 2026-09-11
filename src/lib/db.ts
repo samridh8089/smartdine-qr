@@ -3362,10 +3362,15 @@ export const db = {
   // --- Super Admin Control Panel & SaaS Stats ---
   async getSuperAdminStats(): Promise<{
     totalRestaurants: number;
-    totalRevenue: number; // MRR
+    totalRevenue: number; // For backwards compatibility (this month's realized revenue)
+    todayRevenue: number; // Realized revenue today
+    monthRevenue: number; // Realized revenue this month
+    lifetimeRevenue: number; // Total realized revenue all time
     activeSubscriptions: number; // Active paid
-    mrr: number;
-    arr: number;
+    mrr: number; // Actual active recurring billing
+    arr: number; // Actual billed recurring revenue only
+    pendingPaymentsCount: number;
+    pendingPaymentsAmount: number;
     totalPaidCustomers: number;
     trialUsers: number;
     expiredLicenses: number;
@@ -3380,11 +3385,12 @@ export const db = {
       return acc;
     }, {} as Record<string, { monthly: number; yearly: number }>);
 
-    // Fallbacks if pricing plans database is not loaded yet or for custom/non-standard plans
+    // Fallbacks
     const defaultPrices: Record<string, { monthly: number; yearly: number }> = {
       starter: { monthly: 499, yearly: 4990 },
       pro: { monthly: 999, yearly: 9990 },
       premium: { monthly: 1999, yearly: 19990 },
+      enterprise: { monthly: 4999, yearly: 49990 },
       custom: { monthly: 0, yearly: 0 }
     };
 
@@ -3394,7 +3400,17 @@ export const db = {
       return interval === 'yearly' ? prices.yearly : prices.monthly;
     };
 
-    let mrr = 0;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    let todayRev = 0;
+    let monthRev = 0;
+    let lifetimeRev = 0;
+    let actualMrr = 0;
+    let actualArr = 0;
+    let pendingCount = 0;
+    let pendingAmount = 0;
     let totalPaidCustomers = 0;
     let trialUsers = 0;
     let expiredLicenses = 0;
@@ -3403,30 +3419,77 @@ export const db = {
       const plan = (r.subscription_plan || 'starter').toLowerCase();
       const effectiveStatus = getEffectiveSubscriptionStatus(r);
       const interval = (r.billing_interval || 'monthly') as 'monthly' | 'yearly';
+      const settings = (r.settings as any) || {};
+      const history: any[] = settings.payment_history || [];
+      const paymentDetails = settings.payment_details;
 
+      // 1. Calculate Realized Revenue from actual payment transactions
+      if (Array.isArray(history) && history.length > 0) {
+        history.forEach(item => {
+          if (item.status === 'paid' || item.payment_status === 'paid') {
+            const amt = Number(item.amount || item.paid_amount || 0);
+            lifetimeRev += amt;
+            const itemPaidAt = item.paid_at || item.created_at || '';
+            if (itemPaidAt.startsWith(todayStr)) {
+              todayRev += amt;
+            }
+            if (itemPaidAt.startsWith(currentYearMonth)) {
+              monthRev += amt;
+            }
+          }
+        });
+      } else if (paymentDetails?.paid_amount && paymentDetails?.payment_status === 'paid') {
+        const amt = Number(paymentDetails.paid_amount);
+        lifetimeRev += amt;
+        const paidAt = paymentDetails.paid_at || '';
+        if (paidAt.startsWith(todayStr)) todayRev += amt;
+        if (paidAt.startsWith(currentYearMonth)) monthRev += amt;
+      }
+
+      // 2. Compute Active Recurring Subscriptions
       if (effectiveStatus === 'active') {
         totalPaidCustomers += 1;
-        const price = getPlanPrice(plan, interval);
+        // Check if there is actual recorded paid billing for this tenant
+        const lastPaidItem = history.find(h => h.status === 'paid' || h.payment_status === 'paid');
+        const billedAmount = lastPaidItem
+          ? Number(lastPaidItem.amount || lastPaidItem.paid_amount || 0)
+          : (paymentDetails?.paid_amount ? Number(paymentDetails.paid_amount) : getPlanPrice(plan, interval));
+
         if (interval === 'yearly') {
-          mrr += price / 12;
+          actualMrr += Math.round(billedAmount / 12);
+          actualArr += billedAmount; // Only actual billed recurring
         } else {
-          mrr += price;
+          actualMrr += billedAmount;
+          // ARR only from active recurring subscriptions actually billed
+          actualArr += (billedAmount * 12);
         }
       } else if (effectiveStatus === 'trial') {
         trialUsers += 1;
       } else {
         expiredLicenses += 1;
       }
-    });
 
-    const arr = mrr * 12;
+      // 3. Track Pending Payments & Failures
+      const isPending = r.subscription_status === 'past_due' || 
+                        r.subscription_status === 'pending_payment' || 
+                        Boolean(settings.last_payment_error);
+      if (isPending) {
+        pendingCount += 1;
+        pendingAmount += getPlanPrice(plan, interval);
+      }
+    });
 
     return {
       totalRestaurants: rests.length,
-      totalRevenue: Math.round(mrr), // Exact MRR
-      activeSubscriptions: totalPaidCustomers, // Only paid active subscriptions (trials excluded)
-      mrr: Math.round(mrr),
-      arr: Math.round(arr),
+      totalRevenue: monthRev > 0 ? Math.round(monthRev) : Math.round(actualMrr),
+      todayRevenue: Math.round(todayRev),
+      monthRevenue: Math.round(monthRev),
+      lifetimeRevenue: Math.round(lifetimeRev),
+      activeSubscriptions: totalPaidCustomers,
+      mrr: Math.round(actualMrr),
+      arr: Math.round(actualArr),
+      pendingPaymentsCount: pendingCount,
+      pendingPaymentsAmount: Math.round(pendingAmount),
       totalPaidCustomers,
       trialUsers,
       expiredLicenses,
@@ -3534,6 +3597,169 @@ export const db = {
       'send_renewal_reminder',
       `Sent subscription renewal warning email & push notification to ${rest.name} (Plan: ${rest.subscription_plan})`
     );
+  },
+
+  // --- Phase-31 Super Admin Entity Helpers ---
+  async updateRestaurantEntity(id: string, updates: Partial<Restaurant>): Promise<Restaurant> {
+    restaurantMemoryCache.delete(id);
+    const { data, error } = await supabase
+      .from('restaurants')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error || !data) throw new Error(error?.message || 'Failed to update restaurant');
+    restaurantMemoryCache.set(id, { data: data as Restaurant, timestamp: Date.now() });
+    return data as Restaurant;
+  },
+
+  async updateSubscriptionEntity(id: string, updates: {
+    plan?: string;
+    price?: number;
+    billing_interval?: 'monthly' | 'yearly';
+    status?: Restaurant['subscription_status'];
+    trial_ends_at?: string;
+    settings?: any;
+  }): Promise<Restaurant> {
+    restaurantMemoryCache.delete(id);
+    const updatePayload: any = { updated_at: new Date().toISOString() };
+    if (updates.plan) updatePayload.subscription_plan = updates.plan;
+    if (updates.status) updatePayload.subscription_status = updates.status;
+    if (updates.billing_interval) updatePayload.billing_interval = updates.billing_interval;
+    if (updates.trial_ends_at !== undefined) updatePayload.trial_ends_at = updates.trial_ends_at;
+    if (updates.settings) updatePayload.settings = updates.settings;
+
+    const { data, error } = await supabase
+      .from('restaurants')
+      .update(updatePayload)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error || !data) throw new Error(error?.message || 'Failed to update subscription');
+    restaurantMemoryCache.set(id, { data: data as Restaurant, timestamp: Date.now() });
+    return data as Restaurant;
+  },
+
+  async updateOwnerEntity(ownerId: string, updates: {
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    plain_password?: string;
+    status?: string;
+  }): Promise<any> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', ownerId)
+      .select()
+      .single();
+    if (error || !data) throw new Error(error?.message || 'Failed to update owner profile');
+    return data;
+  },
+
+  async getRestaurantStaffList(restaurantId: string): Promise<Profile[]> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .neq('role', 'super_admin');
+    if (error) throw new Error(error.message);
+    return (data || []) as Profile[];
+  },
+
+  async updateStaffEntity(staffId: string, updates: Partial<Profile>): Promise<Profile> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', staffId)
+      .select()
+      .single();
+    if (error || !data) throw new Error(error?.message || 'Failed to update staff member');
+    return data as Profile;
+  },
+
+  async getRestaurantTablesList(restaurantId: string): Promise<Table[]> {
+    const { data, error } = await supabase
+      .from('tables')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('name', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []) as Table[];
+  },
+
+  async updateTableEntity(tableId: string, updates: Partial<Table>): Promise<Table> {
+    const { data, error } = await supabase
+      .from('tables')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', tableId)
+      .select()
+      .single();
+    if (error || !data) throw new Error(error?.message || 'Failed to update table');
+    return data as Table;
+  },
+
+  async createSuperAdminAuditLog(restaurantId: string, adminEmail: string, action: string, details: string): Promise<void> {
+    try {
+      await supabase.from('audit_logs').insert({
+        restaurant_id: restaurantId,
+        user_email: adminEmail || 'super_admin',
+        action,
+        details,
+        created_at: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn('[Audit Log Insert Notice]:', e);
+    }
+  },
+
+  async getSuperAdminAuditLogs(limit: number = 100, search?: string): Promise<any[]> {
+    let query = supabase
+      .from('audit_logs')
+      .select('*, restaurants(name)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (search && search.trim()) {
+      query = query.or(`action.ilike.%${search}%,details.ilike.%${search}%,user_email.ilike.%${search}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return data || [];
+  },
+
+  async executeBulkRestaurantAction(restaurantIds: string[], action: string, payload?: any): Promise<{ success: boolean; affected: number }> {
+    if (!restaurantIds || restaurantIds.length === 0) return { success: true, affected: 0 };
+    restaurantMemoryCache.clear();
+
+    if (action === 'extend_license') {
+      const days = payload?.days || 30;
+      const expiry = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      await supabase.from('restaurants').update({
+        subscription_status: 'active',
+        trial_ends_at: expiry,
+        updated_at: new Date().toISOString()
+      }).in('id', restaurantIds);
+    } else if (action === 'pause') {
+      await supabase.from('restaurants').update({
+        subscription_status: 'cancelled',
+        updated_at: new Date().toISOString()
+      }).in('id', restaurantIds);
+    } else if (action === 'resume') {
+      await supabase.from('restaurants').update({
+        subscription_status: 'active',
+        updated_at: new Date().toISOString()
+      }).in('id', restaurantIds);
+    } else if (action === 'update_plan') {
+      const newPlan = payload?.plan || 'pro';
+      await supabase.from('restaurants').update({
+        subscription_plan: newPlan,
+        updated_at: new Date().toISOString()
+      }).in('id', restaurantIds);
+    }
+
+    return { success: true, affected: restaurantIds.length };
   },
 
   // --- Pricing Plans CRUD ---
