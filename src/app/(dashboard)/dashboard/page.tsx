@@ -12,8 +12,10 @@ import Link from 'next/link';
 import { 
   DollarSign, ClipboardList, Users, TrendingUp, 
   ArrowRight, Clock, CheckCircle2, AlertCircle, ShoppingBag,
-  ChefHat, MenuSquare, Boxes, QrCode, BarChart3, CreditCard, Settings
+  ChefHat, MenuSquare, Boxes, QrCode, BarChart3, CreditCard, Settings,
+  Megaphone, X
 } from 'lucide-react';
+
 
 import { calculateBillingTotals, isRevenueOrder, getOrderRevenueAmount, calculateOrdersRevenue } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
@@ -77,7 +79,26 @@ export default function DashboardPage() {
     occupancyRate: 0
   });
   const [loading, setLoading] = useState(() => !hasCachedData);
-  const [announcementDismissed, setAnnouncementDismissed] = useState(false);
+  const [dismissedAnnouncementKey, setDismissedAnnouncementKey] = useState<string | null>(null);
+  const [cancellationStats, setCancellationStats] = useState({
+    totalCancelledToday: 0,
+    beforePrepCount: 0,
+    duringPrepCount: 0,
+    afterPrepCount: 0,
+    totalDispositionsCount: 0,
+    wasteDishesCount: 0,
+    reallocatedDishesCount: 0,
+    staffAndOtherDishesCount: 0,
+    totalCancelledGrossValue: 0,
+    paidBeforeCancelValue: 0,
+    estimatedWasteFoodCost: 0,
+    estimatedLoss: 0
+  });
+  const [stockAlerts, setStockAlerts] = useState<{
+    outOfStock: Array<{ menuItemId: string; name: string; reasons: string[] }>;
+    lowStock: Array<{ menuItemId: string; name: string; reasons: string[]; maxServings: number }>;
+  }>({ outOfStock: [], lowStock: [] });
+
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const backgroundTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -279,25 +300,7 @@ export default function DashboardPage() {
     }
   };
 
-  const [cancellationStats, setCancellationStats] = useState({
-    totalCancelledToday: 0,
-    beforePrepCount: 0,
-    duringPrepCount: 0,
-    afterPrepCount: 0,
-    totalDispositionsCount: 0,
-    wasteDishesCount: 0,
-    reallocatedDishesCount: 0,
-    staffAndOtherDishesCount: 0,
-    totalCancelledGrossValue: 0,
-    paidBeforeCancelValue: 0,
-    estimatedWasteFoodCost: 0,
-    estimatedLoss: 0
-  });
 
-  const [stockAlerts, setStockAlerts] = useState<{
-    outOfStock: Array<{ menuItemId: string; name: string; reasons: string[] }>;
-    lowStock: Array<{ menuItemId: string; name: string; reasons: string[]; maxServings: number }>;
-  }>({ outOfStock: [], lowStock: [] });
 
   useEffect(() => {
     let activeRestId = '';
@@ -478,33 +481,43 @@ export default function DashboardPage() {
       </div>
 
       {/* Super Admin Global Announcement Banner */}
-      {!announcementDismissed && restaurant?.settings?.broadcast_announcement?.message && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900/40 via-purple-900/30 to-slate-900/50 border border-indigo-500/40 shadow-xl flex items-start justify-between gap-4 animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-start gap-3.5">
-            <span className="text-2xl p-1 bg-indigo-500/20 rounded-xl">📢</span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-indigo-400 uppercase tracking-wider">Super Admin Announcement</span>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  {restaurant.settings.broadcast_announcement.created_at
-                    ? new Date(restaurant.settings.broadcast_announcement.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                    : 'Recent'}
-                </span>
+      {(() => {
+        const announcement = restaurant?.settings?.broadcast_announcement;
+        const rawMsg = announcement?.message ? String(announcement.message).trim() : '';
+        const cleanMsg = rawMsg.replace(/^[📢ℹ️⚠️🚨\s]+/, '').trim();
+        const announcementKey = announcement?.id || announcement?.created_at || cleanMsg;
+        const isDismissed = Boolean(dismissedAnnouncementKey && dismissedAnnouncementKey === announcementKey);
+
+        if (!cleanMsg || isDismissed) return null;
+
+        return (
+          <div className="relative rounded-2xl bg-gradient-to-r from-sky-50 via-indigo-50/70 to-blue-50/50 dark:from-sky-950/70 dark:via-indigo-950/60 dark:to-slate-900/80 border border-sky-200/90 dark:border-sky-800/80 p-4 sm:p-5 shadow-sm dark:shadow-xl flex items-start justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-300 shrink-0 mt-0.5 border border-sky-500/20">
+                <Megaphone className="w-5 h-5" />
               </div>
-              <p className="text-sm font-semibold mt-1 text-slate-100 leading-relaxed">
-                {restaurant.settings.broadcast_announcement.message}
-              </p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-md bg-sky-600 text-white dark:bg-sky-500/20 dark:text-sky-300 text-[10px] font-black uppercase tracking-wider">
+                    Announcement
+                  </span>
+                </div>
+                <p className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100 leading-relaxed">
+                  {cleanMsg}
+                </p>
+              </div>
             </div>
+            <button
+              onClick={() => setDismissedAnnouncementKey(announcementKey)}
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+              title="Dismiss announcement"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={() => setAnnouncementDismissed(true)}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors text-xs shrink-0 cursor-pointer"
-            title="Dismiss announcement"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+        );
+      })()}
+
 
       {/* Top Row: Revenue & Core Stats (4 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
