@@ -139,7 +139,8 @@ export async function POST(req: Request) {
             const updatedSettings = {
               ...(rest.settings || {}),
               broadcast_announcement: {
-                message,
+                id: `bcast_${Date.now()}`,
+                message: String(message || '').trim(),
                 author: adminEmail,
                 created_at: nowIso
               }
@@ -153,6 +154,7 @@ export async function POST(req: Request) {
       } catch (e) {
         console.warn('[Broadcast settings update]:', e);
       }
+
 
       // 2. Insert into system_events for live telemetry and timeline
       try {
