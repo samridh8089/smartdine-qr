@@ -16,8 +16,6 @@ import {
   Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers
 } from 'lucide-react';
 import { isRevenueOrder } from '@/lib/billingEngine';
-import { usePreviewMode } from '@/context/PreviewModeContext';
-import { DEMO_CATEGORIES, DEMO_MENU_ITEMS, generateDemoDbOrders } from '@/lib/demoPreviewData';
 
 interface ItemPerformanceRow {
   key: string;
@@ -72,7 +70,6 @@ function getISTHour(d: Date | string): number {
 
 export default function ReportsPage() {
   const { restaurant } = useRestaurant();
-  const { isPreviewMode } = usePreviewMode();
   const [orders, setOrders] = useState<Order[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -811,9 +808,9 @@ export default function ReportsPage() {
         db.getTablesWithLiveStatus(restId),
         db.getMenuItems(restId)
       ]);
-      const effectiveOrders = (allOrders || []).length === 0 && isPreviewMode ? generateDemoDbOrders(restId) : (allOrders || []);
-      const effectiveCats = (cats || []).length === 0 && isPreviewMode ? DEMO_CATEGORIES as any : (cats || []);
-      const effectiveMenuItems = (mItems || []).length === 0 && isPreviewMode ? DEMO_MENU_ITEMS as any : (mItems || []);
+      const effectiveOrders = allOrders || [];
+      const effectiveCats = cats || [];
+      const effectiveMenuItems = mItems || [];
 
       setOrders(effectiveOrders);
       setCategories(effectiveCats);
@@ -822,8 +819,8 @@ export default function ReportsPage() {
       const lowStock = invItems.filter((item: any) => Number(item.current_stock || 0) <= Number(item.minimum_stock || 5));
       setLowStockItems(lowStock);
       setDispositionsList(dispRes?.data || []);
-      const occ = liveTableData?.stats?.occupied || (isPreviewMode ? 4 : 0);
-      const fr = liveTableData?.stats?.available || (isPreviewMode ? 16 : 20);
+      const occ = liveTableData?.stats?.occupied || 0;
+      const fr = liveTableData?.stats?.available || 0;
       setLiveOccupancyMerge(prev => ({
         ...prev,
         occupied: occ,
@@ -849,7 +846,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReports();
-  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, restaurant?.id, isPreviewMode]);
+  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, restaurant?.id]);
 
   // Realtime Subscriptions for Reports Dashboard (Phase-18.8 Production Gate)
   useEffect(() => {

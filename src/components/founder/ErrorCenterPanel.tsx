@@ -40,7 +40,7 @@ interface ErrorCenterPanelProps {
   onNotifyWaiter?: (error: SystemErrorItem) => void;
   onNotifyOwner?: (error: SystemErrorItem) => void;
   onViewLogs?: (error: SystemErrorItem) => void;
-  onTriggerDemoError?: () => void;
+  onSimulateError?: () => void;
   onClose: () => void;
   onJumpToOrder?: (orderId: string) => void;
 }
@@ -57,7 +57,7 @@ export default function ErrorCenterPanel({
   onNotifyWaiter,
   onNotifyOwner,
   onViewLogs,
-  onTriggerDemoError,
+  onSimulateError,
   onClose,
   onJumpToOrder,
 }: ErrorCenterPanelProps) {
@@ -196,20 +196,20 @@ export default function ErrorCenterPanel({
         )}
 
         <div className="flex items-center gap-2.5">
-          {/* Re-trigger Demo Error Button */}
-          {onTriggerDemoError && (
+          {/* Simulate Error Button for fault injection testing */}
+          {onSimulateError && (
             <button
-              data-testid="btn-trigger-demo-error"
-              onClick={onTriggerDemoError}
+              data-testid="btn-simulate-error"
+              onClick={onSimulateError}
               className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
                 isLight
                   ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
                   : 'bg-rose-950/60 text-rose-300 border-rose-800 hover:bg-rose-900'
               }`}
-              title="Reset and trigger Table 12 Kitchen Sync Failure demo scenario"
+              title="Simulate a live runtime sync error scenario for fault injection testing"
             >
               <Zap className="h-3.5 w-3.5 text-rose-500" />
-              <span>Re-trigger Demo Error</span>
+              <span>Simulate Error</span>
             </button>
           )}
 
@@ -350,8 +350,8 @@ export default function ErrorCenterPanel({
           ) : (
             filteredErrors.map((err) => {
               const isSelected = activeSelectedError?.id === err.id;
-              const isErrRetrying = isRetrying && err.id === 'ERR-0007';
-              const isErrResolved = (isResolved && err.id === 'ERR-0007') || err.status === 'resolved';
+              const isErrRetrying = (isRetrying && err.id === activeSelectedError?.id) || err.status === 'retrying';
+              const isErrResolved = (isResolved && err.id === activeSelectedError?.id) || err.status === 'resolved';
 
               return (
                 <div
@@ -513,16 +513,16 @@ export default function ErrorCenterPanel({
                 <div className="flex items-center gap-2">
                   <span
                     className={`px-3 py-1 rounded-full font-mono text-xs font-bold uppercase border ${
-                      activeSelectedError.status === 'resolved' || (isResolved && activeSelectedError.id === 'ERR-0007')
+                      activeSelectedError.status === 'resolved' || isResolved
                         ? 'bg-emerald-500/20 text-emerald-600 border-emerald-500/40'
-                        : isRetrying && activeSelectedError.id === 'ERR-0007'
+                        : isRetrying
                         ? 'bg-amber-500/20 text-amber-600 border-amber-500/40 animate-pulse'
                         : 'bg-rose-500/20 text-rose-600 border-rose-500/40'
                     }`}
                   >
-                    {activeSelectedError.status === 'resolved' || (isResolved && activeSelectedError.id === 'ERR-0007')
+                    {activeSelectedError.status === 'resolved' || isResolved
                       ? 'Resolved'
-                      : isRetrying && activeSelectedError.id === 'ERR-0007'
+                      : isRetrying
                       ? 'Retrying...'
                       : activeSelectedError.severity}
                   </span>
@@ -661,7 +661,7 @@ export default function ErrorCenterPanel({
                   {/* Primary: Retry Sync */}
                   <button
                     data-testid="btn-inspector-retry-sync"
-                    disabled={isRetrying || (isResolved && activeSelectedError.id === 'ERR-0007')}
+                    disabled={isRetrying || isResolved || activeSelectedError.status === 'resolved'}
                     onClick={() => onRetrySync(activeSelectedError)}
                     className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg font-bold text-xs font-mono flex items-center gap-2 shadow-md shadow-amber-900/40 cursor-pointer transition-all disabled:opacity-50"
                   >

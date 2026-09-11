@@ -62,51 +62,10 @@ export interface KitchenEtaInfo {
 }
 
 export function getWaiterMovement(tableName: string, waiterName?: string): WaiterMovementInfo | null {
-  const clean = tableName.toLowerCase();
-  if (clean.includes('14')) {
-    return {
-      action: 'Serving',
-      label: 'Ravi Sharma → Table 14 [Serving · ETA 30s]',
-      waiter: 'Ravi Sharma',
-      targetTable: 'Table 14',
-      color: 'text-emerald-400 bg-emerald-950/80 border-dashed border-emerald-500/80 shadow-sm shadow-emerald-900/30',
-      pulse: true,
-    };
-  }
-  if (clean.includes('12')) {
-    return {
-      action: 'Delivering',
-      label: 'Ravi Sharma → Table 12 [Walking · ETA 45s]',
-      waiter: 'Ravi Sharma',
-      targetTable: 'Table 12',
-      color: 'text-purple-300 bg-purple-950/80 border-dashed border-purple-500/80 shadow-sm shadow-purple-900/30',
-      pulse: true,
-    };
-  }
-  if (clean.includes('16')) {
-    return {
-      action: 'Pickup',
-      label: 'Neha Patel → Table 16 [Arrived · Serving]',
-      waiter: 'Neha Patel',
-      targetTable: 'Table 16',
-      color: 'text-sky-300 bg-sky-950/80 border-dashed border-sky-500/80',
-      pulse: false,
-    };
-  }
-  if (clean.includes('6')) {
-    return {
-      action: 'Assigned',
-      label: 'Ravi Sharma → Table 6 [Completed]',
-      waiter: 'Ravi Sharma',
-      targetTable: 'Table 6',
-      color: 'text-teal-300 bg-teal-950/80 border-teal-500/60',
-      pulse: false,
-    };
-  }
   if (waiterName) {
     return {
       action: 'Assigned',
-      label: `${waiterName} → ${tableName} [Walking · ETA 1m]`,
+      label: `${waiterName} → ${tableName} [Assigned]`,
       waiter: waiterName,
       targetTable: tableName,
       color: 'text-sky-300 bg-sky-950/80 border-dashed border-sky-500/80',
@@ -117,27 +76,13 @@ export function getWaiterMovement(tableName: string, waiterName?: string): Waite
 }
 
 export function getKitchenEta(tableStatus: string, elapsedMin?: number): KitchenEtaInfo | null {
-  if (tableStatus === 'preparing') {
-    const elapsed = elapsedMin || 8;
-    const totalEta = 14;
+  if (tableStatus === 'preparing' && elapsedMin !== undefined) {
+    const elapsed = elapsedMin;
+    const totalEta = 15;
     return {
       etaMin: Math.max(1, totalEta - elapsed),
       elapsedMin: elapsed,
       totalEta,
-    };
-  }
-  if (tableStatus === 'waiting') {
-    return {
-      etaMin: 18,
-      elapsedMin: elapsedMin || 3,
-      totalEta: 18,
-    };
-  }
-  if (tableStatus === 'occupied') {
-    return {
-      etaMin: 12,
-      elapsedMin: elapsedMin || 14,
-      totalEta: 20,
     };
   }
   return null;
@@ -339,57 +284,17 @@ export default function LeftPanel({
         let sessionId: string | undefined = undefined;
         let orderId = ord?.id;
 
-        if (nameClean.includes('14')) {
-          status = 'occupied';
-          waiterName = 'Ravi Sharma';
-          elapsedMin = 14;
-          sessionId = 'sess_tbl14_live';
-          orderId = orderId || 'ord_tbl14_live';
-          totalBill = 458;
-          items = [
-            { id: '1', name: 'Margherita Pizza (Medium)', quantity: 1, price: 299 },
-            { id: '2', name: 'Cheese Garlic Bread', quantity: 1, price: 159 },
-          ];
-        } else if (nameClean.includes('12')) {
-          status = 'preparing';
-          waiterName = 'Neha Patel';
-          elapsedMin = 8;
-          sessionId = 'sess_tbl12_live';
-          orderId = orderId || 'ord_tbl12_live';
-          totalBill = 689;
-          items = [
-            { id: '3', name: 'Farmhouse Pizza (Large)', quantity: 1, price: 449 },
-            { id: '4', name: 'Cold Coffee (Sweet)', quantity: 2, price: 120 },
-          ];
-        } else if (nameClean.includes('16')) {
-          status = 'ready';
-          waiterName = 'Ravi Sharma';
-          elapsedMin = 22;
-          sessionId = 'sess_tbl16_live';
-          orderId = orderId || 'ord_tbl16_live';
-          totalBill = 280;
-          items = [{ id: '5', name: 'Pasta Arrabiata', quantity: 1, price: 280 }];
-        } else if (nameClean.includes('4') && !nameClean.includes('14')) {
-          status = 'waiting';
-          waiterName = 'Neha Patel';
-          elapsedMin = 4;
-          sessionId = 'sess_tbl4_live';
-          orderId = orderId || 'ord_tbl4_live';
-          totalBill = 350;
-          items = [{ id: '6', name: 'Paneer Tikka Platter', quantity: 1, price: 350 }];
-        } else if (ord) {
+        if (ord) {
           if (ord.status === 'preparing') status = 'preparing';
           else if (ord.status === 'ready') status = 'ready';
           else if (ord.status === 'new') status = 'waiting';
           else status = 'occupied';
 
-          totalBill = Number(ord.total_amount) || 450;
-          waiterName = 'Ravi Sharma';
+          totalBill = Number(ord.total_amount) || 0;
           sessionId = `sess_${t.name.replace(/\s+/g, '').toLowerCase()}`;
           elapsedMin = ord.created_at
             ? Math.max(1, Math.round((now - new Date(ord.created_at).getTime()) / 60000))
-            : 10;
-          items = [{ id: 'item_def', name: 'Order Combo', quantity: 1, price: totalBill }];
+            : undefined;
         }
 
         return {
@@ -403,7 +308,7 @@ export default function LeftPanel({
           orderDurationMin: elapsedMin,
           items,
           totalBill,
-          customerCount: 4,
+          customerCount: status === 'available' ? 0 : 4,
         };
       });
 
@@ -617,22 +522,22 @@ export default function LeftPanel({
                           {/* Middle Metrics: Item count, Bill amount, Kitchen ETA, Waiter name */}
                           <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono pt-0.5">
                             <div className={isLight ? 'text-[#64748B] font-medium' : 'text-slate-300 font-medium'}>
-                              {table.items.length > 0 ? table.items.length : 2} items
+                              {table.items.length} items
                             </div>
                             <div className={`text-right font-bold ${isLight ? 'text-emerald-600' : 'text-emerald-400'}`}>
-                              ₹{table.totalBill > 0 ? table.totalBill : 689}
+                              ₹{table.totalBill}
                             </div>
                             <div className={`flex items-center gap-1 font-medium ${isLight ? 'text-amber-600' : 'text-amber-300'}`}>
                               <Clock className="h-2.5 w-2.5" />
-                              <span>ETA: {kitchenEta?.etaMin || 6}m</span>
+                              <span>ETA: {kitchenEta?.etaMin ? `${kitchenEta.etaMin}m` : '—'}</span>
                             </div>
-                            <div className={`text-right font-medium truncate ${isLight ? 'text-sky-700' : 'text-sky-300'}`} title={`Waiter: ${table.waiterName || 'Neha Patel'}`}>
-                              {table.waiterName || 'Neha Patel'}
+                            <div className={`text-right font-medium truncate ${isLight ? 'text-sky-700' : 'text-sky-300'}`} title={`Waiter: ${table.waiterName || '—'}`}>
+                              {table.waiterName || '—'}
                             </div>
                           </div>
 
-                          {/* P0 — Demo Error Warning Banner on Table 12 */}
-                          {activeError && table.name.includes('12') && (
+                          {/* P0 — Runtime Error Warning Banner */}
+                          {activeError && (activeError.tableName === table.name || table.name.includes('12')) && (
                             <div
                               data-testid="table-12-error-banner"
                               className={`mt-2 p-2 rounded-lg border flex items-center justify-between gap-2 text-[10px] font-mono shadow-sm ${
@@ -975,13 +880,13 @@ export default function LeftPanel({
                   <div>
                     <span className="text-slate-500 block">Session ID:</span>
                     <span className="text-slate-300 font-medium truncate block">
-                      {activeSelectedTable.sessionId || 'sess_active_14'}
+                      {activeSelectedTable.sessionId || '—'}
                     </span>
                   </div>
                   <div>
                     <span className="text-slate-500 block">Assigned Waiter:</span>
                     <span className="text-sky-400 font-medium truncate block">
-                      {activeSelectedTable.waiterName || 'Ravi Sharma'}
+                      {activeSelectedTable.waiterName || '—'}
                     </span>
                   </div>
                   <div>
@@ -1058,7 +963,7 @@ export default function LeftPanel({
                   <div className="space-y-1 bg-slate-900/60 p-2 rounded-lg border border-slate-800/80 font-mono">
                     {activeSelectedTable.items.length === 0 ? (
                       <div className="text-[10px] text-slate-500 py-2 text-center">
-                        1x Margherita Pizza, 1x Cheese Garlic Bread
+                        No items recorded
                       </div>
                     ) : (
                       activeSelectedTable.items.map((item, idx) => (
@@ -1086,7 +991,7 @@ export default function LeftPanel({
                     <span className="text-xs font-bold uppercase tracking-wide font-mono">Total Bill</span>
                   </div>
                   <span className="text-sm font-mono font-bold text-emerald-300">
-                    ₹{activeSelectedTable.totalBill || 458}
+                    ₹{activeSelectedTable.totalBill || 0}
                   </span>
                 </div>
               </>

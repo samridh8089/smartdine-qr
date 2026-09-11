@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRestaurant } from '../../layout';
 import { supabase } from '@/lib/supabase';
+import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import { 
   convertUnit, 
   formatQuantityWithUnit, 
@@ -34,9 +35,6 @@ import {
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
-import LockedFeatureView from '@/components/shared/LockedFeatureView';
-import { usePreviewMode } from '@/context/PreviewModeContext';
-import { DEMO_INVENTORY_ITEMS, DEMO_PURCHASE_HISTORY, DEMO_STOCK_MOVEMENTS } from '@/lib/demoPreviewData';
 
 function ModalPortal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -162,7 +160,6 @@ function formatTransactionMeta(tx: any) {
 
 export default function InventoryDashboardPage() {
   const { restaurant, activeRole, planSpec } = useRestaurant();
-  const { isPreviewMode } = usePreviewMode();
   const restaurantId = restaurant?.id || '';
   const [aiRecipeUsage, setAiRecipeUsage] = useState<{ used: number; limit: number | null; remaining: number | null }>({
     used: 0,
@@ -367,10 +364,10 @@ export default function InventoryDashboardPage() {
     };
   }, [restaurantId]);
 
-  // Preview mode fallback data (only activates when DB data is empty)
-  const effectiveItems = items.length === 0 && isPreviewMode ? DEMO_INVENTORY_ITEMS : items;
-  const effectivePurchases = purchases.length === 0 && isPreviewMode ? DEMO_PURCHASE_HISTORY : purchases;
-  const effectiveTransactions = transactions.length === 0 && isPreviewMode ? DEMO_STOCK_MOVEMENTS : transactions;
+  // Clean production state (no demo preview overrides)
+  const effectiveItems = items;
+  const effectivePurchases = purchases;
+  const effectiveTransactions = transactions;
 
   // Calculated Summary Metrics (Using canonical getItemStockStatus: BUG-INV-009)
   const activeItems = effectiveItems.filter(i => i.is_active !== false);
@@ -1557,7 +1554,7 @@ export default function InventoryDashboardPage() {
                             <Boxes className="h-6 w-6" />
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-gray-950 dark:text-white">No inventory items found</p>
+                            <p className="text-sm font-bold text-gray-950 dark:text-white" data-testid="empty-inventory-text">No inventory configured.</p>
                             <p className="text-xs text-gray-500 mt-0.5">Add your raw ingredients or import from a CSV to begin tracking stock.</p>
                           </div>
                           <button

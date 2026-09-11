@@ -91,11 +91,6 @@ export default function ReplayMode({
         });
       }
     }
-    // Add demo orders if empty
-    if (map.size === 0) {
-      map.set('A7K-26D00001', { orderId: 'A7K-26D00001', eventIdx: 0, label: 'Order #A7K-26D00001 (Table 12)' });
-      map.set('A7K-26D00002', { orderId: 'A7K-26D00002', eventIdx: 0, label: 'Order #A7K-26D00002 (Table 12)' });
-    }
     return Array.from(map.values());
   }, [events]);
 
@@ -376,7 +371,7 @@ export default function ReplayMode({
           }`}
         >
           <span className="h-2 w-2 rounded-full bg-purple-400 animate-ping" />
-          <span>{events.length > 0 ? `${Math.max(events.length, 145)} events loaded` : '145 events loaded'}</span>
+          <span>{events.length} events loaded</span>
         </div>
 
         {/* Right: Playback Speed + Transport Controls */}
@@ -468,7 +463,7 @@ export default function ReplayMode({
           }`}>
             <span className="h-2 w-2 rounded-full bg-purple-500 animate-ping" />
             <span className={theme === 'light' ? 'font-bold text-[#1E293B]' : 'font-bold text-slate-100'}>
-              Replaying Order #{targetOrder?.id || selectedReplayOrderId || (currentEvent || events[0])?.order_id || (currentEvent || events[0])?.correlation_id?.replace('corr_', '').slice(0, 8) || 'A7K-26D00002'}
+              Replaying Order #{targetOrder?.id || selectedReplayOrderId || (currentEvent || events[0])?.order_id || (currentEvent || events[0])?.correlation_id?.replace('corr_', '').slice(0, 8) || '—'}
             </span>
             <span className="text-purple-400 font-bold">•</span>
             <span className="text-purple-600 font-semibold uppercase text-[11px]">
@@ -480,7 +475,7 @@ export default function ReplayMode({
         {events.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-600">
             <Play className="h-10 w-10 opacity-30" />
-            <p className="text-sm font-mono">No historical events recorded for this range</p>
+            <p className="text-sm font-mono">No events available.</p>
           </div>
         ) : (
           containerSize.width > 100 && (

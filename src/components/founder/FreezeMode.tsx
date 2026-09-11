@@ -294,6 +294,18 @@ export default function FreezeMode({
   const formattedScrubberDate = new Date(scrubberMs).toLocaleDateString();
 
   // ─── Render ──────────────────────────────────────────────────────────────
+  if (events.length === 0) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full w-full gap-3 select-none ${theme === 'light' ? 'bg-[#EEF3F8] text-[#1E293B]' : 'bg-slate-950 text-slate-100'}`}>
+        <div className="h-12 w-12 rounded-full bg-cyan-950/40 border border-cyan-800/60 flex items-center justify-center text-cyan-400">
+          <Clock className="h-6 w-6 opacity-60" />
+        </div>
+        <p className="text-sm font-mono font-semibold">Create your first order to use time travel.</p>
+        <p className="text-xs text-slate-500 font-mono">No historical snapshot</p>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex flex-col h-full w-full overflow-hidden select-none ${theme === 'light' ? 'bg-[#EEF3F8] text-[#1E293B]' : 'bg-slate-950 text-slate-100'}`}>
       {/* ── Top Bar: Freeze Frame Moment Metrics (Part D) ────────────────── */}

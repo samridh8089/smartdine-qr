@@ -11,7 +11,6 @@ import MockBanner from '@/components/shared/MockBanner';
 import buildInfo from '@/lib/build-info.json';
 import { dashboardStore } from '@/lib/dashboardStore';
 import { PreviewModeProvider } from '@/context/PreviewModeContext';
-import DemoPreviewToggle from '@/components/shared/DemoPreviewToggle';
 
 import { 
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
@@ -64,7 +63,6 @@ const ALL_MENU_ITEMS = [
   { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
   { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'] },
   { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
-  { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
   { name: 'Tables & QRs', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
   { name: 'Kitchen Display', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'kitchen'] },
   { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
@@ -684,7 +682,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
 
               <div className="flex items-center gap-3">
-                <DemoPreviewToggle />
                 {restaurant?.subscription_plan && (
                   <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">
                     {planSpec.name} Plan

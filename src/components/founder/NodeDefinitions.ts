@@ -30,8 +30,8 @@ export const GRAPH_NODES: GraphNode[] = [
   { id: 'payment',        label: 'Payment',         x: 2310, y: MY, width: W, height: H, type: 'main', color: '#be185d', description: 'Payment processed' },
   { id: 'session_closed', label: 'Session Closed',  x: 2500, y: MY, width: W, height: H, type: 'main', color: '#475569', description: 'Table session ended' },
 
-  // ── Side nodes ───────────────────────────────────────────────────────────
-  { id: 'inventory',         label: 'Inventory',          x: 1265, y: SY_TOP, width: W, height: H, type: 'side', color: '#0f766e', description: 'Inventory reserve & deduct' },
+  // ── Side nodes (inventory hidden per factory reset contract) ─────────────
+  // { id: 'inventory',         label: 'Inventory',          x: 1265, y: SY_TOP, width: W, height: H, type: 'side', color: '#0f766e', description: 'Inventory reserve & deduct' },
   { id: 'customer_calls',    label: 'Customer Calls',     x: 1835, y: SY_TOP, width: W, height: H, type: 'side', color: '#b45309', description: 'Customer call waiter events' },
   { id: 'push_notifications',label: 'Push Notifications', x: 1455, y: SY_TOP, width: W, height: H, type: 'side', color: '#6d28d9', description: 'FCM push alerts' },
   { id: 'audit_logs',        label: 'Audit Logs',         x: 885,  y: SY_BOT, width: W, height: H, type: 'side', color: '#374151', description: 'System audit trail' },
@@ -54,9 +54,9 @@ export const GRAPH_EDGES: GraphEdge[] = [
   { from: 'served',         to: 'billing',         type: 'main' },
   { from: 'billing',        to: 'payment',         type: 'main' },
   { from: 'payment',        to: 'session_closed',  type: 'main' },
-  // Side connections
-  { from: 'inventory',         to: 'kitchen_queue',  type: 'side' },
-  { from: 'inventory',         to: 'preparing',      type: 'side' },
+  // Side connections (inventory edges hidden)
+  // { from: 'inventory',         to: 'kitchen_queue',  type: 'side' },
+  // { from: 'inventory',         to: 'preparing',      type: 'side' },
   { from: 'push_notifications',to: 'kitchen_queue',  type: 'side' },
   { from: 'push_notifications',to: 'waiter_assigned',type: 'side' },
   { from: 'customer_calls',    to: 'waiter_assigned',type: 'side' },
@@ -83,10 +83,10 @@ export const EVENT_TO_NODE: Record<string, string> = {
   payment_failed:          'billing',
   bill_closed:             'billing',
   session_closed:          'session_closed',
-  inventory_reserved:      'inventory',
-  inventory_deducted:      'inventory',
-  inventory_rollback:      'inventory',
-  waste_entry:             'inventory',
+  inventory_reserved:      'kitchen_queue',
+  inventory_deducted:      'preparing',
+  inventory_rollback:      'kitchen_queue',
+  waste_entry:             'kitchen_queue',
   customer_call_accepted:  'customer_calls',
   customer_call_resolved:  'customer_calls',
   push_sent:               'push_notifications',
@@ -165,7 +165,7 @@ export function toCanonicalNodeId(idOrEvent: string | null | undefined): string 
   if (lower.includes('bill')) return 'billing';
   if (lower.includes('pay')) return 'payment';
   if (lower.includes('session')) return 'session_closed';
-  if (lower.includes('inventory') || lower.includes('stock')) return 'inventory';
+  if (lower.includes('inventory') || lower.includes('stock')) return 'kitchen_queue';
   if (lower.includes('call')) return 'customer_calls';
   if (lower.includes('push')) return 'push_notifications';
   if (lower.includes('audit')) return 'audit_logs';
