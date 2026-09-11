@@ -3757,6 +3757,29 @@ export const db = {
         subscription_plan: newPlan,
         updated_at: new Date().toISOString()
       }).in('id', restaurantIds);
+    } else if (action === 'broadcast') {
+      const message = payload?.message || '';
+      try {
+        const { data: rests } = await supabase
+          .from('restaurants')
+          .select('id, settings')
+          .in('id', restaurantIds);
+        if (rests) {
+          for (const r of rests) {
+            const updated = {
+              ...(r.settings || {}),
+              broadcast_announcement: {
+                message,
+                author: 'Super Admin',
+                created_at: new Date().toISOString()
+              }
+            };
+            await supabase.from('restaurants').update({ settings: updated }).eq('id', r.id);
+          }
+        }
+      } catch (e) {
+        console.warn('[db.executeBulkRestaurantAction broadcast error]:', e);
+      }
     }
 
     return { success: true, affected: restaurantIds.length };

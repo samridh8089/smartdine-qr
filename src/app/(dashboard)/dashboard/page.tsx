@@ -98,8 +98,9 @@ export default function DashboardPage() {
     }
     isReloadingRef.current = true;
     try {
-      const activeRest = restaurant || contextRestaurant || (await db.getRestaurantById(restId));
-      if (!restaurant && activeRest) setRestaurant(activeRest);
+      const freshRest = await db.getRestaurantById(restId);
+      const activeRest = freshRest || restaurant || contextRestaurant;
+      if (activeRest) setRestaurant(activeRest);
 
       // Phase 1: Fast Parallel Fetch of Core Orders & Table Live Status
       const [allOrders, liveTableData] = await Promise.all([

@@ -27,6 +27,8 @@ import {
   ArrowRight,
   Command,
   CheckCircle2,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useFounderLiveSync } from '@/hooks/useFounderLiveSync';
 import LiveMode from './LiveMode';
@@ -756,7 +758,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         </div>
 
         {/* Top Badges: Active Orders, Events, Errors */}
-        <div className="hidden lg:flex items-center gap-1.5 font-mono text-[11px] shrink-0 ml-1">
+        <div className="hidden xl:flex items-center gap-1.5 font-mono text-[11px] shrink-0 ml-1">
           <span data-testid="badge-top-active-orders" className={`px-2 py-1 rounded-lg border flex items-center gap-1.5 ${
             theme === 'light' ? 'bg-white border-[#D7E1EC] text-[#1E293B]' : 'bg-slate-800/90 border-slate-700/80 text-slate-300'
           }`}>
@@ -781,7 +783,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         <button
           data-testid="btn-errors-panel-toggle"
           onClick={() => setErrorCenterOpen((prev) => !prev)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border shadow-sm ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border shadow-sm shrink-0 ${
             errorCenterOpen
               ? 'bg-rose-600 text-white border-rose-500 shadow-rose-900/50 shadow-md font-bold'
               : activeError
@@ -806,7 +808,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
 
 
         {/* 2. Search: Global Order Investigation Bar */}
-        <div className="hidden sm:flex items-center ml-1">
+        <div className="flex items-center ml-1 shrink-0">
           <OrderInvestigationBar
             restaurantId={restaurantId}
             theme={theme}
@@ -824,7 +826,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         <button
           data-testid="btn-command-palette-trigger"
           onClick={() => setCommandPaletteOpen(true)}
-          className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-lg transition-all shadow-sm cursor-pointer ml-1 ${
+          className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-lg transition-all shadow-sm cursor-pointer ml-1 shrink-0 ${
             theme === 'light'
               ? 'bg-white hover:bg-slate-50 border-[#C9D7E6] text-[#1E293B]'
               : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700/80 text-slate-300 hover:text-white'
@@ -836,68 +838,44 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         </button>
 
         {/* Right side controls */}
-        <div className="ml-auto flex items-center gap-3 shrink-0">
+        <div className="ml-auto flex items-center gap-2 shrink-0">
           {/* Realtime connection status */}
-          <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono border ${
+          <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-mono border shrink-0 ${
             theme === 'light' ? 'bg-white border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-800 border-slate-700'
           } ${statusColor}`}>
             {isConnected
               ? <Wifi className="h-3.5 w-3.5 text-emerald-500" />
               : <WifiOff className="h-3.5 w-3.5" />
             }
-            <span className="text-[10px] font-medium hidden sm:block">{statusLabel}</span>
+            <span className="text-[10px] font-medium hidden md:block">{statusLabel}</span>
             {isConnected && (
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             )}
           </div>
 
-          {/* 3. Theme: One animated segmented control pill (200ms sliding thumb, T shortcut, localStorage persistence, ≥24px from Help) */}
-          <div
+          {/* 3. Theme Toggle Button */}
+          <button
             data-testid="btn-theme-toggle"
-            role="switch"
-            aria-checked={theme === 'dark'}
-            tabIndex={0}
             onClick={handleToggleTheme}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                handleToggleTheme();
-              }
-            }}
-            className={`relative flex items-center h-8 w-36 rounded-full p-0.5 border cursor-pointer select-none transition-colors duration-200 mr-6 ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer shadow-sm shrink-0 ${
               theme === 'light'
-                ? 'bg-[#E2E8F0] border-[#CBD5E1]'
-                : 'bg-slate-800 border-slate-700'
+                ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
+                : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-100'
             }`}
             title="Toggle theme: Dark / Light (Shortcut: T)"
           >
-            {/* Sliding Thumb (200ms) */}
-            <div
-              className={`absolute top-0.5 bottom-0.5 w-[calc(50%-2px)] rounded-full transition-all duration-200 shadow-md ${
-                theme === 'dark'
-                  ? 'left-0.5 bg-slate-900 border border-slate-700 shadow-slate-950/50'
-                  : 'left-[calc(50%+1px)] bg-white border border-[#CBD5E1] shadow-sm'
-              }`}
-            />
-            {/* Dark Side */}
-            <div
-              className={`relative z-10 flex-1 flex items-center justify-center gap-1 text-[11px] font-semibold transition-colors duration-200 ${
-                theme === 'dark' ? 'text-white font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <span>🌙</span>
-              <span>Dark</span>
-            </div>
-            {/* Light Side */}
-            <div
-              className={`relative z-10 flex-1 flex items-center justify-center gap-1 text-[11px] font-semibold transition-colors duration-200 ${
-                theme === 'light' ? 'text-[#1E293B] font-bold' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <span>☀️</span>
-              <span>Light</span>
-            </div>
-          </div>
+            {theme === 'dark' ? (
+              <>
+                <Sun className="h-3.5 w-3.5 text-amber-400" />
+                <span className="text-[10px] font-mono hidden sm:inline">Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="h-3.5 w-3.5 text-indigo-500" />
+                <span className="text-[10px] font-mono hidden sm:inline">Dark</span>
+              </>
+            )}
+          </button>
 
           {/* 4. Help: Help & Guide button */}
           <button

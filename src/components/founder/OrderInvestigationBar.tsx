@@ -301,8 +301,8 @@ export default function OrderInvestigationBar({
             setQuery(e.target.value);
             setIsOpenDropdown(true);
           }}
-          placeholder="Search Order ID / Session / Table / Waiter / Customer / Date / Bill... ('/')"
-          className={`w-44 md:w-52 lg:w-56 xl:w-64 pl-8 pr-16 py-1.5 text-xs font-mono rounded-lg border transition-all shadow-inner focus:outline-none focus:ring-1 ${
+          placeholder="Search Orders ('/')"
+          className={`w-36 md:w-44 lg:w-48 pl-7 pr-10 py-1.5 text-xs font-mono rounded-lg border transition-all shadow-inner focus:outline-none focus:ring-1 ${
             isLight
               ? 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400 focus:border-sky-500 focus:ring-sky-500/20'
               : 'bg-slate-950/80 border-slate-700/80 text-slate-100 placeholder-slate-500 focus:border-cyan-500 focus:ring-cyan-500/30'
