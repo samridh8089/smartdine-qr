@@ -28,7 +28,7 @@ import {
   Command,
   CheckCircle2,
 } from 'lucide-react';
-import { useSystemEvents } from '@/hooks/useSystemEvents';
+import { useFounderLiveSync } from '@/hooks/useFounderLiveSync';
 import LiveMode from './LiveMode';
 import ReplayMode from './ReplayMode';
 import FreezeMode from './FreezeMode';
@@ -176,7 +176,17 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const demoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const { events, orderDots, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
+  const {
+    activeOrders,
+    tables,
+    events,
+    orderDots,
+    stats,
+    isConnected,
+    connectionStatus,
+    totalEventCount,
+    refresh,
+  } = useFounderLiveSync({
     restaurantId,
     enabled: true,
   });
@@ -936,6 +946,8 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             onFollowOrder={handleFollowOrder}
             events={combinedEvents}
             orderDots={orderDots}
+            tables={tables}
+            activeOrders={activeOrders}
             theme={theme}
             activeError={activeError}
             isRetryingError={isRetryingError}
