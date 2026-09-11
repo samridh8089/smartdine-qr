@@ -2175,7 +2175,7 @@ export default function SuperAdminPage() {
 
             {/* Embedded FounderControlCenter */}
             {selectedRestId ? (
-              <div className="rounded-[18px] overflow-hidden border border-slate-800 shadow-2xl bg-slate-950 min-h-[700px]">
+              <div className="rounded-[18px] overflow-hidden border border-slate-800 shadow-2xl bg-slate-950 h-[750px] min-h-[750px]">
                 <FounderControlCenter
                   key={selectedRestId}
                   restaurantId={selectedRestId}

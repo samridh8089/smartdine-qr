@@ -107,6 +107,8 @@ interface LeftPanelProps {
   onTableClick?: (table: ActiveTableDetails) => void;
   onOpenTimeline?: (orderId?: string, correlationId?: string) => void;
   onCloseDrawer?: () => void;
+  tables?: ActiveTableDetails[];
+  activeOrders?: any[];
 }
 
 const STATUS_CONFIG: Record<
@@ -174,10 +176,12 @@ export default function LeftPanel({
   onTableClick,
   onOpenTimeline,
   onCloseDrawer,
+  tables: propTables,
+  activeOrders: propActiveOrders,
 }: LeftPanelProps) {
   // ─── 1. useState (Rule 1: Strict Hook Declaration Order) ──────────────────
   const [activeTab, setActiveTab] = useState<LeftTab>('floor');
-  const [tables, setTables] = useState<ActiveTableDetails[]>([]);
+  const [tables, setTables] = useState<ActiveTableDetails[]>(propTables || []);
   const [selectedTable, setSelectedTable] = useState<ActiveTableDetails | null>(null);
   const [isDrawerDismissed, setIsDrawerDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -250,18 +254,20 @@ export default function LeftPanel({
       }
 
       // 2. Fetch active orders
-      let activeOrders: any[] = [];
-      try {
-        const { data: oData } = await supabase
-          .from('orders')
-          .select('id, table_id, table_name, status, total_amount, created_at')
-          .eq('restaurant_id', restaurantId)
-          .in('status', ['new', 'accepted', 'preparing', 'ready', 'served'])
-          .order('created_at', { ascending: false })
-          .limit(30);
-        if (oData) activeOrders = oData;
-      } catch {
-        // silent
+      let activeOrders: any[] = propActiveOrders || [];
+      if (!propActiveOrders || propActiveOrders.length === 0) {
+        try {
+          const { data: oData } = await supabase
+            .from('orders')
+            .select('id, table_id, table_name, status, total, created_at')
+            .eq('restaurant_id', restaurantId)
+            .not('status', 'in', '("completed","cancelled")')
+            .order('created_at', { ascending: false })
+            .limit(30);
+          if (oData) activeOrders = oData;
+        } catch {
+          // silent
+        }
       }
 
       // Map orders by table_id and table_name
@@ -378,6 +384,13 @@ export default function LeftPanel({
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, [loadFloorData, loadKitchenData]);
+
+  useEffect(() => {
+    if (propTables && propTables.length > 0) {
+      setTables(propTables);
+      setLoading(false);
+    }
+  }, [propTables]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

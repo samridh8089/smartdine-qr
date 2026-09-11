@@ -16,6 +16,8 @@ import RightPanel from './RightPanel';
 import { toCanonicalNodeId, GRAPH_NODES } from './NodeDefinitions';
 import type { OrderDotState, SystemEvent, SystemErrorItem } from './types';
 
+import type { ActiveTableDetails } from './LeftPanel';
+
 // Konva canvas dynamically imported (no SSR)
 const GraphCanvas = dynamic(() => import('./GraphCanvas'), {
   ssr: false,
@@ -32,6 +34,8 @@ interface LiveModeProps {
   onFollowOrder: (id: string | null) => void;
   events?: SystemEvent[];
   orderDots?: OrderDotState[];
+  tables?: ActiveTableDetails[];
+  activeOrders?: any[];
   theme?: 'dark' | 'light';
   activeError?: SystemErrorItem | null;
   isRetryingError?: boolean;
@@ -45,6 +49,8 @@ export default function LiveMode({
   onFollowOrder,
   events: propEvents,
   orderDots: propOrderDots,
+  tables: propTables,
+  activeOrders: propActiveOrders,
   theme = 'dark',
   activeError,
   isRetryingError,
@@ -205,6 +211,8 @@ export default function LiveMode({
           restaurantId={restaurantId}
           selectedOrderId={followingOrderId || selectedDot?.orderId || null}
           theme={theme}
+          tables={propTables}
+          activeOrders={propActiveOrders}
           activeError={activeError}
           isRetryingError={isRetryingError}
           onRetryError={onRetryError}

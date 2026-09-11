@@ -507,7 +507,8 @@ export default function GraphCanvas({
   const badgeCountMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const dot of orderDots) {
-      map.set(dot.currentNodeId, (map.get(dot.currentNodeId) || 0) + 1);
+      const canon = toCanonicalNodeId(dot.currentNodeId);
+      map.set(canon, (map.get(canon) || 0) + 1);
     }
     for (const ev of events) {
       if (ev.target_node === 'inventory' || ev.event_type.startsWith('inventory_')) {
@@ -526,9 +527,6 @@ export default function GraphCanvas({
         map.set('reports', (map.get('reports') || 0) + 1);
       }
     }
-    if (!map.get('inventory')) map.set('inventory', 1);
-    if (!map.get('push_notifications')) map.set('push_notifications', 2);
-    if (!map.get('audit_logs')) map.set('audit_logs', 5);
     return map;
   }, [orderDots, events]);
 
@@ -536,9 +534,10 @@ export default function GraphCanvas({
   const dotsByNode = useMemo<Map<string, OrderDotState[]>>(() => {
     const map = new Map<string, OrderDotState[]>();
     for (const dot of orderDots) {
-      const list = map.get(dot.currentNodeId) ?? [];
+      const canon = toCanonicalNodeId(dot.currentNodeId);
+      const list = map.get(canon) ?? [];
       list.push(dot);
-      map.set(dot.currentNodeId, list);
+      map.set(canon, list);
     }
     return map;
   }, [orderDots]);
@@ -945,78 +944,167 @@ export default function GraphCanvas({
         })}
       </Layer>
 
-      {/* ── Layer 3: Dynamic Telemetry (Waiter Movement & Arrival Pulse) ───── */}
+      {/* ── Layer 3: Dynamic Telemetry (Live Orders, Waiter Movement, Zero State) ── */}
       <Layer>
-        {/* Phase-28: No colored circles inside any node. Clean numbered badge only. */}
+        {/* Zero State: Displayed when no active orders exist */}
+        {orderDots.length === 0 && (
+          <Group x={CANVAS_WIDTH / 2 - 250} y={190}>
+            <Rect
+              width={500}
+              height={76}
+              cornerRadius={16}
+              fill={isLight ? 'rgba(255, 255, 255, 0.95)' : 'rgba(15, 23, 42, 0.92)'}
+              stroke={isLight ? '#CBD5E1' : '#334155'}
+              strokeWidth={1.5}
+              shadowColor="#0EA5E9"
+              shadowBlur={16}
+              shadowOpacity={0.2}
+            />
+            <Circle x={36} y={38} radius={8} fill="#10B981" />
+            <Circle x={36} y={38} radius={14} stroke="#10B981" strokeWidth={1} dash={[3, 3]} opacity={0.6} />
+            <Text
+              text="⚡ Waiting for first order"
+              x={60}
+              y={20}
+              fontSize={14}
+              fontStyle="bold"
+              fontFamily="'Inter', sans-serif"
+              fill={isLight ? '#0F172A' : '#F8FAFC'}
+            />
+            <Text
+              text="All tables available • Ready for incoming QR orders & live kitchen queue"
+              x={60}
+              y={44}
+              fontSize={10.5}
+              fontFamily="'Inter', sans-serif"
+              fill={isLight ? '#64748B' : '#94A3B8'}
+            />
+          </Group>
+        )}
 
-        {/* ── Animated Waiter Travel Route & Pulse: Neha Patel Table 4 -> Table 12 ── */}
-        <Line
-          points={[1560, 265, 1740, 265]}
-          stroke="#a855f7"
-          strokeWidth={1.5}
-          dash={[6, 4]}
-          dashOffset={-dashOffset}
-          opacity={0.65}
-          listening={false}
-        />
-        {/* Destination Arrival Pulse at Table 12 */}
-        <Circle
-          x={1740}
-          y={265}
-          radius={7 + Math.sin(dashOffset * 0.1) * 2.5}
-          stroke="#a855f7"
-          strokeWidth={1.2}
-          opacity={0.8}
-          listening={false}
-        />
-        <Circle
-          x={1740}
-          y={265}
-          radius={3}
-          fill="#c084fc"
-          listening={false}
-        />
+        {/* Live Active Order Pills rendered below each respective stage node */}
+        {orderDots.length > 0 && GRAPH_NODES.map((node) => {
+          const dots = dotsByNode.get(node.id) || [];
+          if (dots.length === 0) return null;
 
-        <Group
-          x={1650 + Math.sin(dashOffset * 0.04) * 70}
-          y={265}
-          listening={false}
-        >
-          <Rect
-            width={164}
-            height={20}
-            offsetX={82}
-            offsetY={10}
-            cornerRadius={10}
-            fill={isLight ? '#ffffff' : '#1e1b4b'}
-            stroke="#a855f7"
-            strokeWidth={1.2}
-            shadowColor="#a855f7"
-            shadowBlur={10}
-            shadowOpacity={0.7}
-          />
-          <Circle
-            x={-70}
-            y={0}
-            radius={4}
-            fill="#a855f7"
-            shadowColor="#c084fc"
-            shadowBlur={8}
-          />
-          <Text
-            text="🚶 Neha: T4 → T12 (ETA 45s)"
-            width={145}
-            height={20}
-            offsetX={62}
-            offsetY={10}
-            align="center"
-            verticalAlign="middle"
-            fontSize={8}
-            fontStyle="bold"
-            fontFamily="'Inter', 'Segoe UI', monospace"
-            fill={isLight ? '#6b21a8' : '#e9d5ff'}
-          />
-        </Group>
+          return (
+            <Group key={`dots-layer-${node.id}`}>
+              {dots.map((dot, idx) => {
+                const isSelected = followingOrderId === dot.orderId;
+                const pillX = node.x + (idx % 2) * 78;
+                const pillY = node.y + node.height + 6 + Math.floor(idx / 2) * 22;
+                const label = `${dot.metadata?.table || dot.shortId}`;
+
+                return (
+                  <Group
+                    key={`dot-pill-${dot.orderId}`}
+                    x={pillX}
+                    y={pillY}
+                    onClick={handleDotClick(dot)}
+                    onTap={handleDotClick(dot)}
+                    cursor="pointer"
+                  >
+                    <Rect
+                      width={74}
+                      height={19}
+                      cornerRadius={6}
+                      fill={isSelected ? '#0EA5E9' : isLight ? '#ffffff' : '#0f172a'}
+                      stroke={isSelected ? '#38BDF8' : dot.color}
+                      strokeWidth={isSelected ? 1.8 : 1.2}
+                      shadowColor={dot.color}
+                      shadowBlur={isSelected ? 12 : 6}
+                      shadowOpacity={0.6}
+                    />
+                    <Circle
+                      x={8}
+                      y={9.5}
+                      radius={3.5}
+                      fill={dot.color}
+                      shadowColor={dot.color}
+                      shadowBlur={4}
+                    />
+                    <Text
+                      text={label}
+                      x={16}
+                      y={0}
+                      width={55}
+                      height={19}
+                      align="left"
+                      verticalAlign="middle"
+                      fontSize={8}
+                      fontStyle="bold"
+                      fontFamily="'Inter', monospace"
+                      fill={isSelected ? '#ffffff' : isLight ? '#0f172a' : '#f8fafc'}
+                      listening={false}
+                    />
+                  </Group>
+                );
+              })}
+            </Group>
+          );
+        })}
+
+        {/* ── Dynamic Waiter Travel Route & Pulse (Shown when an order has assigned waiter) ── */}
+        {(() => {
+          const waiterDot = orderDots.find(
+            (d) => d.metadata?.waiter && (d.currentNodeId === 'waiter_assigned' || d.currentNodeId === 'ready' || d.currentNodeId === 'served')
+          );
+          if (!waiterDot) return null;
+
+          const waiterLabel = `🚶 ${waiterDot.metadata?.waiter}: → ${waiterDot.metadata?.table || 'Table'}`;
+          return (
+            <Group>
+              <Line
+                points={[1560, 265, 1740, 265]}
+                stroke="#a855f7"
+                strokeWidth={1.5}
+                dash={[6, 4]}
+                dashOffset={-dashOffset}
+                opacity={0.65}
+                listening={false}
+              />
+              <Circle
+                x={1740}
+                y={265}
+                radius={7 + Math.sin(dashOffset * 0.1) * 2.5}
+                stroke="#a855f7"
+                strokeWidth={1.2}
+                opacity={0.8}
+                listening={false}
+              />
+              <Circle x={1740} y={265} radius={3} fill="#c084fc" listening={false} />
+              <Group x={1650 + Math.sin(dashOffset * 0.04) * 70} y={265} listening={false}>
+                <Rect
+                  width={164}
+                  height={20}
+                  offsetX={82}
+                  offsetY={10}
+                  cornerRadius={10}
+                  fill={isLight ? '#ffffff' : '#1e1b4b'}
+                  stroke="#a855f7"
+                  strokeWidth={1.2}
+                  shadowColor="#a855f7"
+                  shadowBlur={10}
+                  shadowOpacity={0.7}
+                />
+                <Circle x={-70} y={0} radius={4} fill="#a855f7" shadowColor="#c084fc" shadowBlur={8} />
+                <Text
+                  text={waiterLabel}
+                  width={145}
+                  height={20}
+                  offsetX={62}
+                  offsetY={10}
+                  align="center"
+                  verticalAlign="middle"
+                  fontSize={8}
+                  fontStyle="bold"
+                  fontFamily="'Inter', 'Segoe UI', monospace"
+                  fill={isLight ? '#6b21a8' : '#e9d5ff'}
+                />
+              </Group>
+            </Group>
+          );
+        })()}
       </Layer>
     </Stage>
   );
