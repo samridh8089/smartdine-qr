@@ -315,7 +315,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
             <Rect x={width - Math.max(16, width * 0.2) - 4} y={6} width={Math.max(16, width * 0.2)} height={height - 12} cornerRadius={3} fill="#E7E5E4" stroke="#78716C" strokeWidth={1} />
             {/* Coffee Table */}
             <Rect x={width * 0.3} y={height * 0.25} width={width * 0.4} height={height * 0.5} cornerRadius={3} fill="#FFFFFF" stroke="#171717" strokeWidth={1} />
-            <Text text={item.name || 'WAITING'} x={0} y={height / 2 - 5} width={width} align="center" fontSize={8} fontStyle="bold" fill="#57534E" listening={false} />
+            <Text text={item.name || 'WAITING LOUNGE'} x={0} y={height / 2 - 5} width={width} align="center" fontSize={8} fontStyle="bold" fill="#57534E" listening={false} />
           </Group>
         );
 
@@ -328,7 +328,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
             <Ellipse x={15} y={24} radiusX={7} radiusY={9} fill="#FFFFFF" stroke="#78716C" strokeWidth={1} />
             {/* Basin */}
             <Rect x={width - 24} y={8} width={16} height={14} cornerRadius={3} fill="#FFFFFF" stroke="#0284C7" strokeWidth={1} />
-            <Text text={item.name || 'RESTROOM'} x={0} y={height - 16} width={width} align="center" fontSize={8} fontStyle="bold" fill="#78716C" listening={false} />
+            <Text text={item.name || 'WASHROOM'} x={0} y={height - 16} width={width} align="center" fontSize={8} fontStyle="bold" fill="#78716C" listening={false} />
           </Group>
         );
 
