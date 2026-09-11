@@ -105,29 +105,27 @@ export async function POST(req: Request) {
         item = newItem;
       }
 
-      const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
       const { data: newOrder, error: orderErr } = await (admin.from('orders') as any).insert({
         restaurant_id: RESTAURANT_ID,
-        order_number: orderNumber,
-        customer_name: 'Aarav Sharma (Founder Test)',
-        customer_phone: '9876543210',
-        order_type: 'takeaway',
+        table_name: 'Table 1',
+        order_type: 'dine_in',
         status: 'new',
         payment_status: 'pending',
+        special_instructions: 'Customer: Aarav Sharma (9876543210)',
         subtotal: 80,
-        total_amount: 80,
-        tax_amount: 0,
-        discount_amount: 0
+        total: 80,
+        grand_total: 80,
+        gst: 0,
+        tax_total: 0
       }).select().single();
 
       if (newOrder) {
         await (admin.from('order_items') as any).insert({
           order_id: newOrder.id,
           menu_item_id: item?.id,
-          name: item?.name || 'Signature Masala Chai',
+          menu_item_name: item?.name || 'Signature Masala Chai',
           quantity: 2,
           price: 40,
-          total_price: 80,
           notes: 'Less sugar'
         });
 
@@ -140,7 +138,7 @@ export async function POST(req: Request) {
           source_node: 'checkout',
           target_node: 'order_created',
           duration_ms: 120,
-          metadata: { order_number: orderNumber, total: 80, customer: 'Aarav Sharma' }
+          metadata: { total: 80, customer: 'Aarav Sharma' }
         });
       }
 
