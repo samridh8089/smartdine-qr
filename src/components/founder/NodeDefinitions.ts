@@ -105,6 +105,75 @@ export const NODE_MAP: Record<string, GraphNode> = Object.fromEntries(
   GRAPH_NODES.map(n => [n.id, n])
 );
 
+export const NODE_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  GRAPH_NODES.map(n => [n.id, n.label])
+);
+
+export interface NodeMetaSpec {
+  apiEndpoint: string;
+  dbTable: string;
+  lastEventDefault: string;
+  defaultDurationMs: number;
+}
+
+export const NODE_METADATA_SPECS: Record<string, NodeMetaSpec> = {
+  qr_scan: { apiEndpoint: 'GET /api/customer/table-session', dbTable: 'table_sessions', lastEventDefault: 'qr_scanned', defaultDurationMs: 45 },
+  customer_menu: { apiEndpoint: 'GET /api/menu', dbTable: 'menu_items', lastEventDefault: 'menu_opened', defaultDurationMs: 80 },
+  cart: { apiEndpoint: 'POST /api/customer/cart', dbTable: 'cart_sessions', lastEventDefault: 'cart_updated', defaultDurationMs: 65 },
+  checkout: { apiEndpoint: 'POST /api/customer/orders/checkout', dbTable: 'orders (draft)', lastEventDefault: 'checkout_started', defaultDurationMs: 140 },
+  order_created: { apiEndpoint: 'POST /api/customer/orders', dbTable: 'orders', lastEventDefault: 'order_created', defaultDurationMs: 110 },
+  live_orders: { apiEndpoint: 'POST /api/staff/update-order-status', dbTable: 'orders', lastEventDefault: 'order_accepted', defaultDurationMs: 95 },
+  kitchen_queue: { apiEndpoint: 'POST /api/kds/queue', dbTable: 'kitchen_tickets', lastEventDefault: 'kds_queued', defaultDurationMs: 130 },
+  preparing: { apiEndpoint: 'PATCH /api/staff/update-order-status', dbTable: 'orders (preparing)', lastEventDefault: 'order_preparing', defaultDurationMs: 450 },
+  ready: { apiEndpoint: 'POST /api/ready', dbTable: 'orders (ready)', lastEventDefault: 'order_ready', defaultDurationMs: 120 },
+  waiter_assigned: { apiEndpoint: 'POST /api/staff/table-assignments', dbTable: 'staff_assignments', lastEventDefault: 'waiter_assigned', defaultDurationMs: 160 },
+  served: { apiEndpoint: 'PATCH /api/staff/update-order-status', dbTable: 'orders (served)', lastEventDefault: 'order_served', defaultDurationMs: 85 },
+  billing: { apiEndpoint: 'POST /api/payments/create-order', dbTable: 'bills', lastEventDefault: 'bill_closed', defaultDurationMs: 210 },
+  payment: { apiEndpoint: 'POST /api/payments/verify', dbTable: 'payments', lastEventDefault: 'payment_success', defaultDurationMs: 340 },
+  session_closed: { apiEndpoint: 'POST /api/tables/release', dbTable: 'table_sessions', lastEventDefault: 'session_closed', defaultDurationMs: 90 },
+  inventory: { apiEndpoint: 'RPC deduct_inventory_on_preparing', dbTable: 'inventory_transactions', lastEventDefault: 'inventory_deducted', defaultDurationMs: 55 },
+  customer_calls: { apiEndpoint: 'POST /api/customer/call-waiter', dbTable: 'customer_calls', lastEventDefault: 'customer_call_accepted', defaultDurationMs: 70 },
+  push_notifications: { apiEndpoint: 'POST /api/push/dispatch', dbTable: 'push_subscriptions', lastEventDefault: 'push_sent', defaultDurationMs: 180 },
+  audit_logs: { apiEndpoint: 'POST /api/system-events', dbTable: 'system_events', lastEventDefault: 'audit_written', defaultDurationMs: 40 },
+  reports: { apiEndpoint: 'GET /api/reports/daily-metrics', dbTable: 'orders, payments, inventory', lastEventDefault: 'report_generated', defaultDurationMs: 120 },
+};
+
+/**
+ * Maps any event type, alias, or raw string to a guaranteed canonical Graph Node ID.
+ * Eliminates 'Node not found' completely.
+ */
+export function toCanonicalNodeId(idOrEvent: string | null | undefined): string {
+  if (!idOrEvent) return 'reports';
+  if (NODE_MAP[idOrEvent]) return idOrEvent;
+  if (EVENT_TO_NODE[idOrEvent]) return EVENT_TO_NODE[idOrEvent];
+
+  const lower = idOrEvent.toLowerCase().trim();
+  if (NODE_MAP[lower]) return lower;
+  if (EVENT_TO_NODE[lower]) return EVENT_TO_NODE[lower];
+
+  if (lower.includes('prep')) return 'preparing';
+  if (lower.includes('kitchen')) return 'kitchen_queue';
+  if (lower.includes('qr')) return 'qr_scan';
+  if (lower.includes('menu')) return 'customer_menu';
+  if (lower.includes('cart')) return 'cart';
+  if (lower.includes('checkout')) return 'checkout';
+  if (lower.includes('create')) return 'order_created';
+  if (lower.includes('live') || lower.includes('accept')) return 'live_orders';
+  if (lower.includes('ready')) return 'ready';
+  if (lower.includes('waiter')) return 'waiter_assigned';
+  if (lower.includes('serve')) return 'served';
+  if (lower.includes('bill')) return 'billing';
+  if (lower.includes('pay')) return 'payment';
+  if (lower.includes('session')) return 'session_closed';
+  if (lower.includes('inventory') || lower.includes('stock')) return 'inventory';
+  if (lower.includes('call')) return 'customer_calls';
+  if (lower.includes('push')) return 'push_notifications';
+  if (lower.includes('audit')) return 'audit_logs';
+  if (lower.includes('report')) return 'reports';
+
+  return 'reports';
+}
+
 // ─── Canvas dimensions ────────────────────────────────────────────────────────
 export const CANVAS_WIDTH = 2720;
 export const CANVAS_HEIGHT = 640;
@@ -114,3 +183,4 @@ export const DOT_COLORS = [
   '#10b981', '#6366f1', '#f59e0b', '#ef4444',
   '#8b5cf6', '#06b6d4', '#f97316', '#84cc16',
 ];
+

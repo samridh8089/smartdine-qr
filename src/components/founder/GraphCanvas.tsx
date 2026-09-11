@@ -30,17 +30,18 @@ import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   EVENT_TO_NODE,
+  toCanonicalNodeId,
 } from './NodeDefinitions';
 import type { OrderDotState, GraphNode, SystemEvent, SystemErrorItem } from './types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MIN_SCALE = 0.3;
+const MIN_SCALE = 0.55;
 const MAX_SCALE = 2.5;
 const ZOOM_SENSITIVITY = 0.001;
 
 const DOT_RADIUS = 7;
-const TRIGGER_DURATION_MS = 750;
+const TRIGGER_DURATION_MS = 650;
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
@@ -578,6 +579,32 @@ export default function GraphCanvas({
     [onDotClick]
   );
 
+  const autoFitCamera = useCallback(
+    (animate = true) => {
+      if (!stageRef.current || containerWidth === 0 || containerHeight === 0) return;
+      const fitScale = Math.min(1.0, Math.max(0.60, (containerWidth - 60) / 1850));
+      const targetX = 50;
+      const targetY = Math.max(20, Math.round((containerHeight - 500 * fitScale) / 2));
+
+      if (animate && (stageRef.current as any).to) {
+        (stageRef.current as Konva.Stage & { to: (config: object) => void }).to({
+          x: targetX,
+          y: targetY,
+          scaleX: fitScale,
+          scaleY: fitScale,
+          duration: 0.5,
+          easing: Konva.Easings.EaseInOut,
+        });
+      } else {
+        stageRef.current.position({ x: targetX, y: targetY });
+        stageRef.current.scale({ x: fitScale, y: fitScale });
+      }
+      setScale(fitScale);
+      setStagePos({ x: targetX, y: targetY });
+    },
+    [containerWidth, containerHeight]
+  );
+
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
       e.evt.preventDefault();
@@ -625,18 +652,28 @@ export default function GraphCanvas({
     };
   }, []);
 
-  // Notify parent once stage mounted
+  // Notify parent once stage mounted & run initial auto-fit
   useEffect(() => {
     if (stageRef.current && onStageReady) {
       onStageReady(stageRef.current);
     }
-  }, [onStageReady]);
+    if (containerWidth > 100 && containerHeight > 100) {
+      autoFitCamera(false);
+    }
+  }, [onStageReady, containerWidth, containerHeight, autoFitCamera]);
+
+  // Global camera reset listener (e.g. double click or palette)
+  useEffect(() => {
+    const handleReset = () => autoFitCamera(true);
+    window.addEventListener('reset-graph-camera', handleReset);
+    return () => window.removeEventListener('reset-graph-camera', handleReset);
+  }, [autoFitCamera]);
 
   // Detect new event triggers and animate node (500–700ms pulse)
   useEffect(() => {
     if (events.length > lastEventCountRef.current) {
       const latest = events[events.length - 1];
-      const targetNode = latest.target_node || EVENT_TO_NODE[latest.event_type];
+      const targetNode = toCanonicalNodeId(latest.target_node || EVENT_TO_NODE[latest.event_type]);
       if (targetNode) {
         setActiveTriggerNodeId(targetNode);
         if (triggerTimerRef.current) clearTimeout(triggerTimerRef.current);
@@ -658,7 +695,8 @@ export default function GraphCanvas({
       (d) => d.orderId === followingOrderId || d.correlationId === followingOrderId
     );
     if (!followed) return;
-    const node = NODE_MAP[followed.currentNodeId];
+    const canonId = toCanonicalNodeId(followed.currentNodeId);
+    const node = NODE_MAP[canonId];
     if (!node) return;
 
     const centre = nodeCentre(node);
@@ -678,7 +716,8 @@ export default function GraphCanvas({
   // Smooth camera pan to highlighted node
   useEffect(() => {
     if (!highlightedNodeId || !stageRef.current) return;
-    const targetNode = GRAPH_NODES.find((n) => n.id === highlightedNodeId);
+    const canonId = toCanonicalNodeId(highlightedNodeId);
+    const targetNode = GRAPH_NODES.find((n) => n.id === canonId);
     if (!targetNode) return;
 
     const currentScale = stageRef.current.scaleX() || 1;
@@ -698,7 +737,7 @@ export default function GraphCanvas({
   if (containerWidth === 0 || containerHeight === 0) return null;
 
   const isLight = theme === 'light';
-  const gridDotColor = isLight ? '#D7E3EF' : '#1e293b';
+  const gridDotColor = isLight ? '#DCE5F0' : '#1e293b';
 
   return (
     <Stage
@@ -709,12 +748,14 @@ export default function GraphCanvas({
       y={stagePos.y}
       draggable
       onWheel={handleWheel}
+      onDblClick={() => autoFitCamera(true)}
+      onDblTap={() => autoFitCamera(true)}
       onDragEnd={(e) => {
         setStagePos({ x: e.target.x(), y: e.target.y() });
       }}
       style={{
         background: isLight
-          ? '#EEF3F8'
+          ? '#F6F8FC'
           : 'radial-gradient(ellipse at 50% 30%, #0d1527 0%, #060911 100%)',
         cursor: 'grab',
       }}
@@ -724,7 +765,7 @@ export default function GraphCanvas({
         {/* Soft blueprint workflow guide lines (N8N feel) */}
         <Line
           points={[0, 300, CANVAS_WIDTH, 300]}
-          stroke={isLight ? 'rgba(215, 227, 239, 0.7)' : 'rgba(51, 65, 85, 0.28)'}
+          stroke={isLight ? 'rgba(220, 229, 240, 0.8)' : 'rgba(51, 65, 85, 0.28)'}
           strokeWidth={1}
           dash={[6, 12]}
           listening={false}

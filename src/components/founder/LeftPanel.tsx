@@ -580,21 +580,21 @@ export default function LeftPanel({
                       data-testid={isOccupied ? 'table-card-occupied' : 'table-card-available'}
                       onClick={() => handleTableSelect(table)}
                       className={`
-                        group relative rounded-xl border p-3 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between shadow-sm
+                        group relative rounded-xl border p-3 text-left transition-all duration-200 cursor-pointer flex flex-col justify-between shadow-xs
                         ${isOccupied
                           ? isLight
-                            ? 'bg-white border-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.2)] ring-1 ring-amber-400 min-h-[100px]'
-                            : `bg-slate-900/90 ${cfg.border} shadow-[0_0_14px_rgba(56,189,248,0.25)] ring-1 ring-sky-500/40 animate-[pulse_4s_ease-in-out_infinite] min-h-[100px]`
+                            ? 'bg-white border-amber-300/80 shadow-[0_0_10px_rgba(245,158,11,0.15)] ring-1 ring-amber-400/50 min-h-[96px]'
+                            : `bg-slate-900/90 ${cfg.border} shadow-[0_0_14px_rgba(56,189,248,0.25)] ring-1 ring-sky-500/40 animate-[pulse_4s_ease-in-out_infinite] min-h-[96px]`
                           : isLight
-                          ? 'bg-white border-[#C9D7E6] hover:border-slate-400 min-h-[72px]'
-                          : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 min-h-[82px]'}
-                        ${isSelected ? 'ring-2 ring-[#0EA5E9] scale-[1.02] z-10' : 'hover:scale-[1.01]'}
+                          ? 'bg-white border-[#D7E1EC] hover:border-slate-400 min-h-[68px]'
+                          : 'bg-slate-900/50 border-slate-800 hover:border-slate-700 min-h-[76px]'}
+                        ${isSelected ? 'ring-2 ring-[#2563EB] scale-[1.02] z-10' : 'hover:scale-[1.01]'}
                       `}
                     >
                       {isOccupied ? (
-                        /* ── Occupied Card: Table, Status pill, Items, Bill, ETA, Waiter, Live pulse, 3-dot menu ── */
+                        /* ── Occupied Card: Only Table, Status pill, Items, Bill, ETA, Waiter, Live pulse (Zero Clutter) ── */
                         <div className="w-full flex flex-col justify-between h-full space-y-2">
-                          {/* Header: Pulsing Live Indicator + Table Number + Status Pill + Three-dot Menu */}
+                          {/* Header: Pulsing Live Indicator + Table Number + Status Pill */}
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <span className="relative flex h-2 w-2">
@@ -605,69 +605,17 @@ export default function LeftPanel({
                                 {table.name}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                                  isLight ? 'bg-amber-50 text-amber-800 border border-amber-300' : `${cfg.text} bg-slate-950/90 border border-current shadow-sm`
-                                }`}
-                              >
-                                {cfg.label}
-                              </span>
-                              {/* Three-dot menu */}
-                              <div className="relative">
-                                <span
-                                  data-testid={`btn-card-menu-${table.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setMenuOpenTableId(menuOpenTableId === table.id ? null : table.id);
-                                  }}
-                                  className={`p-1 rounded transition-colors inline-flex items-center justify-center cursor-pointer ${
-                                    isLight ? 'text-[#64748B] hover:text-[#1E293B] hover:bg-slate-100' : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                                  }`}
-                                  title="Actions"
-                                >
-                                  <MoreVertical className="h-3 w-3" />
-                                </span>
-                                {menuOpenTableId === table.id && (
-                                  <div
-                                    data-testid={`dropdown-menu-${table.id}`}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className={`absolute right-0 top-6 w-32 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100 border ${
-                                      isLight ? 'bg-white border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-900 border-slate-700 text-slate-300'
-                                    }`}
-                                  >
-                                    <button
-                                      type="button"
-                                      data-testid={`menu-qr-${table.id}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMenuOpenTableId(null);
-                                        if (typeof window !== 'undefined') window.open(`/menu?table=${encodeURIComponent(table.name)}`, '_blank');
-                                      }}
-                                      className="w-full px-2.5 py-1.5 text-left hover:bg-sky-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                      <QrCode className="h-3 w-3 text-sky-500" /> QR Code
-                                    </button>
-                                    <button
-                                      type="button"
-                                      data-testid={`menu-history-${table.id}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMenuOpenTableId(null);
-                                        handleTableSelect(table);
-                                      }}
-                                      className="w-full px-2.5 py-1.5 text-left hover:bg-amber-50 dark:hover:bg-slate-800 flex items-center gap-1.5 cursor-pointer"
-                                    >
-                                      <History className="h-3 w-3 text-amber-500" /> History
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            <span
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                isLight ? 'bg-amber-50 text-amber-800 border border-amber-300' : `${cfg.text} bg-slate-950/90 border border-current shadow-sm`
+                              }`}
+                            >
+                              {cfg.label}
+                            </span>
                           </div>
 
                           {/* Middle Metrics: Item count, Bill amount, Kitchen ETA, Waiter name */}
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono pt-1">
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-mono pt-0.5">
                             <div className={isLight ? 'text-[#64748B] font-medium' : 'text-slate-300 font-medium'}>
                               {table.items.length > 0 ? table.items.length : 2} items
                             </div>
@@ -758,7 +706,7 @@ export default function LeftPanel({
                               }}
                               className={`p-1.5 rounded-lg border cursor-pointer transition-colors flex items-center justify-center ${
                                 isLight
-                                  ? 'bg-[#F6F8FB] hover:bg-sky-50 border-[#CBD5E1] text-sky-600'
+                                  ? 'bg-[#F6F8FC] hover:bg-sky-50 border-[#D7E1EC] text-[#2563EB]'
                                   : 'bg-slate-800/90 hover:bg-sky-950 border-slate-700/80 text-sky-400 hover:text-white'
                               }`}
                               title="Generate QR Code"
@@ -773,7 +721,7 @@ export default function LeftPanel({
                               }}
                               className={`p-1.5 rounded-lg border cursor-pointer transition-colors flex items-center justify-center ${
                                 isLight
-                                  ? 'bg-[#F6F8FB] hover:bg-amber-50 border-[#CBD5E1] text-amber-600'
+                                  ? 'bg-[#F6F8FC] hover:bg-amber-50 border-[#D7E1EC] text-amber-600'
                                   : 'bg-slate-800/90 hover:bg-slate-700 border-slate-700/80 text-slate-300 hover:text-white'
                               }`}
                               title="Table History"
@@ -799,7 +747,7 @@ export default function LeftPanel({
                                   data-testid={`dropdown-menu-${table.id}`}
                                   onClick={(e) => e.stopPropagation()}
                                   className={`absolute right-0 top-6 w-32 rounded-lg shadow-2xl z-50 py-1 text-[10px] font-mono animate-in fade-in duration-100 border ${
-                                    isLight ? 'bg-white border-[#C9D7E6] text-[#1E293B]' : 'bg-slate-900 border-slate-700 text-slate-300'
+                                    isLight ? 'bg-white border-[#D7E1EC] text-[#1E293B]' : 'bg-slate-900 border-slate-700 text-slate-300'
                                   }`}
                                 >
                                   <button

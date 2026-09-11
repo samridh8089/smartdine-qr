@@ -168,9 +168,12 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
   const [isRetryingError, setIsRetryingError] = useState<boolean>(false);
   const [isResolvedError, setIsResolvedError] = useState<boolean>(false);
   const [errorEvents, setErrorEvents] = useState<SystemEvent[]>([]);
+  const [investorDemoRunning, setInvestorDemoRunning] = useState<boolean>(false);
+  const [investorDemoStep, setInvestorDemoStep] = useState<string>('');
 
   // ─── 2. useRef ───────────────────────────────────────────────────────────
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const demoTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const { events, orderDots, isConnected, connectionStatus, totalEventCount } = useSystemEvents({
     restaurantId,
@@ -191,7 +194,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
       actor_type: 'kitchen',
       event_type: 'kitchen_timeout',
       source_node: 'kitchen_queue',
-      target_node: 'order_preparing',
+      target_node: 'preparing',
       duration_ms: 12450,
       metadata: { error: '504 Gateway Timeout', table: 'Table 12', item: 'Farmhouse Pizza' },
       created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
@@ -316,7 +319,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
       actor_type: 'system',
       event_type: 'retry_started',
       source_node: 'kitchen_queue',
-      target_node: 'order_preparing',
+      target_node: 'preparing',
       duration_ms: 800,
       metadata: { attempt: '1/3', action: 'retry_kitchen_sync', table: 'Table 12' },
       created_at: new Date().toISOString(),
@@ -336,7 +339,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         actor_type: 'system',
         event_type: 'sync_restored',
         source_node: 'kitchen_queue',
-        target_node: 'order_preparing',
+        target_node: 'preparing',
         duration_ms: 120,
         metadata: { http_status: '200 OK', connection: 'restored', table: 'Table 12' },
         created_at: new Date().toISOString(),
@@ -350,7 +353,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         actor_type: 'kitchen',
         event_type: 'order_preparing_resumed',
         source_node: 'kitchen_queue',
-        target_node: 'order_preparing',
+        target_node: 'preparing',
         duration_ms: 450,
         metadata: { status: 'preparing_active', table: 'Table 12' },
         created_at: new Date().toISOString(),
@@ -373,6 +376,81 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     }, 800);
   }, [restaurantId]);
 
+  const handleRequeueKitchen = useCallback((errItem: SystemErrorItem) => {
+    setIsRetryingError(true);
+    const requeueEv: SystemEvent = {
+      id: `ev_requeue_${Date.now()}`,
+      restaurant_id: restaurantId,
+      correlation_id: errItem.correlationId,
+      order_id: errItem.orderId,
+      actor_type: 'kitchen',
+      event_type: 'order_accepted',
+      source_node: 'kitchen_queue',
+      target_node: 'preparing',
+      duration_ms: 320,
+      metadata: { action: 'requeued_kds_station_1', order_id: errItem.orderId, table: errItem.tableName },
+      created_at: new Date().toISOString(),
+    };
+    setErrorEvents((prev) => [requeueEv, ...prev]);
+    setTimeout(() => {
+      setIsRetryingError(false);
+    }, 600);
+  }, [restaurantId]);
+
+  const handleNotifyWaiter = useCallback((errItem: SystemErrorItem) => {
+    const waiterEv: SystemEvent = {
+      id: `ev_waiter_alert_${Date.now()}`,
+      restaurant_id: restaurantId,
+      correlation_id: errItem.correlationId,
+      order_id: errItem.orderId,
+      actor_type: 'staff',
+      event_type: 'waiter_assigned',
+      source_node: 'customer_calls',
+      target_node: 'waiter_assigned',
+      duration_ms: 140,
+      metadata: { alert: `Priority service check for ${errItem.tableName}`, waiter_name: 'Neha Patel' },
+      created_at: new Date().toISOString(),
+    };
+    setErrorEvents((prev) => [waiterEv, ...prev]);
+  }, [restaurantId]);
+
+  const handleNotifyOwner = useCallback((errItem: SystemErrorItem) => {
+    const ownerEv: SystemEvent = {
+      id: `ev_owner_push_${Date.now()}`,
+      restaurant_id: restaurantId,
+      correlation_id: errItem.correlationId,
+      order_id: errItem.orderId,
+      actor_type: 'system',
+      event_type: 'push_sent',
+      source_node: 'push_notifications',
+      target_node: 'reports',
+      duration_ms: 210,
+      metadata: { priority: 'URGENT', title: `Outage Escalation: ${errItem.title}`, table: errItem.tableName },
+      created_at: new Date().toISOString(),
+    };
+    setErrorEvents((prev) => [ownerEv, ...prev]);
+  }, [restaurantId]);
+
+  const handleViewLogs = useCallback((errItem: SystemErrorItem) => {
+    const auditEv: SystemEvent = {
+      id: `ev_audit_${Date.now()}`,
+      restaurant_id: restaurantId,
+      correlation_id: errItem.correlationId,
+      order_id: errItem.orderId,
+      actor_type: 'system',
+      event_type: 'audit_written',
+      source_node: 'audit_logs',
+      target_node: 'reports',
+      duration_ms: 45,
+      metadata: { audit_trail: `Forensic audit trail inspected for ${errItem.correlationId}` },
+      created_at: new Date().toISOString(),
+    };
+    setErrorEvents((prev) => [auditEv, ...prev]);
+    setErrorCenterOpen(false);
+    setFollowingOrderId(errItem.orderId);
+    handleModeChange('live');
+  }, [restaurantId, handleModeChange]);
+
   const handleTriggerDemoError = useCallback(() => {
     setActiveError(INITIAL_DEMO_ERROR);
     setSelectedErrorId('ERR-0007');
@@ -381,17 +459,212 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     setSystemErrors([INITIAL_DEMO_ERROR, ...RESOLVED_ERRORS_SEED]);
   }, []);
 
+  // 60-Second Investor Demo Automated Walkthrough (P3)
+  const startInvestorDemo = useCallback(() => {
+    demoTimersRef.current.forEach(clearTimeout);
+    demoTimersRef.current = [];
+
+    setInvestorDemoRunning(true);
+    setInvestorDemoStep('Initiating 60s Investor Walkthrough...');
+    handleModeChange('live');
+
+    const scheduleStep = (delay: number, fn: () => void) => {
+      const t = setTimeout(fn, delay);
+      demoTimersRef.current.push(t);
+    };
+
+    // 0s: Reset & Auto-fit camera
+    scheduleStep(100, () => {
+      window.dispatchEvent(new CustomEvent('reset-graph-camera'));
+    });
+
+    // 2s: QR Scan
+    scheduleStep(2000, () => {
+      setInvestorDemoStep('1. QR Scan: Table 12 guest scans digital code');
+      const ev: SystemEvent = {
+        id: `demo_qr_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: 'corr_A7K-26D00002_err',
+        order_id: 'A7K-26D00002',
+        actor_type: 'customer',
+        event_type: 'qr_scanned',
+        source_node: 'qr_scan',
+        target_node: 'customer_menu',
+        duration_ms: 45,
+        metadata: { table: 'Table 12', session: 'sess_12_active' },
+        created_at: new Date().toISOString(),
+      };
+      setErrorEvents((prev) => [ev, ...prev]);
+    });
+
+    // 5s: Menu & Cart
+    scheduleStep(5000, () => {
+      setInvestorDemoStep('2. Cart: Farmhouse Pizza + Masala Lemonade added');
+      const ev: SystemEvent = {
+        id: `demo_cart_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: 'corr_A7K-26D00002_err',
+        order_id: 'A7K-26D00002',
+        actor_type: 'customer',
+        event_type: 'cart_updated',
+        source_node: 'customer_menu',
+        target_node: 'cart',
+        duration_ms: 80,
+        metadata: { items_count: 2, total: 689 },
+        created_at: new Date().toISOString(),
+      };
+      setErrorEvents((prev) => [ev, ...prev]);
+    });
+
+    // 8s: Checkout & Order Created
+    scheduleStep(8000, () => {
+      setInvestorDemoStep('3. Order Created: Order #A7K-26D00002 dispatched to KDS');
+      const ev: SystemEvent = {
+        id: `demo_ord_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: 'corr_A7K-26D00002_err',
+        order_id: 'A7K-26D00002',
+        actor_type: 'customer',
+        event_type: 'order_created',
+        source_node: 'checkout',
+        target_node: 'order_created',
+        duration_ms: 110,
+        metadata: { order_id: 'A7K-26D00002', table: 'Table 12', amount: 689 },
+        created_at: new Date().toISOString(),
+      };
+      setErrorEvents((prev) => [ev, ...prev]);
+    });
+
+    // 12s: Inventory Reservation
+    scheduleStep(12000, () => {
+      setInvestorDemoStep('4. Inventory Reserve: Cheese 150g & Dough 200g reserved');
+      const ev: SystemEvent = {
+        id: `demo_inv_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: 'corr_A7K-26D00002_err',
+        order_id: 'A7K-26D00002',
+        actor_type: 'system',
+        event_type: 'inventory_reserved',
+        source_node: 'order_created',
+        target_node: 'inventory',
+        duration_ms: 65,
+        metadata: { item_name: 'Farmhouse Pizza', reserved_items: 2 },
+        created_at: new Date().toISOString(),
+      };
+      setErrorEvents((prev) => [ev, ...prev]);
+    });
+
+    // 16s: Kitchen Queue -> Error simulation
+    scheduleStep(16000, () => {
+      setInvestorDemoStep('5. Outage Alert: ERR-0007 504 Timeout at Kitchen Queue');
+      handleTriggerDemoError();
+    });
+
+    // 22s: Error Remediation (Retry Sync)
+    scheduleStep(22000, () => {
+      setInvestorDemoStep('6. Auto-Remediation: Retry Sync restores socket channel (200 OK)');
+      handleRetrySync(INITIAL_DEMO_ERROR);
+    });
+
+    // 29s: Waiter Assigned & Push Sent
+    scheduleStep(29000, () => {
+      setInvestorDemoStep('7. Dispatch: Waiter Neha Patel assigned & push dispatched');
+      const ev: SystemEvent = {
+        id: `demo_waiter_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: 'corr_A7K-26D00002_err',
+        order_id: 'A7K-26D00002',
+        actor_type: 'staff',
+        event_type: 'waiter_assigned',
+        source_node: 'ready',
+        target_node: 'waiter_assigned',
+        duration_ms: 120,
+        metadata: { waiter_name: 'Neha Patel', table: 'Table 12' },
+        created_at: new Date().toISOString(),
+      };
+      setErrorEvents((prev) => [ev, ...prev]);
+    });
+
+    // 35s: Order Served & Billed
+    scheduleStep(35000, () => {
+      setInvestorDemoStep('8. Fulfillment: Order served, bill ₹689 generated');
+      const ev: SystemEvent = {
+        id: `demo_served_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: 'corr_A7K-26D00002_err',
+        order_id: 'A7K-26D00002',
+        actor_type: 'staff',
+        event_type: 'order_served',
+        source_node: 'waiter_assigned',
+        target_node: 'served',
+        duration_ms: 90,
+        metadata: { table: 'Table 12', bill: 689 },
+        created_at: new Date().toISOString(),
+      };
+      setErrorEvents((prev) => [ev, ...prev]);
+    });
+
+    // 41s: Payment Success
+    scheduleStep(41000, () => {
+      setInvestorDemoStep('9. Settlement: UPI QR payment verified successfully');
+      const ev: SystemEvent = {
+        id: `demo_pay_${Date.now()}`,
+        restaurant_id: restaurantId,
+        correlation_id: 'corr_A7K-26D00002_err',
+        order_id: 'A7K-26D00002',
+        actor_type: 'system',
+        event_type: 'payment_success',
+        source_node: 'billing',
+        target_node: 'payment',
+        duration_ms: 280,
+        metadata: { amount: 689, method: 'UPI QR' },
+        created_at: new Date().toISOString(),
+      };
+      setErrorEvents((prev) => [ev, ...prev]);
+    });
+
+    // 47s: Switch to Replay Mode
+    scheduleStep(47000, () => {
+      setInvestorDemoStep('10. CCTV Replay: Forensic playback of 167 operational events');
+      handleModeChange('replay');
+    });
+
+    // 53s: Switch to Freeze Mode
+    scheduleStep(53000, () => {
+      setInvestorDemoStep('11. Freeze Frame: Time-travel comparison with ghost node overlays');
+      handleModeChange('freeze');
+    });
+
+    // 59s: Return to Live Mode & complete
+    scheduleStep(59000, () => {
+      setInvestorDemoStep('12. Showcase Complete: All 19 subsystems verified production green');
+      handleModeChange('live');
+      setTimeout(() => {
+        setInvestorDemoRunning(false);
+        setInvestorDemoStep('');
+      }, 3500);
+    });
+  }, [restaurantId, handleModeChange, handleTriggerDemoError, handleRetrySync]);
+
   // Timer cleanup
   useEffect(() => {
     return () => {
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      demoTimersRef.current.forEach(clearTimeout);
     };
   }, []);
 
-  // Global keyboard shortcuts (Ctrl+K Command Palette, Space Pause/Play, L Live, R Replay, F Freeze, T Theme, Esc Close Drawer/Help/Palette)
+  // Global keyboard shortcuts (Ctrl+K Command Palette, Ctrl+Shift+D Investor Demo, Space Pause/Play, L Live, R Replay, F Freeze, T Theme, Esc Close Drawer/Help/Palette)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+
+      // Ctrl+Shift+D triggers Investor Demo
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        startInvestorDemo();
+        return;
+      }
 
       // Ctrl+K or Cmd+K opens/toggles Command Palette
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
@@ -430,18 +703,39 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleModeChange, handleToggleTheme]);
+  }, [handleModeChange, handleToggleTheme, startInvestorDemo]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className={`flex flex-col w-full h-full overflow-hidden transition-colors ${
-      theme === 'light' ? 'bg-[#EEF3F8] text-[#1E293B]' : 'bg-slate-950 text-slate-100'
+      theme === 'light' ? 'bg-[#F6F8FC] text-[#1E293B]' : 'bg-slate-950 text-slate-100'
     }`}>
+      {/* ── Investor Demo Active Banner (60s Showcase) ── */}
+      {investorDemoRunning && (
+        <div data-testid="investor-demo-banner" className="bg-gradient-to-r from-purple-700 via-indigo-600 to-sky-600 text-white px-4 py-2 flex items-center justify-between font-mono text-xs font-bold shadow-lg animate-in slide-in-from-top duration-300 z-50 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+            <span>🚀 INVESTOR SHOWCASE (60s)</span>
+            <span className="text-purple-200 font-medium">| {investorDemoStep}</span>
+          </div>
+          <button
+            onClick={() => {
+              demoTimersRef.current.forEach(clearTimeout);
+              setInvestorDemoRunning(false);
+              setInvestorDemoStep('');
+            }}
+            className="px-2.5 py-1 rounded bg-white/20 hover:bg-white/30 text-[11px] cursor-pointer"
+          >
+            ✕ Exit Demo
+          </button>
+        </div>
+      )}
+
       {/* ── Top Bar (Strict Order: Live → Replay → Freeze → System → Debug → Search → Theme → Help → Exit) ── */}
       <div
         data-testid="founder-top-bar"
         className={`h-14 shrink-0 flex items-center gap-3 px-4 border-b transition-colors overflow-x-auto lg:overflow-visible ${
-        theme === 'light' ? 'bg-[#F6F8FB] border-[#D7E3EF] shadow-sm text-[#1E293B]' : 'bg-slate-900 border-slate-800 text-slate-100'
+        theme === 'light' ? 'bg-white border-[#D7E1EC] shadow-xs text-[#1E293B]' : 'bg-slate-900 border-slate-800 text-slate-100'
       }`}>
         {/* Title */}
         <div className="flex items-center gap-2 shrink-0 mr-1">
@@ -456,7 +750,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
 
         {/* 1. Mode tabs: Live → Replay → Freeze → System → Debug */}
         <div className={`flex items-center gap-0.5 rounded-lg p-0.5 shrink-0 border ${
-          theme === 'light' ? 'bg-[#E2E8F0] border-[#CBD5E1]' : 'bg-slate-800 border-slate-700/60'
+          theme === 'light' ? 'bg-[#F6F8FC] border-[#D7E1EC]' : 'bg-slate-800 border-slate-700/60'
         }`}>
           {MODE_CONFIG.map(({ id, label, icon: Icon }) => (
             <button
@@ -464,7 +758,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               onClick={() => handleModeChange(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all
                 ${activeMode === id
-                  ? theme === 'light' ? 'bg-white text-[#1E293B] shadow-sm font-bold' : 'bg-slate-700 text-white shadow-sm font-bold'
+                  ? theme === 'light' ? 'bg-white text-[#2563EB] shadow-xs font-bold border border-[#D7E1EC]' : 'bg-slate-700 text-white shadow-sm font-bold'
                   : theme === 'light' ? 'text-[#64748B] hover:text-[#1E293B] hover:bg-white/60' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}
             >
               <Icon className="h-3.5 w-3.5" />
@@ -483,7 +777,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               : activeError
               ? 'bg-rose-950/70 border-rose-600 text-rose-300 hover:bg-rose-900/80 animate-pulse'
               : theme === 'light'
-              ? 'bg-white border-[#CBD5E1] text-[#1E293B] hover:bg-slate-50'
+              ? 'bg-white border-[#D7E1EC] text-[#1E293B] hover:bg-slate-50'
               : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700'
           }`}
           title="Open Error Investigation Center"
@@ -498,6 +792,24 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
               {activeErrorCount}
             </span>
           )}
+        </button>
+
+        {/* Investor Demo Trigger Button (Ctrl+Shift+D) */}
+        <button
+          data-testid="btn-investor-demo-trigger"
+          onClick={startInvestorDemo}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border shadow-sm ${
+            investorDemoRunning
+              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-500 shadow-purple-900/50 animate-pulse font-bold'
+              : theme === 'light'
+              ? 'bg-white border-[#D7E1EC] text-[#7C3AED] hover:bg-purple-50'
+              : 'bg-purple-950/40 border-purple-800/80 text-purple-300 hover:text-white hover:bg-purple-900/60'
+          }`}
+          title="Start 60s Investor Walkthrough (Ctrl+Shift+D)"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+          <span className="hidden sm:inline">Investor Demo</span>
+          <span className="font-mono text-[9px] opacity-75 hidden md:inline">Ctrl+⇧+D</span>
         </button>
 
         {/* 2. Search: Global Order Investigation Bar */}
@@ -651,7 +963,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         {activeMode === 'replay' && (
           <ReplayMode
             restaurantId={restaurantId}
-            initialEvents={events}
+            initialEvents={combinedEvents}
             theme={theme}
             targetOrder={replayTargetOrder}
             targetTimestamp={freezeTargetTimestamp}
@@ -660,7 +972,7 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
         {activeMode === 'freeze' && (
           <FreezeMode
             restaurantId={restaurantId}
-            events={events}
+            events={combinedEvents}
             theme={theme}
             targetTimestamp={freezeTargetTimestamp}
           />
@@ -942,6 +1254,10 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           theme={theme}
           onSelectError={(err) => setSelectedErrorId(err.id)}
           onRetrySync={handleRetrySync}
+          onRequeueKitchen={handleRequeueKitchen}
+          onNotifyWaiter={handleNotifyWaiter}
+          onNotifyOwner={handleNotifyOwner}
+          onViewLogs={handleViewLogs}
           onTriggerDemoError={handleTriggerDemoError}
           onClose={() => setErrorCenterOpen(false)}
           onJumpToOrder={(orderId) => {
