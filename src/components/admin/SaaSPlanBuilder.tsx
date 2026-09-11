@@ -277,19 +277,19 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
             return (
               <Card 
                 key={plan.id} 
-                className={`relative flex flex-col justify-between transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl rounded-[18px] backdrop-blur-md bg-white/90 dark:bg-slate-900/90 ${
+                className={`relative flex flex-col justify-between transition-all duration-200 hover:-translate-y-1.5 hover:shadow-xl rounded-[18px] backdrop-blur-md bg-white/90 dark:bg-slate-900/90 overflow-visible ${
                   plan.is_popular 
-                    ? 'border-2 border-indigo-600 dark:border-indigo-400 shadow-lg ring-2 ring-indigo-500/20' 
+                    ? 'border-2 border-indigo-600 dark:border-indigo-400 shadow-lg ring-2 ring-indigo-500/20 mt-4' 
                     : 'border border-slate-200/80 dark:border-slate-800/80 shadow-sm'
                 }`}
               >
                 {plan.is_popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-1 rounded-full shadow-md z-10 whitespace-nowrap">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-[10px] font-black uppercase tracking-wider px-3.5 py-1 rounded-full shadow-md z-20 whitespace-nowrap">
                     ⭐ Most Popular
                   </div>
                 )}
 
-                <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
+                <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between pt-5">
                   <div className="space-y-4">
                     <div className="flex items-start justify-between gap-2 pt-1">
                       <div className="flex-1 min-w-0">

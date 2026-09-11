@@ -160,9 +160,11 @@ export default function OrderInvestigationBar({
           id,
           restaurant_id,
           table_id,
-          total_amount,
+          table_name,
+          total,
           status,
           created_at,
+          special_instructions,
           order_items (
             id,
             menu_item_name,
@@ -172,7 +174,7 @@ export default function OrderInvestigationBar({
         `)
         .eq('restaurant_id', restaurantId)
         .order('created_at', { ascending: false })
-        .limit(30);
+        .limit(50);
 
       if (data && !error) {
         const mapped: InvestigatedOrder[] = data.map((d: any, idx: number) => {
@@ -187,24 +189,36 @@ export default function OrderInvestigationBar({
           const waiters = ['Ravi Sharma', 'Neha Patel', 'Amit Kumar'];
           const chefs = ['Chef Suresh', 'Chef Ramesh'];
 
+          // Parse customer name from special_instructions JSON if available
+          let customerName = `Guest ${idx + 1}`;
+          try {
+            if (d.special_instructions) {
+              const parsed = JSON.parse(d.special_instructions);
+              if (parsed?.customerName) customerName = parsed.customerName;
+              else if (typeof d.special_instructions === 'string' && d.special_instructions.includes('Customer:')) {
+                customerName = d.special_instructions.replace('Customer:', '').split('(')[0].trim();
+              }
+            }
+          } catch {}
+
           return {
-            id: d.id.startsWith('ord_') ? d.id : `A7K-26D0000${idx + 5}`,
-            correlationId: `corr_${d.id}`,
-            tableName: `Table ${tableNum}`,
-            customerName: idx === 0 ? 'Rohan Verma' : `Guest ${idx + 1}`,
+            id: `#${d.id.slice(-4).toUpperCase()}`,
+            correlationId: `corr_${d.id.slice(0, 14)}`,
+            tableName: d.table_name || `Table ${tableNum}`,
+            customerName,
             waiterName: waiters[idx % waiters.length],
             chefName: chefs[idx % chefs.length],
             status: (d.status as any) || 'served',
             createdAt: d.created_at || new Date().toISOString(),
-            totalAmount: Number(d.total_amount) || 450,
-            items: items.length > 0 ? items : [{ id: '1', name: 'Special Thali', quantity: 1, price: 350 }],
+            totalAmount: Number(d.total) || 0,
+            items: items.length > 0 ? items : [{ id: '1', name: 'Order Item', quantity: 1, price: 0 }],
             inventoryDeductions: [
               { item: 'Key Ingredients', qty: '180g' },
               { item: 'Spices & Oil', qty: '25g' },
             ],
-            pushAlerts: 3,
+            pushAlerts: 0,
             paymentMethod: 'UPI QR',
-            auditTrailId: `AUD-20260910-${1000 + idx}`,
+            auditTrailId: `AUD-${d.id.slice(-8).toUpperCase()}`,
           };
         });
         setDbOrders(mapped);
