@@ -192,6 +192,9 @@ export default function LeftPanel({
     Array<{ orderId: string; table: string; elapsedMin: number; itemsCount: number }>
   >([]);
   const [menuOpenTableId, setMenuOpenTableId] = useState<string | null>(null);
+  const [tableHistory, setTableHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+  const [showHistory, setShowHistory] = useState<boolean>(false);
 
   // ─── 2. useRef ───────────────────────────────────────────────────────────
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -349,10 +352,50 @@ export default function LeftPanel({
     }
   }, [restaurantId]);
 
+  const fetchTableHistory = useCallback(async (tableId: string, tableName: string) => {
+    if (!restaurantId) return;
+    try {
+      setLoadingHistory(true);
+      setShowHistory(true);
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          created_at,
+          status,
+          total,
+          special_instructions,
+          order_items (
+            id,
+            menu_item_name,
+            quantity,
+            price
+          )
+        `)
+        .eq('restaurant_id', restaurantId)
+        .or(`table_id.eq.${tableId},table_name.ilike.%${tableName}%`)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (data && !error) {
+        setTableHistory(data);
+      } else {
+        setTableHistory([]);
+      }
+    } catch (err) {
+      console.warn('[LeftPanel] Error fetching table history:', err);
+      setTableHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [restaurantId]);
+
   const handleTableSelect = useCallback(
     (t: ActiveTableDetails) => {
       setIsDrawerDismissed(false);
       setSelectedTable(t);
+      setShowHistory(false);
+      setTableHistory([]);
       onTableClick?.(t);
     },
     [onTableClick]
@@ -361,14 +404,21 @@ export default function LeftPanel({
   const handleCloseDrawer = useCallback(() => {
     setSelectedTable(null);
     setIsDrawerDismissed(true);
+    setShowHistory(false);
+    setTableHistory([]);
     onCloseDrawer?.();
   }, [onCloseDrawer]);
 
   const handleOpenTimelineClick = useCallback(() => {
     if (activeSelectedTable) {
-      onOpenTimeline?.(activeSelectedTable.currentOrderId, activeSelectedTable.correlationId);
+      if (activeSelectedTable.status === 'available') {
+        fetchTableHistory(activeSelectedTable.id, activeSelectedTable.name);
+        onOpenTimeline?.('', '');
+      } else {
+        onOpenTimeline?.(activeSelectedTable.currentOrderId, activeSelectedTable.correlationId);
+      }
     }
-  }, [activeSelectedTable, onOpenTimeline]);
+  }, [activeSelectedTable, onOpenTimeline, fetchTableHistory]);
 
   // ─── 5. useEffect ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -867,10 +917,11 @@ export default function LeftPanel({
                 <div className="w-full space-y-2 pt-2">
                   <button
                     onClick={handleOpenTimelineClick}
+                    disabled={loadingHistory}
                     className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 font-mono transition-all cursor-pointer"
                   >
-                    <History className="h-3.5 w-3.5 text-sky-400" />
-                    <span>View History</span>
+                    <History className={`h-3.5 w-3.5 text-sky-400 ${loadingHistory ? 'animate-spin' : ''}`} />
+                    <span>{loadingHistory ? 'Loading History...' : showHistory ? 'Refresh History' : 'View History'}</span>
                   </button>
                   <button
                     onClick={() => {
@@ -884,6 +935,76 @@ export default function LeftPanel({
                     <span>Generate QR</span>
                   </button>
                 </div>
+
+                {/* Table History Section */}
+                {showHistory && (
+                  <div className="w-full mt-3 pt-3 border-t border-slate-800 text-left space-y-2 font-mono">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-300">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-3 w-3 text-sky-400" />
+                        <span>Past Orders ({tableHistory.length})</span>
+                      </span>
+                      <button
+                        onClick={() => setShowHistory(false)}
+                        className="text-[10px] text-slate-500 hover:text-slate-300 cursor-pointer"
+                      >
+                        Hide
+                      </button>
+                    </div>
+
+                    {loadingHistory ? (
+                      <div className="py-4 text-center text-xs text-slate-500">
+                        <RefreshCw className="h-4 w-4 animate-spin mx-auto mb-1 text-sky-400" />
+                        Loading orders...
+                      </div>
+                    ) : tableHistory.length === 0 ? (
+                      <div className="py-3 text-center text-[11px] text-slate-500 bg-slate-900/50 rounded-lg border border-slate-800">
+                        No previous orders found for {activeSelectedTable.name}
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-60 overflow-y-auto pr-0.5">
+                        {tableHistory.map((histOrder: any) => {
+                          const orderNum = `#${histOrder.id.slice(-4).toUpperCase()}`;
+                          const timeStr = histOrder.created_at ? new Date(histOrder.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                          const itemsSummary = (histOrder.order_items || [])
+                            .map((it: any) => `${it.quantity}x ${it.menu_item_name}`)
+                            .join(', ');
+
+                          return (
+                            <div
+                              key={histOrder.id}
+                              onClick={() => onOpenTimeline?.(histOrder.id, `corr_${histOrder.id.slice(0, 14)}`)}
+                              className="p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer space-y-1"
+                              title="Click to view in Timeline"
+                            >
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="font-bold text-sky-400">{orderNum}</span>
+                                <span className="text-slate-500">{timeStr}</span>
+                              </div>
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                                  histOrder.status === 'completed'
+                                    ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                                    : histOrder.status === 'cancelled'
+                                    ? 'bg-rose-950/80 text-rose-300 border border-rose-800'
+                                    : 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                                }`}>
+                                  {histOrder.status}
+                                </span>
+                                <span className="font-bold text-slate-200">₹{histOrder.total || 0}</span>
+                              </div>
+                              {itemsSummary && (
+                                <p className="text-[9px] text-slate-400 truncate">
+                                  {itemsSummary}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               /* Active / Occupied Table View */

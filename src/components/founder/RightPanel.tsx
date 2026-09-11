@@ -159,6 +159,11 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
         {visible.map((ev, idx) => {
           const expanded = expandedId === ev.id;
           const isLatest = idx === 0;
+          const meta = (ev.metadata || {}) as Record<string, any>;
+          const orderId = ev.order_id || meta.order_id || meta.orderId || null;
+          const shortOrderId = orderId ? `#${orderId.slice(-4).toUpperCase()}` : null;
+          const tableName = meta.table_name || meta.tableName || meta.table || meta.table_number || (ev.table_uuid ? `Table #${ev.table_uuid.slice(-4).toUpperCase()}` : null);
+
           return (
             <div key={ev.id} className={`group animate-in slide-in-from-top-1 duration-200 ${
               expanded
@@ -169,12 +174,12 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
             }`}>
               <button
                 onClick={() => handleEventRowClick(ev)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors cursor-pointer ${
+                className={`w-full flex items-center gap-1.5 px-3 py-2 text-left transition-colors cursor-pointer ${
                   isLight ? 'hover:bg-[#EEF3F8]' : 'hover:bg-slate-800/60'
                 }`}
-                title="Click to pulse graph node and inspect details"
+                title="Click to view Order ID, Table No, and event details"
               >
-                <span className={`text-[10px] font-mono shrink-0 w-16 ${isLight ? 'text-[#64748B]' : 'text-slate-500'}`}>
+                <span className={`text-[10px] font-mono shrink-0 w-14 ${isLight ? 'text-[#64748B]' : 'text-slate-500'}`}>
                   {fmtTime(ev.created_at)}
                 </span>
                 <span
@@ -184,14 +189,23 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
                 >
                   {ev.event_type}
                 </span>
-                <span className={`text-[10px] font-mono shrink-0 ${isLight ? 'text-[#1E293B] font-semibold' : 'text-slate-400'}`}>
-                  {truncate(ev.correlation_id, 8)}
-                </span>
-                {ev.order_id && (
-                  <span className={`text-[10px] shrink-0 ${isLight ? 'text-[#64748B]' : 'text-slate-500'}`}>
-                    #{truncate(ev.order_id, 8)}
+
+                {shortOrderId && (
+                  <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.2 rounded bg-sky-950/80 border border-sky-800 text-sky-300 shrink-0">
+                    {shortOrderId}
                   </span>
                 )}
+
+                {tableName && (
+                  <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 shrink-0">
+                    {tableName}
+                  </span>
+                )}
+
+                <span className={`text-[10px] font-mono shrink-0 truncate max-w-[70px] ${isLight ? 'text-[#1E293B]' : 'text-slate-400'}`}>
+                  {truncate(ev.correlation_id, 8)}
+                </span>
+
                 {isLatest && (
                   <span className="h-1.5 w-1.5 rounded-full bg-[#0EA5E9] animate-pulse ml-0.5" title="Latest event" />
                 )}
@@ -203,13 +217,54 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
                   )}
                 </span>
               </button>
+
               {expanded && (
                 <div className={`px-3 pb-3 animate-in fade-in duration-150 ${isLight ? 'bg-white border-t border-[#D7E3EF]' : 'bg-slate-900/60'}`}>
+                  {/* Prominent Order ID & Table No Banner on Click */}
+                  <div className="my-2 p-2.5 rounded-xl bg-slate-950/90 border border-sky-800/60 shadow-lg font-mono space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="text-[9px] text-sky-400 block font-bold uppercase tracking-wider">Order ID</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-xs font-black text-white">{shortOrderId || 'N/A'}</span>
+                        </div>
+                        {orderId && (
+                          <span className="text-[8px] text-slate-400 block truncate mt-0.5" title={orderId}>
+                            {orderId}
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="text-[9px] text-emerald-400 block font-bold uppercase tracking-wider">Table No.</span>
+                        <span className="text-xs font-black text-emerald-300 mt-0.5 block">
+                          {tableName || 'Table (N/A)'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-800/80 text-slate-400">
+                      <span>Event: <strong className="text-slate-200">{ev.event_type}</strong></span>
+                      <span>Time: <strong className="text-slate-200">{fmtTime(ev.created_at)}</strong></span>
+                    </div>
+
+                    {meta.waiter_name && (
+                      <div className="text-[10px] text-slate-400">
+                        Waiter: <strong className="text-sky-300">{meta.waiter_name}</strong>
+                      </div>
+                    )}
+                    {(meta.total || meta.amount) && (
+                      <div className="text-[10px] text-slate-400">
+                        Amount: <strong className="text-emerald-300">₹{meta.total || meta.amount}</strong>
+                      </div>
+                    )}
+                  </div>
+
                   <div className={`flex items-center justify-between text-[9px] font-mono py-1 border-b ${isLight ? 'border-[#D7E3EF] text-[#64748B]' : 'border-slate-800 text-slate-500'}`}>
                     <span>Source: {ev.source_node || 'system'}</span>
                     <ArrowRight className="h-2.5 w-2.5" />
                     <span className="text-[#0EA5E9] font-bold">Target: {ev.target_node || 'pipeline'}</span>
                   </div>
+
                   <pre className={`text-[10px] overflow-x-auto whitespace-pre-wrap break-all rounded p-2 mt-1 font-mono border ${
                     isLight ? 'bg-[#F6F8FB] border-[#D7E3EF] text-[#1E293B]' : 'bg-slate-800 border-slate-700 text-slate-300'
                   }`}>

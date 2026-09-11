@@ -328,7 +328,7 @@ export default function OrderInvestigationBar({
       {isOpenDropdown && (
         <div
           data-testid="order-search-results-dropdown"
-          className={`absolute top-full mt-1.5 left-0 w-80 sm:w-96 max-h-[380px] rounded-xl border shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 ${
+          className={`absolute top-full mt-1.5 right-0 w-80 sm:w-96 max-w-[calc(100vw-2rem)] max-h-[380px] rounded-xl border shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 ${
             isLight ? 'bg-white border-slate-300 text-slate-900' : 'bg-slate-900 border-slate-700 text-slate-100'
           }`}
         >
