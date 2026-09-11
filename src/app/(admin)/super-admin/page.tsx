@@ -22,7 +22,7 @@ import {
   Radio, Monitor, Globe, Filter, Download, ArrowUpRight, BarChart3,
   Calendar, CreditCard, UserCheck, Zap, History, MessageSquare, UtensilsCrossed,
   Bell, HelpCircle, Command, SlidersHorizontal, ArrowRight, ShieldCheck,
-  CheckCheck, FileText, LayoutGrid, List, RotateCcw, XCircle
+  CheckCheck, FileText, LayoutGrid, List, RotateCcw, XCircle, Sun, Moon
 } from 'lucide-react';
 
 // Dynamic import of FounderControlCenter to embed inside Super Admin Command Center
@@ -1335,6 +1335,22 @@ export default function SuperAdminPage() {
             <HelpCircle className="h-4 w-4" />
           </button>
 
+          {/* Theme Toggle Button (Dark / Light) */}
+          <button
+            onClick={() => {
+              const root = document.documentElement;
+              root.classList.toggle('dark');
+              const isDark = root.classList.contains('dark');
+              localStorage.setItem('theme', isDark ? 'dark' : 'light');
+              showFeedback(`Theme switched to ${isDark ? 'Dark' : 'Light'} Mode`);
+            }}
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+            title="Toggle Theme: Dark / Light (Shortcut: T)"
+          >
+            <Sun className="h-4 w-4 hidden dark:block text-amber-400" />
+            <Moon className="h-4 w-4 block dark:hidden text-indigo-600" />
+          </button>
+
           <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-800 hidden sm:block" />
 
           {/* Founder Profile Pill */}
@@ -1542,7 +1558,12 @@ export default function SuperAdminPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setBulkModalOpen(true)}
+                      onClick={() => {
+                        if (selectedRestaurantIds.length === 0) {
+                          setSelectedRestaurantIds(availableRestaurants.map(r => r.id));
+                        }
+                        setBulkModalOpen(true);
+                      }}
                       className="flex-1 bg-white/10 hover:bg-white/20 border-white/20 text-white text-xs font-bold rounded-xl gap-1.5"
                     >
                       <Sliders className="h-3.5 w-3.5 text-amber-300" /> Bulk Operations
@@ -3300,6 +3321,55 @@ export default function SuperAdminPage() {
         title={`Bulk Operations (${selectedRestaurantIds.length} Selected)`}
       >
         <div className="space-y-4 pt-1 text-xs">
+          {/* Target Restaurants Checklist */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="font-bold text-slate-800 dark:text-slate-200">
+                Target Restaurants ({selectedRestaurantIds.length}/{availableRestaurants.length})
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedRestaurantIds.length === availableRestaurants.length) {
+                    setSelectedRestaurantIds([]);
+                  } else {
+                    setSelectedRestaurantIds(availableRestaurants.map(r => r.id));
+                  }
+                }}
+                className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              >
+                {selectedRestaurantIds.length === availableRestaurants.length ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+            <div className="space-y-1 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+              {availableRestaurants.map((r) => {
+                const isChecked = selectedRestaurantIds.includes(r.id);
+                return (
+                  <label key={r.id} className="flex items-center justify-between p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800/80 cursor-pointer text-xs transition-colors">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            setSelectedRestaurantIds(selectedRestaurantIds.filter(id => id !== r.id));
+                          } else {
+                            setSelectedRestaurantIds([...selectedRestaurantIds, r.id]);
+                          }
+                        }}
+                        className="rounded text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                      />
+                      <span className="font-bold text-slate-900 dark:text-white">{r.name}</span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-mono uppercase bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                      {r.subscription_plan || 'pro'}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
           <div>
             <label className="block font-bold mb-1">Select Action</label>
             <select
@@ -3358,7 +3428,7 @@ export default function SuperAdminPage() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" size="sm" onClick={() => setBulkModalOpen(false)}>Cancel</Button>
-            <Button size="sm" onClick={handleExecuteBulkAction} isLoading={bulkProcessing}>
+            <Button size="sm" onClick={handleExecuteBulkAction} isLoading={bulkProcessing} disabled={selectedRestaurantIds.length === 0}>
               Apply to {selectedRestaurantIds.length} Tenants
             </Button>
           </div>
@@ -3387,10 +3457,23 @@ export default function SuperAdminPage() {
               onClick={async () => {
                 if (!broadcastMessage.trim()) return;
                 try {
-                  await db.executeBulkRestaurantAction(restaurants.map(r => r.id), 'broadcast', { message: broadcastMessage });
+                  const targetIds = availableRestaurants.map(r => r.id);
+                  const res = await fetch('/api/admin/bulk-operations', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      restaurantIds: targetIds,
+                      action: 'broadcast',
+                      payload: { message: broadcastMessage }
+                    })
+                  });
+                  if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.error || 'Failed to dispatch broadcast');
+                  }
                   setBroadcastModalOpen(false);
                   setBroadcastMessage('');
-                  showFeedback('Broadcast announcement dispatched to all tenants');
+                  showFeedback(`Broadcast announcement dispatched to ${targetIds.length} tenants`);
                 } catch (e: any) {
                   alert(e.message);
                 }

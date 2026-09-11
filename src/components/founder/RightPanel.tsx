@@ -130,6 +130,40 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
   );
   const hasMore = visible.length < events.length;
 
+  // Build cross-event lookup maps so every pipeline event inherits its table name and order ID
+  const lookupTableMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const ev of events) {
+      const meta = (ev.metadata || {}) as Record<string, any>;
+      const tName =
+        meta.table_name ||
+        meta.tableName ||
+        meta.table ||
+        meta.table_number ||
+        null;
+      if (tName) {
+        if (ev.correlation_id) map.set(ev.correlation_id, tName);
+        if (ev.order_id) map.set(ev.order_id, tName);
+        if (meta.order_id) map.set(meta.order_id, tName);
+        if (meta.orderId) map.set(meta.orderId, tName);
+        if (ev.table_uuid) map.set(ev.table_uuid, tName);
+      }
+    }
+    return map;
+  }, [events]);
+
+  const lookupOrderMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const ev of events) {
+      const meta = (ev.metadata || {}) as Record<string, any>;
+      const oId = ev.order_id || meta.order_id || meta.orderId;
+      if (oId) {
+        if (ev.correlation_id) map.set(ev.correlation_id, oId);
+      }
+    }
+    return map;
+  }, [events]);
+
   // ── 4. useCallback ──
   const handleEventRowClick = useCallback(
     (ev: SystemEvent) => {
@@ -160,9 +194,26 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
           const expanded = expandedId === ev.id;
           const isLatest = idx === 0;
           const meta = (ev.metadata || {}) as Record<string, any>;
-          const orderId = ev.order_id || meta.order_id || meta.orderId || null;
-          const shortOrderId = orderId ? `#${orderId.slice(-4).toUpperCase()}` : null;
-          const tableName = meta.table_name || meta.tableName || meta.table || meta.table_number || (ev.table_uuid ? `Table #${ev.table_uuid.slice(-4).toUpperCase()}` : null);
+          const orderId =
+            ev.order_id ||
+            meta.order_id ||
+            meta.orderId ||
+            (ev.correlation_id ? lookupOrderMap.get(ev.correlation_id) : null) ||
+            null;
+          const tableName =
+            meta.table_name ||
+            meta.tableName ||
+            meta.table ||
+            meta.table_number ||
+            (ev.correlation_id ? lookupTableMap.get(ev.correlation_id) : null) ||
+            (orderId ? lookupTableMap.get(orderId) : null) ||
+            (ev.table_uuid ? lookupTableMap.get(ev.table_uuid) : null) ||
+            (ev.table_uuid ? `Table #${ev.table_uuid.slice(-4).toUpperCase()}` : null);
+
+          // Full order ID display formatted cleanly for the row badge
+          const displayOrderId = orderId
+            ? (orderId.startsWith('#') ? orderId : `#${orderId}`)
+            : null;
 
           return (
             <div key={ev.id} className={`group animate-in slide-in-from-top-1 duration-200 ${
@@ -190,19 +241,25 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
                   {ev.event_type}
                 </span>
 
-                {shortOrderId && (
-                  <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.2 rounded bg-sky-950/80 border border-sky-800 text-sky-300 shrink-0">
-                    {shortOrderId}
+                {displayOrderId && (
+                  <span
+                    className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-800 text-sky-300 shrink-0 max-w-[100px] truncate"
+                    title={`Full Order ID: ${orderId}`}
+                  >
+                    {displayOrderId}
                   </span>
                 )}
 
                 {tableName && (
-                  <span className="text-[9.5px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 shrink-0">
+                  <span
+                    className="text-[9.5px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 shrink-0 max-w-[80px] truncate"
+                    title={`Table: ${tableName}`}
+                  >
                     {tableName}
                   </span>
                 )}
 
-                <span className={`text-[10px] font-mono shrink-0 truncate max-w-[70px] ${isLight ? 'text-[#1E293B]' : 'text-slate-400'}`}>
+                <span className={`text-[10px] font-mono shrink-0 truncate max-w-[65px] ${isLight ? 'text-[#1E293B]' : 'text-slate-400'}`}>
                   {truncate(ev.correlation_id, 8)}
                 </span>
 
@@ -226,17 +283,17 @@ function TimelineTab({ events, onNodeSelect, theme = 'dark' }: TimelineTabProps)
                       <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
                         <span className="text-[9px] text-sky-400 block font-bold uppercase tracking-wider">Order ID</span>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-xs font-black text-white">{shortOrderId || 'N/A'}</span>
+                          <span className="text-xs font-black text-white select-all break-all">{displayOrderId || 'N/A'}</span>
                         </div>
-                        {orderId && (
-                          <span className="text-[8px] text-slate-400 block truncate mt-0.5" title={orderId}>
+                        {orderId && orderId !== displayOrderId && (
+                          <span className="text-[8px] text-slate-400 block break-all select-all mt-0.5" title={orderId}>
                             {orderId}
                           </span>
                         )}
                       </div>
                       <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
                         <span className="text-[9px] text-emerald-400 block font-bold uppercase tracking-wider">Table No.</span>
-                        <span className="text-xs font-black text-emerald-300 mt-0.5 block">
+                        <span className="text-xs font-black text-emerald-300 mt-0.5 block select-all">
                           {tableName || 'Table (N/A)'}
                         </span>
                       </div>
