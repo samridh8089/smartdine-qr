@@ -663,12 +663,6 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     const handleKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
 
-      // Ctrl+Shift+D triggers Investor Demo
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
-        e.preventDefault();
-        startInvestorDemo();
-        return;
-      }
 
       // Ctrl+K or Cmd+K opens/toggles Command Palette
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
@@ -714,26 +708,6 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
     <div className={`flex flex-col w-full h-full overflow-hidden transition-colors ${
       theme === 'light' ? 'bg-[#F6F8FC] text-[#1E293B]' : 'bg-slate-950 text-slate-100'
     }`}>
-      {/* ── Investor Demo Active Banner (60s Showcase) ── */}
-      {investorDemoRunning && (
-        <div data-testid="investor-demo-banner" className="bg-gradient-to-r from-purple-700 via-indigo-600 to-sky-600 text-white px-4 py-2 flex items-center justify-between font-mono text-xs font-bold shadow-lg animate-in slide-in-from-top duration-300 z-50 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-            <span>🚀 INVESTOR SHOWCASE (60s)</span>
-            <span className="text-purple-200 font-medium">| {investorDemoStep}</span>
-          </div>
-          <button
-            onClick={() => {
-              demoTimersRef.current.forEach(clearTimeout);
-              setInvestorDemoRunning(false);
-              setInvestorDemoStep('');
-            }}
-            className="px-2.5 py-1 rounded bg-white/20 hover:bg-white/30 text-[11px] cursor-pointer"
-          >
-            ✕ Exit Demo
-          </button>
-        </div>
-      )}
 
       {/* ── Top Bar (Strict Order: Live → Replay → Freeze → System → Debug → Search → Theme → Help → Exit) ── */}
       <div
@@ -820,23 +794,6 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
           )}
         </button>
 
-        {/* Investor Demo Trigger Button (Ctrl+Shift+D) */}
-        <button
-          data-testid="btn-investor-demo-trigger"
-          onClick={startInvestorDemo}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer border shadow-sm ${
-            investorDemoRunning
-              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-500 shadow-purple-900/50 animate-pulse font-bold'
-              : theme === 'light'
-              ? 'bg-white border-[#D7E1EC] text-[#7C3AED] hover:bg-purple-50'
-              : 'bg-purple-950/40 border-purple-800/80 text-purple-300 hover:text-white hover:bg-purple-900/60'
-          }`}
-          title="Start 60s Investor Walkthrough (Ctrl+Shift+D)"
-        >
-          <Sparkles className="h-3.5 w-3.5 text-purple-500" />
-          <span className="hidden sm:inline">Investor Demo</span>
-          <span className="font-mono text-[9px] opacity-75 hidden md:inline">Ctrl+⇧+D</span>
-        </button>
 
         {/* 2. Search: Global Order Investigation Bar */}
         <div className="hidden sm:flex items-center ml-1">
@@ -1034,21 +991,25 @@ export default function FounderControlCenter({ restaurantId, profile }: FounderC
             Your restaurant is freshly initialized with zero historical data. Complete the quickstart checklist:
           </p>
           <div className="space-y-1.5 text-xs">
-            <div className="flex items-center gap-2 text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-              <span>Database schema & floor tables intact</span>
+            <div className="flex items-center gap-2 text-slate-300">
+              <span className="h-3.5 w-3.5 rounded-full border border-emerald-400 flex items-center justify-center text-[9px] text-emerald-400 font-bold shrink-0">1</span>
+              <span>Add Menu</span>
             </div>
             <div className="flex items-center gap-2 text-slate-300">
-              <span className="h-3.5 w-3.5 rounded-full border border-sky-400 flex items-center justify-center text-[9px] text-sky-400 font-bold shrink-0">1</span>
-              <span>Scan table QR code to open menu</span>
+              <span className="h-3.5 w-3.5 rounded-full border border-sky-400 flex items-center justify-center text-[9px] text-sky-400 font-bold shrink-0">2</span>
+              <span>Add Inventory</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-300">
+              <span className="h-3.5 w-3.5 rounded-full border border-purple-400 flex items-center justify-center text-[9px] text-purple-400 font-bold shrink-0">3</span>
+              <span>Create Recipe</span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-300">
+              <span className="h-3.5 w-3.5 rounded-full border border-amber-400 flex items-center justify-center text-[9px] text-amber-400 font-bold shrink-0">4</span>
+              <span>Generate QR</span>
             </div>
             <div className="flex items-center gap-2 text-slate-400">
-              <span className="h-3.5 w-3.5 rounded-full border border-slate-600 flex items-center justify-center text-[9px] text-slate-400 font-bold shrink-0">2</span>
-              <span>Place first live order</span>
-            </div>
-            <div className="flex items-center gap-2 text-slate-400">
-              <span className="h-3.5 w-3.5 rounded-full border border-slate-600 flex items-center justify-center text-[9px] text-slate-400 font-bold shrink-0">3</span>
-              <span>Follow order across workflow pipeline</span>
+              <span className="h-3.5 w-3.5 rounded-full border border-slate-600 flex items-center justify-center text-[9px] text-slate-400 font-bold shrink-0">5</span>
+              <span>Take First Order</span>
             </div>
           </div>
         </div>

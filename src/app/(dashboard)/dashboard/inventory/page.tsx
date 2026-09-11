@@ -1554,7 +1554,7 @@ export default function InventoryDashboardPage() {
                             <Boxes className="h-6 w-6" />
                           </div>
                           <div>
-                            <p className="text-sm font-bold text-gray-950 dark:text-white" data-testid="empty-inventory-text">No inventory configured.</p>
+                            <p className="text-sm font-bold text-gray-950 dark:text-white" data-testid="empty-inventory-text">No inventory configured yet.</p>
                             <p className="text-xs text-gray-500 mt-0.5">Add your raw ingredients or import from a CSV to begin tracking stock.</p>
                           </div>
                           <button
@@ -1567,7 +1567,7 @@ export default function InventoryDashboardPage() {
                             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer mt-1"
                           >
                             <Plus className="h-4 w-4" />
-                            <span>Add First Item</span>
+                            <span>Add First Inventory Item</span>
                           </button>
                         </div>
                       </td>
@@ -1680,7 +1680,42 @@ export default function InventoryDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
-                  {menuItems.map(item => {
+                  {menuItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-16 text-center">
+                        <div className="flex flex-col items-center justify-center space-y-3">
+                          <div className="h-12 w-12 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center">
+                            <BookOpen className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-950 dark:text-white" data-testid="empty-recipes-text">No recipes created yet.</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Create menu items first or generate dishes with AI recipe costing.</p>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              onClick={() => {
+                                window.location.href = '/dashboard/menu';
+                              }}
+                              className="flex items-center gap-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+                            >
+                              <Plus className="h-4 w-4" />
+                              <span>Create Recipe</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setShowAiModal(true);
+                              }}
+                              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+                            >
+                              <Sparkles className="h-4 w-4" />
+                              <span>Generate with AI</span>
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    menuItems.map(item => {
                     const metrics = calculateRecipeMetrics(item);
                     const hasVariants = item.has_variants && item.variants && item.variants.length > 0;
 
@@ -1792,7 +1827,7 @@ export default function InventoryDashboardPage() {
                         </td>
                       </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
             </div>
