@@ -23,7 +23,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
   onDragMove,
   onDragEnd
 }) => {
-  const type = item.furnitureType || 'counter';
+  const type = (item.furnitureType || 'counter') as string;
   const width = Math.max(24, Math.min(600, item.width));
   const height = Math.max(24, Math.min(600, item.height));
   const isLocked = Boolean(item.isLocked);
@@ -65,8 +65,8 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={4} fill="#F5F5F4" stroke={strokeColor} strokeWidth={strokeWidth} />
             {/* Twin Fryer Wells */}
-            <Rect x={width * 0.12} y={height * 0.12} width={width * 0.34} height={height * 0.6} rx={2} fill="#FEF3C7" stroke="#D97706" strokeWidth={1.2} />
-            <Rect x={width * 0.54} y={height * 0.12} width={width * 0.34} height={height * 0.6} rx={2} fill="#FEF3C7" stroke="#D97706" strokeWidth={1.2} />
+            <Rect x={width * 0.12} y={height * 0.12} width={width * 0.34} height={height * 0.6} cornerRadius={2} fill="#FEF3C7" stroke="#D97706" strokeWidth={1.2} />
+            <Rect x={width * 0.54} y={height * 0.12} width={width * 0.34} height={height * 0.6} cornerRadius={2} fill="#FEF3C7" stroke="#D97706" strokeWidth={1.2} />
             {/* Handles */}
             <Rect x={width * 0.24} y={height * 0.72} width={width * 0.1} height={height * 0.22} cornerRadius={2} fill="#44403C" />
             <Rect x={width * 0.66} y={height * 0.72} width={width * 0.1} height={height * 0.22} cornerRadius={2} fill="#44403C" />
@@ -244,7 +244,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
       case 'divider_wall':
         return (
           <Group>
-            <Rect x={0} y={0} width={width} height={height} rx={2} fill="#E7E5E4" stroke={strokeColor} strokeWidth={strokeWidth} />
+            <Rect x={0} y={0} width={width} height={height} cornerRadius={2} fill="#E7E5E4" stroke={strokeColor} strokeWidth={strokeWidth} />
             {Array.from({ length: Math.max(2, Math.floor(width / 20)) }).map((_, i) => (
               <Line key={`hatch_${i}`} points={[(i + 1) * 20 - 10, 0, (i + 1) * 20, height]} stroke="#A8A29E" strokeWidth={1} />
             ))}
@@ -273,7 +273,8 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
         );
 
       // ----------------- UTILITIES -----------------
-      case 'bar_seats': {
+      case 'bar_seats':
+      case 'bar': {
         const stoolCount = Math.max(2, Math.floor(width / 35));
         const stoolStep = width / (stoolCount + 1);
         return (
@@ -291,21 +292,38 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
       }
 
       case 'cash_counter':
+      case 'cashier':
       case 'pos':
         return (
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={4} fill="#F5F5F4" stroke={strokeColor} strokeWidth={strokeWidth} />
             {/* POS Terminal */}
-            <Rect x={10} y={height / 2 - 10} width={24} height={18} cornerRadius={2} fill="#171717" />
-            <Rect x={13} y={height / 2 - 8} width={18} height={14} cornerRadius={1} fill="#0284C7" />
+            <Rect x={Math.min(10, width * 0.1)} y={height / 2 - 10} width={Math.min(24, width * 0.25)} height={18} cornerRadius={2} fill="#171717" />
+            <Rect x={Math.min(13, width * 0.12)} y={height / 2 - 8} width={Math.min(18, width * 0.2)} height={14} cornerRadius={1} fill="#0284C7" />
             {/* Receipt printer */}
-            <Rect x={width - 32} y={height / 2 - 8} width={18} height={16} cornerRadius={2} fill="#FFFFFF" stroke="#78716C" strokeWidth={1} />
-            <Line points={[width - 28, height / 2 - 3, width - 18, height / 2 - 3]} stroke="#171717" strokeWidth={1.5} />
-            <Text text={item.name || 'CASH / POS'} x={36} y={height / 2 - 5} width={width - 70} align="center" fontSize={9} fontStyle="bold" fill="#171717" listening={false} />
+            {width >= 70 && (
+              <>
+                <Rect x={width - 32} y={height / 2 - 8} width={18} height={16} cornerRadius={2} fill="#FFFFFF" stroke="#78716C" strokeWidth={1} />
+                <Line points={[width - 28, height / 2 - 3, width - 18, height / 2 - 3]} stroke="#171717" strokeWidth={1.5} />
+              </>
+            )}
+            <Text
+              text={item.name || 'CASH / POS'}
+              x={width >= 80 ? 36 : 0}
+              y={height / 2 - 5}
+              width={width >= 80 ? Math.max(20, width - 70) : width}
+              align="center"
+              fontSize={9}
+              fontStyle="bold"
+              fill="#171717"
+              listening={false}
+            />
           </Group>
         );
 
       case 'waiting_area':
+      case 'waiting_lounge':
+      case 'waiting':
         return (
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={6} fill="#F5F5F4" stroke={strokeColor} strokeWidth={strokeWidth} />
@@ -320,6 +338,8 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
         );
 
       case 'washroom':
+      case 'restroom':
+      case 'toilet':
         return (
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={4} fill="#F5F5F4" stroke={strokeColor} strokeWidth={strokeWidth} />
@@ -333,6 +353,8 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
         );
 
       case 'accessible_washroom':
+      case 'ada_washroom':
+      case 'ada_restroom':
         return (
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={4} fill="#F5F5F4" stroke={strokeColor} strokeWidth={strokeWidth} />
@@ -348,6 +370,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
         );
 
       case 'emergency_exit':
+      case 'exit':
         return (
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={4} fill="#ECFDF5" stroke="#059669" strokeWidth={strokeWidth} />
@@ -370,6 +393,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
 
       // ----------------- DECOR -----------------
       case 'plant_small':
+      case 'plant':
         return (
           <Group>
             <Circle x={width / 2} y={height / 2} radius={Math.min(width, height) * 0.35} fill="#D97706" stroke="#92400E" strokeWidth={1.5} />
@@ -409,6 +433,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
         );
 
       case 'water_feature':
+      case 'fountain':
         return (
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={8} fill="#E0F2FE" stroke="#0284C7" strokeWidth={strokeWidth} />
@@ -420,6 +445,7 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
         );
 
       case 'pillar':
+      case 'column':
         return (
           <Group>
             <Circle x={width / 2} y={height / 2} radius={Math.min(width, height) * 0.45} fill="#E7E5E4" stroke="#171717" strokeWidth={2.5} />
@@ -441,11 +467,86 @@ export const FurnitureNode: React.FC<FurnitureNodeProps> = ({
         );
 
       case 'sofa':
+      case 'sofa_lounge':
         return (
           <Group>
             <Rect x={0} y={0} width={width} height={height} cornerRadius={8} fill="#E7E5E4" stroke={strokeColor} strokeWidth={strokeWidth} />
             <Rect x={6} y={6} width={width - 12} height={height - 12} cornerRadius={4} fill="#FFFFFF" stroke="#D6D3D1" strokeWidth={1} />
             <Text text={item.name || 'SOFA'} x={0} y={height / 2 - 6} width={width} align="center" fontSize={10} fontStyle="bold" fill="#171717" listening={false} />
+          </Group>
+        );
+
+      case 'wall_art':
+        return (
+          <Group>
+            <Rect x={0} y={0} width={width} height={height} cornerRadius={2} fill="#FEF3C7" stroke="#92400E" strokeWidth={strokeWidth} />
+            <Rect x={2} y={2} width={width - 4} height={height - 4} fill="#FDF4FF" stroke="#A855F7" strokeWidth={1} />
+            <Circle x={width / 2} y={height / 2} radius={Math.min(width, height) * 0.25} fill="#16A34A" />
+            <Text text={item.name || 'ART'} x={0} y={height / 2 - 4} width={width} align="center" fontSize={7} fontStyle="bold" fill="#171717" listening={false} />
+          </Group>
+        );
+
+      case 'slat_wall':
+        return (
+          <Group>
+            <Rect x={0} y={0} width={width} height={height} cornerRadius={2} fill="#78350F" stroke="#451A03" strokeWidth={strokeWidth} />
+            {Array.from({ length: Math.max(3, Math.floor(height / 8)) }).map((_, i) => (
+              <Line key={`wood_${i}`} points={[0, (i + 1) * 8, width, (i + 1) * 8]} stroke="#B45309" strokeWidth={1.5} />
+            ))}
+            <Text text={item.name || 'SLATS'} x={0} y={height / 2 - 4} width={width} align="center" fontSize={7} fontStyle="bold" fill="#FEF3C7" listening={false} />
+          </Group>
+        );
+
+      case 'decorative_shelf':
+        return (
+          <Group>
+            <Rect x={0} y={0} width={width} height={height} cornerRadius={2} fill="#F5F5F4" stroke="#78716C" strokeWidth={strokeWidth} />
+            <Line points={[0, height / 2, width, height / 2]} stroke="#44403C" strokeWidth={2} />
+            <Circle x={width * 0.3} y={height / 2} radius={3} fill="#D97706" />
+            <Circle x={width * 0.7} y={height / 2} radius={2.5} fill="#059669" />
+            <Text text={item.name || 'SHELF'} x={0} y={height - 8} width={width} align="center" fontSize={6} fontStyle="bold" fill="#171717" listening={false} />
+          </Group>
+        );
+
+      case 'pendant_light':
+        return (
+          <Group>
+            <Circle x={width / 2} y={height / 2} radius={Math.min(width, height) / 2} fill="#FEF3C7" stroke="#D97706" strokeWidth={strokeWidth} />
+            <Circle x={width / 2} y={height / 2} radius={Math.min(width, height) * 0.3} fill="#F59E0B" />
+            <Line points={[width / 2, 0, width / 2, height]} stroke="#B45309" strokeWidth={1} strokeDasharray={[2, 2]} />
+            <Line points={[0, height / 2, width, height / 2]} stroke="#B45309" strokeWidth={1} strokeDasharray={[2, 2]} />
+          </Group>
+        );
+
+      case 'spotlight':
+      case 'wall_sconce':
+      case 'ceiling_light':
+        return (
+          <Group>
+            <Rect x={0} y={0} width={width} height={height} cornerRadius={3} fill="#18181B" stroke="#D97706" strokeWidth={strokeWidth} />
+            <Circle x={width / 2} y={height / 2} radius={3} fill="#F59E0B" />
+            <Text text={item.name || 'SPOT'} x={0} y={height / 2 - 3} width={width} align="center" fontSize={6} fontStyle="bold" fill="#FFFFFF" listening={false} />
+          </Group>
+        );
+
+      case 'wall_ac':
+        return (
+          <Group>
+            <Rect x={0} y={0} width={width} height={height} cornerRadius={3} fill="#F8FAFC" stroke="#0284C7" strokeWidth={strokeWidth} />
+            <Line points={[4, height * 0.7, width - 4, height * 0.7]} stroke="#38BDF8" strokeWidth={1.5} />
+            <Circle x={width - 6} y={height * 0.35} radius={2} fill="#22C55E" />
+            <Text text={item.name || 'AC'} x={0} y={height * 0.15} width={width} align="center" fontSize={6} fontStyle="bold" fill="#0369A1" listening={false} />
+          </Group>
+        );
+
+      case 'ceiling_ac':
+        return (
+          <Group>
+            <Rect x={0} y={0} width={width} height={height} cornerRadius={4} fill="#F8FAFC" stroke="#0284C7" strokeWidth={strokeWidth} />
+            <Rect x={width * 0.25} y={height * 0.25} width={width * 0.5} height={height * 0.5} fill="#E2E8F0" stroke="#0284C7" strokeWidth={1} />
+            <Line points={[0, 0, width, height]} stroke="#94A3B8" strokeWidth={1} />
+            <Line points={[width, 0, 0, height]} stroke="#94A3B8" strokeWidth={1} />
+            <Text text={item.name || 'AC'} x={0} y={height / 2 - 4} width={width} align="center" fontSize={7} fontStyle="bold" fill="#0369A1" listening={false} />
           </Group>
         );
 
