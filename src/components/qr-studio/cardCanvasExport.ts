@@ -58,7 +58,7 @@ export async function renderQRCardToCanvas(
   }
   ctx.clip();
 
-  // 2. Background
+  // 2. Background Base
   if (config.background.type === 'gradient') {
     const angleRad = ((config.background.gradientAngle || 160) * Math.PI) / 180;
     const x2 = Math.cos(angleRad) * targetWidth;
@@ -69,8 +69,91 @@ export async function renderQRCardToCanvas(
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, targetWidth, height);
   } else {
-    ctx.fillStyle = config.background.color || '#FFFFFF';
+    ctx.fillStyle = config.background.color || '#111827';
     ctx.fillRect(0, 0, targetWidth, height);
+  }
+
+  // 2b. Food Photography / Image Background Layer
+  if ((config.background.type === 'food_photo' || config.background.type === 'image') && config.background.imageUrl) {
+    await new Promise<void>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        ctx.save();
+        const filters = config.background.filters;
+        if (filters) {
+          try {
+            ctx.filter = `blur(${Math.round((filters.blur || 0) * scale * 0.4)}px) brightness(${filters.brightness || 100}%) contrast(${filters.contrast || 100}%) saturate(${filters.saturation || 100}%)`;
+          } catch (e) {
+            // Some canvas environments might ignore ctx.filter
+          }
+        }
+        const zoom = (filters?.zoom || 100) / 100;
+        // Cover aspect ratio
+        const imgAspect = img.width / img.height;
+        const canvasAspect = targetWidth / height;
+        let drawW = targetWidth * zoom;
+        let drawH = height * zoom;
+        if (canvasAspect > imgAspect) {
+          drawH = (targetWidth / imgAspect) * zoom;
+        } else {
+          drawW = (height * imgAspect) * zoom;
+        }
+        const drawX = (targetWidth - drawW) / 2;
+        const drawY = (height - drawH) / 2;
+
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        ctx.restore();
+
+        // Contrast Overlay Tint
+        ctx.save();
+        ctx.fillStyle = filters?.overlayColor || '#000000';
+        ctx.globalAlpha = ((filters?.overlayOpacity ?? 35) / 100);
+        ctx.fillRect(0, 0, targetWidth, height);
+        ctx.restore();
+
+        resolve();
+      };
+      img.onerror = () => resolve();
+      img.src = config.background.imageUrl;
+    });
+  }
+
+  // 2c. Lighting Effects Layer (Vignette & Spotlight)
+  if (config.lighting?.vignette) {
+    ctx.save();
+    const vStrength = ((config.lighting?.vignetteStrength ?? 45) / 100);
+    const radGrad = ctx.createRadialGradient(
+      targetWidth / 2,
+      height / 2,
+      targetWidth * 0.25,
+      targetWidth / 2,
+      height / 2,
+      targetWidth * 0.75
+    );
+    radGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    radGrad.addColorStop(1, `rgba(0, 0, 0, ${vStrength.toFixed(2)})`);
+    ctx.fillStyle = radGrad;
+    ctx.fillRect(0, 0, targetWidth, height);
+    ctx.restore();
+  }
+
+  if (config.lighting?.spotlight) {
+    ctx.save();
+    const spotGrad = ctx.createRadialGradient(
+      targetWidth / 2,
+      height * 0.15,
+      0,
+      targetWidth / 2,
+      height * 0.15,
+      targetWidth * 0.6
+    );
+    spotGrad.addColorStop(0, 'rgba(255, 255, 255, 0.2)');
+    spotGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
+    spotGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = spotGrad;
+    ctx.fillRect(0, 0, targetWidth, height);
+    ctx.restore();
   }
 
   // 3. Frame Border
@@ -147,7 +230,7 @@ export async function renderQRCardToCanvas(
   currentY += (config.text.tableTypography.fontSize * scale) + 20 * scale;
   ctx.restore();
 
-  // 7. Render QR Code
+  // 7. Render QR Code (High-Contrast Scan-Safe Container)
   const qrSize = (config.qr.size || 180) * scale;
   const qrX = (targetWidth - qrSize) / 2;
   const qrY = currentY;
@@ -164,11 +247,17 @@ export async function renderQRCardToCanvas(
       const img = new Image();
       img.onload = () => {
         ctx.save();
-        // QR Container Background
+        // QR Container Background with Soft Shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+        ctx.shadowBlur = 16 * scale;
+        ctx.shadowOffsetY = 6 * scale;
         ctx.fillStyle = config.qr.bgColor || '#FFFFFF';
-        drawRoundedRect(ctx, qrX, qrY, qrSize, qrSize, (config.qr.borderRadius || 12) * scale);
+        drawRoundedRect(ctx, qrX, qrY, qrSize, qrSize, (config.qr.borderRadius || 14) * scale);
         ctx.fill();
-        // Draw image
+        ctx.restore();
+
+        // Draw QR Image
+        ctx.save();
         const pad = (config.qr.padding || 8) * scale;
         ctx.drawImage(img, qrX + pad, qrY + pad, qrSize - pad * 2, qrSize - pad * 2);
         ctx.restore();
@@ -196,6 +285,58 @@ export async function renderQRCardToCanvas(
   ctx.textAlign = 'center';
   ctx.fillText(config.text.footerText || 'Powered by CleverOps', targetWidth / 2, height - 16 * scale);
   ctx.restore();
+
+  // 10. Stickers & Badges Layer
+  if (config.stickers && config.stickers.length > 0) {
+    const pad = 12 * scale;
+    for (const sticker of config.stickers) {
+      let sx = pad;
+      let sy = pad;
+      if (sticker.position === 'top-right') {
+        sx = targetWidth - pad - 60 * scale;
+        sy = pad;
+      } else if (sticker.position === 'bottom-left') {
+        sx = pad;
+        sy = height - pad - 40 * scale;
+      } else if (sticker.position === 'bottom-right') {
+        sx = targetWidth - pad - 60 * scale;
+        sy = height - pad - 40 * scale;
+      } else if (sticker.position === 'custom') {
+        sx = (sticker.x || 10) * scale;
+        sy = (sticker.y || 10) * scale;
+      }
+
+      ctx.save();
+      const rot = ((sticker.rotation || 0) * Math.PI) / 180;
+      ctx.translate(sx + 20 * scale, sy + 20 * scale);
+      ctx.rotate(rot);
+      const stScale = (sticker.scale || 1);
+
+      if (sticker.type === 'badge') {
+        // Draw Pill Badge
+        const bText = sticker.content;
+        ctx.font = `bold ${Math.round(11 * scale * stScale)}px sans-serif`;
+        const metrics = ctx.measureText(bText);
+        const bWidth = metrics.width + 16 * scale;
+        const bHeight = 22 * scale * stScale;
+        ctx.fillStyle = sticker.bgColor || '#EF4444';
+        drawRoundedRect(ctx, -bWidth / 2, -bHeight / 2, bWidth, bHeight, bHeight / 2);
+        ctx.fill();
+
+        ctx.fillStyle = sticker.textColor || '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(bText, 0, 1);
+      } else {
+        // Draw Emoji / Icon
+        ctx.font = `${Math.round(26 * scale * stScale)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(sticker.content, 0, 0);
+      }
+      ctx.restore();
+    }
+  }
 
   return canvas;
 }
