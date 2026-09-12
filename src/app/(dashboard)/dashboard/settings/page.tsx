@@ -14,22 +14,23 @@ import { formatPrice } from '@/lib/utils';
 import { 
   Settings, Users, History, Download, Upload, 
   Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard, Volume2, Copy, RefreshCw,
-  Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil
+  Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil, QrCode
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { getActiveDevices, removeTrustedDevice, logoutAllDevices } from '@/lib/sessionManager';
+import { QRDesignStudio } from '@/components/qr-studio/QRDesignStudio';
 
-export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 'profile' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' } = {}) {
+export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' } = {}) {
   const { restaurant, profile, planSpec, refresh } = useRestaurant();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications'>(() => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications'>(() => {
     if (initialTab && initialTab !== 'profile') return initialTab;
     if (typeof window !== 'undefined') {
       if (window.location.pathname.includes('/staff')) return 'staff';
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['profile', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
+      if (tabParam && ['profile', 'qr_design', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
         return tabParam as any;
       }
     }
@@ -187,7 +188,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       }
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['profile', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
+      if (tabParam && ['profile', 'qr_design', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
         setActiveTab(tabParam as any);
       }
     }
@@ -961,6 +962,17 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
           Restaurant Profile
         </button>
         <button
+          onClick={() => setActiveTab('qr_design')}
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'qr_design'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <QrCode className="h-4 w-4" />
+          QR Design Studio
+        </button>
+        <button
           onClick={() => setActiveTab('staff')}
           className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'staff'
@@ -1036,6 +1048,11 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       {/* Tab Panels */}
       <div className="space-y-6">
         
+        {/* QR DESIGN STUDIO TAB */}
+        {activeTab === 'qr_design' && (
+          <QRDesignStudio restaurant={restaurant} onSaved={refresh} />
+        )}
+
         {/* PROFILE BRANDING SETTINGS */}
         {activeTab === 'profile' && (
           <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
