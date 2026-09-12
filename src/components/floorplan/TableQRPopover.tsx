@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
-import { QrCode, Printer, Download, Copy, Check, X, ShieldCheck } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { QrCode, Printer, Download, Copy, Check, X, ShieldCheck, Sparkles } from 'lucide-react';
 import { FloorPlanItem } from './types';
+import { useQRDesign } from '@/components/qr-studio/storage';
+import { QRCardRenderer } from '@/components/qr-studio/QRCardRenderer';
+import { downloadBrandedTableQR, printSingleBrandedTable } from '@/components/qr-studio/cardCanvasExport';
 
 interface TableQRPopoverProps {
   table: FloorPlanItem | null;
@@ -21,7 +24,10 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
   isOpen,
   onClose
 }) => {
+  // 1. Strict React Hooks Safety Guardrail: ALL hooks declared at the very top
   const [copied, setCopied] = useState(false);
+  const restaurantMock = useMemo(() => ({ id: restaurantSlug, slug: restaurantSlug, name: restaurantName }), [restaurantSlug, restaurantName]);
+  const { designConfig: qrDesign } = useQRDesign(restaurantMock);
 
   if (!isOpen || !table) return null;
 
@@ -37,103 +43,19 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadPNG = () => {
-    if (!qrDataUrl) return;
-    const link = document.createElement('a');
-    link.href = qrDataUrl;
-    link.download = `${restaurantSlug}-table-${displayNumber}-qr.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadPNG = async () => {
+    await downloadBrandedTableQR(
+      qrDesign,
+      { id: tableUuid, name: `Table ${displayNumber}`, url: directUrl },
+      restaurantSlug
+    );
   };
 
-  const handlePrintSticker = () => {
-    const printWindow = window.open('', '_blank', 'width=450,height=500');
-    if (!printWindow) return;
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Table ${displayNumber} QR - ${restaurantName}</title>
-          <style>
-            @page {
-              size: 80mm 80mm;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 16px;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              text-align: center;
-              background: #FFFFFF;
-              color: #171717;
-            }
-            .restaurant {
-              font-size: 13px;
-              font-weight: 600;
-              letter-spacing: 0.05em;
-              text-transform: uppercase;
-              color: #525252;
-              margin-bottom: 4px;
-            }
-            .table-badge {
-              font-size: 22px;
-              font-weight: 800;
-              color: #171717;
-              margin-bottom: 8px;
-            }
-            .qr-box {
-              width: 160px;
-              height: 160px;
-              padding: 8px;
-              background: #FFFFFF;
-              border: 1px solid #E7E5E4;
-              border-radius: 12px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            }
-            .qr-box img {
-              width: 100%;
-              height: 100%;
-              object-fit: contain;
-            }
-            .cta {
-              margin-top: 8px;
-              font-size: 11px;
-              font-weight: 600;
-              color: #171717;
-            }
-            .sub {
-              font-size: 9px;
-              color: #737373;
-              margin-top: 2px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="restaurant">${restaurantName}</div>
-          <div class="table-badge">Table ${displayNumber}</div>
-          <div class="qr-box">
-            <img src="${qrDataUrl || ''}" alt="QR" />
-          </div>
-          <div class="cta">Scan to View Menu & Order</div>
-          <div class="sub">Powered by CleverOps</div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+  const handlePrintSticker = async () => {
+    await printSingleBrandedTable(
+      qrDesign,
+      { id: tableUuid, name: `Table ${displayNumber}`, url: directUrl }
+    );
   };
 
   return (
@@ -169,25 +91,16 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
           </div>
         </div>
 
-        {/* QR Code Graphic Box */}
-        <div className="my-4 flex flex-col items-center justify-center bg-[#F8F8F6] border border-[#E7E5E4] rounded-xl p-4">
-          <div className="w-44 h-44 bg-white p-2.5 rounded-lg border border-[#E7E5E4] shadow-xs flex items-center justify-center">
-            {qrDataUrl ? (
-              <img
-                src={qrDataUrl}
-                alt={`Table ${displayNumber} QR`}
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <div className="text-center text-xs text-[#737373]">
-                Generating QR...
-              </div>
-            )}
-          </div>
-          <div className="mt-2.5 text-center">
-            <span className="text-xs font-bold text-[#171717]">
-              Table {displayNumber}
-            </span>
+        {/* QR Code Graphic Box with Branded Card Design */}
+        <div className="my-4 flex flex-col items-center justify-center bg-[#F8F8F6] border border-[#E7E5E4] rounded-xl p-3">
+          <QRCardRenderer
+            config={qrDesign}
+            tableName={displayNumber}
+            directUrl={directUrl}
+            previewScale={0.78}
+            className="shadow-md rounded-xl"
+          />
+          <div className="mt-2 text-center">
             <span className="text-[10px] text-[#737373] block truncate max-w-[240px]">
               UUID: {tableUuid}
             </span>

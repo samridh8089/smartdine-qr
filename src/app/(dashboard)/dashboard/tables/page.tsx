@@ -13,13 +13,21 @@ import Link from 'next/link';
 import { 
   Plus, QrCode, Download, ExternalLink, Trash2, 
   AlertTriangle, Printer, HelpCircle, Calendar, ShoppingBag,
-  Layers, LayoutGrid
+  Layers, LayoutGrid, Sparkles, FileText, Archive
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { dashboardStore } from '@/lib/dashboardStore';
 import FloorCanvasWrapper from '@/components/floorplan/FloorCanvasWrapper';
 import { FloorPlanItem } from '@/components/floorplan/types';
+import { useQRDesign } from '@/components/qr-studio/storage';
+import { QRCardRenderer } from '@/components/qr-studio/QRCardRenderer';
+import { 
+  downloadBrandedTableQR, 
+  downloadAllTablesQRZip, 
+  printSingleBrandedTable, 
+  printAllTablesA4Sheet 
+} from '@/components/qr-studio/cardCanvasExport';
 
 export default function TablesPage() {
   const { restaurant, profile, planSpec } = useRestaurant();
@@ -62,6 +70,11 @@ export default function TablesPage() {
   const [nowTime, setNowTime] = useState(Date.now());
   const [viewMode, setViewMode] = useState<'floorplan' | 'grid'>('floorplan');
   const [floorPlanMode, setFloorPlanMode] = useState<'view' | 'edit'>('view');
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Global QR Design Studio configuration sync
+  const { designConfig: qrDesign } = useQRDesign(restaurant);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -368,114 +381,51 @@ export default function TablesPage() {
   const downloadQR = async (table: Table) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const customerUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
-    const highResQR = await generateQRDataURL(customerUrl, { width: 512, errorCorrectionLevel: 'H' });
-    const qrData = highResQR || qrCodes[table.id];
-    if (!qrData) return;
-
-    const link = document.createElement('a');
-    link.href = qrData;
-    link.download = `${tableNameToFilename(table.name)}-QR.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const tableNameToFilename = (name: string) => {
-    return name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    await downloadBrandedTableQR(
+      qrDesign,
+      { id: table.id, name: table.name, url: customerUrl },
+      restaurantSlug
+    );
   };
 
   const printTableQR = async (table: Table) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const customerUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
-    const highResQR = await generateQRDataURL(customerUrl, { width: 512, errorCorrectionLevel: 'H' });
-    const qrData = highResQR || qrCodes[table.id];
-    if (!qrData) return;
+    await printSingleBrandedTable(
+      qrDesign,
+      { id: table.id, name: table.name, url: customerUrl }
+    );
+  };
 
-    // Create a printable window
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+  const handleDownloadAllQRZip = async () => {
+    if (!tables.length) return;
+    setIsBulkDownloading(true);
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const items = tables.map(t => ({
+      id: t.id,
+      name: t.name,
+      url: `${origin}/menu/${restaurantSlug}/table/${t.id}`
+    }));
+    await downloadAllTablesQRZip(qrDesign, items, restaurantSlug, (current, total) => {
+      setBulkProgress({ current, total });
+    });
+    setIsBulkDownloading(false);
+    setBulkProgress(null);
+  };
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print QR - ${table.name}</title>
-          <style>
-            body {
-              font-family: system-ui, -apple-system, sans-serif;
-              text-align: center;
-              padding: 40px;
-              color: #0f172a;
-            }
-            .container {
-              border: 4px double #e2e8f0;
-              border-radius: 24px;
-              padding: 40px;
-              max-width: 450px;
-              margin: 0 auto;
-              box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
-            }
-            .logo {
-              font-size: 24px;
-              font-weight: 800;
-              color: #059669;
-              margin-bottom: 5px;
-            }
-            .sub {
-              font-size: 14px;
-              color: #64748b;
-              margin-bottom: 30px;
-              font-weight: 500;
-            }
-            .qr-img {
-              width: 300px;
-              height: 300px;
-              margin-bottom: 20px;
-            }
-            .table-number {
-              font-size: 32px;
-              font-weight: 900;
-              margin: 10px 0;
-            }
-            .instructions {
-              font-size: 16px;
-              font-weight: 600;
-              color: #059669;
-              background-color: #ecfdf5;
-              padding: 10px 20px;
-              border-radius: 9999px;
-              display: inline-block;
-              margin-top: 15px;
-            }
-            .footer-link {
-              margin-top: 20px;
-              font-size: 10px;
-              color: #94a3b8;
-            }
-            @media print {
-              body { padding: 0; }
-              .container { border: none; box-shadow: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="logo">CleverOps</div>
-            <div class="sub">SCAN & ORDER INSTANTLY</div>
-            <img class="qr-img" src="${qrData}" alt="QR Code" />
-            <div class="table-number">${table.name}</div>
-            <div class="instructions">Scan to View Menu & Place Order</div>
-            <div class="footer-link">${customerUrl}</div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
+  const handlePrintAllQRA4 = async () => {
+    if (!tables.length) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const items = tables.map(t => ({
+      id: t.id,
+      name: t.name,
+      url: `${origin}/menu/${restaurantSlug}/table/${t.id}`
+    }));
+    await printAllTablesA4Sheet(qrDesign, items, restaurant?.name || 'The Foody Hub');
+  };
+
+  const tableNameToFilename = (name: string) => {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '-');
   };
 
   const printTakeawayQR = () => {
@@ -627,7 +577,43 @@ export default function TablesPage() {
               : 'Generate QR codes for tables, merge dining groups, and monitor order flows by location.'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/dashboard/settings?tab=qr_design"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+            title="Open QR Design Studio in Settings"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+            <span>QR Design Studio</span>
+          </Link>
+
+          {tables.length > 0 && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleDownloadAllQRZip}
+                disabled={isBulkDownloading}
+                className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
+                title="Download branded QR cards for all tables in a ZIP"
+              >
+                <Archive className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                {isBulkDownloading ? `Zipping (${bulkProgress?.current || 0}/${bulkProgress?.total || tables.length})...` : 'Download All QR (ZIP)'}
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handlePrintAllQRA4}
+                className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
+                title="Print all table QR cards on A4 sheets"
+              >
+                <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                <span>Print All QR (A4)</span>
+              </Button>
+            </>
+          )}
+
           {selectedTableIds.length >= 2 && viewMode === 'grid' && (
             <Button size="sm" variant="outline" className="border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={handleOpenMergeModal}>
               Merge ({selectedTableIds.length}) Tables
@@ -1086,17 +1072,15 @@ export default function TablesPage() {
                     </button>
                   </div>
 
-                  {/* QR Code Container */}
-                  <div className="relative p-3 border border-slate-100 rounded-2xl bg-slate-50 flex items-center justify-center w-48 h-48 shadow-inner group">
-                    {qrData ? (
-                      <img 
-                        src={qrData} 
-                        alt={`QR Code for ${table.name}`} 
-                        className="w-full h-full object-contain rounded-lg"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 border-4 border-slate-300 border-t-transparent rounded-full animate-spin" />
-                    )}
+                  {/* Branded QR Card Container (Auto-applied from QR Design Studio) */}
+                  <div className="relative flex items-center justify-center my-1 group transition-transform hover:scale-[1.02]">
+                    <QRCardRenderer
+                      config={qrDesign}
+                      tableName={table.name}
+                      directUrl={origin + customerUrl}
+                      previewScale={0.72}
+                      className="shadow-md rounded-2xl"
+                    />
                   </div>
 
                   {/* QR Link */}
