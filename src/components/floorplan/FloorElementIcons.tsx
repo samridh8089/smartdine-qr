@@ -5,6 +5,7 @@ import React from 'react';
 interface ElementIconProps {
   type: string;
   className?: string;
+  size?: number;
 }
 
 export const FloorElementIcon: React.FC<ElementIconProps> = ({ type, className = 'w-10 h-10' }) => {

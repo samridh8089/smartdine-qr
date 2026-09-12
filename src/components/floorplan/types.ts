@@ -59,7 +59,20 @@ export type FurnitureType =
   | 'flower_pot'
   | 'water_feature'
   | 'pillar'
-  | 'decorative_partition';
+  | 'decorative_partition'
+  | 'wall_art'
+  | 'decorative_shelf'
+  | 'slat_wall'
+  // Lighting additions
+  | 'pendant_light'
+  | 'spotlight'
+  | 'wall_sconce'
+  | 'ceiling_light'
+  // Climate & Ventilation
+  | 'wall_ac'
+  | 'ceiling_ac'
+  // Windows
+  | 'window_large';
 
 export type TableOperationalStatus = 'available' | 'occupied' | 'reserved' | 'cleaning' | 'merged';
 
@@ -79,6 +92,7 @@ export interface FloorPlanItem {
   status: TableOperationalStatus;
   isLocked?: boolean;
   zIndex?: number;
+  material?: 'walnut' | 'marble' | 'black_steel' | 'olive_leather' | 'concrete' | 'warm_fabric' | 'brass' | string;
   
   // Real restaurant mapping
   dbTableId?: string;

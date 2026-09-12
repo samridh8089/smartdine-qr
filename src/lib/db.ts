@@ -213,6 +213,7 @@ export interface Restaurant {
       display_number?: string;
       seats?: number;
       capacity?: number;
+      guest_count?: number | null;
       zone_id?: string;
       assigned_waiter_id?: string | null;
       assigned_waiter_name?: string | null;

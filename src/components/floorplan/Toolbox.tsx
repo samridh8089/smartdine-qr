@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { 
-  PanelLeftClose, PanelLeft, Search, Layers,
-  Utensils, ChefHat, Building2, Wrench, Sparkles, LayoutGrid
+  PanelLeftClose, PanelLeft, Search,
+  Utensils, Armchair, ChefHat, Building2, Sparkles, LayoutGrid
 } from 'lucide-react';
 import { FloorPlanItem, TableShape, FurnitureType } from './types';
 import { FloorElementIcon } from './FloorElementIcons';
@@ -12,7 +12,7 @@ interface ToolboxProps {
   onAddItem: (itemTemplate: Partial<FloorPlanItem>) => void;
 }
 
-type CategoryKey = 'all' | 'tables' | 'kitchen' | 'structure' | 'utilities' | 'decor';
+type CategoryKey = 'all' | 'tables' | 'seating' | 'kitchen' | 'structure' | 'decor';
 
 export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
   // 1. useState declarations (Strict React Hooks Safety Guardrail)
@@ -37,13 +37,23 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
     { label: '6 Seater', shape: 'six_seater', defaultSeats: 6, width: 130, height: 80, category: 'tables' },
     { label: '8 Seater', shape: 'eight_seater', defaultSeats: 8, width: 160, height: 85, category: 'tables' },
     { label: '10 Seater', shape: 'ten_seater', defaultSeats: 10, width: 190, height: 90, category: 'tables' },
-    { label: 'Booth', shape: 'booth', defaultSeats: 4, width: 110, height: 85, category: 'tables' },
-    { label: 'L Booth', shape: 'l_booth', defaultSeats: 5, width: 120, height: 120, category: 'tables' },
-    { label: 'U Booth', shape: 'u_booth', defaultSeats: 6, width: 130, height: 110, category: 'tables' },
-    { label: 'Sofa Lounge', shape: 'sofa_lounge', defaultSeats: 4, width: 130, height: 85, category: 'tables' },
-    { label: 'Window Bench', shape: 'window_bench', defaultSeats: 5, width: 130, height: 85, category: 'tables' },
-    { label: 'VIP Lounge', shape: 'vip_lounge', defaultSeats: 4, width: 120, height: 110, category: 'tables' },
     { label: 'Bar Table', shape: 'bar_table', defaultSeats: 4, width: 85, height: 85, category: 'tables' }
+  ];
+
+  const seatingTemplates: Array<{
+    label: string;
+    shape: TableShape;
+    defaultSeats: number;
+    width: number;
+    height: number;
+    category: 'seating';
+  }> = [
+    { label: 'Booth', shape: 'booth', defaultSeats: 4, width: 110, height: 85, category: 'seating' },
+    { label: 'L Booth', shape: 'l_booth', defaultSeats: 5, width: 120, height: 120, category: 'seating' },
+    { label: 'U Booth', shape: 'u_booth', defaultSeats: 6, width: 130, height: 110, category: 'seating' },
+    { label: 'Sofa Lounge', shape: 'sofa_lounge', defaultSeats: 4, width: 130, height: 85, category: 'seating' },
+    { label: 'Window Bench', shape: 'window_bench', defaultSeats: 5, width: 130, height: 85, category: 'seating' },
+    { label: 'VIP Lounge', shape: 'vip_lounge', defaultSeats: 4, width: 120, height: 110, category: 'seating' }
   ];
 
   const kitchenTemplates: Array<{
@@ -77,22 +87,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
     { label: 'Window', type: 'window', width: 100, height: 25, category: 'structure' },
     { label: 'Divider Wall', type: 'divider_wall', width: 120, height: 20, category: 'structure' },
     { label: 'Curved Wall', type: 'curved_wall', width: 100, height: 80, category: 'structure' },
-    { label: 'Glass Partition', type: 'glass_partition', width: 110, height: 25, category: 'structure' }
-  ];
-
-  const utilityTemplates: Array<{
-    label: string;
-    type: FurnitureType;
-    width: number;
-    height: number;
-    category: 'utilities';
-  }> = [
-    { label: 'Cashier / POS', type: 'cash_counter', width: 110, height: 55, category: 'utilities' },
-    { label: 'Waiting Area', type: 'waiting_area', width: 130, height: 85, category: 'utilities' },
-    { label: 'Washroom', type: 'washroom', width: 90, height: 80, category: 'utilities' },
-    { label: 'Accessible Washroom', type: 'accessible_washroom', width: 100, height: 95, category: 'utilities' },
-    { label: 'Emergency Exit', type: 'emergency_exit', width: 80, height: 70, category: 'utilities' },
-    { label: 'Fire Extinguisher', type: 'fire_extinguisher', width: 60, height: 60, category: 'utilities' }
+    { label: 'Glass Partition', type: 'glass_partition', width: 110, height: 25, category: 'structure' },
+    { label: 'Pillar', type: 'pillar', width: 65, height: 65, category: 'structure' },
+    { label: 'Cashier / POS', type: 'cash_counter', width: 110, height: 55, category: 'structure' },
+    { label: 'Waiting Area', type: 'waiting_area', width: 130, height: 85, category: 'structure' },
+    { label: 'Washroom', type: 'washroom', width: 90, height: 80, category: 'structure' },
+    { label: 'Emergency Exit', type: 'emergency_exit', width: 80, height: 70, category: 'structure' }
   ];
 
   const decorTemplates: Array<{
@@ -106,7 +106,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
     { label: 'Large Plant', type: 'plant_large', width: 85, height: 85, category: 'decor' },
     { label: 'Flower Pot', type: 'flower_pot', width: 65, height: 65, category: 'decor' },
     { label: 'Water Feature', type: 'water_feature', width: 95, height: 95, category: 'decor' },
-    { label: 'Pillar', type: 'pillar', width: 65, height: 65, category: 'decor' },
     { label: 'Decorative Partition', type: 'decorative_partition', width: 110, height: 25, category: 'decor' }
   ];
 
@@ -115,6 +114,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
     if (activeCategory !== 'all' && activeCategory !== 'tables') return [];
     if (!searchQuery.trim()) return tableTemplates;
     return tableTemplates.filter((t) => t.label.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [activeCategory, searchQuery]);
+
+  const filteredSeating = useMemo(() => {
+    if (activeCategory !== 'all' && activeCategory !== 'seating') return [];
+    if (!searchQuery.trim()) return seatingTemplates;
+    return seatingTemplates.filter((s) => s.label.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [activeCategory, searchQuery]);
 
   const filteredKitchen = useMemo(() => {
@@ -129,12 +134,6 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
     return structureTemplates.filter((s) => s.label.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [activeCategory, searchQuery]);
 
-  const filteredUtilities = useMemo(() => {
-    if (activeCategory !== 'all' && activeCategory !== 'utilities') return [];
-    if (!searchQuery.trim()) return utilityTemplates;
-    return utilityTemplates.filter((u) => u.label.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [activeCategory, searchQuery]);
-
   const filteredDecor = useMemo(() => {
     if (activeCategory !== 'all' && activeCategory !== 'decor') return [];
     if (!searchQuery.trim()) return decorTemplates;
@@ -144,16 +143,16 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
   // ALL HOOKS STRICTLY DECLARED BEFORE ANY RETURN
   if (isCollapsed) {
     return (
-      <div className="w-11 bg-white border-r border-[#E7E5E4] flex flex-col items-center py-3 select-none shrink-0 shadow-xs transition-all">
+      <div className="w-11 bg-[#0B0F14] border-r border-white/[0.08] flex flex-col items-center py-3 select-none shrink-0 transition-all font-sans">
         <button
           type="button"
           onClick={() => setIsCollapsed(false)}
-          className="p-1.5 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
+          className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors cursor-pointer"
           title="Expand Element Library"
         >
           <PanelLeft className="w-4 h-4" />
         </button>
-        <span className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-6 [writing-mode:vertical-lr] rotate-180">
+        <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest mt-6 [writing-mode:vertical-lr] rotate-180">
           Library
         </span>
       </div>
@@ -161,17 +160,17 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
   }
 
   return (
-    <div className="w-64 md:w-72 bg-white border-r border-[#E7E5E4] flex flex-col h-full select-none overflow-hidden shrink-0 shadow-xs transition-all">
+    <div className="w-64 md:w-72 bg-[#0B0F14] text-zinc-100 border-r border-white/[0.08] flex flex-col h-full select-none overflow-hidden shrink-0 transition-all font-sans">
       {/* Header */}
-      <div className="p-3 border-b border-[#EFEDE8] flex items-center justify-between shrink-0">
+      <div className="p-3 border-b border-white/[0.08] flex items-center justify-between shrink-0">
         <div>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#171717]">Element Library</h2>
-          <p className="text-[10px] text-[#737373] mt-0.5">Click any element to add to canvas</p>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-100">Element Library</h2>
+          <p className="text-[10px] text-zinc-400 mt-0.5">Click element to place on canvas</p>
         </div>
         <button
           type="button"
           onClick={() => setIsCollapsed(true)}
-          className="p-1 text-stone-400 hover:text-stone-900 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
+          className="p-1 text-zinc-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors cursor-pointer"
           title="Collapse Toolbox"
         >
           <PanelLeftClose className="w-4 h-4" />
@@ -186,20 +185,20 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
             placeholder="Search fixtures & tables..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-[#FAFAF9] border border-[#E7E5E4] rounded-lg focus:outline-none focus:border-[#171717] focus:bg-white transition-all placeholder:text-stone-400"
+            className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-white/[0.03] border border-white/[0.08] rounded-lg text-zinc-200 focus:outline-none focus:border-[#16A34A] focus:ring-1 focus:ring-[#16A34A] transition-all placeholder:text-zinc-500"
           />
-          <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5 pointer-events-none" />
+          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5 pointer-events-none" />
         </div>
       </div>
 
       {/* Category Pills Strip */}
-      <div className="px-3 pb-2 border-b border-[#EFEDE8] flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
+      <div className="px-3 pb-2 border-b border-white/[0.08] flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0">
         {[
           { key: 'all' as CategoryKey, label: 'All', icon: LayoutGrid },
           { key: 'tables' as CategoryKey, label: 'Tables', icon: Utensils },
+          { key: 'seating' as CategoryKey, label: 'Seating', icon: Armchair },
           { key: 'kitchen' as CategoryKey, label: 'Kitchen', icon: ChefHat },
           { key: 'structure' as CategoryKey, label: 'Structure', icon: Building2 },
-          { key: 'utilities' as CategoryKey, label: 'Utilities', icon: Wrench },
           { key: 'decor' as CategoryKey, label: 'Decor', icon: Sparkles }
         ].map((tab) => {
           const Icon = tab.icon;
@@ -209,10 +208,10 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
               key={tab.key}
               type="button"
               onClick={() => setActiveCategory(tab.key)}
-              className={`px-2 py-1 rounded-md text-[10px] font-semibold flex items-center gap-1 transition-all whitespace-nowrap cursor-pointer ${
+              className={`px-2.5 py-1 rounded-[10px] text-[10px] font-medium flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
                 isActive
-                  ? 'bg-stone-900 text-white shadow-2xs'
-                  : 'bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-stone-900 border border-stone-200'
+                  ? 'bg-[#16A34A] text-white shadow-xs'
+                  : 'bg-white/[0.03] hover:bg-white/[0.06] text-zinc-400 hover:text-zinc-200 border border-white/[0.08]'
               }`}
             >
               <Icon className="w-3 h-3" />
@@ -224,12 +223,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
 
       {/* Scrollable Element Cards Area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
-        {/* 1. Tables & Seating Section */}
+        {/* 1. Tables Section */}
         {filteredTables.length > 0 && (
           <div>
-            <span className="text-[10px] font-bold text-[#737373] uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-              <Utensils className="w-3 h-3 text-stone-500" />
-              Tables &amp; Seating ({filteredTables.length})
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+              <Utensils className="w-3 h-3 text-[#16A34A]" />
+              Tables ({filteredTables.length})
             </span>
             <div className="grid grid-cols-2 gap-2">
               {filteredTables.map((t, idx) => (
@@ -246,16 +245,16 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
                       status: 'available'
                     })
                   }
-                  className="flex flex-col items-center justify-between p-2 rounded-lg border border-[#E7E5E4] bg-white/70 hover:bg-white hover:border-[#171717] hover:shadow-xs transition-all duration-150 text-center group cursor-pointer"
+                  className="flex flex-col items-center justify-between p-2.5 rounded-[12px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-[#16A34A]/50 transition-all duration-150 text-center group cursor-pointer"
                 >
                   <div className="h-12 w-full flex items-center justify-center">
                     <FloorElementIcon type={t.shape} className="w-12 h-10 object-contain group-hover:scale-105 transition-transform" />
                   </div>
-                  <div className="w-full mt-1">
-                    <span className="text-[11px] font-semibold text-[#171717] block leading-tight truncate">
+                  <div className="w-full mt-1.5">
+                    <span className="text-[11px] font-medium text-zinc-200 group-hover:text-white block leading-tight truncate">
                       {t.label}
                     </span>
-                    <span className="text-[9px] text-[#737373] font-medium block mt-0.5">
+                    <span className="text-[9px] text-zinc-500 block mt-0.5">
                       {t.defaultSeats} seats
                     </span>
                   </div>
@@ -265,12 +264,53 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
           </div>
         )}
 
-        {/* 2. Kitchen Equipment Section */}
+        {/* 2. Seating Section */}
+        {filteredSeating.length > 0 && (
+          <div>
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+              <Armchair className="w-3 h-3 text-[#16A34A]" />
+              Seating ({filteredSeating.length})
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              {filteredSeating.map((s, idx) => (
+                <button
+                  key={`seat_${s.shape}_${idx}`}
+                  type="button"
+                  onClick={() =>
+                    onAddItem({
+                      kind: 'table',
+                      shape: s.shape,
+                      seats: s.defaultSeats,
+                      width: s.width,
+                      height: s.height,
+                      status: 'available'
+                    })
+                  }
+                  className="flex flex-col items-center justify-between p-2.5 rounded-[12px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-[#16A34A]/50 transition-all duration-150 text-center group cursor-pointer"
+                >
+                  <div className="h-12 w-full flex items-center justify-center">
+                    <FloorElementIcon type={s.shape} className="w-12 h-10 object-contain group-hover:scale-105 transition-transform" />
+                  </div>
+                  <div className="w-full mt-1.5">
+                    <span className="text-[11px] font-medium text-zinc-200 group-hover:text-white block leading-tight truncate">
+                      {s.label}
+                    </span>
+                    <span className="text-[9px] text-zinc-500 block mt-0.5">
+                      {s.defaultSeats} seats
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 3. Kitchen Section */}
         {filteredKitchen.length > 0 && (
           <div>
-            <span className="text-[10px] font-bold text-[#737373] uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-              <ChefHat className="w-3 h-3 text-stone-500" />
-              Kitchen Equipment ({filteredKitchen.length})
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+              <ChefHat className="w-3 h-3 text-[#16A34A]" />
+              Kitchen ({filteredKitchen.length})
             </span>
             <div className="grid grid-cols-2 gap-2">
               {filteredKitchen.map((k, idx) => (
@@ -286,16 +326,16 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
                       name: k.label
                     })
                   }
-                  className="flex flex-col items-center justify-between p-2 rounded-lg border border-[#E7E5E4] bg-white/70 hover:bg-white hover:border-[#171717] hover:shadow-xs transition-all duration-150 text-center group cursor-pointer"
+                  className="flex flex-col items-center justify-between p-2.5 rounded-[12px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-[#16A34A]/50 transition-all duration-150 text-center group cursor-pointer"
                 >
                   <div className="h-12 w-full flex items-center justify-center">
                     <FloorElementIcon type={k.type} className="w-12 h-10 object-contain group-hover:scale-105 transition-transform" />
                   </div>
-                  <div className="w-full mt-1">
-                    <span className="text-[11px] font-semibold text-[#171717] block leading-tight truncate">
+                  <div className="w-full mt-1.5">
+                    <span className="text-[11px] font-medium text-zinc-200 group-hover:text-white block leading-tight truncate">
                       {k.label}
                     </span>
-                    <span className="text-[9px] text-stone-400 font-medium block mt-0.5">
+                    <span className="text-[9px] text-zinc-500 block mt-0.5">
                       Kitchen
                     </span>
                   </div>
@@ -305,12 +345,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
           </div>
         )}
 
-        {/* 3. Structure & Architectural Section */}
+        {/* 4. Structure Section */}
         {filteredStructure.length > 0 && (
           <div>
-            <span className="text-[10px] font-bold text-[#737373] uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-              <Building2 className="w-3 h-3 text-stone-500" />
-              Structure &amp; Doors ({filteredStructure.length})
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+              <Building2 className="w-3 h-3 text-[#16A34A]" />
+              Structure ({filteredStructure.length})
             </span>
             <div className="grid grid-cols-2 gap-2">
               {filteredStructure.map((s, idx) => (
@@ -326,17 +366,17 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
                       name: s.label
                     })
                   }
-                  className="flex flex-col items-center justify-between p-2 rounded-lg border border-[#E7E5E4] bg-white/70 hover:bg-white hover:border-[#171717] hover:shadow-xs transition-all duration-150 text-center group cursor-pointer"
+                  className="flex flex-col items-center justify-between p-2.5 rounded-[12px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-[#16A34A]/50 transition-all duration-150 text-center group cursor-pointer"
                 >
                   <div className="h-12 w-full flex items-center justify-center">
                     <FloorElementIcon type={s.type} className="w-12 h-10 object-contain group-hover:scale-105 transition-transform" />
                   </div>
-                  <div className="w-full mt-1">
-                    <span className="text-[11px] font-semibold text-[#171717] block leading-tight truncate">
+                  <div className="w-full mt-1.5">
+                    <span className="text-[11px] font-medium text-zinc-200 group-hover:text-white block leading-tight truncate">
                       {s.label}
                     </span>
-                    <span className="text-[9px] text-stone-400 font-medium block mt-0.5">
-                      Fixture
+                    <span className="text-[9px] text-zinc-500 block mt-0.5">
+                      Structure
                     </span>
                   </div>
                 </button>
@@ -345,52 +385,12 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
           </div>
         )}
 
-        {/* 4. Utilities & Amenities Section */}
-        {filteredUtilities.length > 0 && (
-          <div>
-            <span className="text-[10px] font-bold text-[#737373] uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-              <Wrench className="w-3 h-3 text-stone-500" />
-              Utilities &amp; Restrooms ({filteredUtilities.length})
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              {filteredUtilities.map((u, idx) => (
-                <button
-                  key={`util_${u.type}_${idx}`}
-                  type="button"
-                  onClick={() =>
-                    onAddItem({
-                      kind: 'furniture',
-                      furnitureType: u.type,
-                      width: u.width,
-                      height: u.height,
-                      name: u.label
-                    })
-                  }
-                  className="flex flex-col items-center justify-between p-2 rounded-lg border border-[#E7E5E4] bg-white/70 hover:bg-white hover:border-[#171717] hover:shadow-xs transition-all duration-150 text-center group cursor-pointer"
-                >
-                  <div className="h-12 w-full flex items-center justify-center">
-                    <FloorElementIcon type={u.type} className="w-12 h-10 object-contain group-hover:scale-105 transition-transform" />
-                  </div>
-                  <div className="w-full mt-1">
-                    <span className="text-[11px] font-semibold text-[#171717] block leading-tight truncate">
-                      {u.label}
-                    </span>
-                    <span className="text-[9px] text-stone-400 font-medium block mt-0.5">
-                      Facility
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 5. Decor & Plants Section */}
+        {/* 5. Decor Section */}
         {filteredDecor.length > 0 && (
           <div>
-            <span className="text-[10px] font-bold text-[#737373] uppercase tracking-wider block mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-stone-500" />
-              Decor &amp; Plants ({filteredDecor.length})
+            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-[#16A34A]" />
+              Decor ({filteredDecor.length})
             </span>
             <div className="grid grid-cols-2 gap-2">
               {filteredDecor.map((d, idx) => (
@@ -406,16 +406,16 @@ export const Toolbox: React.FC<ToolboxProps> = ({ onAddItem }) => {
                       name: d.label
                     })
                   }
-                  className="flex flex-col items-center justify-between p-2 rounded-lg border border-[#E7E5E4] bg-white/70 hover:bg-white hover:border-[#171717] hover:shadow-xs transition-all duration-150 text-center group cursor-pointer"
+                  className="flex flex-col items-center justify-between p-2.5 rounded-[12px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05] hover:border-[#16A34A]/50 transition-all duration-150 text-center group cursor-pointer"
                 >
                   <div className="h-12 w-full flex items-center justify-center">
                     <FloorElementIcon type={d.type} className="w-12 h-10 object-contain group-hover:scale-105 transition-transform" />
                   </div>
-                  <div className="w-full mt-1">
-                    <span className="text-[11px] font-semibold text-[#171717] block leading-tight truncate">
+                  <div className="w-full mt-1.5">
+                    <span className="text-[11px] font-medium text-zinc-200 group-hover:text-white block leading-tight truncate">
                       {d.label}
                     </span>
-                    <span className="text-[9px] text-stone-400 font-medium block mt-0.5">
+                    <span className="text-[9px] text-zinc-500 block mt-0.5">
                       Decor
                     </span>
                   </div>

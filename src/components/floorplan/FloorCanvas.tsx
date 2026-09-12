@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import { Stage, Layer } from 'react-konva';
 import Konva from 'konva';
 import { 
   ZoomIn, ZoomOut, RotateCcw, Grid, Undo2, Redo2, 
   Save, Eye, Edit3, Plus, Layers, AlertCircle, Compass, X,
   TrendingUp, Users, ChevronDown, ChevronRight,
-  Lock, Unlock, ArrowUp, ArrowDown, Copy, Trash2
+  Lock, Unlock, ArrowUp, ArrowDown, Copy, Trash2, Box,
+  Download, Maximize2, Sparkles
 } from 'lucide-react';
 
 import { FloorPlanItem, TableShape, FloorPlanBlueprint } from './types';
@@ -17,6 +19,7 @@ import { TableNode } from './TableNode';
 import { FurnitureNode } from './FurnitureNode';
 import { SelectionBox } from './SelectionBox';
 import { Toolbox } from './Toolbox';
+import { AssetLibraryCarousel } from './AssetLibraryCarousel';
 import { PropertyPanel } from './PropertyPanel';
 import { MergePromptModal } from './MergePromptModal';
 import { SeatGuestDrawer } from './SeatGuestDrawer';
@@ -30,6 +33,14 @@ import { AutoSaveEngine } from './AutoSaveEngine';
 import { findCollidingTable, mergeTables, splitTable } from './CollisionEngine';
 import { db, RestaurantZone, STANDARD_ZONES } from '@/lib/db';
 import { generateQRDataURL } from '@/lib/qr';
+
+const FloorPreview3D = dynamic(
+  () => import('../floorplan3d/FloorPreview3D').then((m) => m.FloorPreview3D),
+  { ssr: false }
+);
+
+import { AILayoutModal } from './ai-layout/AILayoutModal';
+import { AIImprovementAssistant } from './ai-layout/AIImprovementAssistant';
 
 interface FloorCanvasProps {
   restaurantId: string;
@@ -142,6 +153,11 @@ export default function FloorCanvas({
   const [hasUnsavedDraft, setHasUnsavedDraft] = useState<boolean>(false);
   const [draftItems, setDraftItems] = useState<FloorPlanItem[] | null>(null);
   const [showExitWarningModal, setShowExitWarningModal] = useState<boolean>(false);
+  const [show3DPreview, setShow3DPreview] = useState<boolean>(false);
+  const [activeNavTab, setActiveNavTab] = useState<'planner' | 'tables' | 'zones' | 'walkthrough'>('planner');
+  const [showWalkthroughModal, setShowWalkthroughModal] = useState<boolean>(false);
+  const [showLayersDropdown, setShowLayersDropdown] = useState<boolean>(false);
+  const [showAILayoutModal, setShowAILayoutModal] = useState<boolean>(false);
 
   // 2. useRef declarations
   const stageRef = useRef<Konva.Stage>(null);
@@ -252,6 +268,17 @@ export default function FloorCanvas({
     }, 300);
   }, [restaurantId]);
 
+  const handleApplyAILayout = useCallback((newItems: FloorPlanItem[], newDimensions: { width: number; height: number }) => {
+    setItems(newItems);
+    setCanvasDimensions(newDimensions);
+    setSelectedId(null);
+    updateItemsWithHistory(newItems);
+  }, [updateItemsWithHistory]);
+
+  const handleApplyAISuggestion = useCallback((newItems: FloorPlanItem[]) => {
+    updateItemsWithHistory(newItems);
+  }, [updateItemsWithHistory]);
+
   const handleManualSave = useCallback(() => {
     if (autoSaveEngineRef.current) {
       autoSaveEngineRef.current.flushSave(items);
@@ -322,7 +349,7 @@ export default function FloorCanvas({
       width: template.width || 80,
       height: template.height || 80,
       rotation: 0,
-      seats: template.seats || 4,
+      seats: template.seats !== undefined ? template.seats : (isTable ? 4 : 0),
       zone_id: selectedZoneFilter !== 'all' ? selectedZoneFilter : (zones[0]?.id || 'zone_indoor'),
       status: 'available'
     };
@@ -538,6 +565,26 @@ export default function FloorCanvas({
     const centerOffsetX = Math.max(20, Math.round((containerW - (layoutBounds.minX + layoutBounds.maxX)) / 2));
     setStagePos({ x: centerOffsetX, y: 24 });
   }, [layoutBounds]);
+
+  // Export Blueprint JSON
+  const handleExportBlueprint = useCallback(() => {
+    const blueprintData: FloorPlanBlueprint = {
+      version: 2,
+      restaurantId,
+      updatedAt: new Date().toISOString(),
+      canvasWidth: canvasDimensions.width,
+      canvasHeight: canvasDimensions.height,
+      gridSize: 20,
+      items
+    };
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(blueprintData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `floorplan-${restaurantSlug || 'smartdine'}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  }, [restaurantId, restaurantSlug, canvasDimensions, items]);
 
   // Seat Guest from Bottom Sheet
   const handleSeatGuest = useCallback((table: FloorPlanItem, guestCount: number, waiter: string) => {
@@ -864,11 +911,83 @@ export default function FloorCanvas({
       className="flex flex-col bg-[#F8F8F6] rounded-xl border border-[#E7E5E4] overflow-hidden shadow-xs transition-all duration-300"
       style={{ height: `${dynamicCardHeight}px`, minHeight: '520px' }}
     >
-      {/* Top Toolbar */}
-      <div className="h-12 bg-white border-b border-[#E7E5E4] px-4 flex items-center justify-between select-none z-10 shrink-0">
-        {/* Left: Mode Switcher & Title */}
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center bg-[#F5F5F4] p-0.5 rounded-lg border border-[#E7E5E4]">
+      {/* SaaS Product Navigation Tabs (Dark Glassmorphic) */}
+      <div className="h-11 bg-stone-900 border-b border-stone-800 px-4 flex items-center justify-between select-none z-20 shrink-0 text-xs">
+        {/* Left: Product Navigation Tabs */}
+        <div className="flex items-center space-x-1">
+          <button
+            type="button"
+            onClick={() => setActiveNavTab('planner')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeNavTab === 'planner'
+                ? 'bg-stone-800 text-white shadow-xs border border-stone-700'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800/60'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Floor Planner</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveNavTab('tables');
+              onModeChange('view');
+            }}
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeNavTab === 'tables'
+                ? 'bg-stone-800 text-white shadow-xs border border-stone-700'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800/60'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-sky-400" />
+            <span>Table Management</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveNavTab('zones');
+              setShowZoneModal(true);
+            }}
+            className="px-3 py-1.5 rounded-lg font-semibold text-stone-400 hover:text-white hover:bg-stone-800/60 transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Layers className="w-3.5 h-3.5 text-amber-400" />
+            <span>Zones</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowWalkthroughModal(true)}
+            className="px-3 py-1.5 rounded-lg font-semibold text-stone-400 hover:text-white hover:bg-stone-800/60 transition-all cursor-pointer flex items-center gap-1.5"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>Walkthrough</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              Soon
+            </span>
+          </button>
+        </div>
+
+        {/* Right: AutoSave Status Badges */}
+        <div className="flex items-center space-x-2 text-[10px] font-semibold">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Auto Save: On
+          </span>
+          {autoSaveStatus === 'dirty' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-800/60 animate-pulse">
+              Unsaved Changes
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Primary Action Toolbar (Dark Glassmorphic Style) */}
+      <div className="h-12 bg-stone-900/95 backdrop-blur-md border-b border-stone-800 px-4 flex items-center justify-between select-none z-10 shrink-0 text-white">
+        {/* Left: 2D View & 3D Preview Mode Switcher */}
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center bg-stone-950 p-0.5 rounded-lg border border-stone-800">
             <button
               type="button"
               onClick={() => {
@@ -880,20 +999,20 @@ export default function FloorCanvas({
               }}
               className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                 mode === 'view'
-                  ? 'bg-white text-[#171717] shadow-xs'
-                  : 'text-[#737373] hover:text-[#171717]'
+                  ? 'bg-stone-800 text-white shadow-xs'
+                  : 'text-stone-400 hover:text-white'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>Live Floor</span>
+              <span>2D View</span>
             </button>
             <button
               type="button"
               onClick={() => onModeChange('edit')}
               className={`flex items-center space-x-1.5 px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                 mode === 'edit'
-                  ? 'bg-white text-[#171717] shadow-xs'
-                  : 'text-[#737373] hover:text-[#171717]'
+                  ? 'bg-stone-800 text-white shadow-xs'
+                  : 'text-stone-400 hover:text-white'
               }`}
             >
               <Edit3 className="w-3.5 h-3.5" />
@@ -901,38 +1020,45 @@ export default function FloorCanvas({
             </button>
           </div>
 
-          <div className="h-4 w-px bg-[#E7E5E4]" />
+          {/* 3D Preview (Prominent Green Active Button) */}
+          <button
+            type="button"
+            onClick={() => setShow3DPreview(true)}
+            className="flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-md shadow-emerald-950 hover:shadow-lg hover:shadow-emerald-900/40 ml-1"
+            title="Open Realistic 3D Restaurant Visualization (Three.js / React Three Fiber)"
+          >
+            <Box className="w-3.5 h-3.5 text-white" />
+            <span>3D Preview</span>
+          </button>
 
-          {/* AutoSave & Dirty State Badges */}
-          <div className="flex items-center space-x-2 text-[10px] font-semibold">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Auto Save: On
-            </span>
-            {autoSaveStatus === 'dirty' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 animate-pulse">
-                Unsaved Changes
-              </span>
-            )}
-          </div>
+          {/* AI Floor Planner Generator */}
+          <button
+            type="button"
+            onClick={() => setShowAILayoutModal(true)}
+            className="flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 shadow-sm ml-1"
+            title="Generate AI-Assisted Restaurant Floor Plan Layout"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-white" />
+            <span>Generate AI Layout</span>
+          </button>
         </div>
 
-        {/* Right: Canvas Controls */}
+        {/* Right: SaaS Toolbar Actions: Undo, Redo, Fit View, Grid, Layers, Export */}
         <div className="flex items-center space-x-1.5">
           {isEditable && (
             <>
-              {/* Save Blueprint Button */}
+              {/* Save Layout Button */}
               <button
                 type="button"
                 onClick={handleManualSave}
-                className="flex items-center gap-1.5 px-3 py-1 bg-stone-900 hover:bg-black text-white rounded-lg text-xs font-bold shadow-xs cursor-pointer mr-1"
+                className="flex items-center gap-1.5 px-3 py-1 bg-white text-stone-900 hover:bg-stone-100 rounded-lg text-xs font-bold shadow-xs cursor-pointer mr-1"
                 title="Save Blueprint Layout (Ctrl+S)"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>Save Layout</span>
+                <span>Save</span>
               </button>
 
-              {/* Exit Blueprint Button */}
+              {/* Cancel Edit Button */}
               <button
                 type="button"
                 onClick={() => {
@@ -942,7 +1068,7 @@ export default function FloorCanvas({
                     onModeChange('view');
                   }
                 }}
-                className="px-2.5 py-1 text-stone-600 hover:text-stone-900 border border-stone-200 rounded-lg text-xs font-semibold hover:bg-stone-50 cursor-pointer mr-1"
+                className="px-2.5 py-1 text-stone-400 hover:text-white border border-stone-800 rounded-lg text-xs font-semibold hover:bg-stone-800 cursor-pointer mr-1"
               >
                 Cancel
               </button>
@@ -951,7 +1077,7 @@ export default function FloorCanvas({
               <button
                 type="button"
                 onClick={handleUndo}
-                className="p-1.5 text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-md transition-colors cursor-pointer"
+                className="p-1.5 text-stone-400 hover:text-white hover:bg-stone-800 rounded-md transition-colors cursor-pointer"
                 title="Undo (Ctrl+Z)"
               >
                 <Undo2 className="w-4 h-4" />
@@ -959,46 +1085,82 @@ export default function FloorCanvas({
               <button
                 type="button"
                 onClick={handleRedo}
-                className="p-1.5 text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-md transition-colors cursor-pointer"
+                className="p-1.5 text-stone-400 hover:text-white hover:bg-stone-800 rounded-md transition-colors cursor-pointer"
                 title="Redo (Ctrl+Shift+Z)"
               >
                 <Redo2 className="w-4 h-4" />
               </button>
 
-              <div className="h-4 w-px bg-[#E7E5E4] mx-1" />
-
-              {/* Snap to Grid Toggle */}
-              <button
-                type="button"
-                onClick={() => setSnapGrid(!snapGrid)}
-                className={`p-1.5 rounded-md transition-colors cursor-pointer ${
-                  snapGrid
-                    ? 'bg-[#171717] text-white'
-                    : 'text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4]'
-                }`}
-                title="Toggle Snap to Grid (20px)"
-              >
-                <Grid className="w-4 h-4" />
-              </button>
+              <div className="h-4 w-px bg-stone-800 mx-1" />
             </>
           )}
+
+          {/* Fit View */}
+          <button
+            type="button"
+            onClick={handleResetView}
+            className="p-1.5 text-stone-400 hover:text-white hover:bg-stone-800 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+            title="Fit View to Blueprint Center"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+
+          {/* Snap to Grid Toggle */}
+          <button
+            type="button"
+            onClick={() => setSnapGrid(!snapGrid)}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+              snapGrid
+                ? 'bg-stone-800 text-amber-400 border border-stone-700'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+            title="Toggle Snap to Grid (20px)"
+          >
+            <Grid className="w-4 h-4" />
+          </button>
+
+          {/* Layers Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowLayersDropdown(!showLayersDropdown)}
+            className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+              showLayersDropdown
+                ? 'bg-stone-800 text-sky-400 border border-stone-700'
+                : 'text-stone-400 hover:text-white hover:bg-stone-800'
+            }`}
+            title="Toggle Blueprint Layers"
+          >
+            <Layers className="w-4 h-4" />
+          </button>
+
+          {/* Export Layout Blueprint */}
+          <button
+            type="button"
+            onClick={handleExportBlueprint}
+            className="p-1.5 text-stone-400 hover:text-white hover:bg-stone-800 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+            title="Export Blueprint JSON"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+
+          <div className="h-4 w-px bg-stone-800 mx-1" />
 
           {/* Zoom controls */}
           <button
             type="button"
             onClick={() => handleZoom(1.15)}
-            className="p-1.5 text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-md transition-colors cursor-pointer"
+            className="p-1.5 text-stone-400 hover:text-white hover:bg-stone-800 rounded-md transition-colors cursor-pointer"
             title="Zoom In"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
-          <span className="text-[11px] font-bold text-[#171717] w-10 text-center">
+          <span className="text-[11px] font-bold text-stone-300 w-10 text-center">
             {Math.round(scale * 100)}%
           </span>
           <button
             type="button"
             onClick={() => handleZoom(0.85)}
-            className="p-1.5 text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-md transition-colors cursor-pointer"
+            className="p-1.5 text-stone-400 hover:text-white hover:bg-stone-800 rounded-md transition-colors cursor-pointer"
             title="Zoom Out"
           >
             <ZoomOut className="w-4 h-4" />
@@ -1006,7 +1168,7 @@ export default function FloorCanvas({
           <button
             type="button"
             onClick={handleResetView}
-            className="p-1.5 text-[#525252] hover:text-[#171717] hover:bg-[#F5F5F4] rounded-md transition-colors cursor-pointer"
+            className="p-1.5 text-stone-400 hover:text-white hover:bg-stone-800 rounded-md transition-colors cursor-pointer"
             title="Reset View"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -1346,6 +1508,9 @@ export default function FloorCanvas({
             </div>
           )}
           </div>
+
+          {/* Bottom Asset Library Carousel (Edit Mode) */}
+          {isEditable && <AssetLibraryCarousel onAddItem={handleAddItem} />}
         </div>
 
         {/* Right Property Inspector Panel (Edit Mode) */}
@@ -1496,6 +1661,61 @@ export default function FloorCanvas({
           setSelectedId(t.id);
         }}
       />
+
+      {/* Realistic 3D Restaurant Preview Modal (React Three Fiber) */}
+      {show3DPreview && (
+        <FloorPreview3D
+          items={items}
+          zones={zones}
+          restaurantName={restaurantName}
+          onClose={() => setShow3DPreview(false)}
+          onUpdateItem={handleUpdateItem}
+          onDuplicateItem={handleDuplicateItem}
+          onDeleteItem={handleDeleteItem}
+        />
+      )}
+
+      {/* AI Floor Planner Generator Modal (Phase 2 Vision+) */}
+      <AILayoutModal
+        isOpen={showAILayoutModal}
+        onClose={() => setShowAILayoutModal(false)}
+        onApplyLayout={handleApplyAILayout}
+        restaurantName={restaurantName}
+        currentSeats={occupancyStats.total * 4 || 26}
+      />
+
+      {/* AI Improvement Assistant (Floating Button & Suggestions Drawer) */}
+      {isEditable && (
+        <AIImprovementAssistant
+          items={items}
+          canvasDimensions={canvasDimensions}
+          onApplyChanges={handleApplyAISuggestion}
+        />
+      )}
+
+      {/* Walkthrough Soon Modal */}
+      {showWalkthroughModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center mx-auto shadow-lg shadow-purple-900/30">
+              <Sparkles className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Interactive 3D Walkthrough</h3>
+              <p className="text-xs text-stone-400 mt-1.5 leading-relaxed">
+                First-person restaurant walkthrough with cinematic camera paths, live seating flows, and realistic café lighting is coming soon!
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowWalkthroughModal(false)}
+              className="w-full py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer shadow-md"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
