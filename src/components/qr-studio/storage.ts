@@ -116,8 +116,17 @@ export function mergeWithDefaults(
     },
     background: {
       ...DEFAULT_QR_CONFIG.background,
-      ...(config.background || {})
+      ...(config.background || {}),
+      filters: {
+        ...DEFAULT_QR_CONFIG.background.filters,
+        ...(config.background?.filters || {})
+      }
     },
+    lighting: {
+      ...DEFAULT_QR_CONFIG.lighting,
+      ...(config.lighting || {})
+    },
+    stickers: Array.isArray(config.stickers) ? config.stickers : (DEFAULT_QR_CONFIG.stickers || []),
     frame: {
       ...DEFAULT_QR_CONFIG.frame,
       ...(config.frame || {})
