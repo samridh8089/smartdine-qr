@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { db, Order, Restaurant, CustomerRequest, OrderBatch, VALID_ORDER_TRANSITIONS } from '@/lib/db';
-import { calculateBillingTotals } from '@/lib/billingEngine';
+import { calculateBillingTotals, calculateBillSplit } from '@/lib/billingEngine';
+import { recordAuditLog } from '@/lib/auditLogger';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
 import { formatPrice, formatDate, getFormattedOrderId, matchesOrderSearchQuery, parseCustomerDetailsFromOrder } from '@/lib/utils';
@@ -12,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus, User } from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus, User, Smartphone, Split, Share2, Download, Scissors } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
@@ -1186,7 +1187,13 @@ export default function OrdersPage() {
   };
 
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'card' | 'split'>('cash');
+  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
+  const [splitGuestCount, setSplitGuestCount] = useState<number>(2);
+  const [splitGuests, setSplitGuests] = useState<Array<{ name: string; amount: number; method: 'cash' | 'upi' | 'card' }>>([
+    { name: 'Guest A', amount: 0, method: 'cash' },
+    { name: 'Guest B', amount: 0, method: 'upi' }
+  ]);
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const submittingPaymentRef = useRef(false);
 
@@ -1274,6 +1281,93 @@ export default function OrdersPage() {
     } catch (e) {}
   };
 
+  const handleDownloadReceipt = () => {
+    if (!printOrderData) return;
+    const { order, calcResult, validItems, restaurant } = printOrderData;
+    const formattedId = getFormattedOrderId(order, restaurant.name, orders);
+    const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Receipt_${formattedId}</title>
+  <style>
+    body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 15px; color: #111; font-size: 12px; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .bold { font-weight: bold; }
+    .divider { border-top: 1px dashed #444; margin: 8px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { padding: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="text-center">
+    <h2 style="margin:0 0 4px 0;">${restaurant.name}</h2>
+    <p style="margin:0 0 2px 0;">${restaurant.address || 'Dining QR Order System'}</p>
+    ${restaurant.phone ? `<p style="margin:0 0 2px 0;">Tel: ${restaurant.phone}</p>` : ''}
+    ${restaurant.gst_number ? `<p style="margin:0 0 2px 0;">GSTIN: ${restaurant.gst_number}</p>` : ''}
+  </div>
+  <div class="divider"></div>
+  <p><span class="bold">Order ID:</span> ${formattedId}</p>
+  <p><span class="bold">Table:</span> ${order.order_type === 'takeaway' ? 'TAKEAWAY' : order.table_name || 'DINE-IN'}</p>
+  <p><span class="bold">Date:</span> ${formatExactTimestamp(order.created_at)}</p>
+  <p><span class="bold">Payment:</span> PAID (${order.payment_method?.toUpperCase() || 'PAID'})</p>
+  <div class="divider"></div>
+  <table>
+    <thead><tr><th style="text-align:left">Item</th><th class="text-right">Qty</th><th class="text-right">Price</th></tr></thead>
+    <tbody>
+      ${validItems.map((i: any) => `<tr><td>${i.menu_item_name}</td><td class="text-right">×${i.quantity}</td><td class="text-right">${formatPrice(i.price * i.quantity, restaurant.settings?.currency)}</td></tr>`).join('')}
+    </tbody>
+  </table>
+  <div class="divider"></div>
+  <p class="text-right">Subtotal: ${formatPrice(calcResult.validSubtotal, restaurant.settings?.currency)}</p>
+  ${calcResult.discountAmount > 0 ? `<p class="text-right">Discount: -${formatPrice(calcResult.discountAmount, restaurant.settings?.currency)}</p>` : ''}
+  ${calcResult.cgstAmount > 0 ? `<p class="text-right">CGST (${calcResult.cgstPercentage}%): ${formatPrice(calcResult.cgstAmount, restaurant.settings?.currency)}</p>` : ''}
+  ${calcResult.sgstAmount > 0 ? `<p class="text-right">SGST (${calcResult.sgstPercentage}%): ${formatPrice(calcResult.sgstAmount, restaurant.settings?.currency)}</p>` : ''}
+  ${calcResult.serviceChargeAmount > 0 ? `<p class="text-right">Service Charge: ${formatPrice(calcResult.serviceChargeAmount, restaurant.settings?.currency)}</p>` : ''}
+  ${calcResult.roundOff ? `<p class="text-right">Round Off: ${calcResult.roundOff > 0 ? '+' : ''}${formatPrice(calcResult.roundOff, restaurant.settings?.currency)}</p>` : ''}
+  <div class="divider"></div>
+  <p class="bold text-right" style="font-size:14px;">Total: ${formatPrice(calcResult.grandTotal, restaurant.settings?.currency)}</p>
+  <div class="divider"></div>
+  <p class="text-center" style="margin-top:10px;">Thank you for dining with us!</p>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Receipt_${formattedId}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Receipt downloaded successfully!', 'Receipt Ready', 'success');
+  };
+
+  const handleShareReceipt = async () => {
+    if (!printOrderData) return;
+    const { order, calcResult, validItems, restaurant } = printOrderData;
+    const formattedId = getFormattedOrderId(order, restaurant.name, orders);
+    const textSummary = `*Receipt - ${restaurant.name}*\nOrder: ${formattedId}\nTable: ${order.table_name || 'Dine-In'}\nDate: ${formatExactTimestamp(order.created_at)}\n---\n${validItems.map((i: any) => `${i.quantity}x ${i.menu_item_name} - ${formatPrice(i.price * i.quantity, restaurant.settings?.currency)}`).join('\n')}\n---\nSubtotal: ${formatPrice(calcResult.validSubtotal, restaurant.settings?.currency)}\n${calcResult.discountAmount > 0 ? `Discount: -${formatPrice(calcResult.discountAmount, restaurant.settings?.currency)}\n` : ''}Taxes: ${formatPrice(calcResult.gstAmount, restaurant.settings?.currency)}\n*Grand Total: ${formatPrice(calcResult.grandTotal, restaurant.settings?.currency)}*\nPaid via: ${order.payment_method?.toUpperCase() || 'Cash'}\nThank you!`;
+
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `Receipt - ${restaurant.name} (${formattedId})`,
+          text: textSummary
+        });
+        showToast('Receipt shared successfully!', 'Receipt Shared', 'success');
+        return;
+      } catch (err) {}
+    }
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      await navigator.clipboard.writeText(textSummary);
+      showToast('Receipt details copied to clipboard!', 'Receipt Copied', 'success');
+    }
+  };
+
   const handleConfirmPayment = async () => {
     if (!selectedOrder || !restaurant) return;
     if (submittingPaymentRef.current || submittingPayment) return;
@@ -1287,19 +1381,6 @@ export default function OrdersPage() {
 
     const targetOrderId = selectedOrder.id;
     const origOrder = orders.find(o => o.id === targetOrderId);
-    const chosenMethod = paymentMethod;
-
-    // Immediate Optimistic UI update: Close modal & reflect Paid/Completed in DOM immediately (< 20ms)
-    setPaymentModalOpen(false);
-    optimisticStatusMapRef.current[targetOrderId] = 'completed';
-    setOptimisticStatusMap(prev => ({ ...prev, [targetOrderId]: 'completed' }));
-    setOrders(prev => prev.map(o => o.id === targetOrderId ? {
-      ...o,
-      payment_status: 'paid',
-      payment_method: chosenMethod,
-      paid_at: new Date().toISOString(),
-      status: 'completed'
-    } : o));
 
     const calcResult = calculateBillingTotals({
       items: selectedOrder.items || [],
@@ -1316,6 +1397,50 @@ export default function OrdersPage() {
       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
       customCharges: restaurant.settings.custom_charges || []
     });
+
+    let chosenMethod: string = paymentMethod;
+    let paymentRefData: string | null = null;
+    let splitSummary: any = null;
+
+    if (paymentMethod === 'split') {
+      const splitResult = calculateBillSplit(calcResult.grandTotal, splitMode, {
+        guestCount: splitGuestCount,
+        customAmounts: splitGuests.map(g => g.amount),
+        paymentMethods: splitGuests.map(g => g.method)
+      });
+
+      if (splitMode === 'custom' && !splitResult.isFullyPaid) {
+        showToast(`Split total must equal exact bill. Remaining balance: ${formatPrice(splitResult.remainingBalance, restaurant.settings.currency)}`, 'Split Bill Notice', 'warning');
+        submittingPaymentRef.current = false;
+        setSubmittingPayment(false);
+        return;
+      }
+
+      splitSummary = {
+        is_split: true,
+        mode: splitMode,
+        splits: splitGuests.map((g, idx) => ({
+          name: g.name || `Guest ${idx + 1}`,
+          amount: splitMode === 'equal' ? splitResult.splits[idx]?.amount : g.amount,
+          method: g.method
+        }))
+      };
+      paymentRefData = JSON.stringify(splitSummary);
+      chosenMethod = 'split';
+    }
+
+    // Immediate Optimistic UI update: Close modal & reflect Paid/Completed in DOM immediately (< 20ms)
+    setPaymentModalOpen(false);
+    optimisticStatusMapRef.current[targetOrderId] = 'completed';
+    setOptimisticStatusMap(prev => ({ ...prev, [targetOrderId]: 'completed' }));
+    setOrders(prev => prev.map(o => o.id === targetOrderId ? {
+      ...o,
+      payment_status: 'paid',
+      payment_method: chosenMethod,
+      paid_at: new Date().toISOString(),
+      status: 'completed'
+    } : o));
+
     showToast(`Payment of ${formatPrice(calcResult.grandTotal, restaurant.settings.currency)} recorded successfully!`, "Bill Settled", "success");
     window.dispatchEvent(new Event('storage'));
 
@@ -1326,6 +1451,7 @@ export default function OrdersPage() {
         .update({
           payment_status: 'paid',
           payment_method: chosenMethod,
+          payment_reference: paymentRefData || origOrder?.payment_reference || null,
           paid_at: new Date().toISOString(),
           marked_paid_by: profile?.full_name || activeRole || 'Staff Member',
           subtotal: calcResult.validSubtotal,
@@ -1353,6 +1479,25 @@ export default function OrdersPage() {
         profile?.full_name || activeRole || 'Staff Member'
       );
 
+      // Release Table Occupancy immediately so table becomes Available across Floor Layout & Dashboard (B5)
+      if (selectedOrder.table_id) {
+        await db.checkAndReleaseTableOccupancy(restaurant.id, selectedOrder.table_id);
+      }
+
+      // Record Audit Log for Phase 4
+      await recordAuditLog({
+        restaurantId: restaurant.id,
+        userEmail: profile?.email || 'staff',
+        userName: profile?.full_name || activeRole || 'Staff Member',
+        role: activeRole || 'Staff Member',
+        action: 'payment_completed',
+        entity: 'order',
+        entityId: targetOrderId,
+        previousValue: { payment_status: 'pending' },
+        newValue: { payment_status: 'paid', payment_method: chosenMethod, total: calcResult.grandTotal, split: splitSummary },
+        details: { orderId: targetOrderId, tableName: selectedOrder.table_name, total: calcResult.grandTotal }
+      });
+
       // BUG-ORD-004: Instantly broadcast payment-updated across all tenant channels (Live Orders, KDS, Dashboard, Customer)
       await broadcastOrderRealtimeEvent({
         restaurantId: restaurant.id,
@@ -1361,6 +1506,7 @@ export default function OrdersPage() {
         payload: {
           orderId: targetOrderId,
           paymentStatus: 'paid',
+          paymentMethod: chosenMethod,
           status: 'completed',
           updatedOrder: updated
         }
@@ -2825,37 +2971,275 @@ export default function OrdersPage() {
                     </p>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                      Select Payment Method
+                      Select Payment Mode
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-4 gap-2">
                       <button
                         type="button"
                         onClick={() => setPaymentMethod('cash')}
-                        className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
+                        className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
                           paymentMethod === 'cash'
-                            ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold shadow-md'
+                            ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 font-bold shadow-sm'
                             : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold hover:border-slate-300'
                         }`}
                       >
-                        <Banknote className="h-6 w-6 text-emerald-600" />
-                        <span className="text-sm font-bold">Cash Payment</span>
+                        <Banknote className="h-5 w-5 text-emerald-600" />
+                        <span className="text-xs font-bold">Cash</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => setPaymentMethod('online')}
-                        className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer ${
-                          paymentMethod === 'online'
-                            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 font-bold shadow-md'
+                        onClick={() => setPaymentMethod('upi')}
+                        className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          paymentMethod === 'upi'
+                            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 font-bold shadow-sm'
                             : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold hover:border-slate-300'
                         }`}
                       >
-                        <CreditCard className="h-6 w-6 text-indigo-600" />
-                        <span className="text-sm font-bold">Online / UPI</span>
+                        <Smartphone className="h-5 w-5 text-indigo-600" />
+                        <span className="text-xs font-bold">UPI</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('card')}
+                        className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          paymentMethod === 'card'
+                            ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 font-bold shadow-sm'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold hover:border-slate-300'
+                        }`}
+                      >
+                        <CreditCard className="h-5 w-5 text-blue-600" />
+                        <span className="text-xs font-bold">Card</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentMethod('split');
+                          // Initialize equal split amounts
+                          const equalAmt = parseFloat((calcResult.grandTotal / splitGuestCount).toFixed(2));
+                          const remainder = parseFloat((calcResult.grandTotal - (equalAmt * (splitGuestCount - 1))).toFixed(2));
+                          setSplitGuests(Array.from({ length: splitGuestCount }, (_, idx) => ({
+                            name: `Guest ${String.fromCharCode(65 + idx)}`,
+                            amount: idx === splitGuestCount - 1 ? remainder : equalAmt,
+                            method: idx === 0 ? 'cash' : (idx === 1 ? 'upi' : 'card')
+                          })));
+                        }}
+                        className={`p-3 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          paymentMethod === 'split'
+                            ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 font-bold shadow-sm'
+                            : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 font-semibold hover:border-slate-300'
+                        }`}
+                      >
+                        <Split className="h-5 w-5 text-amber-600" />
+                        <span className="text-xs font-bold">Split Bill</span>
                       </button>
                     </div>
+
+                    {/* Split Bill Expanded Options */}
+                    {paymentMethod === 'split' && (
+                      <div className="p-4 bg-slate-50 dark:bg-slate-900/60 border border-amber-200 dark:border-amber-900/40 rounded-2xl space-y-4 animate-in fade-in duration-200">
+                        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                            <Users className="h-4 w-4 text-amber-600" /> Split Configuration
+                          </span>
+                          <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSplitMode('equal');
+                                const equalAmt = parseFloat((calcResult.grandTotal / splitGuestCount).toFixed(2));
+                                const remainder = parseFloat((calcResult.grandTotal - (equalAmt * (splitGuestCount - 1))).toFixed(2));
+                                setSplitGuests(prev => Array.from({ length: splitGuestCount }, (_, idx) => ({
+                                  name: prev[idx]?.name || `Guest ${String.fromCharCode(65 + idx)}`,
+                                  amount: idx === splitGuestCount - 1 ? remainder : equalAmt,
+                                  method: prev[idx]?.method || (idx === 0 ? 'cash' : 'upi')
+                                })));
+                              }}
+                              className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
+                                splitMode === 'equal' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'
+                              }`}
+                            >
+                              Equal Split
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSplitMode('custom')}
+                              className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
+                                splitMode === 'custom' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'
+                              }`}
+                            >
+                              Custom Split
+                            </button>
+                          </div>
+                        </div>
+
+                        {splitMode === 'equal' && (
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-slate-600 dark:text-slate-400 font-medium">Number of Guests:</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={splitGuestCount <= 2}
+                                  onClick={() => {
+                                    const next = Math.max(2, splitGuestCount - 1);
+                                    setSplitGuestCount(next);
+                                    const equalAmt = parseFloat((calcResult.grandTotal / next).toFixed(2));
+                                    const remainder = parseFloat((calcResult.grandTotal - (equalAmt * (next - 1))).toFixed(2));
+                                    setSplitGuests(Array.from({ length: next }, (_, idx) => ({
+                                      name: `Guest ${String.fromCharCode(65 + idx)}`,
+                                      amount: idx === next - 1 ? remainder : equalAmt,
+                                      method: splitGuests[idx]?.method || (idx === 0 ? 'cash' : 'upi')
+                                    })));
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                <span className="w-8 text-center font-bold font-mono text-sm">{splitGuestCount}</span>
+                                <button
+                                  type="button"
+                                  disabled={splitGuestCount >= 10}
+                                  onClick={() => {
+                                    const next = Math.min(10, splitGuestCount + 1);
+                                    setSplitGuestCount(next);
+                                    const equalAmt = parseFloat((calcResult.grandTotal / next).toFixed(2));
+                                    const remainder = parseFloat((calcResult.grandTotal - (equalAmt * (next - 1))).toFixed(2));
+                                    setSplitGuests(Array.from({ length: next }, (_, idx) => ({
+                                      name: `Guest ${String.fromCharCode(65 + idx)}`,
+                                      amount: idx === next - 1 ? remainder : equalAmt,
+                                      method: splitGuests[idx]?.method || (idx % 2 === 0 ? 'cash' : 'upi')
+                                    })));
+                                  }}
+                                  className="w-7 h-7 rounded-lg border border-slate-200 dark:border-slate-700 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              {splitGuests.map((guest, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
+                                  <span className="font-bold text-slate-900 dark:text-white font-mono">{guest.name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                                      {formatPrice(guest.amount, restaurant.settings.currency)}
+                                    </span>
+                                    <select
+                                      value={guest.method}
+                                      onChange={(e) => {
+                                        const m = e.target.value as any;
+                                        setSplitGuests(prev => prev.map((g, i) => i === idx ? { ...g, method: m } : g));
+                                      }}
+                                      className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[11px] font-semibold"
+                                    >
+                                      <option value="cash">Cash</option>
+                                      <option value="upi">UPI</option>
+                                      <option value="card">Card</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {splitMode === 'custom' && (
+                          <div className="space-y-3">
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {splitGuests.map((guest, idx) => (
+                                <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
+                                  <input
+                                    type="text"
+                                    value={guest.name}
+                                    onChange={(e) => {
+                                      const n = e.target.value;
+                                      setSplitGuests(prev => prev.map((g, i) => i === idx ? { ...g, name: n } : g));
+                                    }}
+                                    className="w-24 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold"
+                                  />
+                                  <div className="flex-1 flex items-center gap-1">
+                                    <span className="text-slate-400 font-mono">₹</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="1"
+                                      value={guest.amount || ''}
+                                      placeholder="0"
+                                      onChange={(e) => {
+                                        const val = Math.max(0, parseFloat(e.target.value) || 0);
+                                        setSplitGuests(prev => prev.map((g, i) => i === idx ? { ...g, amount: val } : g));
+                                      }}
+                                      className="w-full px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-bold font-mono"
+                                    />
+                                  </div>
+                                  <select
+                                    value={guest.method}
+                                    onChange={(e) => {
+                                      const m = e.target.value as any;
+                                      setSplitGuests(prev => prev.map((g, i) => i === idx ? { ...g, method: m } : g));
+                                    }}
+                                    className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-[11px] font-semibold"
+                                  >
+                                    <option value="cash">Cash</option>
+                                    <option value="upi">UPI</option>
+                                    <option value="card">Card</option>
+                                  </select>
+                                  {splitGuests.length > 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSplitGuests(prev => prev.filter((_, i) => i !== idx))}
+                                      className="text-rose-500 hover:text-rose-700 p-1"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentSum = splitGuests.reduce((s, g) => s + g.amount, 0);
+                                const rem = Math.max(0, parseFloat((calcResult.grandTotal - currentSum).toFixed(2)));
+                                setSplitGuests(prev => [
+                                  ...prev,
+                                  { name: `Guest ${String.fromCharCode(65 + prev.length)}`, amount: rem, method: 'cash' }
+                                ]);
+                              }}
+                              className="w-full py-1.5 rounded-xl border border-dashed border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-xs font-bold flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <Plus className="h-3.5 w-3.5" /> Add Guest Share
+                            </button>
+
+                            {/* Split Allocation Progress Bar */}
+                            {(() => {
+                              const allocated = splitGuests.reduce((s, g) => s + (Number(g.amount) || 0), 0);
+                              const remaining = parseFloat((calcResult.grandTotal - allocated).toFixed(2));
+                              const isExact = Math.abs(remaining) < 0.05;
+                              return (
+                                <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between font-mono font-bold ${
+                                  isExact
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                                    : 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                                }`}>
+                                  <span>Allocated: {formatPrice(allocated, restaurant.settings.currency)}</span>
+                                  <span>
+                                    {isExact ? '✅ Exact Match' : `Remaining: ${formatPrice(remaining, restaurant.settings.currency)}`}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
@@ -2863,14 +3247,27 @@ export default function OrdersPage() {
                       Cancel
                     </Button>
                     <Button
-                      className={paymentMethod === 'cash' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6' : 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6'}
+                      className={
+                        paymentMethod === 'cash' ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6' :
+                        paymentMethod === 'upi' ? 'bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6' :
+                        paymentMethod === 'card' ? 'bg-blue-600 hover:bg-blue-700 text-white font-bold px-6' :
+                        'bg-amber-600 hover:bg-amber-700 text-white font-bold px-6'
+                      }
                       isLoading={submittingPayment}
-                      disabled={submittingPayment || selectedOrder.payment_status === 'paid'}
+                      disabled={
+                        submittingPayment || 
+                        selectedOrder.payment_status === 'paid' ||
+                        (paymentMethod === 'split' && splitMode === 'custom' && Math.abs(calcResult.grandTotal - splitGuests.reduce((s, g) => s + (Number(g.amount) || 0), 0)) > 0.05)
+                      }
                       onClick={handleConfirmPayment}
                     >
                       {paymentMethod === 'cash'
                         ? `Confirm Cash Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`
-                        : `Confirm Online Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`}
+                        : paymentMethod === 'upi'
+                        ? `Confirm UPI Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`
+                        : paymentMethod === 'card'
+                        ? `Confirm Card Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`
+                        : `Confirm Split Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`}
                     </Button>
                   </div>
                 </>
@@ -3506,9 +3903,25 @@ export default function OrdersPage() {
             title="PRINT BILL PREVIEW"
             size="md"
             footer={
-              <div className="flex gap-3 w-full justify-end">
+              <div className="flex gap-2 w-full justify-end">
                 <Button variant="outline" size="sm" onClick={() => setPrintModalOpen(false)}>
                   Close
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 cursor-pointer font-semibold"
+                  onClick={handleShareReceipt}
+                >
+                  <Share2 className="h-4 w-4 text-indigo-600" /> Share
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 cursor-pointer font-semibold"
+                  onClick={handleDownloadReceipt}
+                >
+                  <Download className="h-4 w-4 text-emerald-600" /> Download PDF
                 </Button>
                 <Button
                   size="sm"
@@ -3517,7 +3930,7 @@ export default function OrdersPage() {
                     if (typeof window !== 'undefined') window.print();
                   }}
                 >
-                  <Printer className="h-4 w-4" /> Print Physical Receipt
+                  <Printer className="h-4 w-4" /> Print Receipt
                 </Button>
               </div>
             }

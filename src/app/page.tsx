@@ -15,6 +15,7 @@ import { db, PricingPlan } from '@/lib/db';
 import { formatPrice } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import InstallAppButton from '@/components/shared/InstallAppButton';
 
 // Analytics tracking helper
 function trackEvent(eventName: string, params?: Record<string, any>) {
@@ -901,6 +902,7 @@ export default function LandingPage() {
             </button>
           </div>
 
+          <InstallAppButton />
           <Link href={`/signup?plan=trial&lang=${language}`}>
             <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-xs shadow-emerald-600/20 transition-all cursor-pointer min-h-[40px]">
               {t.nav.trialCta}
@@ -938,6 +940,8 @@ export default function LandingPage() {
             </button>
           </div>
 
+          <InstallAppButton className="px-2.5 py-1 text-xs" />
+
           <Link href={`/signup?plan=trial&lang=${language}`}>
             <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-xs min-h-[38px]">
               {t.nav.trialCtaMobile}
@@ -964,6 +968,9 @@ export default function LandingPage() {
             <Link href={`/login?lang=${language}`} onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700">
               {t.nav.signIn}
             </Link>
+            <div className="pt-1">
+              <InstallAppButton className="w-full justify-center py-2.5" />
+            </div>
             <Link href={`/signup?plan=trial&lang=${language}`} onClick={() => setMobileMenuOpen(false)}>
               <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl text-sm font-bold shadow-xs min-h-[48px] cursor-pointer">
                 {t.nav.trialCta}

@@ -1,0 +1,58 @@
+[
+  {
+    "screen": "Dashboard Overview",
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": []
+  },
+  {
+    "screen": "Floor Layout Manager",
+    "buttonsCount": 15,
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": []
+  },
+  {
+    "screen": "Kitchen Display System",
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": []
+  },
+  {
+    "screen": "Menu Management",
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": []
+  },
+  {
+    "screen": "Billing Page",
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": []
+  },
+  {
+    "screen": "Reports Page",
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": []
+  },
+  {
+    "screen": "Settings Page",
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": [
+      {
+        "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "loc": {
+          "url": "http://localhost:3000/api/staff/list?restaurantId=81fa8201-51d7-4da5-98f5-a52dbff4e6ae"
+        }
+      }
+    ]
+  },
+  {
+    "screen": "Super Admin Portal",
+    "hasErrors": false,
+    "errors": [],
+    "consoleErrors": []
+  }
+]

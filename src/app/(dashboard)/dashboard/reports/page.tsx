@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRestaurant } from '../../layout';
 import { db, Order, Category, MenuItem, getPlanFeatures } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
@@ -13,7 +13,7 @@ import {
   Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle,
   ShoppingBag, ClipboardList, Lock, Banknote, Download, FileText, Filter, ArrowUpDown,
   Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight,
-  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers
+  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers, Search
 } from 'lucide-react';
 import { isRevenueOrder } from '@/lib/billingEngine';
 
@@ -233,6 +233,37 @@ export default function ReportsPage() {
   });
   const [kitchenSlaSuccessPct, setKitchenSlaSuccessPct] = useState('96%');
 
+  // Table Utilization State (R6)
+  const [tableUtilization, setTableUtilization] = useState({
+    occupancyPct: 0,
+    avgDiningDurationMin: 0,
+    peakHours: '8:00 PM',
+    idleTables: 0
+  });
+
+  // Persistent Filters (R7: waiter, status)
+  const [selectedWaiter, setSelectedWaiter] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('reports_selected_waiter') || 'all';
+    }
+    return 'all';
+  });
+
+  const [selectedStatus, setSelectedStatus] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('reports_selected_status') || 'all';
+    }
+    return 'all';
+  });
+
+  // Audit Trail State (Phase 4)
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditSearchQuery, setAuditSearchQuery] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState('all');
+  const [auditPage, setAuditPage] = useState(1);
+
 
   const handleApplyCustomDates = () => {
     if (customStartDate > customEndDate) {
@@ -285,6 +316,23 @@ export default function ReportsPage() {
       const sParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(startMs));
       const eParts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(endMs));
       periodLabel = `${sParts} – ${eParts}`;
+    }
+
+    // Apply Waiter and Status Filters (R7 Persistent Filters)
+    if (selectedWaiter !== 'all') {
+      rangeOrders = rangeOrders.filter(o => 
+        (o as any).waiter === selectedWaiter || 
+        (o as any).server_name === selectedWaiter || 
+        (o.batches || []).some((b: any) => b.served_by === selectedWaiter)
+      );
+    }
+
+    if (selectedStatus !== 'all') {
+      if (selectedStatus === 'paid') {
+        rangeOrders = rangeOrders.filter(o => o.payment_status === 'paid');
+      } else {
+        rangeOrders = rangeOrders.filter(o => o.status === selectedStatus);
+      }
     }
 
     // REVENUE-ELIGIBLE ORDERS ONLY: PAID OR COMPLETED ORDERS (EXCLUDES UNPAID PENDING & CANCELLED)
@@ -599,8 +647,8 @@ export default function ReportsPage() {
       totalFulfillmentMin: fulfillCount > 0 ? Number((totalFulfillmentSec / fulfillCount / 60).toFixed(1)) : 0
     });
 
-    // 2. Waiter Performance Leaderboard (BUG-AN-WAITER Fix: No hardcoded stubs, export both waiterName and name)
-    const waiterMap: Record<string, { orders: number; serveTimes: number[]; delayCount: number; activeTables: Set<string> }> = {};
+    // 2. Waiter Performance Leaderboard (R5: orders handled, revenue served, avg service time, tables managed)
+    const waiterMap: Record<string, { orders: number; revenueServed: number; serveTimes: number[]; delayCount: number; activeTables: Set<string> }> = {};
 
     allBatches.forEach(b => {
       const waiter = b.served_by || (b.status === 'served' ? 'Staff Waiter' : null);
@@ -608,11 +656,14 @@ export default function ReportsPage() {
 
       const matchedKey = waiter.trim();
       if (!waiterMap[matchedKey]) {
-        waiterMap[matchedKey] = { orders: 0, serveTimes: [], delayCount: 0, activeTables: new Set() };
+        waiterMap[matchedKey] = { orders: 0, revenueServed: 0, serveTimes: [], delayCount: 0, activeTables: new Set() };
       }
 
       waiterMap[matchedKey].orders += 1;
       if (b.tableName) waiterMap[matchedKey].activeTables.add(b.tableName);
+
+      const batchRev = (b.items || []).reduce((sum: number, it: any) => sum + (Number(it.price || 0) * Number(it.quantity || 1)), 0);
+      waiterMap[matchedKey].revenueServed += batchRev;
 
       if (b.ready_at && b.served_at) {
         const diffSec = Math.max(1, Math.round((new Date(b.served_at).getTime() - new Date(b.ready_at).getTime()) / 1000));
@@ -633,6 +684,7 @@ export default function ReportsPage() {
           waiterName: name,
           name,
           ordersServed: data.orders,
+          revenueServed: Math.round((data.revenueServed + Number.EPSILON) * 100) / 100,
           avgServeSec: avg,
           avgServeTimeSec: avg,
           fastestSec: fastest,
@@ -853,6 +905,20 @@ export default function ReportsPage() {
 
     const successPct = totalFulfillmentSec > 0 ? Math.min(98, Math.max(88, Math.round((fulfillCount / Math.max(1, rangeOrders.length)) * 100))) : 96;
     setKitchenSlaSuccessPct(`${successPct}%`);
+
+    // R6 Table Utilization metrics
+    const totalTablesCount = Math.max(1, occupiedCount + freeCount);
+    const occPct = Math.min(100, Math.round((occupiedCount / totalTablesCount) * 100));
+    const avgStayDuration = turnoverRows.length > 0 
+      ? Math.round(turnoverRows.reduce((acc, t) => acc + t.avgStayDurationMin, 0) / turnoverRows.length)
+      : 35;
+
+    setTableUtilization({
+      occupancyPct: occPct,
+      avgDiningDurationMin: avgStayDuration,
+      peakHours: hoursArr[pIdx]?.label || '8:00 PM',
+      idleTables: freeCount
+    });
   };
 
   const isReloadingReportsRef = useRef(false);
@@ -910,13 +976,26 @@ export default function ReportsPage() {
   };
 
   const loadReportsRef = useRef(loadReports);
+
+  const availableWaiters = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach(o => {
+      if ((o as any).waiter) set.add(String((o as any).waiter).trim());
+      if ((o as any).server_name) set.add(String((o as any).server_name).trim());
+      (o.batches || []).forEach((b: any) => {
+        if (b.served_by) set.add(String(b.served_by).trim());
+      });
+    });
+    return Array.from(set).filter(Boolean).sort();
+  }, [orders]);
+
   useEffect(() => {
     loadReportsRef.current = loadReports;
   });
 
   useEffect(() => {
     loadReports();
-  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, restaurant?.id]);
+  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, selectedWaiter, selectedStatus, restaurant?.id]);
 
   // Realtime Subscriptions for Reports Dashboard (Phase-18.8 Production Gate)
   useEffect(() => {
@@ -961,7 +1040,7 @@ export default function ReportsPage() {
     };
   }, [restaurant?.id]);
 
-  // UX-003 & P2-03: Persist reports filters and sorting across page refreshes
+  // UX-003 & P2-03 & R7: Persist reports filters and sorting across page refreshes
   useEffect(() => {
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('reports_time_range', timeRange);
@@ -973,8 +1052,40 @@ export default function ReportsPage() {
       sessionStorage.setItem('reports_applied_end_date', appliedEndDate);
       sessionStorage.setItem('reports_item_sort_by', itemSortBy);
       sessionStorage.setItem('reports_item_limit', String(itemLimit));
+      sessionStorage.setItem('reports_selected_waiter', selectedWaiter);
+      sessionStorage.setItem('reports_selected_status', selectedStatus);
     }
-  }, [timeRange, selectedMonth, selectedYear, customStartDate, customEndDate, appliedStartDate, appliedEndDate, itemSortBy, itemLimit]);
+  }, [timeRange, selectedMonth, selectedYear, customStartDate, customEndDate, appliedStartDate, appliedEndDate, itemSortBy, itemLimit, selectedWaiter, selectedStatus]);
+
+  // Phase 4: Fetch audit logs for Owner Audit Trail
+  useEffect(() => {
+    const restId = restaurant?.id;
+    if (!restId) return;
+
+    let isMounted = true;
+    setAuditLoading(true);
+    const q = encodeURIComponent(auditSearchQuery.trim());
+    const act = encodeURIComponent(auditActionFilter);
+    fetch(`/api/restaurant/audit-logs?restaurantId=${restId}&search=${q}&action=${act}&page=${auditPage}&limit=10`)
+      .then(res => res.json())
+      .then(data => {
+        if (isMounted) {
+          setAuditLogs(data.auditLogs || []);
+          setAuditTotal(data.total || 0);
+          setAuditLoading(false);
+        }
+      })
+      .catch(err => {
+        if (isMounted) {
+          console.error('Audit logs fetch failed:', err);
+          setAuditLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [restaurant?.id, auditSearchQuery, auditActionFilter, auditPage]);
 
   // Helper to trigger CSV file download
   const triggerDownload = (filename: string, csvData: string) => {
@@ -1020,6 +1131,22 @@ export default function ReportsPage() {
       });
     } else {
       filtered = orders;
+    }
+
+    if (selectedWaiter !== 'all') {
+      filtered = filtered.filter(o => 
+        (o as any).waiter === selectedWaiter || 
+        (o as any).server_name === selectedWaiter || 
+        (o.batches || []).some((b: any) => b.served_by === selectedWaiter)
+      );
+    }
+
+    if (selectedStatus !== 'all') {
+      if (selectedStatus === 'paid') {
+        filtered = filtered.filter(o => o.payment_status === 'paid');
+      } else {
+        filtered = filtered.filter(o => o.status === selectedStatus);
+      }
     }
 
     return filtered.filter(isRevenueOrder);
@@ -1380,6 +1507,15 @@ export default function ReportsPage() {
       iconColor: 'text-gray-700 dark:text-gray-300',
       valueColor: 'text-gray-950 dark:text-white',
     },
+    {
+      id: 'guest-count',
+      label: 'GUEST COUNT',
+      value: customerSummary.totalCustomers.toString(),
+      desc: 'Distinct guests served',
+      icon: Users,
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
+    },
   ];
 
   return (
@@ -1455,6 +1591,40 @@ export default function ReportsPage() {
             </button>
           </div>
 
+          {/* Waiter Filter Selector (R7) */}
+          <div className="bg-slate-100 dark:bg-slate-800/80 p-1 px-2.5 rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700/60 shadow-2xs">
+            <Filter className="h-3 w-3 text-slate-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Waiter:</span>
+            <select
+              value={selectedWaiter}
+              onChange={(e) => setSelectedWaiter(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer py-0.5"
+            >
+              <option value="all">All Waiters</option>
+              {availableWaiters.map((wName) => (
+                <option key={wName} value={wName}>{wName}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status Filter Selector (R7) */}
+          <div className="bg-slate-100 dark:bg-slate-800/80 p-1 px-2.5 rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700/60 shadow-2xs">
+            <Activity className="h-3 w-3 text-slate-500" />
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Status:</span>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer py-0.5"
+            >
+              <option value="all">All Statuses</option>
+              <option value="completed">Completed</option>
+              <option value="paid">Paid</option>
+              <option value="preparing">Preparing</option>
+              <option value="ready">Ready</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+
           {/* EXPORT ACTION GROUP */}
           <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800/40 p-1 rounded-xl border border-slate-200 dark:border-slate-700/50">
             <Button onClick={handleExportOrdersSummaryCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
@@ -1513,7 +1683,7 @@ export default function ReportsPage() {
       </div>
 
       {/* 1. SALES OVERVIEW METRIC CARDS (CLEAN COMMERCIAL POS/ACCOUNTING SAAS KPI COMPONENT) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 lg:gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 lg:gap-3.5">
         {kpiCards.map((kpi) => {
           return (
             <div 
@@ -1672,6 +1842,7 @@ export default function ReportsPage() {
                 <tr>
                   <th className="py-3 px-4">Waiter</th>
                   <th className="py-3 px-4 text-center">Orders Served</th>
+                  <th className="py-3 px-4 text-center">Revenue Served</th>
                   <th className="py-3 px-4 text-center">Avg Serve</th>
                   <th className="py-3 px-4 text-center">Fastest</th>
                   <th className="py-3 px-4 text-center">Slowest</th>
@@ -1682,7 +1853,7 @@ export default function ReportsPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
                 {waiterLeaderboard.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-6 text-center text-slate-400">
+                    <td colSpan={8} className="py-6 text-center text-slate-400">
                       No waiter deliveries recorded for the selected date range.
                     </td>
                   </tr>
@@ -1696,6 +1867,9 @@ export default function ReportsPage() {
                         <span>{w.waiterName || w.name}</span>
                       </td>
                       <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{w.ordersServed}</td>
+                      <td className="py-3 px-4 text-center font-bold text-emerald-600 dark:text-emerald-400">
+                        {formatPrice(w.revenueServed || 0, restaurant?.settings?.currency || 'INR')}
+                      </td>
                       <td className="py-3 px-4 text-center font-semibold">{w.avgServeSec}s</td>
                       <td className="py-3 px-4 text-center font-semibold text-emerald-600 dark:text-emerald-400">{w.fastestSec}s</td>
                       <td className="py-3 px-4 text-center font-semibold text-rose-500">{w.slowestSec}s</td>
@@ -1715,6 +1889,38 @@ export default function ReportsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* R6 TABLE UTILIZATION INTELLIGENCE */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs rounded-xl p-3.5 flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider block text-slate-500 dark:text-slate-400">Occupancy %</span>
+            <p className="text-xl font-black tracking-tight text-slate-900 dark:text-white pt-1">{tableUtilization.occupancyPct}%</p>
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium pt-1">Active table utilization</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs rounded-xl p-3.5 flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider block text-slate-500 dark:text-slate-400">Avg Dining Duration</span>
+            <p className="text-xl font-black tracking-tight text-slate-900 dark:text-white pt-1">{tableUtilization.avgDiningDurationMin} min</p>
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium pt-1">Average guest table stay</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs rounded-xl p-3.5 flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider block text-slate-500 dark:text-slate-400">Peak Hours</span>
+            <p className="text-xl font-black tracking-tight text-slate-900 dark:text-white pt-1">{tableUtilization.peakHours}</p>
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium pt-1">Highest turnover window</p>
+        </div>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs rounded-xl p-3.5 flex flex-col justify-between">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider block text-slate-500 dark:text-slate-400">Idle Tables</span>
+            <p className="text-xl font-black tracking-tight text-slate-900 dark:text-white pt-1">{tableUtilization.idleTables}</p>
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium pt-1">Available for seating</p>
+        </div>
+      </div>
 
       {/* 2.3 TABLE TURNOVER & PEAK HOUR HEATMAP */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2208,6 +2414,132 @@ export default function ReportsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ========================================== */}
+      {/* PHASE 4: SYSTEM AUDIT TRAIL & COMPLIANCE LOG (OWNER ONLY) */}
+      {/* ========================================== */}
+      <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden mt-6 print:hidden">
+        <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+              <ClipboardList className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">System Audit Trail & Compliance Log</h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase">
+                  Owner Access Only
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-medium">Immutable audit logs for orders, payments, voids, and table operations.</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search audit trail..."
+                value={auditSearchQuery}
+                onChange={(e) => { setAuditSearchQuery(e.target.value); setAuditPage(1); }}
+                className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none w-48 font-medium"
+              />
+            </div>
+            <select
+              value={auditActionFilter}
+              onChange={(e) => { setAuditActionFilter(e.target.value); setAuditPage(1); }}
+              className="text-xs px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-semibold cursor-pointer"
+            >
+              <option value="all">All Actions</option>
+              <option value="order">Order Events</option>
+              <option value="payment">Payment Events</option>
+              <option value="table">Table Operations</option>
+              <option value="reservation">Reservations</option>
+            </select>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 font-bold border-b border-slate-100 dark:border-slate-800">
+                <tr>
+                  <th className="py-3 px-4">Timestamp (IST)</th>
+                  <th className="py-3 px-4">User / Staff</th>
+                  <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">Action</th>
+                  <th className="py-3 px-4">Entity</th>
+                  <th className="py-3 px-4">Details / Transition</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
+                {auditLoading ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400">Loading audit records...</td>
+                  </tr>
+                ) : auditLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400">No matching audit log entries found.</td>
+                  </tr>
+                ) : (
+                  auditLogs.map((entry) => (
+                    <tr key={entry.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                        {new Date(entry.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
+                        {entry.user_email || 'System'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 uppercase">
+                          {entry.user_role || (entry.metadata as any)?.role || 'Staff'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          entry.action.includes('payment') ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                          entry.action.includes('void') || entry.action.includes('cancelled') ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300' :
+                          'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
+                        }`}>
+                          {entry.action}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px]">
+                        {entry.entity_type ? `${entry.entity_type} #${(entry.entity_id || '').slice(0, 8)}` : 'System'}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 dark:text-slate-400 max-w-xs truncate" title={entry.details}>
+                        {entry.details || (entry.previous_state && entry.new_state ? `${JSON.stringify(entry.previous_state)} -> ${JSON.stringify(entry.new_state)}` : '-')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          {auditTotal > 10 && (
+            <div className="p-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500">
+              <span>Total records: {auditTotal}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={auditPage <= 1}
+                  onClick={() => setAuditPage(p => Math.max(1, p - 1))}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-bold disabled:opacity-40 cursor-pointer"
+                >
+                  Prev
+                </button>
+                <span>Page {auditPage} of {Math.ceil(auditTotal / 10)}</span>
+                <button
+                  disabled={auditPage * 10 >= auditTotal}
+                  onClick={() => setAuditPage(p => p + 1)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-bold disabled:opacity-40 cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </CardContent>

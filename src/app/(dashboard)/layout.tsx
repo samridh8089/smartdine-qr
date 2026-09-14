@@ -8,6 +8,7 @@ import { db, Profile, Restaurant, isSubscriptionExpired } from '@/lib/db';
 import { DEFAULT_PLAN_SPECS, parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import MockBanner from '@/components/shared/MockBanner';
+import InstallAppButton from '@/components/shared/InstallAppButton';
 import buildInfo from '@/lib/build-info.json';
 import { dashboardStore } from '@/lib/dashboardStore';
 import { PreviewModeProvider } from '@/context/PreviewModeContext';
@@ -710,6 +711,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </p>
                 </div>
               </div>
+              <div className="mb-3">
+                <InstallAppButton className="w-full justify-center py-2" />
+              </div>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-all cursor-pointer"
@@ -761,6 +765,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
 
               <div className="flex items-center gap-3">
+                <InstallAppButton />
                 {restaurant?.subscription_plan && (
                   <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">
                     {planSpec.name} Plan

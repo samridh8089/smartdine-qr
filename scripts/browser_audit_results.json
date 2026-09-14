@@ -1,0 +1,336 @@
+[
+  {
+    "name": "Landing Page",
+    "url": "/",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 687,
+    "bodyTextLength": 10406,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Login Page",
+    "url": "/login",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 142,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Signup Page",
+    "url": "/signup",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 112,
+    "bodyTextLength": 301,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Forgot Password",
+    "url": "/forgot-password",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 185,
+    "bodyTextLength": 136,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Reset Password",
+    "url": "/reset-password",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 152,
+    "bodyTextLength": 123,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Customer Menu (Non-existent)",
+    "url": "/menu/non-existent-restaurant?table=1",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 522,
+    "bodyTextLength": 113,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Customer Order Tracking (Fake ID)",
+    "url": "/order-tracking/fake-order-id-1234",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 182,
+    "bodyTextLength": 182,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Owner Dashboard (Unauthenticated)",
+    "url": "/dashboard",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 150,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Floor Layout Manager",
+    "url": "/dashboard/tables",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 145,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Menu Management",
+    "url": "/dashboard/menu",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 154,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Orders Management",
+    "url": "/dashboard/orders",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 148,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Kitchen Display System (KDS)",
+    "url": "/dashboard/kds",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 103,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Reports Page",
+    "url": "/dashboard/reports",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 276,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Billing Page",
+    "url": "/dashboard/billing",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 168,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Settings Page",
+    "url": "/dashboard/settings",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 107,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Founder Control Center",
+    "url": "/dashboard/founder/control-center",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 307,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Super Admin Portal",
+    "url": "/super-admin",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 152,
+    "bodyTextLength": 105,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Checkout Page",
+    "url": "/checkout",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 108,
+    "bodyTextLength": 272,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [
+      {
+        "text": "Loading the script 'https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inline' https://checkout.razorpay.com https://*.supabase.co https://www.cleverops.in https://cleverops.in\". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.",
+        "location": {
+          "url": "https://checkout.razorpay.com/v1/checkout.js",
+          "lineNumber": 0
+        }
+      },
+      {
+        "text": "Connecting to 'https://lumberjack.razorpay.com/v1/track?key_id=rzp_live_TK1Nbl3mJiENjR' violates the following Content Security Policy directive: \"connect-src 'self' https://*.supabase.co wss://*.supabase.co https://checkout.razorpay.com https://api.razorpay.com https://lumberjack-cx.razorpay.com https://www.cleverops.in https://cleverops.in\". The action has been blocked.",
+        "location": {
+          "url": "https://checkout.razorpay.com/v1/checkout.js",
+          "lineNumber": 0
+        }
+      }
+    ],
+    "failedRequests": [
+      {
+        "url": "https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js"
+      },
+      {
+        "url": "https://lumberjack.razorpay.com/v1/track?key_id=rzp_live_TK1Nbl3mJiENjR"
+      }
+    ]
+  },
+  {
+    "name": "Contact Page",
+    "url": "/contact",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 154,
+    "bodyTextLength": 1312,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "About Page",
+    "url": "/about",
+    "status": 200,
+    "title": "About Us | CleverOps",
+    "loadTime": 118,
+    "bodyTextLength": 1592,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Privacy Policy",
+    "url": "/privacy-policy",
+    "status": 200,
+    "title": "Privacy Policy | CleverOps",
+    "loadTime": 115,
+    "bodyTextLength": 2288,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Terms Page",
+    "url": "/terms",
+    "status": 200,
+    "title": "Terms of Service & Disclaimer | CleverOps",
+    "loadTime": 106,
+    "bodyTextLength": 1925,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Refund Policy",
+    "url": "/refund-policy",
+    "status": 200,
+    "title": "Cancellation & Refund Policy | CleverOps",
+    "loadTime": 100,
+    "bodyTextLength": 3222,
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  },
+  {
+    "name": "Debug Build Info",
+    "url": "/debug/build-info",
+    "status": 200,
+    "title": "CleverOps - Modern Restaurant Management & QR Ordering",
+    "loadTime": 118,
+    "bodyTextLength": 246,
+    "mobileOverflow": true,
+    "tabletOverflow": false,
+    "errors": [],
+    "consoleErrors": [],
+    "failedRequests": []
+  }
+]

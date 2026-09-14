@@ -558,54 +558,17 @@ export interface Order {
   customer_phone?: string;
 }
 
-export const VALID_ORDER_TRANSITIONS: Record<Order['status'], Order['status'][]> = {
-  new: ['accepted', 'cancelled'],
-  accepted: ['preparing', 'cancelled'],
-  preparing: ['ready', 'cancelled'],
-  ready: ['served', 'completed', 'cancelled'],
-  served: ['completed'],
-  completed: [],
-  cancelled: []
-};
+import {
+  VALID_ORDER_TRANSITIONS,
+  ALLOWED_PRIOR_STATUSES,
+  getOrderStatusLabel
+} from '../../packages/core';
 
-export const ALLOWED_PRIOR_STATUSES: Record<Order['status'], Order['status'][]> = {
-  new: [],
-  accepted: ['new'],
-  preparing: ['accepted'],
-  ready: ['preparing'],
-  served: ['ready'],
-  completed: ['served', 'ready'],
-  cancelled: ['new', 'accepted', 'preparing', 'ready']
+export {
+  VALID_ORDER_TRANSITIONS,
+  ALLOWED_PRIOR_STATUSES,
+  getOrderStatusLabel
 };
-
-/**
- * Resolves user-facing status label for an order or batch,
- * strictly replacing 'Served' with 'Handed Over' for Takeaway orders.
- */
-export function getOrderStatusLabel(status: Order['status'], orderType?: string): string {
-  if (orderType === 'takeaway') {
-    switch (status) {
-      case 'new': return 'New';
-      case 'accepted': return 'Accepted';
-      case 'preparing': return 'Preparing';
-      case 'ready': return 'Ready for Pickup';
-      case 'served': return 'Handed Over';
-      case 'completed': return 'Completed';
-      case 'cancelled': return 'Cancelled';
-      default: return status;
-    }
-  }
-  switch (status) {
-    case 'new': return 'New';
-    case 'accepted': return 'Accepted';
-    case 'preparing': return 'Preparing';
-    case 'ready': return 'Ready';
-    case 'served': return 'Served';
-    case 'completed': return 'Completed';
-    case 'cancelled': return 'Cancelled';
-    default: return status;
-  }
-}
 
 /**
  * Safety lock check: Blocks marking a dining table available if it has active,

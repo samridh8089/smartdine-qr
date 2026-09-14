@@ -1,0 +1,46 @@
+[
+  {
+    "edgeCase": "50 Tables Stress Test",
+    "status": "PASS",
+    "details": "Evaluated 55 tables in 7ms"
+  },
+  {
+    "edgeCase": "Long Restaurant Name",
+    "mobileOverflow": false,
+    "status": "PASS"
+  },
+  {
+    "edgeCase": "Long Guest Name Handling",
+    "httpStatus": 404,
+    "response": {
+      "error": "Restaurant not found for ID: 81fa8201-51d7-4da5-98f5-a52dbff4e6ae"
+    }
+  },
+  {
+    "edgeCase": "10 Simultaneous Orders (Duplicate Spam)",
+    "statuses": [
+      404,
+      404,
+      404,
+      404,
+      404,
+      404,
+      404,
+      404,
+      404,
+      404
+    ],
+    "allHandled": true
+  },
+  {
+    "edgeCase": "Unauthorized Admin Attempt",
+    "status": 401,
+    "pass": true
+  },
+  {
+    "edgeCase": "Responsive Breakpoints",
+    "mobileOverflow": false,
+    "tabletOverflow": false,
+    "desktopOverflow": false
+  }
+]
