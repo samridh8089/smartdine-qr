@@ -32,7 +32,7 @@ import { FloorPlanItem, RestaurantZone, TableOperationalStatus } from './types';
 import { db } from '@/lib/db';
 import { generateQRDataURL } from '@/lib/qr';
 import { supabase } from '@/lib/supabase';
-import { checkBookingOverlap, formatLiveTimer } from '@/lib/utils';
+import { checkBookingOverlap, formatLiveTimer, getFormattedOrderId } from '@/lib/utils';
 
 export type FloorTabType = 'indoor' | 'outdoor' | 'first_floor' | 'terrace';
 
@@ -148,6 +148,7 @@ function getOrderStatusBadge(status: string) {
 
 export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
   restaurantId,
+  restaurantName = 'The Foody Hub',
   restaurantSlug = 'thefoodyhub',
   initialItems = [],
   onDataMutated
@@ -496,23 +497,25 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
         );
         return matchesId || matchesName;
       });
-      const totalBill = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
-      const items: Array<{ name: string; quantity: number; status: string }> = [];
+      const totalBill = orders.reduce((sum, o) => sum + Number(o.grand_total ?? o.total ?? o.total_amount ?? o.subtotal ?? 0), 0);
+      const items: Array<{ name: string; quantity: number; status: string; price?: number }> = [];
       const counts = { preparing: 0, ready: 0, served: 0, completed: 0 };
 
       orders.forEach((o) => {
-        if (Array.isArray(o.items)) {
-          o.items.forEach((it: any) => {
-            const st = (it.status || o.status || 'preparing').toLowerCase();
-            if (st === 'preparing') counts.preparing += (it.quantity || 1);
+        const orderItems = o.items || o.order_items || [];
+        if (Array.isArray(orderItems)) {
+          orderItems.forEach((it: any) => {
+            const st = (it.status || (it.is_served ? 'served' : (it.is_cancelled ? 'cancelled' : o.status)) || 'preparing').toLowerCase();
+            if (st === 'preparing' || st === 'new' || st === 'accepted') counts.preparing += (it.quantity || 1);
             else if (st === 'ready') counts.ready += (it.quantity || 1);
             else if (st === 'served') counts.served += (it.quantity || 1);
             else if (st === 'completed') counts.completed += (it.quantity || 1);
 
             items.push({
-              name: it.name || 'Item',
+              name: it.menu_item_name || it.name || 'Item',
               quantity: it.quantity || 1,
-              status: st
+              status: st,
+              price: Number(it.price) || 0
             });
           });
         }
@@ -536,7 +539,7 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
       }
 
       map[t.id] = {
-        totalBill: totalBill > 0 ? totalBill : (t.status === 'occupied' ? 1280 : 0),
+        totalBill: orders.length > 0 ? totalBill : (t.status === 'occupied' ? 1280 : 0),
         orders,
         items,
         counts
@@ -1231,11 +1234,17 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
       try {
         const { data } = await supabase
           .from('orders')
-          .select('*')
+          .select('*, order_items(*)')
           .eq('restaurant_id', restaurantId)
           .in('status', ['new', 'accepted', 'preparing', 'ready', 'served'])
           .order('created_at', { ascending: false });
-        if (data) setAllActiveOrders(data);
+        if (data) {
+          const normalized = data.map((o: any) => ({
+            ...o,
+            items: o.order_items && o.order_items.length > 0 ? o.order_items : (o.items || [])
+          }));
+          setAllActiveOrders(normalized);
+        }
       } catch {
         // ignore
       }
@@ -1312,6 +1321,11 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${restaurantId}` },
+        reloadAll
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items' },
         reloadAll
       )
       .subscribe();
@@ -1727,11 +1741,21 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
                     {/* OCCUPIED STATE DETAILS (Priority 3: Guests + Bill, Priority 4: Started + Elapsed, Priority 5: Order Chips) */}
                     {isOccupied && (
                       <div className="space-y-1.5 mt-1">
+                        {/* Priority: Formatted Order Number Chip */}
+                        {tableData.orders.length > 0 && (
+                          <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                            <span className="truncate">Order {getFormattedOrderId(tableData.orders[0], restaurantName, allActiveOrders, false)}</span>
+                            {tableData.orders.length > 1 && (
+                              <span className="text-[9px] text-zinc-400 font-normal">+{tableData.orders.length - 1}</span>
+                            )}
+                          </div>
+                        )}
+
                         {/* Priority 3: Dynamic Guest Count & Right-Aligned Bill */}
                         <div className="flex items-center justify-between text-[11px] font-semibold pt-0.5 border-t border-white/[0.06]">
                           <span className="text-zinc-200">{table.guestCount || table.seats || 4} Guests</span>
                           <span className="font-mono text-emerald-400 font-bold text-right tracking-tight">
-                            ₹{tableData.totalBill.toLocaleString()}
+                            ₹{tableData.totalBill.toLocaleString('en-IN')}
                           </span>
                         </div>
 
@@ -1851,6 +1875,11 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-white/[0.05] text-zinc-300 border border-white/[0.08]">
                   {floorNames[selectedTable.floor] || selectedTable.floor}
                 </span>
+                {activeTableOrders.length > 0 && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Order {getFormattedOrderId(activeTableOrders[0], restaurantName, allActiveOrders, false)}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-zinc-400 mt-0.5">
                 Table operations and live session for {selectedTable.name}.
@@ -1952,9 +1981,16 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
                           <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                           Live Table Session
                         </span>
-                        <span className="text-xs font-mono text-zinc-400">
-                          {formatStartedTime(selectedTable.occupiedAt)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {activeTableOrders.length > 0 && (
+                            <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                              Order {getFormattedOrderId(activeTableOrders[0], restaurantName, allActiveOrders, false)}
+                            </span>
+                          )}
+                          <span className="text-xs font-mono text-zinc-400">
+                            {formatStartedTime(selectedTable.occupiedAt)}
+                          </span>
+                        </div>
                       </div>
 
                       {/* 4-Metric Grid: Guest Count, Started Time, Elapsed Time, Current Bill */}
@@ -2250,27 +2286,54 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
                     </p>
                   </div>
                 ) : (
-                  activeTableOrders.map((ord) => (
-                    <div
-                      key={ord.id}
-                      className="p-4 bg-white/[0.02] border border-white/[0.08] rounded-[12px] space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white font-mono">
-                          #{ord.order_number || ord.id.slice(0, 8)}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                          {ord.status}
-                        </span>
+                  activeTableOrders.map((ord) => {
+                    const formattedOrderId = getFormattedOrderId(ord, restaurantName, allActiveOrders, false);
+                    const billTotal = Number(ord.grand_total ?? ord.total ?? ord.total_amount ?? ord.subtotal ?? 0);
+                    const orderItems = ord.items || ord.order_items || [];
+                    return (
+                      <div
+                        key={ord.id}
+                        className="p-4 bg-white/[0.02] border border-white/[0.08] rounded-[12px] space-y-3"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white font-mono">
+                              Order {formattedOrderId}
+                            </span>
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              #{ord.id.slice(0, 8)}
+                            </span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            {ord.status}
+                          </span>
+                        </div>
+
+                        {/* Itemized dishes breakdown */}
+                        {Array.isArray(orderItems) && orderItems.length > 0 && (
+                          <div className="space-y-1.5 py-2 border-y border-white/[0.04]">
+                            {orderItems.map((item: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center text-xs">
+                                <span className="text-zinc-300">
+                                  {item.quantity || 1}× {item.menu_item_name || item.name || 'Dish'}
+                                </span>
+                                <span className="font-mono text-zinc-400">
+                                  ₹{((Number(item.price) || 0) * (item.quantity || 1)).toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-xs text-zinc-400 pt-1">
+                          <span>Total Bill:</span>
+                          <span className="font-bold text-white font-mono text-sm">
+                            ₹{billTotal.toLocaleString('en-IN')}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-white/[0.04]">
-                        <span>Total Bill:</span>
-                        <span className="font-bold text-white font-mono">
-                          ₹{ord.total_amount || 0}
-                        </span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             )}
