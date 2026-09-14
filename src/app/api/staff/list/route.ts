@@ -5,6 +5,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -12,6 +14,16 @@ export async function GET(req: Request) {
 
     if (!restaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    // Enforce mandatory staff authentication & multi-tenant isolation
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized && authCheck.response) {
+      return authCheck.response;
     }
 
     // 1. Fetch restaurant settings for staff_metadata fallback
@@ -69,24 +81,6 @@ export async function GET(req: Request) {
         verification_status: verStatus
       };
     });
-
-    const authHeader = req.headers.get('Authorization') || '';
-    const token = authHeader.replace('Bearer ', '').trim();
-
-    if (token) {
-      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-      if (user) {
-        const { data: callerProf } = await supabaseAdmin
-          .from('profiles')
-          .select('restaurant_id, role')
-          .eq('id', user.id)
-          .maybeSingle();
-
-        if (callerProf && callerProf.role !== 'super_admin' && callerProf.restaurant_id !== restaurantId) {
-          return NextResponse.json({ error: 'FORBIDDEN', message: 'Access denied: You cannot view staff from other restaurants.' }, { status: 403 });
-        }
-      }
-    }
 
     const seenEmails = new Set(mergedProfiles.map(p => p.email.trim().toLowerCase()));
 

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, verified: true, isDemo: true });
     }
 
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '***REMOVED***';
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
     if (!keySecret) {
       return NextResponse.json({ success: true, verified: true, isDemo: true });
     }

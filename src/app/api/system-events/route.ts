@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 let _adminClient: SupabaseClient | null = null;
 function getAdmin(): SupabaseClient | null {
@@ -25,6 +26,24 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const restaurantId = searchParams.get('restaurantId');
     const limit = parseInt(searchParams.get('limit') || '200', 10);
+
+    if (!restaurantId) {
+      return NextResponse.json({ error: 'restaurantId parameter is required' }, { status: 400 });
+    }
+
+    // Require staff/admin authentication
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'supervisor', 'kitchen', 'waiter', 'cashier', 'super_admin'],
+      restaurantId === 'all' ? undefined : restaurantId
+    );
+    if (!authCheck.isAuthorized && authCheck.response) {
+      return authCheck.response;
+    }
+
+    if (restaurantId === 'all' && !authCheck.isSuperAdmin) {
+      return NextResponse.json({ error: 'FORBIDDEN', message: 'Super Admin required to view all system events.' }, { status: 403 });
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query = (supabaseAdmin.from('system_events') as any)

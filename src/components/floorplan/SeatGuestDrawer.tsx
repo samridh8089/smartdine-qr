@@ -40,8 +40,8 @@ export const SeatGuestDrawer: React.FC<SeatGuestDrawerProps> = ({
   const isReserved = table.status === 'reserved';
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center p-3 animate-slide-up pointer-events-none">
-      <div className="bg-white border border-[#E7E5E4] rounded-2xl shadow-2xl max-w-2xl w-full p-4 pointer-events-auto text-[#171717]">
+    <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center p-2 sm:p-3 animate-slide-up pointer-events-none">
+      <div className="bg-white border border-[#E7E5E4] rounded-2xl shadow-2xl max-w-2xl w-full p-3 sm:p-4 pointer-events-auto text-[#171717]">
         {/* Top Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[#EFEDE8]">
           <div className="flex items-center space-x-3">
@@ -110,7 +110,7 @@ export const SeatGuestDrawer: React.FC<SeatGuestDrawerProps> = ({
                 </div>
               </div>
 
-              <div className="flex space-x-2 pt-1">
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => onViewQR(table)}
@@ -162,7 +162,7 @@ export const SeatGuestDrawer: React.FC<SeatGuestDrawerProps> = ({
           ) : (
             /* Available Table: Direct Actions */
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-[#525252] uppercase tracking-wider mb-1">
                     Party Size (Guests)
@@ -202,8 +202,8 @@ export const SeatGuestDrawer: React.FC<SeatGuestDrawerProps> = ({
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center space-x-2 pt-2">
+              {/* Action Buttons (UX-002: responsive wrapping for 320px/375px/768px) */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => onSeatGuest(table, guestCount, waiterName)}
@@ -212,30 +212,32 @@ export const SeatGuestDrawer: React.FC<SeatGuestDrawerProps> = ({
                   <Users className="w-3.5 h-3.5" />
                   <span>Seat Guest ({guestCount} Guests)</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => onOpenReservation(table)}
-                  className="py-2.5 px-3 border border-[#E7E5E4] rounded-lg text-xs font-semibold text-[#171717] hover:bg-[#FAFAF9] flex items-center space-x-1.5 transition-colors cursor-pointer"
-                >
-                  <Calendar className="w-3.5 h-3.5 text-[#525252]" />
-                  <span>Reservation</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenTakeaway}
-                  className="py-2.5 px-3 border border-[#E7E5E4] rounded-lg text-xs font-semibold text-[#171717] hover:bg-[#FAFAF9] flex items-center space-x-1.5 transition-colors cursor-pointer"
-                >
-                  <ShoppingBag className="w-3.5 h-3.5 text-[#525252]" />
-                  <span>Takeaway</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onViewQR(table)}
-                  className="py-2.5 px-3 border border-[#E7E5E4] rounded-lg text-xs font-semibold text-[#171717] hover:bg-[#FAFAF9] transition-colors cursor-pointer"
-                  title="View Table QR Code"
-                >
-                  <QrCode className="w-3.5 h-3.5 text-[#525252]" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenReservation(table)}
+                    className="flex-1 sm:flex-initial py-2.5 px-3 border border-[#E7E5E4] rounded-lg text-xs font-semibold text-[#171717] hover:bg-[#FAFAF9] flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                  >
+                    <Calendar className="w-3.5 h-3.5 text-[#525252]" />
+                    <span>Reservation</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onOpenTakeaway}
+                    className="flex-1 sm:flex-initial py-2.5 px-3 border border-[#E7E5E4] rounded-lg text-xs font-semibold text-[#171717] hover:bg-[#FAFAF9] flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5 text-[#525252]" />
+                    <span>Takeaway</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onViewQR(table)}
+                    className="py-2.5 px-3 border border-[#E7E5E4] rounded-lg text-xs font-semibold text-[#171717] hover:bg-[#FAFAF9] transition-colors cursor-pointer flex items-center justify-center"
+                    title="View Table QR Code"
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-[#525252]" />
+                  </button>
+                </div>
               </div>
             </div>
           )}

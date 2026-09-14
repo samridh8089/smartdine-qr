@@ -448,12 +448,34 @@ export async function printSingleBrandedTable(
             justify-content: center;
             min-height: 100vh;
             background: #f8fafc;
+            box-sizing: border-box;
           }
           img {
             max-width: 90vw;
             max-height: 90vh;
             object-fit: contain;
             box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: block;
+            margin: auto;
+          }
+          @media print {
+            body {
+              padding: 0;
+              margin: 0;
+              background: #ffffff !important;
+              display: flex !important;
+              align-items: center !important;
+              justify-content: center !important;
+              min-height: 100vh !important;
+              width: 100vw;
+            }
+            img {
+              max-width: 85vw !important;
+              max-height: 85vh !important;
+              box-shadow: none !important;
+              page-break-inside: avoid;
+              margin: auto !important;
+            }
           }
         </style>
       </head>

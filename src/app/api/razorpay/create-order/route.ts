@@ -4,8 +4,8 @@ export async function POST(req: Request) {
   try {
     const { amount, currency = 'INR', plan, restaurantId, billingInterval } = await req.json();
 
-    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '***REMOVED***';
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '***REMOVED***';
+    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
 
     // Fallback demo mode if keys are not set yet in environment
     if (!keyId || !keySecret) {

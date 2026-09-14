@@ -5,6 +5,7 @@ import { ServerTimer } from '@/lib/serverTiming';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 export async function POST(req: Request) {
   const totalStart = performance.now();
@@ -25,9 +26,9 @@ export async function POST(req: Request) {
       staffName: { rules: [Validators.string({ max: 100 })], required: false },
       idempotencyKey: { rules: [Validators.string({ max: 100 })], required: false }
     });
-    timer.end('auth');
 
     if (!validation.valid) {
+      timer.end('auth');
       return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
 
@@ -38,13 +39,57 @@ export async function POST(req: Request) {
       specialInstructions = '',
       orderType = 'dine_in',
       paymentStatus = 'pending',
-      staffName = 'Staff',
+      staffName: inputStaffName,
       idempotencyKey,
       customerName,
       customerPhone,
       customerArrivalMinutes,
       takeawayNotes
     } = body;
+
+    // Enforce Staff Authorization & Tenant Isolation
+    const authCheck = await verifyStaffRequest(req, ['waiter', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'], restaurantId);
+    if (!authCheck.isAuthorized && authCheck.response) {
+      timer.end('auth');
+      return authCheck.response;
+    }
+
+    const staffName = authCheck.profile?.full_name || inputStaffName || authCheck.user?.email || 'Staff';
+    timer.end('auth');
+
+    // P1-01: Idempotency Protection for Waiter Punch Orders
+    const cleanKey = typeof idempotencyKey === 'string' ? idempotencyKey.trim() : '';
+    if (cleanKey) {
+      const { data: existingOrder } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .eq('idempotency_key', cleanKey)
+        .maybeSingle();
+
+      if (existingOrder) {
+        return NextResponse.json({
+          success: true,
+          order: existingOrder,
+          isDuplicate: true
+        });
+      }
+
+      const { data: existingBatch } = await supabase
+        .from('order_batches')
+        .select('*, order:orders(*)')
+        .eq('idempotency_key', cleanKey)
+        .maybeSingle();
+
+      if (existingBatch && existingBatch.order) {
+        return NextResponse.json({
+          success: true,
+          order: existingBatch.order,
+          batch: existingBatch,
+          isDuplicate: true
+        });
+      }
+    }
 
     let finalCustomerName = String(customerName || body.customer_name || '').trim();
     let finalCustomerPhone = String(customerPhone || body.customer_phone || '').trim();
@@ -113,19 +158,29 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `Item "${menuItem?.name || 'Selected'}" is out of stock.` }, { status: 400 });
       }
       const qty = Number(entry.quantity || 1);
-      const price = Number(entry.price !== undefined ? entry.price : menuItem.price);
-      subtotal += price * qty;
-
+      
       const rawVariantId = entry.variantId || entry.variant_id || null;
       const validVariantId = (typeof rawVariantId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawVariantId.trim())) ? rawVariantId.trim() : null;
 
+      let authoritativePrice = Number(menuItem.price);
+      let safeVariantName: string | null = null;
+      if (validVariantId && Array.isArray(menuItem.variants) && menuItem.variants.length > 0) {
+        const matchedVariant = menuItem.variants.find((v: any) => v.id === validVariantId);
+        if (matchedVariant) {
+          authoritativePrice = Number(matchedVariant.price ?? menuItem.price);
+          safeVariantName = matchedVariant.name;
+        }
+      }
+
+      subtotal += authoritativePrice * qty;
+
       itemsPayload.push({
         menu_item_id: menuItem.id,
-        menu_item_name: entry.variantName ? `${menuItem.name} (${entry.variantName})` : menuItem.name,
+        menu_item_name: safeVariantName ? `${menuItem.name} (${safeVariantName})` : menuItem.name,
         variant_id: validVariantId,
-        variant_name: entry.variantName || entry.variant_name || null,
+        variant_name: safeVariantName || entry.variantName || entry.variant_name || null,
         quantity: qty,
-        price,
+        price: authoritativePrice,
         notes: entry.notes || null
       });
     }
@@ -158,7 +213,8 @@ export async function POST(req: Request) {
           order_id: activeOrder.id,
           batch_number: newBatchIndex,
           status: 'new',
-          special_instructions: specialInstructions || null
+          special_instructions: specialInstructions || null,
+          idempotency_key: cleanKey || null
         }])
         .select()
         .single();
@@ -229,6 +285,7 @@ export async function POST(req: Request) {
         grand_total: grandTotal,
         takeaway_notes: takeawayNotes || null,
         customer_arrival_minutes: customerArrivalMinutes || null,
+        idempotency_key: cleanKey || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -240,6 +297,19 @@ export async function POST(req: Request) {
         .single();
 
       if (orderInsertErr) {
+        // Double-check if duplicate insert was blocked by unique constraint
+        if (cleanKey) {
+          const { data: duplicateOrder } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .eq('idempotency_key', cleanKey)
+            .maybeSingle();
+          if (duplicateOrder) {
+            timer.end('order_insert');
+            return NextResponse.json({ success: true, order: duplicateOrder, isDuplicate: true });
+          }
+        }
         timer.end('order_insert');
         return NextResponse.json({ error: orderInsertErr.message }, { status: 500 });
       }
@@ -250,7 +320,8 @@ export async function POST(req: Request) {
         order_id: createdOrder.id,
         batch_number: 1,
         status: 'new',
-        special_instructions: specialInstructions || null
+        special_instructions: specialInstructions || null,
+        idempotency_key: cleanKey || null
       }]).select().single();
 
       const orderItemsPayload = itemsPayload.map((item: any) => ({
@@ -291,6 +362,47 @@ export async function POST(req: Request) {
       payload: realtimePayload,
       client: supabase
     });
+
+    // P1-07: Table Status Sync — automatically occupy table on dine-in punch order
+    const isDiningPunchOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';
+    if (isDiningPunchOrder && restaurantId && restaurantId !== 'demo-rest') {
+      try {
+        const tableStates = { ...(restaurant.settings?.table_states || {}) };
+        const existingTableState = tableStates[tableId] || {};
+        tableStates[tableId] = {
+          ...existingTableState,
+          occupancy_status: 'occupied',
+          manual_occupied: true,
+          occupied_at: existingTableState.occupied_at || new Date().toISOString(),
+          current_session_id: createdOrder.id
+        };
+        await supabase
+          .from('restaurants')
+          .update({
+            settings: {
+              ...restaurant.settings,
+              table_states: tableStates
+            }
+          })
+          .eq('id', restaurantId);
+
+        await broadcastOrderRealtimeEvent({
+          restaurantId,
+          orderId: createdOrder.id,
+          eventType: 'table-status-updated',
+          payload: {
+            tableId,
+            tableName: createdOrder.table_name,
+            status: 'occupied',
+            occupiedAt: tableStates[tableId].occupied_at,
+            orderId: createdOrder.id
+          },
+          client: supabase
+        });
+      } catch (tableSyncErr) {
+        console.error('[PunchOrder] Table status sync error:', tableSyncErr);
+      }
+    }
     timer.end('realtime');
 
     const response = NextResponse.json({

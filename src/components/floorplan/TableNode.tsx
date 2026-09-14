@@ -76,8 +76,10 @@ export const TableNode: React.FC<TableNodeProps> = ({
     strokeWidth = 2.5;
   }
 
-  // Timer ring calculation for occupied tables
-  const elapsedMinutes = item.elapsedMinutes || 0;
+  // Timer ring calculation for occupied tables (OP-005: server timestamp persistence)
+  const elapsedMinutes = item.elapsedMinutes !== undefined
+    ? item.elapsedMinutes
+    : (item.occupiedAt ? Math.max(0, Math.floor((Date.now() - new Date(item.occupiedAt).getTime()) / 60000)) : 0);
   let timerRingColor = '#10B981'; // 0-45m: Calm Green
   if (elapsedMinutes > 75) {
     timerRingColor = '#EF4444'; // >75m: Soft Red (Overdue)
@@ -101,6 +103,7 @@ export const TableNode: React.FC<TableNodeProps> = ({
   };
 
   const displayLabel = item.display_number || item.tableNumber || item.name?.replace(/^Table\s*/i, '') || 'T';
+  const labelFontSize = displayLabel.length > 10 ? 11 : displayLabel.length > 6 ? 13 : 15;
 
   // Render Chairs / Seating depending on shape
   const renderFurnitureAndTable = () => {
@@ -706,18 +709,21 @@ export const TableNode: React.FC<TableNodeProps> = ({
         </Group>
       )}
 
-      {/* Table Label & Capacity */}
+      {/* Table Label & Capacity (UX-001: no clipping, ellipsis, responsive font) */}
       <Text
         text={displayLabel}
-        x={0}
+        x={2}
         y={height / 2 - 13}
-        width={width}
+        width={width - 4}
         align="center"
         fontFamily="sans-serif"
-        fontSize={15}
+        fontSize={labelFontSize}
         fontStyle="700"
         fill="#171717"
         listening={false}
+        ellipsis={true}
+        wrap="none"
+        padding={2}
       />
 
       <Text
@@ -725,18 +731,21 @@ export const TableNode: React.FC<TableNodeProps> = ({
           status === 'occupied'
             ? `${elapsedMinutes}m`
             : status === 'reserved'
-            ? item.reservationTime?.split(',')[1]?.trim() || 'Res'
+            ? item.reservationTime?.split(',')[1]?.trim() || item.reservationTime || 'Res'
             : `${seatCount} seats`
         }
-        x={0}
+        x={2}
         y={height / 2 + 4}
-        width={width}
+        width={width - 4}
         align="center"
         fontFamily="sans-serif"
         fontSize={10}
         fontStyle="500"
         fill={status === 'occupied' ? '#525252' : '#737373'}
         listening={false}
+        ellipsis={true}
+        wrap="none"
+        padding={1}
       />
     </Group>
   );

@@ -407,6 +407,18 @@ export default function SuperAdminPage() {
     setTimeout(() => setActionSuccessMsg(null), 4000);
   }, []);
 
+  const getAdminAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token || '';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }, []);
+
   const loadAdminData = useCallback(async () => {
     try {
       // Clear any orphan impersonation session if user landed back on Super Admin
@@ -490,6 +502,13 @@ export default function SuperAdminPage() {
       });
       setRestaurantTelemetry(tMap);
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || '';
+      const authHeaders: Record<string, string> = {};
+      if (token) {
+        authHeaders['Authorization'] = `Bearer ${token}`;
+      }
+
       // Fetch platform-wide system events for Global Activity Feed
       fetch('/api/system-events?limit=40')
         .then(r => r.ok ? r.json() : null)
@@ -501,7 +520,7 @@ export default function SuperAdminPage() {
         .catch(() => {});
 
       // Fetch recent audit logs
-      fetch('/api/admin/audit-logs?limit=50')
+      fetch('/api/admin/audit-logs?limit=50', { headers: authHeaders })
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (d && d.logs) setRecentAuditLogs(d.logs);
@@ -509,7 +528,7 @@ export default function SuperAdminPage() {
         .catch(() => {});
 
       // Fetch analytics trends
-      fetch('/api/admin/analytics')
+      fetch('/api/admin/analytics', { headers: authHeaders })
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (d && d.success) setAnalyticsData(d);
@@ -736,9 +755,10 @@ export default function SuperAdminPage() {
     e.preventDefault();
     if (!editingRest) return;
     try {
+      const headers = await getAdminAuthHeaders();
       const res = await fetch('/api/admin/entity-edit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           entityType: 'restaurant',
           entityId: editingRest.id,
@@ -792,9 +812,10 @@ export default function SuperAdminPage() {
     if (!editingSubRest) return;
     try {
       const expiryIso = editSubForm.expiryDate ? new Date(editSubForm.expiryDate).toISOString() : undefined;
+      const headers = await getAdminAuthHeaders();
       const res = await fetch('/api/admin/entity-edit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           entityType: 'subscription',
           entityId: editingSubRest.id,
@@ -853,9 +874,10 @@ export default function SuperAdminPage() {
         updates.new_password = editOwnerForm.new_password;
       }
 
+      const headers = await getAdminAuthHeaders();
       const res = await fetch('/api/admin/entity-edit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           entityType: 'owner',
           entityId: ownerId,
@@ -897,9 +919,10 @@ export default function SuperAdminPage() {
 
     try {
       if (editingStaffMember) {
+        const headers = await getAdminAuthHeaders();
         const res = await fetch('/api/admin/entity-edit', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             entityType: 'staff',
             entityId: editingStaffMember.id,
@@ -976,9 +999,10 @@ export default function SuperAdminPage() {
     setBulkProcessing(true);
 
     try {
+      const headers = await getAdminAuthHeaders();
       const res = await fetch('/api/admin/bulk-operations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           restaurantIds: selectedRestaurantIds,
           action: bulkAction,
@@ -1057,9 +1081,10 @@ export default function SuperAdminPage() {
     if (!investigatingOrder) return;
     setOrderActionLoading(true);
     try {
+      const headers = await getAdminAuthHeaders();
       const res = await fetch('/api/admin/entity-edit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           entityType: 'order',
           entityId: investigatingOrder.id,
@@ -1089,9 +1114,10 @@ export default function SuperAdminPage() {
     const isSuspended = (rest.subscription_status as string) === 'suspended';
     const newStatus = isSuspended ? 'active' : 'suspended';
     try {
+      const headers = await getAdminAuthHeaders();
       const res = await fetch('/api/admin/entity-edit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           entityType: 'restaurant',
           entityId: rest.id,
@@ -3460,7 +3486,7 @@ export default function SuperAdminPage() {
                   const targetIds = availableRestaurants.map(r => r.id);
                   const res = await fetch('/api/admin/bulk-operations', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: await getAdminAuthHeaders(),
                     body: JSON.stringify({
                       restaurantIds: targetIds,
                       action: 'broadcast',
@@ -3526,7 +3552,7 @@ export default function SuperAdminPage() {
                 try {
                   const res = await fetch('/api/admin/entity-edit', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: await getAdminAuthHeaders(),
                     body: JSON.stringify({
                       entityType: 'restaurant',
                       entityId: deletingRest.id,

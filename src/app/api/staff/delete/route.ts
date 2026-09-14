@@ -17,20 +17,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'targetUserId is required' }, { status: 400 });
     }
 
-    // 1. Resolve requester Auth User
+    // 1. Resolve requester Auth User via verified JWT token
     let user: any = null;
     if (token) {
       const { data } = await supabaseAdmin.auth.getUser(token);
       if (data?.user) user = data.user;
     }
 
-    if (!user && clientRequesterId) {
-      const { data: adminUser } = await supabaseAdmin.auth.admin.getUserById(clientRequesterId);
-      if (adminUser?.user) user = adminUser.user;
-    }
-
     if (!user) {
-      return NextResponse.json({ error: 'Unauthenticated user session' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthenticated user session: valid token required' }, { status: 401 });
     }
 
     // 2. Resolve requester profile

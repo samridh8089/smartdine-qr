@@ -259,3 +259,73 @@ export function getCleanSpecialInstructions(order?: any, batch?: any): string {
   return parts.join(' | ');
 }
 
+/**
+ * Parses time string (e.g. "19:30", "19:30:00", "2026-09-13T19:30:00Z") into minutes from start of day.
+ */
+export function parseTimeToMinutes(timeStr?: string | null): number | null {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  const clean = timeStr.trim();
+  if (!clean) return null;
+
+  // Check if ISO date string
+  if (clean.includes('T') || clean.includes('-')) {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) {
+      return d.getHours() * 60 + d.getMinutes();
+    }
+  }
+
+  // Check HH:MM or HH:MM:SS
+  const parts = clean.split(':');
+  if (parts.length >= 2) {
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    if (!isNaN(hours) && !isNaN(minutes)) {
+      return (hours % 24) * 60 + (minutes % 60);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Validates whether two reservation times overlap given a slot buffer duration (default 90 mins).
+ * Returns true if the times overlap (i.e. difference is strictly less than slotBufferMinutes).
+ */
+export function checkBookingOverlap(
+  timeA?: string | null,
+  timeB?: string | null,
+  slotBufferMinutes: number = 90
+): boolean {
+  if (!timeA || !timeB) return false;
+  const minsA = parseTimeToMinutes(timeA);
+  const minsB = parseTimeToMinutes(timeB);
+  if (minsA === null || minsB === null) {
+    return timeA.trim().toLowerCase() === timeB.trim().toLowerCase();
+  }
+  const diff = Math.abs(minsA - minsB);
+  return diff < slotBufferMinutes;
+}
+
+/**
+ * Computes live elapsed timer from a server timestamp (e.g. ISO string or timestamp).
+ * Under 1 hour: MM:SS
+ * Above 1 hour: HH:MM:SS
+ * Never resets after refresh because it strictly calculates from server timestamp.
+ */
+export function formatLiveTimer(serverTimestamp?: string | number | null, now?: number): string {
+  if (!serverTimestamp) return '00:00';
+  const start = typeof serverTimestamp === 'number' ? serverTimestamp : new Date(serverTimestamp).getTime();
+  if (isNaN(start) || start <= 0) return '00:00';
+  const current = now || Date.now();
+  const totalSeconds = Math.max(0, Math.floor((current - start) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+

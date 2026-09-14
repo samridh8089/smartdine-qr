@@ -7,6 +7,7 @@ import { reserveInventoryForOrderBatch } from '@/lib/inventoryEngine';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { isSubscriptionExpired } from '@/lib/db';
 import { logSystemEvent, getOrderCorrelationId } from '@/lib/systemEventLogger';
+import { checkBookingOverlap } from '@/lib/utils';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -148,6 +149,65 @@ export async function POST(req: Request) {
       }, { status: 403 });
     }
 
+    // P1-03: Robust Booking Conflict Detection (Reject overlapping reservations for same table)
+    if (orderType === 'reservation' && tableId && tableId !== 'takeaway' && tableId !== 'reservation') {
+      let requestedTime: string | null = body.reservationTime || body.reservation_time || null;
+      if (!requestedTime && specialInstructions) {
+        try {
+          const parsed = typeof specialInstructions === 'string' ? JSON.parse(specialInstructions) : specialInstructions;
+          requestedTime = parsed.time || parsed.reservationTime || null;
+        } catch (_) {
+          const timeMatch = String(specialInstructions).match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
+          if (timeMatch) requestedTime = timeMatch[0];
+        }
+      }
+
+      if (requestedTime) {
+        // Check 1: Live table states in restaurant settings
+        const currentTableState = restaurant.settings?.table_states?.[tableId];
+        if (currentTableState && currentTableState.occupancy_status === 'reserved' && currentTableState.reservation_time) {
+          if (checkBookingOverlap(currentTableState.reservation_time, requestedTime, 90)) {
+            timer.end('inventory');
+            return NextResponse.json({
+              error: 'RESERVATION_OVERLAP',
+              message: `Table already has an active reservation at ${currentTableState.reservation_time} which overlaps with requested time ${requestedTime} (within 90-minute dining window). Please select another time or table.`
+            }, { status: 409 });
+          }
+        }
+
+        // Check 2: Active reservation orders for this specific table
+        const { data: activeResOrders } = await supabase
+          .from('orders')
+          .select('id, special_instructions, created_at')
+          .eq('restaurant_id', restaurantId)
+          .eq('table_id', tableId)
+          .eq('order_type', 'reservation')
+          .in('status', ['new', 'accepted', 'preparing', 'ready']);
+
+        if (activeResOrders && activeResOrders.length > 0) {
+          for (const ord of activeResOrders) {
+            let existingResTime: string | null = null;
+            if (ord.special_instructions) {
+              try {
+                const parsed = JSON.parse(ord.special_instructions);
+                existingResTime = parsed.time || parsed.reservationTime || null;
+              } catch (_) {
+                const tm = String(ord.special_instructions).match(/\b([01]?\d|2[0-3]):[0-5]\d\b/);
+                if (tm) existingResTime = tm[0];
+              }
+            }
+            if (existingResTime && checkBookingOverlap(existingResTime, requestedTime, 90)) {
+              timer.end('inventory');
+              return NextResponse.json({
+                error: 'RESERVATION_OVERLAP',
+                message: `Table already has a booked reservation at ${existingResTime} which overlaps with requested time ${requestedTime} (within 90-minute dining window). Please select another time or table.`
+              }, { status: 409 });
+            }
+          }
+        }
+      }
+    }
+
     const table = tRes.data || {
       id: tableId || 'takeaway',
       restaurant_id: restaurantId,
@@ -213,9 +273,36 @@ export async function POST(req: Request) {
     }
     timer.end('inventory');
 
-    // 3. TAX & BILLING COMPUTATION PHASE
+    // 3. AUTHORITATIVE SERVER-SIDE DISCOUNT & TAX COMPUTATION
     timer.start('tax');
-    const discAmt = Number(discountAmount || 0);
+    let validatedDiscountAmount = 0;
+    let validatedOffer: any = null;
+
+    if (offerCode && typeof offerCode === 'string' && offerCode.trim()) {
+      const cleanCode = offerCode.trim().toUpperCase();
+      const restaurantOffers: any[] = restaurant.settings?.offers || [];
+      const matchedOffer = restaurantOffers.find(
+        (o: any) => o.code && String(o.code).trim().toUpperCase() === cleanCode && o.is_active !== false
+      );
+
+      if (matchedOffer) {
+        const minOrder = Number(matchedOffer.min_order_amount || 0);
+        if (subtotal >= minOrder) {
+          validatedOffer = matchedOffer;
+          if (matchedOffer.discount_type === 'percentage') {
+            const pct = Number(matchedOffer.discount_value || 0);
+            validatedDiscountAmount = parseFloat(((subtotal * pct) / 100).toFixed(2));
+          } else {
+            const flatVal = Number(matchedOffer.discount_value || 0);
+            validatedDiscountAmount = Math.min(flatVal, subtotal);
+          }
+          validatedDiscountAmount = Math.min(validatedDiscountAmount, subtotal);
+        }
+      }
+    }
+
+    // Server is the single pricing authority: client-supplied discountAmount is strictly discarded
+    const discAmt = validatedDiscountAmount;
     const taxCalc = calculateOrderTax(subtotal, discAmt, restaurant.settings || {}, restaurant.gst_number);
 
     const serviceChargeEnabled = restaurant.settings?.service_charge_enabled !== false;
@@ -505,6 +592,54 @@ export async function POST(req: Request) {
       payload: realtimePayload,
       client: supabase
     });
+
+    // P1-07: Table Status Sync — automatically occupy table on dine-in order creation
+    const isDiningOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';
+    if (isDiningOrder && restaurantId && restaurantId !== 'demo-rest') {
+      try {
+        const tableStates = { ...(restaurant.settings?.table_states || {}) };
+        const existingTableState = tableStates[tableId] || {};
+        tableStates[tableId] = {
+          ...existingTableState,
+          occupancy_status: 'occupied',
+          manual_occupied: true,
+          occupied_at: existingTableState.occupied_at || new Date().toISOString(),
+          current_session_id: createdOrder.id
+        };
+        await supabase
+          .from('restaurants')
+          .update({
+            settings: {
+              ...restaurant.settings,
+              table_states: tableStates
+            }
+          })
+          .eq('id', restaurantId);
+
+        // Update tables row status in database
+        await supabase
+          .from('tables')
+          .update({ status: 'occupied' })
+          .eq('id', tableId);
+
+        // Broadcast table-status-updated event across all channels
+        await broadcastOrderRealtimeEvent({
+          restaurantId,
+          orderId: createdOrder.id,
+          eventType: 'table-status-updated',
+          payload: {
+            tableId,
+            tableName: createdOrder.table_name,
+            status: 'occupied',
+            occupiedAt: tableStates[tableId].occupied_at,
+            orderId: createdOrder.id
+          },
+          client: supabase
+        });
+      } catch (tableSyncErr) {
+        console.error('[CustomerOrder] Table status sync error:', tableSyncErr);
+      }
+    }
     timer.end('realtime');
 
     // ─── Phase-19/21: Event Bus — fire-and-forget, never awaited ─────────────

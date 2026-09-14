@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { db, MenuItem, Table, Restaurant, Category } from '@/lib/db';
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { formatPrice } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -200,7 +202,11 @@ export default function PunchOrderModal({
         fullInstructions = fullInstructions ? `${custHeader} | NOTES: ${fullInstructions}` : custHeader;
       }
 
-      // 1. Create order in DB
+      // 1. Create order in DB with idempotency protection
+      const punchIdempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `punch_${Date.now()}_${Math.random()}`;
+
       const newOrder = await db.createOrder(
         restaurant.id,
         targetTableId,
@@ -208,7 +214,9 @@ export default function PunchOrderModal({
         fullInstructions || undefined,
         orderType,
         undefined, // arrival mins
-        customerPhone.trim() || undefined // takeaway notes / phone
+        customerPhone.trim() || undefined, // takeaway notes / phone
+        markPaid ? 'paid' : 'pending',
+        punchIdempotencyKey
       );
 
       // 2. If marked paid immediately by waiter
@@ -220,6 +228,29 @@ export default function PunchOrderModal({
           paymentMethod,
           `POS-${Date.now().toString().slice(-6)}`
         );
+      }
+
+      // 3. Immediately sync table occupancy state and broadcast realtime event
+      if (restaurant?.id && targetTableId && targetTableId !== 'takeaway') {
+        try {
+          await db.toggleTableOccupancy(restaurant.id, targetTableId, true);
+          const targetTableObj = tables.find(t => t.id === targetTableId);
+          await broadcastOrderRealtimeEvent({
+            restaurantId: restaurant.id,
+            orderId: newOrder.id,
+            eventType: 'table-status-updated',
+            payload: {
+              tableId: targetTableId,
+              tableName: targetTableObj?.name || `Table ${targetTableObj?.display_number || ''}`,
+              status: 'occupied',
+              occupiedAt: new Date().toISOString(),
+              orderId: newOrder.id
+            },
+            client: supabase
+          });
+        } catch (tableSyncErr) {
+          console.error('[PunchOrderModal] Table status sync error:', tableSyncErr);
+        }
       }
 
       // Notify parent & dispatch storage event

@@ -22,6 +22,8 @@ function getOrderColor(orderId: string): string {
   return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length];
 }
 
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
+
 /**
  * GET /api/admin/live-sync?restaurantId=...
  * Single Source of Truth for Super Admin Command Center and Founder Control Center.
@@ -38,6 +40,12 @@ export async function GET(req: Request) {
     const restaurantId = searchParams.get('restaurantId');
     if (!restaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    // Server-Side Authorization: only super_admin or restaurant staff/owner can access live-sync
+    const authCheck = await verifyStaffRequest(req, ['owner', 'manager', 'supervisor', 'super_admin'], restaurantId);
+    if (!authCheck.isAuthorized && authCheck.response) {
+      return authCheck.response;
     }
 
     // Parallel fetch of real active orders, tables, system events, and staff

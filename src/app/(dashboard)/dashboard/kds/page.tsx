@@ -58,6 +58,8 @@ export default function KitchenDisplayPage() {
   const [inventoryItemsMap, setInventoryItemsMap] = useState<Record<string, any>>({});
   const [transactionsMap, setTransactionsMap] = useState<Record<string, any>>({});
   const [errorMessage, setErrorMessage] = useState('');
+  const [isAcceptingAlert, setIsAcceptingAlert] = useState(false);
+  const [isCancellingBatch, setIsCancellingBatch] = useState(false);
 
 
 
@@ -461,9 +463,14 @@ export default function KitchenDisplayPage() {
       if (nextStatus === 'accepted') {
         window.dispatchEvent(new Event('stop-kitchen-sound'));
       }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || '';
       const res = await fetch('/api/staff/update-order-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           batchId,
           newStatus: nextStatus,
@@ -559,6 +566,52 @@ export default function KitchenDisplayPage() {
     return orders.filter(order => matchesOrderSearchQuery(order, q, restaurant?.name || '', orders));
   }, [orders, searchQuery, restaurant?.name]);
 
+  // Extract active batches from active orders (BUG-RES-001: reservations excluded; OP-001: deduplicate batch tickets)
+  const activeBatches = useMemo(() => {
+    const seenBatchIds = new Set<string>();
+    return filteredOrders.filter(o => o.order_type !== 'reservation').reduce((acc: any[], order) => {
+      if (order.batches) {
+        order.batches.forEach(batch => {
+          if (!batch || !batch.id || seenBatchIds.has(batch.id)) return;
+          const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
+          if (batch.status !== 'served' && !isCancelled) {
+            seenBatchIds.add(batch.id);
+            acc.push({
+              ...batch,
+              table_name: order.table_name,
+              restaurant_id: order.restaurant_id,
+              order_id: order.id,
+              payment_status: order.payment_status || 'pending',
+              order_type: order.order_type || 'dine_in',
+              customer_arrival_minutes: order.customer_arrival_minutes,
+              takeaway_notes: order.takeaway_notes
+            });
+          }
+        });
+      }
+      return acc;
+    }, []);
+  }, [filteredOrders]);
+
+  const newOrders = useMemo(() => 
+    activeBatches
+      .filter(b => b.status === 'new' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [activeBatches]
+  );
+  const preparingOrders = useMemo(() => 
+    activeBatches
+      .filter(b => (b.status === 'accepted' || b.status === 'preparing') && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [activeBatches]
+  );
+  const readyOrders = useMemo(() => 
+    activeBatches
+      .filter(b => b.status === 'ready' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [activeBatches]
+  );
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -571,32 +624,6 @@ export default function KitchenDisplayPage() {
       </div>
     );
   }
-
-  // Extract active batches from active orders (BUG-RES-001: reservations excluded)
-  const activeBatches = filteredOrders.filter(o => o.order_type !== 'reservation').reduce((acc: any[], order) => {
-    if (order.batches) {
-      order.batches.forEach(batch => {
-        const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
-        if (batch.status !== 'served' && !isCancelled) {
-          acc.push({
-            ...batch,
-            table_name: order.table_name,
-            restaurant_id: order.restaurant_id,
-            order_id: order.id,
-            payment_status: order.payment_status || 'pending',
-            order_type: order.order_type || 'dine_in',
-            customer_arrival_minutes: order.customer_arrival_minutes,
-            takeaway_notes: order.takeaway_notes
-          });
-        }
-      });
-    }
-    return acc;
-  }, []);
-
-  const newOrders = activeBatches.filter(b => b.status === 'new' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'));
-  const preparingOrders = activeBatches.filter(b => (b.status === 'accepted' || b.status === 'preparing') && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'));
-  const readyOrders = activeBatches.filter(b => b.status === 'ready' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'));
 
   return (
     <div className="space-y-6 h-full flex flex-col">
@@ -1007,15 +1034,33 @@ export default function KitchenDisplayPage() {
                       </div>
                     )}
 
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                       {order.order_type === 'takeaway' ? (
-                        <span className="text-xs text-amber-700 dark:text-amber-400 font-bold flex items-center justify-center gap-1.5 py-1">
-                          <ShoppingBag className="h-3.5 w-3.5" /> Ready for Counter Pickup
-                        </span>
+                        <button
+                          disabled={processingBatchIds.includes(order.id)}
+                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                          onClick={() => updateBatchStatus(order.id, 'served')}
+                        >
+                          {processingBatchIds.includes(order.id) ? (
+                            <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5" />
+                          ) : (
+                            <ShoppingBag className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          Hand Over / Complete
+                        </button>
                       ) : (
-                        <span className="text-xs text-slate-500 font-semibold flex items-center justify-center gap-1.5 py-1">
-                          <Clock className="h-3.5 w-3.5 text-emerald-600" /> Waiting for waiter pickup
-                        </span>
+                        <button
+                          disabled={processingBatchIds.includes(order.id)}
+                          className="w-full inline-flex items-center justify-center font-bold px-3 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                          onClick={() => updateBatchStatus(order.id, 'served')}
+                        >
+                          {processingBatchIds.includes(order.id) ? (
+                            <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin mr-1.5" />
+                          ) : (
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                          )}
+                          Mark Served / Complete
+                        </button>
                       )}
                     </div>
                   </CardContent>
@@ -1041,21 +1086,31 @@ export default function KitchenDisplayPage() {
               Close
             </button>
             <button 
+              disabled={isAcceptingAlert}
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2" 
               onClick={async () => {
-                if (newOrderAlert) {
-                  const newBatches = newOrderAlert.batches?.filter(b => b.status === 'new') || [];
-                  for (const batch of newBatches) {
-                    await db.updateBatchStatus(batch.id, 'accepted', profile?.full_name || 'Kitchen Staff');
+                if (isAcceptingAlert) return;
+                setIsAcceptingAlert(true);
+                try {
+                  if (newOrderAlert) {
+                    const newBatches = newOrderAlert.batches?.filter(b => b.status === 'new') || [];
+                    for (const batch of newBatches) {
+                      await db.updateBatchStatus(batch.id, 'accepted', profile?.full_name || 'Kitchen Staff');
+                    }
+                    if (restaurantId) {
+                      await loadKdsData(restaurantId);
+                      window.dispatchEvent(new Event('storage'));
+                    }
+                    setNewOrderAlert(null);
                   }
-                  if (restaurantId) {
-                    await loadKdsData(restaurantId);
-                    window.dispatchEvent(new Event('storage'));
-                  }
-                  setNewOrderAlert(null);
+                } finally {
+                  setIsAcceptingAlert(false);
                 }
               }}
             >
+              {isAcceptingAlert ? (
+                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : null}
               Accept Order
             </button>
           </div>
@@ -1199,9 +1254,10 @@ export default function KitchenDisplayPage() {
               <Button
                 type="button"
                 variant="danger"
-                disabled={!cancellationReason.trim()}
+                disabled={!cancellationReason.trim() || isCancellingBatch}
                 onClick={async () => {
-                  if (!orderToCancel || !cancellationReason.trim()) return;
+                  if (!orderToCancel || !cancellationReason.trim() || isCancellingBatch) return;
+                  setIsCancellingBatch(true);
                   try {
                     window.dispatchEvent(new Event('stop-kitchen-sound'));
                     const cancelReasonText = cancellationReason.trim();
@@ -1253,9 +1309,14 @@ export default function KitchenDisplayPage() {
                       await loadKdsData(restaurantId);
                       window.dispatchEvent(new Event('storage'));
                     }
-                    setCancelModalOpen(false);
                   } catch (err: any) {
-                    alert(`Failed to cancel order: ${err.message}`);
+                    setErrorMessage(`Failed to cancel: ${err.message || 'Error occurred'}`);
+                    setTimeout(() => setErrorMessage(''), 5000);
+                  } finally {
+                    setIsCancellingBatch(false);
+                    setCancelModalOpen(false);
+                    setOrderToCancel(null);
+                    setCancellationReason('');
                   }
                 }}
                 className="rounded-xl font-extrabold px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white cursor-pointer shadow-md shadow-rose-600/10"

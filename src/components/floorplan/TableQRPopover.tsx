@@ -6,6 +6,7 @@ import { FloorPlanItem } from './types';
 import { useQRDesign } from '@/components/qr-studio/storage';
 import { QRCardRenderer } from '@/components/qr-studio/QRCardRenderer';
 import { downloadBrandedTableQR, printSingleBrandedTable } from '@/components/qr-studio/cardCanvasExport';
+import { getCanonicalTableQRUrl } from '@/lib/qr';
 
 interface TableQRPopoverProps {
   table: FloorPlanItem | null;
@@ -31,11 +32,9 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
 
   if (!isOpen || !table) return null;
 
-  const tableUuid = table.table_uuid || table.id;
+  const tableId = table.id || table.table_uuid || '';
   const displayNumber = table.display_number || table.tableNumber || table.name.replace(/^Table\s*/i, '');
-  const directUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/menu/${restaurantSlug}/tbl/${tableUuid}`
-    : `https://www.cleverops.in/menu/${restaurantSlug}/tbl/${tableUuid}`;
+  const directUrl = getCanonicalTableQRUrl(typeof window !== 'undefined' ? window.location.origin : '', restaurantSlug, tableId) || `/menu/${restaurantSlug}/table/${tableId}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(directUrl);
@@ -46,7 +45,7 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
   const handleDownloadPNG = async () => {
     await downloadBrandedTableQR(
       qrDesign,
-      { id: tableUuid, name: `Table ${displayNumber}`, url: directUrl },
+      { id: tableId, name: `Table ${displayNumber}`, url: directUrl },
       restaurantSlug
     );
   };
@@ -54,7 +53,7 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
   const handlePrintSticker = async () => {
     await printSingleBrandedTable(
       qrDesign,
-      { id: tableUuid, name: `Table ${displayNumber}`, url: directUrl }
+      { id: tableId, name: `Table ${displayNumber}`, url: directUrl }
     );
   };
 
@@ -102,7 +101,7 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
           />
           <div className="mt-2 text-center">
             <span className="text-[10px] text-[#737373] block truncate max-w-[240px]">
-              UUID: {tableUuid}
+              ID: {tableId}
             </span>
           </div>
         </div>
@@ -110,7 +109,7 @@ export const TableQRPopover: React.FC<TableQRPopoverProps> = ({
         {/* Direct Link Box */}
         <div className="mb-4 flex items-center bg-[#F5F5F4] border border-[#E7E5E4] rounded-lg p-1.5 text-xs">
           <span className="text-[#737373] text-[11px] truncate flex-1 px-2 font-mono">
-            /menu/{restaurantSlug}/tbl/{tableUuid.slice(0, 8)}...
+            /menu/{restaurantSlug}/table/{tableId.slice(0, 8)}...
           </span>
           <button
             type="button"

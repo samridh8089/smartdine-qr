@@ -6,15 +6,19 @@ import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { logSystemEvent, getOrderCorrelationId, type SystemEventType } from '@/lib/systemEventLogger';
-
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
-
 export async function POST(req: Request) {
   try {
+    const authCheck = await verifyStaffRequest(req, ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin']);
+    if (!authCheck.isAuthorized && authCheck.response) {
+      return authCheck.response;
+    }
+
     const body = await req.json();
 
     const normalizedBody = {
@@ -34,13 +38,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
 
-    const { batchId, orderId, newStatus, staffName = 'Staff', cancellationReason } = normalizedBody;
+    const { batchId, orderId, newStatus, staffName: inputStaffName, cancellationReason } = normalizedBody;
+    const staffName = authCheck.profile?.full_name || inputStaffName || authCheck.user?.email || 'Staff';
 
     if (!batchId && !orderId) {
       return NextResponse.json({ error: 'batchId or orderId is required' }, { status: 400 });
     }
 
     const effectiveStatus = (newStatus === 'received' ? 'accepted' : newStatus);
+
+    // Enforce role-based status transition restrictions
+    const callerRole = authCheck.isSuperAdmin ? 'super_admin' : (authCheck.profile?.role || 'owner');
+    const statusRoleMap: Record<string, string[]> = {
+      preparing: ['kitchen', 'supervisor', 'manager', 'owner', 'super_admin'],
+      ready: ['kitchen', 'supervisor', 'manager', 'owner', 'super_admin'],
+      served: ['kitchen', 'waiter', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
+      completed: ['cashier', 'waiter', 'supervisor', 'manager', 'owner', 'super_admin'],
+      accepted: ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
+      cancelled: ['kitchen', 'waiter', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
+    };
+
+    const allowedRolesForStatus = statusRoleMap[effectiveStatus];
+    if (allowedRolesForStatus && !authCheck.isSuperAdmin && !allowedRolesForStatus.includes(callerRole)) {
+      return NextResponse.json({
+        error: 'FORBIDDEN',
+        message: `Role "${callerRole}" is not authorized to update order status to "${effectiveStatus}".`
+      }, { status: 403 });
+    }
+
+    // Resolve target restaurant_id to enforce multi-tenant isolation
+    let orderRestId: string | null = null;
+    if (orderId) {
+      const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id').eq('id', orderId).maybeSingle();
+      orderRestId = ord?.restaurant_id;
+    } else if (batchId) {
+      const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
+      if (bRec?.order_id) {
+        const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id').eq('id', bRec.order_id).maybeSingle();
+        orderRestId = ord?.restaurant_id;
+      }
+    }
+
+    if (orderRestId && !authCheck.isSuperAdmin) {
+      if (authCheck.profile?.restaurant_id && authCheck.profile.restaurant_id !== orderRestId) {
+        return NextResponse.json({
+          error: 'TENANT_MISMATCH',
+          message: 'Forbidden: You cannot update orders for another restaurant.'
+        }, { status: 403 });
+      }
+    }
     const t_start = performance.now();
     let updatedOrder: any = null;
     let updatedBatch: any = null;
@@ -121,6 +167,81 @@ export async function POST(req: Request) {
             paymentStatus: updatedOrder?.payment_status || 'paid',
             status: 'completed',
             updatedOrder
+          },
+          client: supabaseAdmin
+        });
+      }
+
+      // P1-07: Table status lifecycle sync — release table upon completed or cancelled
+      const tableId = updatedOrder?.table_id;
+      if (tableId) {
+        const isReleaseStatus = effectiveStatus === 'completed' || effectiveStatus === 'cancelled';
+        let targetTableStatus = 'occupied';
+
+        if (isReleaseStatus) {
+          try {
+            // Check if any other active dine-in orders remain on this table
+            const { data: remainingOrders } = await supabaseAdmin
+              .from('orders')
+              .select('id')
+              .eq('restaurant_id', restId)
+              .eq('table_id', tableId)
+              .not('status', 'in', '(completed,cancelled)')
+              .neq('id', targetOrderId);
+
+            if (!remainingOrders || remainingOrders.length === 0) {
+              targetTableStatus = 'available';
+
+              // 1. Release table state in restaurant settings
+              const { data: restData } = await supabaseAdmin
+                .from('restaurants')
+                .select('settings')
+                .eq('id', restId)
+                .single();
+
+              if (restData?.settings) {
+                const tableStates = { ...(restData.settings.table_states || {}) };
+                if (tableStates[tableId]) {
+                  tableStates[tableId] = {
+                    ...tableStates[tableId],
+                    occupancy_status: tableStates[tableId].qr_enabled === false ? 'inactive' : 'available',
+                    manual_occupied: false,
+                    occupied_at: null,
+                    current_session_id: null
+                  };
+                  await supabaseAdmin
+                    .from('restaurants')
+                    .update({
+                      settings: {
+                        ...restData.settings,
+                        table_states: tableStates
+                      }
+                    })
+                    .eq('id', restId);
+                }
+              }
+
+              // 2. Release tables row status
+              await supabaseAdmin
+                .from('tables')
+                .update({ status: 'available' })
+                .eq('id', tableId);
+            }
+          } catch (relErr) {
+            console.warn('[update-order-status] Table release sync warning:', relErr);
+          }
+        }
+
+        await broadcastOrderRealtimeEvent({
+          restaurantId: restId,
+          orderId: targetOrderId,
+          eventType: 'table-status-updated',
+          payload: {
+            tableId,
+            tableName: updatedOrder?.table_name,
+            status: targetTableStatus,
+            orderId: targetOrderId,
+            newStatus: effectiveStatus
           },
           client: supabaseAdmin
         });

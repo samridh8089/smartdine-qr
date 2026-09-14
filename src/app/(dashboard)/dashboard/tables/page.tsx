@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, Table, checkTableHasActiveUnpaidOrders, RestaurantZone } from '@/lib/db';
 import { useRestaurant } from '../../layout';
 import { getActiveUser, supabase } from '@/lib/supabase';
-import { generateQRDataURL } from '@/lib/qr';
+import { generateQRDataURL, getCanonicalTableQRUrl } from '@/lib/qr';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -51,6 +51,7 @@ export default function TablesPage() {
   const [qrCodes, setQrCodes] = useState<Record<string, string>>(() => dashboardStore.getCachedTableQRs());
   const [takeawayQR, setTakeawayQR] = useState<string>(() => (restaurant?.slug ? dashboardStore.getCachedQR(`takeaway:${restaurant.slug}`) : '') || '');
   const [reservationQR, setReservationQR] = useState<string>(() => (restaurant?.slug ? dashboardStore.getCachedQR(`reservation:${restaurant.slug}`) : '') || '');
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -100,6 +101,12 @@ export default function TablesPage() {
         assignment_source: t.assignment_source,
         service_badges: t.service_badges,
         status: (t.occupancy_status || 'available') as any,
+        occupiedAt: t.occupied_at || undefined,
+        elapsedMinutes: t.occupied_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(t.occupied_at).getTime()) / 60000))
+          : undefined,
+        reservationPartyName: t.reservation_party_name || undefined,
+        reservationTime: t.reservation_time || undefined,
         dbTableId: t.id,
         qrCodeUrl: qrCodes[t.id]
       }));
@@ -157,13 +164,13 @@ export default function TablesPage() {
         }
       }
 
-      await fetchTablesData(targetRestId);
+      await fetchTablesData(targetRestId, true);
       setLoading(false);
 
       // Realtime subscription deferred slightly so it never blocks first interactive paint
       const realtimeTimer = setTimeout(() => {
         channel = supabase
-          .channel(`tables_page_${targetRestId}_${Date.now()}`)
+          .channel(`tables_${targetRestId}`)
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${targetRestId}` },
@@ -179,16 +186,41 @@ export default function TablesPage() {
             { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${targetRestId}` },
             () => debouncedReload(targetRestId)
           )
+          .on('broadcast', { event: 'new-order' }, () => debouncedReload(targetRestId))
+          .on('broadcast', { event: 'order-status-updated' }, () => debouncedReload(targetRestId))
+          .on('broadcast', { event: 'payment-updated' }, () => debouncedReload(targetRestId))
+          .on('broadcast', { event: 'table-status-updated' }, () => debouncedReload(targetRestId))
           .subscribe();
       }, 150);
     }
     loadTables();
 
+    const handleResync = () => {
+      const targetRestId = restaurant?.id || profile?.restaurant_id;
+      if (targetRestId) {
+        fetchTablesData(targetRestId, true);
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('waiter-reconnected', { detail: { restaurantId: targetRestId } }));
+      }
+    };
+
+    window.addEventListener('force-resync', handleResync);
+    window.addEventListener('online', handleResync);
+    window.addEventListener('focus', handleResync);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') handleResync();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (channel) supabase.removeChannel(channel);
+      window.removeEventListener('force-resync', handleResync);
+      window.removeEventListener('online', handleResync);
+      window.removeEventListener('focus', handleResync);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [restaurant?.id, profile?.restaurant_id]);
 
   // Compute and load base64 QR codes whenever tables change
   useEffect(() => {
@@ -380,7 +412,7 @@ export default function TablesPage() {
 
   const downloadQR = async (table: Table) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const customerUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
+    const customerUrl = getCanonicalTableQRUrl(origin, restaurantSlug, table.id);
     await downloadBrandedTableQR(
       qrDesign,
       { id: table.id, name: table.name, url: customerUrl },
@@ -390,7 +422,7 @@ export default function TablesPage() {
 
   const printTableQR = async (table: Table) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const customerUrl = `${origin}/menu/${restaurantSlug}/table/${table.id}`;
+    const customerUrl = getCanonicalTableQRUrl(origin, restaurantSlug, table.id);
     await printSingleBrandedTable(
       qrDesign,
       { id: table.id, name: table.name, url: customerUrl }
@@ -404,7 +436,7 @@ export default function TablesPage() {
     const items = tables.map(t => ({
       id: t.id,
       name: t.name,
-      url: `${origin}/menu/${restaurantSlug}/table/${t.id}`
+      url: getCanonicalTableQRUrl(origin, restaurantSlug, t.id)
     }));
     await downloadAllTablesQRZip(qrDesign, items, restaurantSlug, (current, total) => {
       setBulkProgress({ current, total });
@@ -419,7 +451,7 @@ export default function TablesPage() {
     const items = tables.map(t => ({
       id: t.id,
       name: t.name,
-      url: `${origin}/menu/${restaurantSlug}/table/${t.id}`
+      url: getCanonicalTableQRUrl(origin, restaurantSlug, t.id)
     }));
     await printAllTablesA4Sheet(qrDesign, items, restaurant?.name || 'The Foody Hub');
   };
@@ -448,7 +480,7 @@ export default function TablesPage() {
             .table-number { font-size: 32px; font-weight: 900; margin: 10px 0; color: #7c3aed; }
             .instructions { font-size: 16px; font-weight: 600; color: #7c3aed; background-color: #f5f3ff; padding: 10px 20px; border-radius: 9999px; display: inline-block; margin-top: 15px; }
             .footer-link { margin-top: 20px; font-size: 10px; color: #94a3b8; }
-            @media print { body { padding: 0; } .container { border: none; box-shadow: none; } }
+            @media print { body { padding: 0; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; } .container { border: none; box-shadow: none; margin: auto; } }
           </style>
         </head>
         <body>
@@ -492,7 +524,7 @@ export default function TablesPage() {
             .table-number { font-size: 32px; font-weight: 900; margin: 10px 0; color: #4f46e5; }
             .instructions { font-size: 16px; font-weight: 600; color: #4f46e5; background-color: #eef2ff; padding: 10px 20px; border-radius: 9999px; display: inline-block; margin-top: 15px; }
             .footer-link { margin-top: 20px; font-size: 10px; color: #94a3b8; }
-            @media print { body { padding: 0; } .container { border: none; box-shadow: none; } }
+            @media print { body { padding: 0; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; } .container { border: none; box-shadow: none; margin: auto; } }
           </style>
         </head>
         <body>
@@ -908,10 +940,11 @@ export default function TablesPage() {
                   onClick={() => {
                     const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${restaurantSlug}/reservation`;
                     navigator.clipboard.writeText(url);
-                    alert('Table Reservation link copied to clipboard!');
+                    setCopyFeedback('Reservation link copied!');
+                    setTimeout(() => setCopyFeedback(null), 2500);
                   }}
                 >
-                  Copy Link
+                  {copyFeedback === 'Reservation link copied!' ? 'Copied!' : 'Copy Link'}
                 </Button>
               </div>
             </div>
@@ -952,11 +985,12 @@ export default function TablesPage() {
                 onClick={() => {
                   const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${restaurantSlug}/reservation`;
                   navigator.clipboard.writeText(url);
-                  alert('Reservation link copied! Add it to your Instagram bio.');
+                  setCopyFeedback('Instagram link copied!');
+                  setTimeout(() => setCopyFeedback(null), 2500);
                 }}
                 className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
               >
-                <span>Instagram</span>
+                <span>{copyFeedback === 'Instagram link copied!' ? 'Copied!' : 'Instagram'}</span>
               </button>
             </div>
           </div>
@@ -973,7 +1007,7 @@ export default function TablesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {tables.map((table) => {
             const origin = typeof window !== 'undefined' ? window.location.origin : '';
-            const customerUrl = `/menu/${restaurantSlug}/table/${table.id}`;
+            const customerUrl = getCanonicalTableQRUrl(origin, restaurantSlug, table.id);
             const qrData = qrCodes[table.id];
             const activeGroupForTable = activeMergeGroups.find(g => (g.members || []).some((m: any) => m.table_id === table.id || m.table_name === table.name));
             const assignedWaiters = tableAssignments.filter(a => a.table_id === table.id);
@@ -1077,7 +1111,7 @@ export default function TablesPage() {
                     <QRCardRenderer
                       config={qrDesign}
                       tableName={table.name}
-                      directUrl={origin + customerUrl}
+                      directUrl={customerUrl}
                       previewScale={0.72}
                       className="shadow-md rounded-2xl"
                     />
@@ -1085,7 +1119,7 @@ export default function TablesPage() {
 
                   {/* QR Link */}
                   <div className="w-full truncate text-[11px] font-semibold text-slate-400 select-all p-2 bg-slate-50 border border-slate-100 rounded-lg">
-                    {origin + customerUrl}
+                    {customerUrl}
                   </div>
 
                   {/* Live Status & QR Controls Row */}

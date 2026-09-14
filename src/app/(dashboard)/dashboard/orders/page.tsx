@@ -255,9 +255,9 @@ export default function OrdersPage() {
 
       setPayMergedModalOpen(false);
       await safeReloadOrders(restaurant.id);
-      alert(`Merged Session "${mergedGroupDetails.group.name}" completely settled & paid via ${paymentMethodChoice.toUpperCase()}.`);
+      showToast(`Merged Session "${mergedGroupDetails.group.name}" completely settled & paid via ${paymentMethodChoice.toUpperCase()}.`, 'Session Settled', 'success');
     } catch (err: any) {
-      alert('Failed to complete merged session: ' + err.message);
+      showToast(`Failed to complete merged session: ${err.message}`, 'Payment Error', 'error');
     } finally {
       submittingPayMergedRef.current = false;
       setSubmittingPayMerged(false);
@@ -825,9 +825,14 @@ export default function OrdersPage() {
       if (status === 'served') {
         window.dispatchEvent(new Event('stop-waiter-sound'));
       }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || '';
       const res = await fetch('/api/staff/update-order-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           orderId: orderIdToUpdate,
           newStatus: status,
@@ -909,9 +914,14 @@ export default function OrdersPage() {
     }
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token || '';
       const res = await fetch('/api/staff/update-order-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           orderId: order.id,
           newStatus,
