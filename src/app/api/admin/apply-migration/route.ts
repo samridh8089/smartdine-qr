@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const SEED_SECRET = 'foody_hub_seed_2026';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    if (body.secret !== SEED_SECRET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authCheck = await verifySuperAdminRequest(req);
+    if (!authCheck.isSuperAdmin && authCheck.response) {
+      return authCheck.response;
     }
 
     const admin = createClient(supabaseUrl, supabaseKey);

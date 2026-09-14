@@ -35,7 +35,7 @@ export default function FounderControlCenterPage() {
   const { restaurant, profile, dbRole } = useRestaurant();
   const [hasFounderSession, setHasFounderSession] = useState<boolean>(false);
 
-  // Access control check: authorized role
+  // Access control check: authorized role (owner, manager, super_admin)
   const isRoleAuthorized = useMemo(() => {
     if (!profile) return false;
     return (
@@ -46,14 +46,8 @@ export default function FounderControlCenterPage() {
     );
   }, [profile, dbRole]);
 
-  const isAuthorized = hasFounderSession || isRoleAuthorized;
-
-  // Check sessionStorage on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined' && sessionStorage.getItem('founder_mode') === 'true') {
-      setHasFounderSession(true);
-    }
-  }, []);
+  // Strict RBAC: founder mode requires an authorized role
+  const isAuthorized = isRoleAuthorized;
 
   // Once authorized via role, persist founder session in sessionStorage
   useEffect(() => {

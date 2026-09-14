@@ -10,6 +10,7 @@ import {
   transitionOrderBatchLifecycle
 } from './inventoryEngine';
 import { logSystemEvent, getOrderCorrelationId } from './systemEventLogger';
+import { checkBookingOverlap } from './utils';
 
 
 async function dispatchFCMNotification(
@@ -200,6 +201,7 @@ export interface Restaurant {
     offers?: any[];
     table_assignments?: TableAssignment[];
     zones?: RestaurantZone[];
+    floor_names?: Record<string, string>;
     table_states?: Record<string, {
       qr_enabled?: boolean;
       occupancy_status?: 'available' | 'occupied' | 'inactive' | 'reserved';
@@ -721,6 +723,7 @@ function saveStoredOffers(restaurantId: string, offers: Offer[]) {
 }
 
 const restaurantMemoryCache = new Map<string, { data: Restaurant; timestamp: number }>();
+const restaurantSlugMemoryCache = new Map<string, { data: Restaurant; timestamp: number }>();
 
 export const DEFAULT_PRICING_PLANS: PricingPlan[] = [
   { id: 'starter', name: 'Starter', price_monthly: 299, price_yearly: 2500, features: ['Standard KDS', 'Basic Sales Overview', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 15, max_items: 50 },
@@ -1002,12 +1005,24 @@ export const db = {
   },
 
   async getRestaurantBySlug(slug: string): Promise<Restaurant | null> {
+    const cleanSlug = (slug || '').toLowerCase().trim();
+    if (!cleanSlug) return null;
+    const cached = restaurantSlugMemoryCache.get(cleanSlug);
+    if (cached && Date.now() - cached.timestamp < 30000) {
+      return cached.data;
+    }
     const { data, error } = await supabase
       .from('restaurants')
       .select('*')
-      .eq('slug', slug.toLowerCase());
-    if (error || !data || data.length === 0) return null;
-    return data[0] as Restaurant;
+      .eq('slug', cleanSlug);
+    if (error || !data || data.length === 0) {
+      if (cached?.data) return cached.data;
+      return null;
+    }
+    const res = data[0] as Restaurant;
+    restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
+    restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
+    return res;
   },
 
   async getRestaurantById(id: string): Promise<Restaurant | null> {
@@ -1027,6 +1042,7 @@ export const db = {
 
   async updateRestaurant(id: string, data: Partial<Restaurant>): Promise<Restaurant> {
     restaurantMemoryCache.delete(id);
+    restaurantSlugMemoryCache.clear();
     const { data: updated, error } = await supabase
       .from('restaurants')
       .update(data)
@@ -1532,13 +1548,25 @@ export const db = {
     restaurantId: string, 
     tableId: string, 
     isReserved: boolean, 
-    reservationInfo?: { partyName?: string; time?: string; reservationId?: string }
+    reservationInfo?: { partyName?: string; time?: string; reservationId?: string; force?: boolean }
   ): Promise<void> {
     const rest = await this.getRestaurantById(restaurantId);
     if (!rest) throw new Error('Restaurant not found');
 
     const tableStates = { ...(rest.settings?.table_states || {}) };
     if (isReserved) {
+      const current = tableStates[tableId];
+      if (!reservationInfo?.force && current?.occupancy_status === 'reserved' && current.reservation_time && reservationInfo?.time) {
+        if (checkBookingOverlap(current.reservation_time, reservationInfo.time, 90)) {
+          const overlapErr: any = new Error(
+            `Table ${tableId} already has an active reservation at ${current.reservation_time} which overlaps with ${reservationInfo.time}.`
+          );
+          overlapErr.code = 'RESERVATION_OVERLAP';
+          overlapErr.status = 409;
+          throw overlapErr;
+        }
+      }
+
       tableStates[tableId] = {
         ...(tableStates[tableId] || {}),
         occupancy_status: 'reserved',
@@ -1647,6 +1675,7 @@ export const db = {
         tableStates[tableId] = {
           ...tableStates[tableId],
           occupancy_status: tableStates[tableId].qr_enabled === false ? 'inactive' : 'available',
+          manual_occupied: false,
           occupied_at: null,
           current_session_id: null
         };
@@ -1658,6 +1687,27 @@ export const db = {
           }
         });
       }
+
+      try {
+        await supabase
+          .from('tables')
+          .update({ status: 'available' })
+          .eq('id', tableId);
+      } catch (_) {}
+
+      try {
+        const { broadcastOrderRealtimeEvent } = await import('./realtime');
+        await broadcastOrderRealtimeEvent({
+          restaurantId,
+          orderId: `release_${tableId}`,
+          eventType: 'table-status-updated',
+          payload: {
+            tableId,
+            status: 'available'
+          },
+          client: supabase
+        });
+      } catch (_) {}
     }
   },
 
@@ -2377,13 +2427,25 @@ export const db = {
       );
     }
 
-    // 1. Create a new order
-    const serviceChargeEnabled = restaurant.settings.service_charge_enabled !== false;
-    const serviceChargePercentage = serviceChargeEnabled ? (restaurant.settings.service_charge_percentage || 0) : 0;
-
-    const discAmt = Number(discountAmount || 0);
+    let validatedDiscountAmount = 0;
+    if (offerCode && typeof offerCode === 'string' && offerCode.trim()) {
+      const cleanCode = offerCode.trim().toUpperCase();
+      const offers: Offer[] = restaurant.settings?.offers || [];
+      const matched = offers.find((o: any) => o.code && String(o.code).toUpperCase() === cleanCode && o.is_active !== false);
+      if (matched && batchSubtotal >= (matched.min_order_amount || 0)) {
+        if (matched.discount_type === 'percentage') {
+          validatedDiscountAmount = parseFloat(((batchSubtotal * matched.discount_value) / 100).toFixed(2));
+        } else {
+          validatedDiscountAmount = Math.min(matched.discount_value, batchSubtotal);
+        }
+        validatedDiscountAmount = Math.min(validatedDiscountAmount, batchSubtotal);
+      }
+    }
+    const discAmt = validatedDiscountAmount;
     const taxCalc = calculateOrderTax(batchSubtotal, discAmt, restaurant.settings, restaurant.gst_number);
 
+    const serviceChargeEnabled = restaurant.settings?.service_charge_enabled !== false;
+    const serviceChargePercentage = serviceChargeEnabled ? (restaurant.settings?.service_charge_percentage || 0) : 0;
     const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
 
     // Calculate custom charges
@@ -2599,6 +2661,44 @@ export const db = {
         console.error('[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_RESERVATION_ERROR:', invErr?.message || invErr);
       }
 
+      // Sync table occupancy state in table_states and broadcast table-status-updated event
+      if (restaurantId && table.id && orderType !== 'takeaway' && orderType !== 'reservation') {
+        try {
+          const rest = await this.getRestaurantById(restaurantId);
+          if (rest) {
+            const tableStates = { ...(rest.settings?.table_states || {}) };
+            tableStates[table.id] = {
+              ...(tableStates[table.id] || {}),
+              occupancy_status: 'occupied',
+              occupied_at: new Date().toISOString(),
+              current_session_id: newOrder.id
+            };
+            await this.updateRestaurant(restaurantId, {
+              settings: {
+                ...rest.settings,
+                table_states: tableStates
+              }
+            });
+          }
+          const { broadcastOrderRealtimeEvent } = await import('./realtime');
+          await broadcastOrderRealtimeEvent({
+            restaurantId,
+            orderId: newOrder.id,
+            eventType: 'table-status-updated',
+            payload: {
+              tableId: table.id,
+              tableName: table.name,
+              status: 'occupied',
+              occupiedAt: new Date().toISOString(),
+              orderId: newOrder.id
+            },
+            client: supabase
+          });
+        } catch (syncErr) {
+          console.error('[db.createOrder] Table status sync error:', syncErr);
+        }
+      }
+
       return fullOrder;
   },
 
@@ -2637,7 +2737,21 @@ export const db = {
       .eq('order_id', activeOrder.id);
     const maxBatchNum = (existingBatches || []).reduce((max, b) => Math.max(max, Number(b.batch_number || 0)), 0);
     const nextBatchNum = maxBatchNum + 1;
-    const batchDiscAmt = Number(discountAmount || 0);
+    let validatedBatchDiscount = 0;
+    if (offerCode && typeof offerCode === 'string' && offerCode.trim()) {
+      const cleanCode = offerCode.trim().toUpperCase();
+      const offers: Offer[] = restaurant?.settings?.offers || [];
+      const matched = offers.find((o: any) => o.code && String(o.code).toUpperCase() === cleanCode && o.is_active !== false);
+      if (matched && batchSubtotal >= (matched.min_order_amount || 0)) {
+        if (matched.discount_type === 'percentage') {
+          validatedBatchDiscount = parseFloat(((batchSubtotal * matched.discount_value) / 100).toFixed(2));
+        } else {
+          validatedBatchDiscount = Math.min(matched.discount_value, batchSubtotal);
+        }
+        validatedBatchDiscount = Math.min(validatedBatchDiscount, batchSubtotal);
+      }
+    }
+    const batchDiscAmt = validatedBatchDiscount;
 
     let batchInstructions = specialInstructions || '';
     if (offerCode) {

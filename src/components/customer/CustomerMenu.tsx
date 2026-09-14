@@ -983,9 +983,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       }
     }
 
-    // OPTIMISTIC UI: Instantly disable button & close cart drawer (<5ms Visual Feedback)
+    // P1-08: Lock the submit button immediately. Keep cart open so the customer
+    // can see loading state. Cart closes only after successful navigation.
     setOrderPlacing(true);
-    setCartOpen(false);
 
     try {
       const orderPayload = cart.map(item => ({
@@ -1032,16 +1032,27 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
         });
 
-        const apiResult = await res.json();
+        const apiResult = await res.json().catch(() => ({}));
         if (!res.ok || !apiResult.success || !apiResult.order) {
-          throw new Error(apiResult.error || 'API order placement returned error');
+          const err = new Error(apiResult.error || `Order creation failed (${res.status})`);
+          (err as any).isValidation = res.status < 500 && res.status !== 0;
+          throw err;
         }
         newOrder = apiResult.order;
       } catch (apiErr: any) {
+        if (apiErr.isValidation) {
+          showToast(apiErr.message || 'Unable to place order. Please review your cart.');
+          isSubmittingRef.current = false;
+          setOrderPlacing(false);
+          return;
+        }
         if (apiErr.message === 'OFFLINE_NETWORK' || !navigator.onLine) {
-          // OFFLINE RESILIENCE: Save to IndexedDB/localStorage Queue with Idempotency Key
+          // P1-06: OFFLINE RESILIENCE - Queue action with idempotency key and preserve cart
           try {
             const queueKey = `smartdine_offline_orders_${restaurant.id}`;
+            const backupCartKey = `smartdine_offline_cart_backup_${restaurant.id}`;
+            localStorage.setItem(backupCartKey, JSON.stringify(cart));
+
             const existingQueue = JSON.parse(localStorage.getItem(queueKey) || '[]');
             const duplicateIndex = existingQueue.findIndex((o: any) => o.idempotencyKey === idempotencyKey);
             if (duplicateIndex === -1) {
@@ -1051,16 +1062,21 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 items: orderPayload,
                 specialInstructions: finalInstructions,
                 orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
+                customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
+                takeawayNotes: isTakeaway ? takeawayNotes : undefined,
+                customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : undefined,
+                customerPhone: isTakeaway ? takeawayPhone.trim() : isReservation ? reservationPhone.trim() : undefined,
+                paymentStatus: (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
                 idempotencyKey,
+                offerCode: appliedOffer?.code,
+                discountAmount,
                 queuedAt: Date.now()
               });
               localStorage.setItem(queueKey, JSON.stringify(existingQueue));
             }
           } catch (e) {}
 
-          showToast("Network Offline. Order saved safely & will auto-sync when connection restores!");
-          saveCart([]);
-          setSpecialInstructions('');
+          showToast("Network Offline. Order safely queued with cart preserved — auto-syncing upon reconnect!");
           setIdempotencyKey(crypto.randomUUID());
           return;
         }
@@ -1091,15 +1107,15 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         setActiveOrderId(newOrder.id);
       } catch (e) {}
 
-      router.push(`/order-tracking/${newOrder.id}`);
-
+      // Close cart before navigating away — clean exit
+      setCartOpen(false);
       saveCart([]);
       setSpecialInstructions('');
       setIdempotencyKey(crypto.randomUUID());
+      router.push(`/order-tracking/${newOrder.id}`);
 
     } catch (e: any) {
-      // ROLLBACK ONLY ON API FAILURE
-      setCartOpen(true);
+      // Cart is already open — just show the error and re-enable the button
       showToast(e.message || 'Failed to place order. Please try again.');
     } finally {
       isSubmittingRef.current = false;
@@ -2372,12 +2388,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       {formatPrice(itemP * item.quantity, restaurant.settings.currency)}
                     </span>
                   
-                  {/* Qty edit */}
+                  {/* Qty edit — frozen while order is being submitted */}
                   <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-800">
                     <button
                       type="button"
                       onClick={() => updateCartQty(idx, -1)}
-                      className="px-2 py-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                      disabled={orderPlacing}
+                      className={`px-2 py-1 text-slate-500 dark:text-slate-400 ${orderPlacing ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer'}`}
                     >
                       <Minus className="h-3 w-3" />
                     </button>
@@ -2385,7 +2402,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                     <button
                       type="button"
                       onClick={() => updateCartQty(idx, 1)}
-                      className="px-2 py-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
+                      disabled={orderPlacing}
+                      className={`px-2 py-1 text-slate-500 dark:text-slate-400 ${orderPlacing ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer'}`}
                     >
                       <Plus className="h-3 w-3" />
                     </button>

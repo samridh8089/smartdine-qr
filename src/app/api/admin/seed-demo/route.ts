@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-const SEED_SECRET = 'foody_hub_seed_2026';
 const RESTAURANT_ID = '81fa8201-51d7-4da5-98f5-a52dbff4e6ae';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    if (body.secret !== SEED_SECRET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authCheck = await verifySuperAdminRequest(req);
+    if (!authCheck.isSuperAdmin && authCheck.response) {
+      return authCheck.response;
     }
+
+    const body = await req.json().catch(() => ({}));
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 

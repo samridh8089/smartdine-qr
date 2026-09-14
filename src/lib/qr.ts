@@ -25,3 +25,14 @@ export async function generateQRDataURL(text: string, options?: QROptions): Prom
     return '';
   }
 }
+
+/**
+ * Canonical URL builder for Table QR codes, ensuring 100% parity across
+ * preview, print, and download.
+ */
+export function getCanonicalTableQRUrl(origin: string, restaurantSlug: string, tableId: string): string {
+  const cleanOrigin = (origin || (typeof window !== 'undefined' ? window.location.origin : 'https://www.cleverops.in')).replace(/\/+$/, '');
+  const cleanSlug = encodeURIComponent((restaurantSlug || '').trim());
+  const cleanTableId = encodeURIComponent((tableId || '').trim());
+  return `${cleanOrigin}/menu/${cleanSlug}/table/${cleanTableId}`;
+}

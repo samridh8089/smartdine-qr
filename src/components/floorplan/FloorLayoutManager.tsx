@@ -32,6 +32,7 @@ import { FloorPlanItem, RestaurantZone, TableOperationalStatus } from './types';
 import { db } from '@/lib/db';
 import { generateQRDataURL } from '@/lib/qr';
 import { supabase } from '@/lib/supabase';
+import { checkBookingOverlap, formatLiveTimer } from '@/lib/utils';
 
 export type FloorTabType = 'indoor' | 'outdoor' | 'first_floor' | 'terrace';
 
@@ -80,18 +81,7 @@ function formatStartedTime(occupiedAt?: string | null): string {
 
 // 2. Compute live elapsed time: MM:SS under 1 hour, HH:MM:SS above 1 hour
 function formatElapsedTimer(occupiedAt?: string | null, now?: number): string {
-  if (!occupiedAt) return '00:00';
-  const start = new Date(occupiedAt).getTime();
-  if (isNaN(start) || start <= 0) return '00:00';
-  const totalSeconds = Math.max(0, Math.floor(((now || Date.now()) - start) / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  return formatLiveTimer(occupiedAt, now);
 }
 
 // 3. Format reservation time display: "Reserved for 19:30", optional "Starts in 12 min"
@@ -269,20 +259,57 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
       const defaultX = 80 + (idx % 4) * 190;
       const defaultY = 100 + Math.floor(idx / 4) * 200;
 
-      // Extract effective status and times
-      const effectiveStatus: TableOperationalStatus = (
-        liveState.occupancy_status || t.status || 'available'
-      ) as TableOperationalStatus;
+      // Extract active dining orders for this table (excluding takeaway and unassigned reservations)
+      const activeTableOrders = allActiveOrders.filter((o) => {
+        if (o.order_type === 'takeaway' || o.table_name === 'Takeaway Counter') return false;
+        if (['completed', 'cancelled'].includes((o.status || '').toLowerCase())) return false;
+        const matchesId = o.table_id === t.id || o.table_id === t.dbTableId || o.table_id === t.table_uuid;
+        const matchesName = o.table_name && (
+          o.table_name.toLowerCase() === t.name.toLowerCase() ||
+          o.table_name.toLowerCase() === `table ${t.display_number || ''}`.toLowerCase() ||
+          o.table_name.toLowerCase() === `table-${t.display_number || ''}`.toLowerCase()
+        );
+        return matchesId || matchesName;
+      });
 
-      const effectiveOccupiedAt = liveState.occupied_at || t.occupiedAt || null;
+      const hasActiveOrders = activeTableOrders.length > 0;
+      const isManualOccupied = liveState.manual_occupied === true || liveState.occupancy_status === 'occupied';
+      const isReserved = liveState.occupancy_status === 'reserved' || (!hasActiveOrders && t.status === 'reserved');
+
+      // Comprehensive status hierarchy:
+      // 1. Any active in-flight order (new, accepted, preparing, ready, served) => strictly Occupied
+      // 2. Explicit manual seating / occupancy in table_states => Occupied
+      // 3. Reserved booking => Reserved
+      // 4. Fallback to table initial status or Available
+      let effectiveStatus: TableOperationalStatus = 'available';
+      if (hasActiveOrders || isManualOccupied) {
+        effectiveStatus = 'occupied';
+      } else if (isReserved) {
+        effectiveStatus = 'reserved';
+      } else if (t.status === 'occupied' && !liveState.occupancy_status) {
+        effectiveStatus = 'occupied';
+      } else {
+        effectiveStatus = 'available';
+      }
+
+      const effectiveOccupiedAt = liveState.occupied_at || activeTableOrders[0]?.created_at || t.occupiedAt || null;
       const effectiveGuestCount = liveState.guest_count || t.seats || 4;
       const effectiveResParty = liveState.reservation_party_name || t.reservationPartyName || null;
       const effectiveResTime = liveState.reservation_time || t.reservationTime || null;
+
+      let calculatedElapsed = liveState.elapsedMinutes ?? t.elapsedMinutes;
+      if (effectiveOccupiedAt) {
+        const start = new Date(effectiveOccupiedAt).getTime();
+        if (!isNaN(start) && start > 0) {
+          calculatedElapsed = Math.max(0, Math.floor((Date.now() - start) / 60000));
+        }
+      }
 
       return {
         ...t,
         status: effectiveStatus,
         occupiedAt: effectiveOccupiedAt,
+        elapsedMinutes: calculatedElapsed,
         guestCount: effectiveGuestCount,
         reservationPartyName: effectiveResParty,
         reservationTime: effectiveResTime,
@@ -292,7 +319,7 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
         floor: assignedFloor
       };
     });
-  }, [rawTables, layoutMap, liveTableStates]);
+  }, [rawTables, layoutMap, liveTableStates, allActiveOrders]);
 
   // Tables on current active floor
   const floorTables = useMemo(() => {
@@ -402,30 +429,42 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
     }
   }, [activeFloor]);
 
-  // Smart Table Suggestion logic:
-  // 2 guests -> nearest 2-seater
-  // 4 guests -> nearest available 4-seater
-  // 5 guests -> 6-seater suggest
-  // If perfect table unavailable, nearest larger table
+  // Smart Table Suggestion logic (P1-04):
+  // 1. Filter out occupied, reserved, and locked tables
+  // 2. Best-fit capacity matching (exact seats first, then smallest larger table)
+  // 3. Distance proximity sorting (nearest available table to entrance/host stand)
   const smartSuggestedTable = useMemo(() => {
-    const floorAvailable = floorTables.filter((t) => t.status === 'available');
-    const allAvailable = resolvedTables.filter((t) => t.status === 'available');
+    const floorAvailable = floorTables.filter((t) => t.status === 'available' && !t.isLocked);
+    const allAvailable = resolvedTables.filter((t) => t.status === 'available' && !t.isLocked);
     const pool = floorAvailable.length > 0 ? floorAvailable : allAvailable;
 
     if (pool.length === 0) return null;
 
-    // 1. Exact match
-    const exact = pool.find((t) => (t.seats || 4) === walkInGuestCount);
-    if (exact) return exact;
+    const getDistSq = (t: any) => ((t.x || 0) ** 2 + (t.y || 0) ** 2);
 
-    // 2. Smallest table with seats >= walkInGuestCount
+    // 1. Exact match sorted by nearest proximity
+    const exactMatches = pool.filter((t) => (t.seats || 4) === walkInGuestCount);
+    if (exactMatches.length > 0) {
+      exactMatches.sort((a, b) => getDistSq(a) - getDistSq(b));
+      return exactMatches[0];
+    }
+
+    // 2. Smallest table with seats >= walkInGuestCount (sorted by best capacity, then proximity)
     const larger = pool
       .filter((t) => (t.seats || 4) >= walkInGuestCount)
-      .sort((a, b) => (a.seats || 4) - (b.seats || 4));
+      .sort((a, b) => {
+        const capDiff = (a.seats || 4) - (b.seats || 4);
+        if (capDiff !== 0) return capDiff;
+        return getDistSq(a) - getDistSq(b);
+      });
     if (larger.length > 0) return larger[0];
 
     // 3. Largest available table if none have >= seats
-    const sortedDesc = [...pool].sort((a, b) => (b.seats || 4) - (a.seats || 4));
+    const sortedDesc = [...pool].sort((a, b) => {
+      const capDiff = (b.seats || 4) - (a.seats || 4);
+      if (capDiff !== 0) return capDiff;
+      return getDistSq(a) - getDistSq(b);
+    });
     return sortedDesc[0] || null;
   }, [floorTables, resolvedTables, walkInGuestCount]);
 
@@ -448,7 +487,15 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
     }> = {};
 
     resolvedTables.forEach((t) => {
-      const orders = allActiveOrders.filter((o) => o.table_id === t.id);
+      const orders = allActiveOrders.filter((o) => {
+        const matchesId = o.table_id === t.id || o.table_id === t.dbTableId || o.table_id === t.table_uuid;
+        const matchesName = o.table_name && (
+          o.table_name.toLowerCase() === t.name.toLowerCase() ||
+          o.table_name.toLowerCase() === `table ${t.display_number || ''}`.toLowerCase() ||
+          o.table_name.toLowerCase() === `table-${t.display_number || ''}`.toLowerCase()
+        );
+        return matchesId || matchesName;
+      });
       const totalBill = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
       const items: Array<{ name: string; quantity: number; status: string }> = [];
       const counts = { preparing: 0, ready: 0, served: 0, completed: 0 };
@@ -529,15 +576,15 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
       localStorage.setItem(`smartdine_floor_names_${restaurantId}`, JSON.stringify(updated));
       const rest = await db.getRestaurantById(restaurantId);
       if (rest) {
-        await supabase.from('restaurants').update({
+        await db.updateRestaurant(restaurantId, {
           settings: {
             ...rest.settings,
             floor_names: updated
           }
-        }).eq('id', restaurantId);
+        });
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn('[FloorLayoutManager] Could not persist floor names:', e);
     }
   }, [floorNames, restaurantId]);
 
@@ -927,6 +974,16 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
       if (!rest) return;
 
       const tableStates = { ...(rest.settings?.table_states || {}) };
+      const currentTableState = tableStates[tableId];
+
+      if (currentTableState && currentTableState.occupancy_status === 'reserved' && currentTableState.reservation_time) {
+        if (checkBookingOverlap(currentTableState.reservation_time, bookingTime, 90)) {
+          alert(`This table already has an active reservation at ${currentTableState.reservation_time} which overlaps with ${bookingTime} (90-minute dining window). Please select another time or table.`);
+          setIsBookingSaving(false);
+          return;
+        }
+      }
+
       tableStates[tableId] = {
         ...(tableStates[tableId] || {}),
         occupancy_status: 'reserved',
@@ -1125,7 +1182,7 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
             .table-number { font-size: 32px; font-weight: 900; margin: 10px 0; color: #16A34A; }
             .instructions { font-size: 16px; font-weight: 600; color: #16A34A; background-color: #f0fdf4; padding: 10px 20px; border-radius: 9999px; display: inline-block; margin-top: 15px; }
             .footer-link { margin-top: 20px; font-size: 10px; color: #94a3b8; }
-            @media print { body { padding: 0; } .container { border: none; box-shadow: none; } }
+            @media print { body { padding: 0; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; } .container { border: none; box-shadow: none; margin: auto; } }
           </style>
         </head>
         <body>
@@ -1167,7 +1224,7 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch active orders and table states on mount & interval
+  // Fetch active orders and table states on mount & interval, with Supabase Realtime for instant updates
   useEffect(() => {
     const fetchOrders = async () => {
       if (!restaurantId) return;
@@ -1211,7 +1268,61 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
       fetchStates();
     }, 15000);
 
-    return () => clearInterval(interval);
+    // P1-07: Realtime broadcast subscription — instant table status updates without waiting for poll
+    const reloadAll = () => {
+      fetchStates();
+      fetchOrders();
+    };
+
+    const realtimeChannel = supabase
+      .channel(`floorplan_${restaurantId}`)
+      .on('broadcast', { event: 'table-status-updated' }, reloadAll)
+      .on('broadcast', { event: 'new-order' }, reloadAll)
+      .on('broadcast', { event: 'order-status-updated' }, reloadAll)
+      .on('broadcast', { event: 'payment-updated' }, reloadAll)
+      .subscribe();
+
+    const fallbackLiveChannel = supabase
+      .channel(`floorplan_live_${restaurantId}`)
+      .on('broadcast', { event: 'table-status-updated' }, reloadAll)
+      .on('broadcast', { event: 'new-order' }, reloadAll)
+      .on('broadcast', { event: 'order-status-updated' }, reloadAll)
+      .on('broadcast', { event: 'payment-updated' }, reloadAll)
+      .subscribe();
+
+    const tablesBroadcastChannel = supabase
+      .channel(`tables_sync_${restaurantId}`)
+      .on('broadcast', { event: 'table-status-updated' }, reloadAll)
+      .on('broadcast', { event: 'new-order' }, reloadAll)
+      .on('broadcast', { event: 'order-status-updated' }, reloadAll)
+      .subscribe();
+
+    const postgresOrdersChannel = supabase
+      .channel(`floorplan_pg_${restaurantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` },
+        reloadAll
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${restaurantId}` },
+        reloadAll
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${restaurantId}` },
+        reloadAll
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(realtimeChannel);
+      supabase.removeChannel(fallbackLiveChannel);
+      supabase.removeChannel(tablesBroadcastChannel);
+      supabase.removeChannel(postgresOrdersChannel);
+    };
   }, [restaurantId]);
 
   // Load layout & floor names from localStorage
@@ -1468,10 +1579,10 @@ export const FloorLayoutManager: React.FC<FloorLayoutManagerProps> = ({
               <Users className="w-6 h-6 text-zinc-400" />
             </div>
             <p className="text-sm font-semibold text-zinc-300">
-              No tables placed on {floorNames[activeFloor] || activeFloor} floor yet
+              {activeFloor === 'outdoor' ? 'No tables placed in Outdoor seating area yet.' : `No tables placed on ${floorNames[activeFloor] || activeFloor} floor yet`}
             </p>
             <p className="text-xs text-zinc-500 max-w-sm mt-1">
-              Click Add Table or Bulk Add in the toolbar above to set up tables on this floor.
+              {activeFloor === 'outdoor' ? 'Click Add Table or Bulk Add in the toolbar above to set up outdoor tables.' : 'Click Add Table or Bulk Add in the toolbar above to set up tables on this floor.'}
             </p>
           </div>
         )}

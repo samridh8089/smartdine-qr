@@ -26,7 +26,7 @@ export async function broadcastOrderRealtimeEvent({
   restaurantId: string;
   orderId?: string;
   batchId?: string;
-  eventType: 'new-order' | 'order-status-updated' | 'payment-updated';
+  eventType: 'new-order' | 'order-status-updated' | 'payment-updated' | 'table-status-updated';
   payload: any;
   client?: any;
 }) {
@@ -39,6 +39,9 @@ export async function broadcastOrderRealtimeEvent({
     `kds_${restaurantId}`,
     `overview_dashboard_${restaurantId}`,
     `reports_${restaurantId}`,
+    `tables_${restaurantId}`,
+    `floorplan_${restaurantId}`,
+    `floorplan_live_${restaurantId}`,
     `founder_events_${restaurantId}`
   ];
 
@@ -59,13 +62,34 @@ export async function broadcastOrderRealtimeEvent({
       const ch = client.channel(chName, {
         config: { broadcast: { self: true } }
       });
+      if (typeof window === 'undefined') {
+        await new Promise<void>((resolve) => {
+          let resolved = false;
+          ch.subscribe((status: string) => {
+            if (status === 'SUBSCRIBED' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+              if (!resolved) {
+                resolved = true;
+                resolve();
+              }
+            }
+          });
+          setTimeout(() => {
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          }, 350);
+        });
+      }
       await ch.send({
         type: 'broadcast',
         event: eventType,
         payload: broadcastPayload
       });
       if (typeof window === 'undefined') {
-        client.removeChannel(ch);
+        setTimeout(() => {
+          try { client.removeChannel(ch); } catch (_) {}
+        }, 150);
       }
     } catch (e) {
       console.warn(`[Realtime] Failed broadcast of "${eventType}" to "${chName}":`, e);

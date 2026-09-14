@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       }
 
       if (!paymentDetails.isDemo) {
-        const keySecret = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
+        const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
         if (!keySecret || !paymentDetails.razorpay_signature) {
           return NextResponse.json({
             error: 'Payment verification failed: Razorpay cryptographic signature is missing.'
@@ -337,8 +337,15 @@ export async function POST(req: Request) {
     if (realPaymentId && !realPaymentId.startsWith('demo_')) {
       console.warn(`[AUTOMATIC REFUND TRIGGERED]: Onboarding failed post-payment for ${realPaymentId}. Initiating refund...`);
       try {
-        const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TK1Nbl3mJiENjR';
-        const keySecret = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
+        const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+        const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
+        if (!keyId || !keySecret) {
+          console.warn('[AUTOMATIC REFUND SKIPPED]: Missing Razorpay API keys.');
+          return NextResponse.json({
+            error: 'Onboarding failed, and automated refund could not be initiated due to unconfigured API keys. Please contact support.',
+            details: 'MISSING_RAZORPAY_KEYS'
+          }, { status: 500 });
+        }
         const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
 
         const refundRes = await fetch(`https://api.razorpay.com/v1/payments/${realPaymentId}/refund`, {

@@ -73,19 +73,89 @@ export default function ReportsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom'>('today');
+  const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_time_range');
+      if (saved && ['today', 'yesterday', 'weekly', 'monthly', 'custom'].includes(saved)) {
+        return saved as any;
+      }
+    }
+    return 'today';
+  });
   
-  // Date Range Controls (Standardized to IST)
-  const [selectedMonth, setSelectedMonth] = useState<number>(() => getISTMonthYear().month);
-  const [selectedYear, setSelectedYear] = useState<number>(() => getISTMonthYear().year);
-  const [customStartDate, setCustomStartDate] = useState<string>(() => getISTDateString());
-  const [customEndDate, setCustomEndDate] = useState<string>(() => getISTDateString());
-  const [appliedStartDate, setAppliedStartDate] = useState<string>(() => getISTDateString());
-  const [appliedEndDate, setAppliedEndDate] = useState<string>(() => getISTDateString());
+  // Date Range Controls (Standardized to IST & Persisted across refresh for UX-003)
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_selected_month');
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 11) return parsed;
+      }
+    }
+    return getISTMonthYear().month;
+  });
 
-  // Performance Table Sorting & Limit
-  const [itemSortBy, setItemSortBy] = useState<'quantity' | 'revenue'>('revenue');
-  const [itemLimit, setItemLimit] = useState<number>(10);
+  const [selectedYear, setSelectedYear] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_selected_year');
+      if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 2020) return parsed;
+      }
+    }
+    return getISTMonthYear().year;
+  });
+
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_custom_start_date');
+      if (saved) return saved;
+    }
+    return getISTDateString();
+  });
+
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_custom_end_date');
+      if (saved) return saved;
+    }
+    return getISTDateString();
+  });
+
+  const [appliedStartDate, setAppliedStartDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_applied_start_date');
+      if (saved) return saved;
+    }
+    return getISTDateString();
+  });
+
+  const [appliedEndDate, setAppliedEndDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_applied_end_date');
+      if (saved) return saved;
+    }
+    return getISTDateString();
+  });
+
+  // Performance Table Sorting & Limit (Persisted across refresh for P2-03)
+  const [itemSortBy, setItemSortBy] = useState<'quantity' | 'revenue'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_item_sort_by');
+      if (saved === 'quantity' || saved === 'revenue') return saved;
+    }
+    return 'revenue';
+  });
+  const [itemLimit, setItemLimit] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_item_limit');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && [10, 25, 50, 100].includes(parsed)) return parsed;
+      }
+    }
+    return 10;
+  });
 
   const [loading, setLoading] = useState(true);
 
@@ -890,6 +960,21 @@ export default function ReportsPage() {
       window.removeEventListener('force-resync', handleResync);
     };
   }, [restaurant?.id]);
+
+  // UX-003 & P2-03: Persist reports filters and sorting across page refreshes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('reports_time_range', timeRange);
+      sessionStorage.setItem('reports_selected_month', String(selectedMonth));
+      sessionStorage.setItem('reports_selected_year', String(selectedYear));
+      sessionStorage.setItem('reports_custom_start_date', customStartDate);
+      sessionStorage.setItem('reports_custom_end_date', customEndDate);
+      sessionStorage.setItem('reports_applied_start_date', appliedStartDate);
+      sessionStorage.setItem('reports_applied_end_date', appliedEndDate);
+      sessionStorage.setItem('reports_item_sort_by', itemSortBy);
+      sessionStorage.setItem('reports_item_limit', String(itemLimit));
+    }
+  }, [timeRange, selectedMonth, selectedYear, customStartDate, customEndDate, appliedStartDate, appliedEndDate, itemSortBy, itemLimit]);
 
   // Helper to trigger CSV file download
   const triggerDownload = (filename: string, csvData: string) => {

@@ -301,8 +301,24 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
   const scPct = isScEnabled ? (serviceChargePercentage || input.settings?.service_charge_percentage || 0) : 0;
   const serviceChargeAmount = parseFloat(((taxableBase * scPct) / 100).toFixed(2));
 
-  // 7. Grand Total
-  const grandTotal = parseFloat((discountedSubtotal + customChargesTotal + gstAmount + serviceChargeAmount).toFixed(2));
+  // 7. Grand Total & Round-Off (P2-01: Billing Accuracy)
+  const rawGrandTotal = parseFloat((discountedSubtotal + customChargesTotal + gstAmount + serviceChargeAmount).toFixed(2));
+  const isRoundOffEnabled = Boolean(
+    input.settings?.round_off === true ||
+    input.settings?.round_off_enabled === true ||
+    (input as any).roundOffEnabled === true
+  );
+
+  let roundOffVal = 0;
+  let grandTotalVal = rawGrandTotal;
+
+  if (isRoundOffEnabled) {
+    const rounded = Math.round(rawGrandTotal);
+    roundOffVal = parseFloat((rounded - rawGrandTotal).toFixed(2));
+    grandTotalVal = rounded;
+  }
+
+  const grandTotal = grandTotalVal;
 
   const subtotalVal = parseFloat(validSubtotal.toFixed(2));
   const discountVal = parseFloat(finalDiscountAmount.toFixed(2));
@@ -313,8 +329,6 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
   const taxableSubtotalVal = parseFloat(taxableBase.toFixed(2));
   const gstVal = gstAmount;
   const serviceChargeVal = serviceChargeAmount;
-  const roundOffVal = 0;
-  const grandTotalVal = grandTotal;
 
   const breakdownObj = {
     subtotal: subtotalVal,
@@ -413,4 +427,77 @@ export function calculateOrdersRevenue(orders: any[] | null | undefined): number
     .reduce((sum, o) => sum + getOrderRevenueAmount(o), 0);
   return Math.round((total + Number.EPSILON) * 100) / 100;
 }
+
+/**
+ * P2-02: Bill Split Calculation Engine
+ * Supports:
+ * - Equal Split across N guests
+ * - Custom Split (custom amounts or fixed contribution with remaining balance)
+ * - Multiple Payment Methods validation
+ */
+export interface BillSplitResult {
+  splitMode: 'equal' | 'custom';
+  totalAmount: number;
+  splits: Array<{
+    guestNumber: number;
+    amount: number;
+    paymentMethod?: 'cash' | 'upi' | 'card';
+  }>;
+  remainingBalance: number;
+  isFullyPaid: boolean;
+}
+
+export function calculateBillSplit(
+  totalAmount: number,
+  splitMode: 'equal' | 'custom',
+  options: {
+    guestCount?: number;
+    customAmounts?: number[];
+    paymentMethods?: Array<'cash' | 'upi' | 'card'>;
+  } = {}
+): BillSplitResult {
+  const count = Math.max(1, options.guestCount || 2);
+  const cleanTotal = Math.max(0, parseFloat(totalAmount.toFixed(2)));
+
+  if (splitMode === 'equal') {
+    const baseSplit = parseFloat((cleanTotal / count).toFixed(2));
+    const remainder = parseFloat((cleanTotal - (baseSplit * (count - 1))).toFixed(2));
+    const splits = Array.from({ length: count }, (_, idx) => ({
+      guestNumber: idx + 1,
+      amount: idx === count - 1 ? remainder : baseSplit,
+      paymentMethod: options.paymentMethods?.[idx] || 'cash'
+    }));
+
+    return {
+      splitMode: 'equal',
+      totalAmount: cleanTotal,
+      splits,
+      remainingBalance: 0,
+      isFullyPaid: true
+    };
+  } else {
+    const customList = options.customAmounts || [];
+    let allocatedTotal = 0;
+    const splits = customList.map((amt, idx) => {
+      const cleanAmt = Math.max(0, parseFloat(Number(amt || 0).toFixed(2)));
+      allocatedTotal += cleanAmt;
+      return {
+        guestNumber: idx + 1,
+        amount: cleanAmt,
+        paymentMethod: options.paymentMethods?.[idx] || 'cash'
+      };
+    });
+    allocatedTotal = parseFloat(allocatedTotal.toFixed(2));
+    const remainingBalance = parseFloat(Math.max(0, cleanTotal - allocatedTotal).toFixed(2));
+
+    return {
+      splitMode: 'custom',
+      totalAmount: cleanTotal,
+      splits,
+      remainingBalance,
+      isFullyPaid: remainingBalance <= 0
+    };
+  }
+}
+
 

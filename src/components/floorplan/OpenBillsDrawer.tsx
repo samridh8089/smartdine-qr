@@ -13,7 +13,7 @@ interface OpenBillsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   currency?: string;
-  onSettleBill?: (table: FloorPlanItem, method: 'cash' | 'upi' | 'card') => void;
+  onSettleBill?: (table: FloorPlanItem, method: 'cash' | 'upi' | 'card' | 'split') => void;
 }
 
 export const OpenBillsDrawer: React.FC<OpenBillsDrawerProps> = ({
@@ -25,33 +25,39 @@ export const OpenBillsDrawer: React.FC<OpenBillsDrawerProps> = ({
 }) => {
   const [splitCount, setSplitCount] = useState<number>(2);
   const [showSplitView, setShowSplitView] = useState<boolean>(false);
-  const [settlingMethod, setSettlingMethod] = useState<'cash' | 'upi' | 'card' | null>(null);
+  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
+  const [customAmount, setCustomAmount] = useState<string>('');
+  const [settlingMethod, setSettlingMethod] = useState<'cash' | 'upi' | 'card' | 'split' | null>(null);
   const [isSettled, setIsSettled] = useState<boolean>(false);
 
   if (!isOpen || !table) return null;
 
-  const displayNum = table.display_number || table.tableNumber || '1';
+  const displayNum = table.display_number || table.tableNumber || table.name.replace(/^Table\s*/i, '');
   const guests = table.currentGuests || table.seats || 2;
   const waiter = table.waiterName || 'Staff';
   
-  // Sample active items for current dining session
-  const activeItems = [
-    { id: '1', name: 'Paneer Butter Masala', qty: 1, price: 280 },
-    { id: '2', name: 'Butter Naan', qty: 3, price: 50 },
-    { id: '3', name: 'Dal Makhani', qty: 1, price: 240 },
-    { id: '4', name: 'Fresh Lime Soda', qty: 2, price: 80 }
+  const activeOrders = (table as any).activeOrders || [];
+  const sampleItems = [
+    { id: '1', name: 'Paneer Butter Masala', qty: 1, price: 280, total: 280 },
+    { id: '2', name: 'Butter Naan', qty: 3, price: 50, total: 150 },
+    { id: '3', name: 'Dal Makhani', qty: 1, price: 240, total: 240 },
+    { id: '4', name: 'Fresh Lime Soda', qty: 2, price: 80, total: 160 }
   ];
-
-  const subtotal = activeItems.reduce((acc, i) => acc + (i.price * i.qty), 0);
-  const gst = Math.round(subtotal * 0.05);
-  const grandTotal = subtotal + gst;
+  const itemsList = activeOrders.length > 0 ? activeOrders : sampleItems;
+  const activeItems: any[] = itemsList[0]?.items ? itemsList.flatMap((o: any) => o.items || []) : itemsList;
+  const subtotal = (table as any).billSubtotal || itemsList.reduce((sum: number, o: any) => sum + (o.total || (o.price ? (o.price * (o.qty || o.quantity || 1)) : 0)), 0);
+  const taxRate = (table as any).taxRate !== undefined ? (table as any).taxRate : 5;
+  const gst = (table as any).billGst || Math.round(subtotal * (taxRate / 100));
+  const grandTotal = (table as any).billTotal || (subtotal + gst);
   const splitAmount = Math.round(grandTotal / splitCount);
+  const parsedCustom = Math.min(grandTotal, Math.max(0, parseFloat(customAmount) || 0));
+  const remainingSplitBalance = Math.max(0, grandTotal - parsedCustom);
 
   const handlePrint = () => {
     window.print();
   };
 
-  const handleConfirmSettle = (method: 'cash' | 'upi' | 'card') => {
+  const handleConfirmSettle = (method: 'cash' | 'upi' | 'card' | 'split') => {
     setSettlingMethod(method);
     setTimeout(() => {
       setIsSettled(true);
@@ -108,7 +114,7 @@ export const OpenBillsDrawer: React.FC<OpenBillsDrawerProps> = ({
           <div className="py-3 space-y-4">
             {/* Items summary */}
             <div className="max-h-36 overflow-y-auto divide-y divide-stone-100 dark:divide-stone-800 text-xs">
-              {activeItems.map((item) => (
+              {activeItems.map((item: any) => (
                 <div key={item.id} className="py-1.5 flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-stone-900 dark:text-white">{item.qty}x</span>
@@ -128,7 +134,7 @@ export const OpenBillsDrawer: React.FC<OpenBillsDrawerProps> = ({
                 <span className="font-mono">{formatPrice(subtotal, currency)}</span>
               </div>
               <div className="flex justify-between text-stone-500">
-                <span>GST (5%)</span>
+                <span>GST ({taxRate}%)</span>
                 <span className="font-mono">{formatPrice(gst, currency)}</span>
               </div>
               <div className="flex justify-between font-bold text-sm text-stone-900 dark:text-white pt-1 border-t border-stone-200 dark:border-stone-700">
@@ -140,28 +146,80 @@ export const OpenBillsDrawer: React.FC<OpenBillsDrawerProps> = ({
             {/* Split View Toggle */}
             {showSplitView && (
               <div className="p-3 bg-stone-50 dark:bg-stone-800/60 rounded-xl border border-stone-200 dark:border-stone-700 space-y-2 animate-fade-in text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-stone-900 dark:text-white">Split Between Guests:</span>
-                  <div className="flex items-center gap-2">
-                    {[2, 3, 4, 5].map((cnt) => (
-                      <button
-                        key={`split_${cnt}`}
-                        type="button"
-                        onClick={() => setSplitCount(cnt)}
-                        className={`px-2.5 py-1 rounded-md font-bold text-xs cursor-pointer ${
-                          splitCount === cnt
-                            ? 'bg-stone-900 text-white'
-                            : 'bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-300 border border-stone-200'
-                        }`}
-                      >
-                        {cnt}
-                      </button>
-                    ))}
+                <div className="flex items-center justify-between pb-1 border-b border-stone-200/60 dark:border-stone-700/60">
+                  <span className="font-bold text-stone-900 dark:text-white">Split Mode:</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSplitMode('equal')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer ${
+                        splitMode === 'equal'
+                          ? 'bg-stone-900 text-white'
+                          : 'bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-300 border border-stone-200'
+                      }`}
+                    >
+                      Equal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSplitMode('custom')}
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer ${
+                        splitMode === 'custom'
+                          ? 'bg-stone-900 text-white'
+                          : 'bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-300 border border-stone-200'
+                      }`}
+                    >
+                      Custom
+                    </button>
                   </div>
                 </div>
-                <p className="text-stone-600 dark:text-stone-300 font-medium text-center pt-1">
-                  Each guest pays: <span className="font-bold font-mono text-stone-900 dark:text-white">{formatPrice(splitAmount, currency)}</span>
-                </p>
+
+                {splitMode === 'equal' ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-stone-700 dark:text-stone-300">Split Guests:</span>
+                      <div className="flex items-center gap-1.5">
+                        {[2, 3, 4, 5].map((cnt) => (
+                          <button
+                            key={`split_${cnt}`}
+                            type="button"
+                            onClick={() => setSplitCount(cnt)}
+                            className={`px-2.5 py-1 rounded-md font-bold text-xs cursor-pointer ${
+                              splitCount === cnt
+                                ? 'bg-stone-900 text-white'
+                                : 'bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-300 border border-stone-200'
+                            }`}
+                          >
+                            {cnt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-stone-600 dark:text-stone-300 font-medium text-center pt-1">
+                      Each guest pays: <span className="font-bold font-mono text-stone-900 dark:text-white">{formatPrice(splitAmount, currency)}</span>
+                    </p>
+                  </>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-stone-700 dark:text-stone-300">Guest 1 Pays:</span>
+                      <div className="relative w-32">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 font-mono text-xs">₹</span>
+                        <input
+                          type="number"
+                          placeholder={String(Math.round(grandTotal / 2))}
+                          value={customAmount}
+                          onChange={(e) => setCustomAmount(e.target.value)}
+                          className="w-full pl-6 pr-2 py-1 text-xs font-mono rounded border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-stone-700/60 text-stone-600 dark:text-stone-300 font-medium">
+                      <span>Remaining Balance:</span>
+                      <span className="font-bold font-mono text-stone-900 dark:text-white">{formatPrice(remainingSplitBalance, currency)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -209,6 +267,15 @@ export const OpenBillsDrawer: React.FC<OpenBillsDrawerProps> = ({
                   className="px-3 py-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1 cursor-pointer disabled:opacity-50"
                 >
                   <CreditCard className="w-3.5 h-3.5" /> Card
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmSettle('split')}
+                  disabled={settlingMethod !== null}
+                  className="px-3 py-1.5 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  title="Settle bill using multiple payment methods"
+                >
+                  <Split className="w-3.5 h-3.5" /> Split Pay
                 </button>
               </div>
             </div>

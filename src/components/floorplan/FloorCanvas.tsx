@@ -33,6 +33,8 @@ import { AutoSaveEngine } from './AutoSaveEngine';
 import { findCollidingTable, mergeTables, splitTable } from './CollisionEngine';
 import { db, RestaurantZone, STANDARD_ZONES } from '@/lib/db';
 import { generateQRDataURL } from '@/lib/qr';
+import { supabase } from '@/lib/supabase';
+import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 
 const FloorPreview3D = dynamic(
   () => import('../floorplan3d/FloorPreview3D').then((m) => m.FloorPreview3D),
@@ -586,8 +588,9 @@ export default function FloorCanvas({
     downloadAnchor.remove();
   }, [restaurantId, restaurantSlug, canvasDimensions, items]);
 
-  // Seat Guest from Bottom Sheet
-  const handleSeatGuest = useCallback((table: FloorPlanItem, guestCount: number, waiter: string) => {
+  // Seat Guest from Bottom Sheet with live persistence
+  const handleSeatGuest = useCallback(async (table: FloorPlanItem, guestCount: number, waiter: string) => {
+    const occupiedTimestamp = new Date().toISOString();
     const updated = items.map((it) => {
       if (it.id === table.id) {
         return {
@@ -596,16 +599,56 @@ export default function FloorCanvas({
           currentGuests: guestCount,
           waiterName: waiter,
           elapsedMinutes: 1,
-          occupiedAt: new Date().toISOString()
+          occupiedAt: occupiedTimestamp
         };
       }
       return it;
     });
     updateItemsWithHistory(updated);
     setActiveDrawerTable(null);
-  }, [items, updateItemsWithHistory]);
 
-  const handleClearTable = useCallback((table: FloorPlanItem) => {
+    const tableDbId = table.dbTableId || table.id;
+    try {
+      if (restaurantId && tableDbId) {
+        await db.toggleTableOccupancy(restaurantId, tableDbId, true);
+        const rest = await db.getRestaurantById(restaurantId);
+        if (rest) {
+          const tableStates = { ...(rest.settings?.table_states || {}) };
+          tableStates[tableDbId] = {
+            ...(tableStates[tableDbId] || {}),
+            manual_occupied: true,
+            occupancy_status: 'occupied',
+            occupied_at: occupiedTimestamp,
+            guest_count: guestCount,
+            assigned_waiter_name: waiter
+          };
+          await db.updateRestaurant(restaurantId, {
+            settings: {
+              ...rest.settings,
+              table_states: tableStates
+            }
+          });
+        }
+        await broadcastOrderRealtimeEvent({
+          restaurantId,
+          orderId: `seat_${tableDbId}`,
+          eventType: 'table-status-updated',
+          payload: {
+            tableId: tableDbId,
+            tableName: table.name || `Table ${table.display_number}`,
+            status: 'occupied',
+            occupiedAt: occupiedTimestamp
+          },
+          client: supabase
+        });
+      }
+    } catch (err) {
+      console.error('[FloorCanvas] Failed to persist seat guest:', err);
+    }
+    onDataMutated?.();
+  }, [items, updateItemsWithHistory, restaurantId, onDataMutated]);
+
+  const handleClearTable = useCallback(async (table: FloorPlanItem) => {
     const updated = items.map((it) => {
       if (it.id === table.id) {
         return {
@@ -622,7 +665,104 @@ export default function FloorCanvas({
     });
     updateItemsWithHistory(updated);
     setActiveDrawerTable(null);
-  }, [items, updateItemsWithHistory]);
+
+    const tableDbId = table.dbTableId || table.id;
+    try {
+      if (restaurantId && tableDbId) {
+        await db.toggleTableOccupancy(restaurantId, tableDbId, false);
+        await broadcastOrderRealtimeEvent({
+          restaurantId,
+          orderId: `clear_${tableDbId}`,
+          eventType: 'table-status-updated',
+          payload: {
+            tableId: tableDbId,
+            tableName: table.name || `Table ${table.display_number}`,
+            status: 'available',
+            occupiedAt: null
+          },
+          client: supabase
+        });
+      }
+    } catch (err) {
+      console.error('[FloorCanvas] Failed to persist clear table:', err);
+    }
+    onDataMutated?.();
+  }, [items, updateItemsWithHistory, restaurantId, onDataMutated]);
+
+  const handleSettleBill = useCallback(async (table: FloorPlanItem, paymentMethod: string = 'cash') => {
+    await handleClearTable(table);
+
+    const tableDbId = table.dbTableId || table.id;
+    try {
+      if (restaurantId && tableDbId) {
+        const liveOrders = await db.getOrders(restaurantId);
+        const activeTableOrders = liveOrders.filter(
+          (o) => (o.table_id === tableDbId || o.table_name === table.name) &&
+                 !['completed', 'cancelled'].includes(o.status)
+        );
+
+        for (const order of activeTableOrders) {
+          await db.updateOrderStatus(order.id, 'completed', 'Cashier');
+          await db.updateOrderPaymentStatus(
+            order.id,
+            'paid',
+            'Cashier',
+            paymentMethod,
+            `POS-SETTLE-${Date.now().toString().slice(-6)}`
+          );
+          await broadcastOrderRealtimeEvent({
+            restaurantId,
+            orderId: order.id,
+            eventType: 'order-status-updated',
+            payload: { orderId: order.id, status: 'completed', payment_status: 'paid' },
+            client: supabase
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[FloorCanvas] Failed to settle bill in DB:', err);
+    }
+    onDataMutated?.();
+  }, [handleClearTable, restaurantId, onDataMutated]);
+
+  const handleOpenReservation = useCallback(async (table: FloorPlanItem, partyName?: string, time?: string) => {
+    const updated = items.map((it) =>
+      it.id === table.id
+        ? {
+            ...it,
+            status: 'reserved' as const,
+            reservationPartyName: partyName || 'Scheduled Guest',
+            reservationTime: time || '20:30'
+          }
+        : it
+    );
+    updateItemsWithHistory(updated);
+    setActiveDrawerTable(null);
+
+    const tableDbId = table.dbTableId || table.id;
+    try {
+      if (restaurantId && tableDbId) {
+        await db.setTableReservationState(restaurantId, tableDbId, true, {
+          partyName: partyName || 'Scheduled Guest',
+          time: time || '20:30'
+        });
+        await broadcastOrderRealtimeEvent({
+          restaurantId,
+          orderId: `res_${tableDbId}`,
+          eventType: 'table-status-updated',
+          payload: {
+            tableId: tableDbId,
+            tableName: table.name || `Table ${table.display_number}`,
+            status: 'reserved'
+          },
+          client: supabase
+        });
+      }
+    } catch (err) {
+      console.error('[FloorCanvas] Failed to persist reservation:', err);
+    }
+    onDataMutated?.();
+  }, [items, updateItemsWithHistory, restaurantId, onDataMutated]);
 
   // Table Identity Mutation Operations
   const handleRenameTable = useCallback(async (table: FloorPlanItem, newDisplayNumber: string) => {
@@ -686,10 +826,10 @@ export default function FloorCanvas({
 
   const handleOpenQRModal = useCallback(async (table: FloorPlanItem) => {
     setActiveQRModalTable(table);
-    const tableUuid = table.table_uuid || table.id;
+    const tableId = table.id || table.table_uuid || '';
     const directUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}/menu/${restaurantSlug}/tbl/${tableUuid}`
-      : `https://www.cleverops.in/menu/${restaurantSlug}/tbl/${tableUuid}`;
+      ? `${window.location.origin}/menu/${restaurantSlug}/table/${tableId}`
+      : `https://www.cleverops.in/menu/${restaurantSlug}/table/${tableId}`;
     try {
       const dataUrl = await generateQRDataURL(directUrl);
       setActiveQRDataUrl(dataUrl);
@@ -1564,7 +1704,7 @@ export default function FloorCanvas({
         table={activeOpenBillTable}
         isOpen={Boolean(activeOpenBillTable && mode === 'view')}
         onClose={() => setActiveOpenBillTable(null)}
-        onSettleBill={(t) => handleClearTable(t)}
+        onSettleBill={(t, method) => handleSettleBill(t, method)}
       />
 
       {/* Exit Warning Modal */}
@@ -1637,20 +1777,7 @@ export default function FloorCanvas({
         onSeatGuest={handleSeatGuest}
         onClearTable={handleClearTable}
         onViewQR={(t) => handleOpenQRModal(t)}
-        onOpenReservation={(t) => {
-          const updated = items.map((it) =>
-            it.id === t.id
-              ? {
-                  ...it,
-                  status: 'reserved' as const,
-                  reservationPartyName: 'Scheduled Guest',
-                  reservationTime: '20:30'
-                }
-              : it
-          );
-          updateItemsWithHistory(updated);
-          setActiveDrawerTable(null);
-        }}
+        onOpenReservation={(t) => handleOpenReservation(t)}
         onOpenTakeaway={() => {
           setActiveDrawerTable(null);
           alert('Takeaway order initialized in dedicated Takeaway lane (does not occupy table).');

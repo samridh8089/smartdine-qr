@@ -6,11 +6,16 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvt
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_KEY_SECRET;
 
 export async function POST(req: Request) {
   try {
+    if (!RAZORPAY_WEBHOOK_SECRET) {
+      console.error('[Razorpay Webhook] Missing RAZORPAY_WEBHOOK_SECRET environment variable');
+      return NextResponse.json({ error: 'Server payment configuration error' }, { status: 500 });
+    }
+
     const rawBody = await req.text();
     const signature = req.headers.get('x-razorpay-signature');
 

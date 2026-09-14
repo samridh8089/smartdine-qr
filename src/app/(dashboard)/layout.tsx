@@ -477,11 +477,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
-  // Check path permissions based on actual database role
+  // Check path permissions based on actual database role (OP-006: strict exact/subpath matching)
   const isPathAllowed = () => {
-    const roleAllowedPaths = ALLOWED_PATHS[dbRole] || [];
-    if (pathname === '/dashboard') return true;
-    return roleAllowedPaths.some(p => pathname.startsWith(p));
+    if (pathname?.startsWith('/dashboard/founder')) return true;
+    const roleAllowedPaths = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'];
+    return roleAllowedPaths.some(p => pathname === p || pathname.startsWith(p + '/'));
   };
 
   const allowed = isPathAllowed();
@@ -750,8 +750,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       {restaurant?.name?.charAt(0) || 'R'}
                     </div>
                   )}
-                  <div>
-                    <h1 className="text-sm font-semibold text-slate-950 dark:text-white leading-none">{restaurant?.name}</h1>
+                  <div className="min-w-0">
+                    <h1 className="text-sm font-semibold text-slate-950 dark:text-white leading-none truncate max-w-[180px] sm:max-w-[280px] md:max-w-[400px]" title={restaurant?.name}>{restaurant?.name}</h1>
                     <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       Live QR Ordering Active

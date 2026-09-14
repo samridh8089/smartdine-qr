@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const rawKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.supabase.co';
+const supabaseServiceKey = rawKey || 'placeholder-service-key';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 
@@ -36,25 +38,13 @@ export async function verifySuperAdminRequest(req: Request) {
     }
 
     if (!token) {
-      // If running inside server or authenticated founder session, allow fallback check
-      const { data: superAdmins } = await supabaseAdmin
-        .from('profiles')
-        .select('id, email, role')
-        .eq('role', 'super_admin')
-        .limit(1);
-
-      if (superAdmins && superAdmins.length > 0) {
-        return {
-          isSuperAdmin: true,
-          user: { id: superAdmins[0].id, email: superAdmins[0].email, role: 'super_admin' },
-          response: null
-        };
-      }
-
       return {
         isSuperAdmin: false,
         user: null,
-        response: NextResponse.json({ error: 'SUPER_ADMIN_REQUIRED', message: 'Authorization token required' }, { status: 403 })
+        response: NextResponse.json({
+          error: 'UNAUTHORIZED',
+          message: 'Authentication token required for Super Admin access.'
+        }, { status: 401 })
       };
     }
 

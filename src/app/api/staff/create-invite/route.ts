@@ -7,16 +7,35 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PU
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { name, email, phone, password, role, department, restaurantId } = body;
 
-    if (!email || !email.includes('@')) {
-      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
-    }
     if (!restaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    // 1. Caller Authorization Guard: only owner, manager, or super_admin can create/invite staff
+    const authCheck = await verifyStaffRequest(req, ['owner', 'manager', 'super_admin'], restaurantId);
+    if (!authCheck.isAuthorized && authCheck.response) {
+      return authCheck.response;
+    }
+
+    // 2. Privilege Escalation Protection: Forbid creating super_admin or owner roles via staff invite
+    const requestedRole = (role || 'staff').toLowerCase().trim();
+    const ALLOWED_STAFF_ROLES = ['waiter', 'kitchen', 'cashier', 'manager', 'supervisor', 'staff'];
+    if (requestedRole === 'super_admin' || requestedRole === 'owner' || !ALLOWED_STAFF_ROLES.includes(requestedRole)) {
+      return NextResponse.json({
+        error: 'ROLE_ESCALATION_FORBIDDEN',
+        message: 'Forbidden: Cannot create super_admin or owner accounts through staff invites.'
+      }, { status: 403 });
+    }
+
+    if (!email || !email.includes('@')) {
+      return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
     }
 
     const cleanEmail = email.trim().toLowerCase();

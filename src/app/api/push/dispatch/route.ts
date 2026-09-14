@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sendWebPushToRestaurant } from '@/lib/webPush';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 export async function POST(req: Request) {
   try {
@@ -8,6 +9,16 @@ export async function POST(req: Request) {
 
     if (!restaurantId || !roles || !title) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+    }
+
+    // Require staff authentication & tenant isolation
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized && authCheck.response) {
+      return authCheck.response;
     }
 
     const count = await sendWebPushToRestaurant(restaurantId, roles, {

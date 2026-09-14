@@ -1,19 +1,52 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const SEED_SECRET = 'foody_hub_seed_2026';
-const RESTAURANT_ID = '81fa8201-51d7-4da5-98f5-a52dbff4e6ae';
-
 export async function POST(req: Request) {
   try {
+    const authCheck = await verifySuperAdminRequest(req);
+    if (!authCheck.isSuperAdmin && authCheck.response) {
+      return authCheck.response;
+    }
+
     const body = await req.json();
-    if (body.secret !== SEED_SECRET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const RESTAURANT_ID = body.restaurantId;
+    if (!RESTAURANT_ID || typeof RESTAURANT_ID !== 'string' || !RESTAURANT_ID.trim()) {
+      return NextResponse.json({
+        error: 'RESTAURANT_ID_REQUIRED',
+        message: 'A valid restaurantId is strictly required for factory reset operations.'
+      }, { status: 400 });
     }
 
     const admin = createClient(supabaseUrl, supabaseKey);
+
+    // Validate that target restaurant exists
+    const { data: targetRest, error: restErr } = await admin
+      .from('restaurants')
+      .select('id, name')
+      .eq('id', RESTAURANT_ID)
+      .maybeSingle();
+
+    if (restErr || !targetRest) {
+      return NextResponse.json({
+        error: 'RESTAURANT_NOT_FOUND',
+        message: `Restaurant with ID ${RESTAURANT_ID} not found.`
+      }, { status: 404 });
+    }
+
+    const adminEmail = authCheck.user?.email || 'Super Admin';
+
+    // Factory reset protection: destructive wipe requires explicit confirmation
+    if (body.action !== 'count' && body.action !== 'get-inventory' && body.action !== 'deduplicate-inventory' && body.action !== 'create-test-order') {
+      if (body.confirmReset !== 'CONFIRM_FACTORY_RESET') {
+        return NextResponse.json({
+          error: 'CONFIRMATION_REQUIRED',
+          message: 'Destructive factory reset requires explicit confirmation protection: confirmReset must equal "CONFIRM_FACTORY_RESET".'
+        }, { status: 400 });
+      }
+    }
 
     // If body.action === 'count', only return row counts without deleting
     if (body.action === 'count') {
@@ -234,104 +267,122 @@ export async function POST(req: Request) {
       });
     }
 
-    // ── COMPLETE FACTORY RESET EXECUTION ─────────────────────────────────────
+    // ── COMPLETE FACTORY RESET EXECUTION (STRICT MULTI-TENANT ISOLATION) ───
     const results: Record<string, any> = {};
 
-    // 1. system_events
+    // First fetch all order IDs belonging exclusively to this restaurant
+    const { data: restOrders } = await (admin.from('orders') as any)
+      .select('id')
+      .eq('restaurant_id', RESTAURANT_ID);
+    const orderIds = (restOrders || []).map((o: any) => o.id);
+
+    // 1. system_events (tenant isolated)
     try {
       const { error, count } = await (admin.from('system_events') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.system_events = { count, error: error?.message };
     } catch (e: any) {
       results.system_events = { error: e.message };
     }
 
-    // 2. activity_logs
+    // 2. activity_logs (tenant isolated)
     try {
       const { error, count } = await (admin.from('activity_logs') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.activity_logs = { count, error: error?.message };
     } catch (e: any) {
       results.activity_logs = { error: e.message };
     }
 
-    // 3. audit_logs (if present)
+    // 3. audit_logs (tenant isolated if restaurant_id column exists)
     try {
       const { error, count } = await (admin.from('audit_logs') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.audit_logs = { count, error: error?.message };
     } catch (e: any) {
       results.audit_logs = { error: e.message };
     }
 
-    // 4. customer_calls
+    // 4. customer_calls (tenant isolated)
     try {
       const { error, count } = await (admin.from('customer_calls') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.customer_calls = { count, error: error?.message };
     } catch (e: any) {
       results.customer_calls = { error: e.message };
     }
 
-    // 5. inventory_reservations
+    // 5. inventory_reservations (tenant isolated)
     try {
       const { error, count } = await (admin.from('inventory_reservations') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.inventory_reservations = { count, error: error?.message };
     } catch (e: any) {
       results.inventory_reservations = { error: e.message };
     }
 
-    // 6. inventory_transactions
+    // 6. inventory_transactions (tenant isolated)
     try {
       const { error, count } = await (admin.from('inventory_transactions') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.inventory_transactions = { count, error: error?.message };
     } catch (e: any) {
       results.inventory_transactions = { error: e.message };
     }
 
-    // 7. order_items
+    // 7. order_items (tenant isolated by order_id)
     try {
-      const { error, count } = await (admin.from('order_items') as any)
-        .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      results.order_items = { count, error: error?.message };
+      if (orderIds.length > 0) {
+        const { error, count } = await (admin.from('order_items') as any)
+          .delete({ count: 'exact' })
+          .in('order_id', orderIds);
+        results.order_items = { count, error: error?.message };
+      } else {
+        results.order_items = { count: 0 };
+      }
     } catch (e: any) {
       results.order_items = { error: e.message };
     }
 
-    // 8. order_batches
+    // 8. order_batches (tenant isolated by order_id)
     try {
-      const { error, count } = await (admin.from('order_batches') as any)
-        .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      results.order_batches = { count, error: error?.message };
+      if (orderIds.length > 0) {
+        const { error, count } = await (admin.from('order_batches') as any)
+          .delete({ count: 'exact' })
+          .in('order_id', orderIds);
+        results.order_batches = { count, error: error?.message };
+      } else {
+        results.order_batches = { count: 0 };
+      }
     } catch (e: any) {
       results.order_batches = { error: e.message };
     }
 
-    // 9. order_discounts
+    // 9. order_discounts (tenant isolated by order_id)
     try {
-      const { error, count } = await (admin.from('order_discounts') as any)
-        .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-      results.order_discounts = { count, error: error?.message };
+      if (orderIds.length > 0) {
+        const { error, count } = await (admin.from('order_discounts') as any)
+          .delete({ count: 'exact' })
+          .in('order_id', orderIds);
+        results.order_discounts = { count, error: error?.message };
+      } else {
+        results.order_discounts = { count: 0 };
+      }
     } catch (e: any) {
       results.order_discounts = { error: e.message };
     }
 
-    // 10. orders
+    // 10. orders (tenant isolated)
     try {
       const { error, count } = await (admin.from('orders') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.orders = { count, error: error?.message };
     } catch (e: any) {
       results.orders = { error: e.message };
@@ -341,79 +392,79 @@ export async function POST(req: Request) {
     try {
       const { error: eMemb, count: cMemb } = await (admin.from('table_merge_session_members') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       const { error: eSess, count: cSess } = await (admin.from('table_merge_sessions') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.table_merges = { cMemb, cSess, error: eMemb?.message || eSess?.message };
     } catch (e: any) {
       results.table_merges = { error: e.message };
     }
 
-    // 12. staff_table_assignments
+    // 12. staff_table_assignments (tenant isolated)
     try {
       const { error, count } = await (admin.from('staff_table_assignments') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.staff_table_assignments = { count, error: error?.message };
     } catch (e: any) {
       results.staff_table_assignments = { error: e.message };
     }
 
-    // 13. recipe_ingredients & recipes
+    // 13. recipe_ingredients & recipes (tenant isolated)
     try {
       const { error: eRI, count: cRI } = await (admin.from('recipe_ingredients') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       const { error: eR, count: cR } = await (admin.from('recipes') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.recipes = { cRI, cR, error: eRI?.message || eR?.message };
     } catch (e: any) {
       results.recipes = { error: e.message };
     }
 
-    // 14. inventory_items & ingredients
+    // 14. inventory_items & ingredients (tenant isolated)
     try {
       const { error: eII, count: cII } = await (admin.from('inventory_items') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       const { error: eIng, count: cIng } = await (admin.from('ingredients') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.inventory = { cII, cIng, error: eII?.message || eIng?.message };
     } catch (e: any) {
       results.inventory = { error: e.message };
     }
 
-    // 15. menu_item_variants & menu_items
+    // 15. menu_item_variants & menu_items (tenant isolated)
     try {
       const { error: eMIV, count: cMIV } = await (admin.from('menu_item_variants') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       const { error: eMI, count: cMI } = await (admin.from('menu_items') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.menu_items = { cMIV, cMI, error: eMIV?.message || eMI?.message };
     } catch (e: any) {
       results.menu_items = { error: e.message };
     }
 
-    // 16. categories
+    // 16. categories (tenant isolated)
     try {
       const { error, count } = await (admin.from('categories') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.categories = { count, error: error?.message };
     } catch (e: any) {
       results.categories = { error: e.message };
     }
 
-    // 17. idempotency_keys
+    // 17. idempotency_keys (tenant isolated)
     try {
       const { error, count } = await (admin.from('idempotency_keys') as any)
         .delete({ count: 'exact' })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
+        .eq('restaurant_id', RESTAURANT_ID);
       results.idempotency_keys = { count, error: error?.message };
     } catch (e: any) {
       results.idempotency_keys = { error: e.message };

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { 
   FEATURE_CATALOG, 
   RESOURCE_LIMIT_CATALOG, 
@@ -39,6 +40,18 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
   const [selectedRestaurant, setSelectedRestaurant] = useState<any | null>(null);
   const [targetPlanId, setTargetPlanId] = useState('starter');
 
+  const getAuthHeaders = async (): Promise<Record<string, string>> => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token || '';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   useEffect(() => {
     loadPlans();
   }, []);
@@ -46,7 +59,8 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
   async function loadPlans() {
     setLoading(true);
     try {
-      const res = await fetch('/api/admin/plans');
+      const headers = await getAuthHeaders();
+      const res = await fetch('/api/admin/plans', { headers });
       const data = await res.json();
       if (data.success && Array.isArray(data.plans)) {
         setPlans(data.plans);
@@ -91,9 +105,10 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
     const newId = newName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/admin/plans', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           action: 'duplicate_plan',
           sourcePlanId: plan.id,
@@ -123,7 +138,8 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
     if (!confirm(`Are you sure you want to delete plan "${plan.name}"? This action cannot be undone.`)) return;
 
     try {
-      const res = await fetch(`/api/admin/plans?planId=${plan.id}`, { method: 'DELETE' });
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/admin/plans?planId=${plan.id}`, { method: 'DELETE', headers });
       const data = await res.json();
       if (data.success) {
         alert(`Plan deleted successfully`);
@@ -144,9 +160,10 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
   const savePlanSpec = async (specToSave: PlanEntitlementSpec) => {
     setSaving(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/admin/plans', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           planSpec: specToSave,
           adminUser: 'Super Admin',
@@ -201,9 +218,10 @@ export default function SaaSPlanBuilder({ restaurants, onRefreshData }: SaaSPlan
     if (!selectedRestaurant) return;
 
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/admin/plans', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           action: 'assign_restaurant_plan',
           restId: selectedRestaurant.id,
