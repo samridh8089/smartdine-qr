@@ -17,8 +17,14 @@ node_modules/
 out/
 build/
 dist/
+dist-desktop/
+dist-electron/
+out-electron-build/
+release-rc1/
+release-rc2/
 tsconfig.tsbuildinfo
 .vercel/
+*.png
 
 # Environment files
 .env*

@@ -1,0 +1,100 @@
+[
+  {
+    "testName": "Factory Reset: Unauthenticated Access Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication token required for Super Admin access.\"}"
+  },
+  {
+    "testName": "Entity Edit: Unauthenticated Access Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication token required for Super Admin access.\"}"
+  },
+  {
+    "testName": "Apply Migration: Arbitrary SQL Execution Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication token required for Super Admin access.\"}"
+  },
+  {
+    "testName": "Seed Recipes: Unauthenticated Access Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication token required for Super Admin access.\"}"
+  },
+  {
+    "testName": "Update Plan Specs: Unauthenticated Tampering Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication token required for Super Admin access.\"}"
+  },
+  {
+    "testName": "Staff Invite: Privilege Escalation to Super Admin Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required. Missing staff session token.\"}"
+  },
+  {
+    "testName": "Staff Delete: Unauthenticated Deletion Blocked",
+    "expected": "401 or 403",
+    "actual": 400,
+    "passed": false,
+    "details": "{\"error\":\"targetUserId is required\"}"
+  },
+  {
+    "testName": "Table Assignments: Unauthenticated Modification Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required. Missing staff session token.\"}"
+  },
+  {
+    "testName": "Update Order Status: Unauthenticated Status Change Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required. Missing staff session token.\"}"
+  },
+  {
+    "testName": "Waiter Punch Order: Unauthenticated Order Creation Blocked",
+    "expected": "401 or 403",
+    "actual": 401,
+    "passed": true,
+    "details": "{\"error\":\"UNAUTHORIZED\",\"message\":\"Authentication required. Missing staff session token.\"}"
+  },
+  {
+    "testName": "Push Dispatch: Unauthenticated Push Notification Blocked",
+    "expected": "401 or 403",
+    "actual": 400,
+    "passed": false,
+    "details": "{\"error\":\"Missing required parameters\"}"
+  },
+  {
+    "testName": "Customer Order: Negative Quantity Rejected",
+    "expected": "400 Bad Request",
+    "actual": 404,
+    "passed": false,
+    "details": "{\"error\":\"Restaurant not found for ID: test-rest\"}"
+  },
+  {
+    "testName": "Customer Order: Empty Items Array Rejected",
+    "expected": "400 Bad Request",
+    "actual": 400,
+    "passed": true,
+    "details": "{\"error\":\"restaurantId and items are required\"}"
+  },
+  {
+    "testName": "Customer Order: Missing Restaurant ID Rejected",
+    "expected": "400 Bad Request",
+    "actual": 400,
+    "passed": true,
+    "details": "{\"error\":\"restaurantId and items are required\"}"
+  }
+]

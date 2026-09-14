@@ -1,8 +1,10 @@
 {
+  "id": "/",
   "name": "CleverOps SmartDine",
   "short_name": "SmartDine",
   "description": "Modern QR Menu Ordering, KDS & Restaurant Management",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#090d16",
   "theme_color": "#059669",

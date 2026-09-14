@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CleverOps - Modern Restaurant Management & QR Ordering",
   description: "CleverOps restaurant management, KDS, waiter calling, and contactless QR ordering system.",
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: [
       { url: '/favicon.ico?v=20260901' },
@@ -39,6 +40,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#059669" />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -55,13 +57,18 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
+                function registerSW() {
                   navigator.serviceWorker.register('/sw.js').then(function(reg) {
                     console.log('SmartDine ServiceWorker registered:', reg.scope);
                   }).catch(function(err) {
                     console.warn('SmartDine ServiceWorker registration failed:', err);
                   });
-                });
+                }
+                if (document.readyState === 'complete') {
+                  registerSW();
+                } else {
+                  window.addEventListener('load', registerSW);
+                }
               }
             `,
           }}

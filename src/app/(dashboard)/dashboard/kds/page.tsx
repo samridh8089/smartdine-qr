@@ -26,8 +26,9 @@ export default function KitchenDisplayPage() {
   const [restaurantId, setRestaurantId] = useState(restId || '');
   const [orders, setOrders] = useState<Order[]>(() => {
     if (!initialCachedOrders) return [];
-    return initialCachedOrders.filter(o => !['completed', 'cancelled', 'served'].includes(o.status));
+    return initialCachedOrders.filter(o => !['cancelled'].includes(o.status));
   });
+  const [queueView, setQueueView] = useState<'cooking' | 'served' | 'completed' | 'all'>('cooking');
   const [loading, setLoading] = useState(() => !initialCachedOrders);
   const [searchQuery, setSearchQuery] = useState('');
   const [processingBatchIds, setProcessingBatchIds] = useState<string[]>([]);
@@ -135,7 +136,7 @@ export default function KitchenDisplayPage() {
 
       // BUG-RES-001: Reservations must NOT enter KDS until actual dining session / food order placed
       const activeOrders = (allOrders || []).filter(o => 
-        !['completed', 'cancelled', 'served'].includes(o.status) &&
+        !['cancelled'].includes(o.status) &&
         o.order_type !== 'reservation'
       );
       setOrders(activeOrders);
@@ -279,7 +280,7 @@ export default function KitchenDisplayPage() {
             }
             setOrders(prev => {
               const exists = prev.some(o => o.id === u.id);
-              if (['completed', 'cancelled', 'served'].includes(u.status)) {
+              if (['cancelled'].includes(u.status)) {
                 return prev.filter(o => o.id !== u.id);
               }
               if (exists) {
@@ -299,7 +300,7 @@ export default function KitchenDisplayPage() {
           console.log('Realtime broadcast KDS payment-updated received:', payload);
           const completedOrderId = payload.payload?.orderId;
           if (completedOrderId) {
-            setOrders(prev => prev.filter(o => o.id !== completedOrderId));
+            setOrders(prev => prev.map(o => o.id === completedOrderId ? { ...o, payment_status: 'paid', status: 'completed' } : o));
           }
           await reloadFnRef.current(restaurantId);
         }
@@ -574,7 +575,7 @@ export default function KitchenDisplayPage() {
         order.batches.forEach(batch => {
           if (!batch || !batch.id || seenBatchIds.has(batch.id)) return;
           const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
-          if (batch.status !== 'served' && !isCancelled) {
+          if (!isCancelled) {
             seenBatchIds.add(batch.id);
             acc.push({
               ...batch,
@@ -582,6 +583,7 @@ export default function KitchenDisplayPage() {
               restaurant_id: order.restaurant_id,
               order_id: order.id,
               payment_status: order.payment_status || 'pending',
+              order_status: order.status,
               order_type: order.order_type || 'dine_in',
               customer_arrival_minutes: order.customer_arrival_minutes,
               takeaway_notes: order.takeaway_notes
@@ -609,6 +611,18 @@ export default function KitchenDisplayPage() {
     activeBatches
       .filter(b => b.status === 'ready' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [activeBatches]
+  );
+  const servedOrders = useMemo(() => 
+    activeBatches
+      .filter(b => b.status === 'served' && b.order_status !== 'completed' && b.payment_status !== 'paid' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(b.served_at || b.created_at).getTime() - new Date(a.served_at || a.created_at).getTime()),
+    [activeBatches]
+  );
+  const completedOrders = useMemo(() => 
+    activeBatches
+      .filter(b => (b.status === 'completed' || b.order_status === 'completed' || b.payment_status === 'paid') && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()),
     [activeBatches]
   );
 
@@ -661,12 +675,67 @@ export default function KitchenDisplayPage() {
         </div>
       </div>
 
+      {/* Queue View Switcher (K1: New, Preparing, Ready, Served, Completed) */}
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3 flex-wrap">
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900/60 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setQueueView('cooking')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              queueView === 'cooking'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Cooking Queue ({newOrders.length + preparingOrders.length + readyOrders.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setQueueView('served')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              queueView === 'served'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Served Queue ({servedOrders.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setQueueView('completed')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              queueView === 'completed'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            Completed ({completedOrders.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setQueueView('all')}
+            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              queueView === 'all'
+                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-2xs'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            All 5 Stages Pipeline ({activeBatches.length})
+          </button>
+        </div>
 
+        <div className="flex items-center gap-3 text-xs text-slate-400 font-semibold">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> &lt;10m Normal</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> 10-15m Near SLA</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> &gt;15m Breached</span>
+        </div>
+      </div>
 
       {/* Grid Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-[70vh]">
+      <div className={`grid gap-6 flex-1 min-h-[70vh] ${queueView === 'all' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-5' : queueView === 'cooking' ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1 max-w-2xl'}`}>
         
         {/* COLUMN 1: NEW INCOMING ORDERS */}
+        {(queueView === 'cooking' || queueView === 'all') && (
         <div className="bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col space-y-4">
           <div className="flex items-center justify-between shrink-0 border-b border-slate-200 dark:border-slate-800 pb-2">
             <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-sm tracking-wider uppercase flex items-center gap-2">
@@ -706,8 +775,11 @@ export default function KitchenDisplayPage() {
                             {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
                           </div>
                         )}
-                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider font-mono">
+                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider font-mono block">
                           {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-medium block">
+                          Recv: {new Date(order.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       {(() => {
@@ -837,8 +909,10 @@ export default function KitchenDisplayPage() {
             )}
           </div>
         </div>
+        )}
 
         {/* COLUMN 2: PREPARING (COOKING) */}
+        {(queueView === 'cooking' || queueView === 'all') && (
         <div className="bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col space-y-4">
           <div className="flex items-center justify-between shrink-0 border-b border-slate-200 dark:border-slate-800 pb-2">
             <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-sm tracking-wider uppercase flex items-center gap-2">
@@ -878,8 +952,11 @@ export default function KitchenDisplayPage() {
                             {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
                           </div>
                         )}
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider font-mono">
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 tracking-wider font-mono block">
                           {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-medium block">
+                          Recv: {new Date(order.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       {(() => {
@@ -961,8 +1038,10 @@ export default function KitchenDisplayPage() {
             )}
           </div>
         </div>
+        )}
 
         {/* COLUMN 3: READY FOR PICKUP */}
+        {(queueView === 'cooking' || queueView === 'all') && (
         <div className="bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col space-y-4">
           <div className="flex items-center justify-between shrink-0 border-b border-slate-200 dark:border-slate-800 pb-2">
             <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-sm tracking-wider uppercase flex items-center gap-2">
@@ -1002,8 +1081,11 @@ export default function KitchenDisplayPage() {
                             {order.takeaway_notes && <span className="text-[10px] text-slate-400 font-semibold block mt-0.5">Note: {order.takeaway_notes}</span>}
                           </div>
                         )}
-                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 tracking-wider font-mono">
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 tracking-wider font-mono block">
                           {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono font-medium block">
+                          Recv: {new Date(order.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       {(() => {
@@ -1069,7 +1151,133 @@ export default function KitchenDisplayPage() {
             )}
           </div>
         </div>
+        )}
 
+        {/* COLUMN 4: SERVED ORDERS */}
+        {(queueView === 'served' || queueView === 'all') && (
+          <div className="bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col space-y-4">
+            <div className="flex items-center justify-between shrink-0 border-b border-slate-200 dark:border-slate-800 pb-2">
+              <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-sm tracking-wider uppercase flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+                Served
+              </h3>
+              <Badge variant="info">{servedOrders.length}</Badge>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {servedOrders.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-center text-slate-400 text-xs py-12">
+                  No orders waiting in served status.
+                </div>
+              ) : (
+                servedOrders.map(order => (
+                  <Card key={order.id} className="border-l-4 border-l-blue-500 shadow-md">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            {order.order_type === 'takeaway' ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 uppercase">
+                                Takeaway
+                              </span>
+                            ) : (
+                              <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                            )}
+                            <Badge variant="info">Served</Badge>
+                          </div>
+                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 tracking-wider font-mono block mt-0.5">
+                            {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono font-medium block">
+                            Recv: {new Date(order.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {(() => {
+                          const sla = getSlaTimerInfo(order.created_at, nowTime);
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-black border shadow-2xs ${sla.badgeClass}`} title={sla.label}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${sla.dotClass}`} />
+                              <Clock className="h-3.5 w-3.5" />
+                              <span>{sla.formatted}</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
+                        {order.items.map((item: any) => (
+                          <li key={item.id} className="py-1 flex justify-between">
+                            <span>{item.quantity}x {item.menu_item_name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {order.served_by && (
+                        <div className="text-[10px] text-slate-400 font-semibold border-t border-slate-100 dark:border-slate-800 pt-1">
+                          Served by: <span className="text-slate-700 dark:text-slate-200">{order.served_by}</span>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* COLUMN 5: COMPLETED ORDERS */}
+        {(queueView === 'completed' || queueView === 'all') && (
+          <div className="bg-slate-100 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col space-y-4">
+            <div className="flex items-center justify-between shrink-0 border-b border-slate-200 dark:border-slate-800 pb-2">
+              <h3 className="font-extrabold text-slate-800 dark:text-slate-200 text-sm tracking-wider uppercase flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                Completed
+              </h3>
+              <Badge variant="success">{completedOrders.length}</Badge>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+              {completedOrders.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-center text-slate-400 text-xs py-12">
+                  No completed orders in this session.
+                </div>
+              ) : (
+                completedOrders.map(order => (
+                  <Card key={order.id} className="border-l-4 border-l-emerald-600 shadow-md opacity-90">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            {order.order_type === 'takeaway' ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 uppercase">
+                                Takeaway
+                              </span>
+                            ) : (
+                              <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{order.table_name}</h4>
+                            )}
+                            <Badge variant="success">Paid & Closed</Badge>
+                          </div>
+                          <span className="text-[10px] font-bold text-slate-500 tracking-wider font-mono block mt-0.5">
+                            {getFormattedOrderId({ id: order.order_id, created_at: order.created_at }, restaurant?.name || '', orders, false)} • BATCH #{order.batch_number}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono font-medium block">
+                            Recv: {new Date(order.created_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <Badge variant="neutral" className="font-mono text-xs">
+                          {order.payment_status === 'paid' ? 'Settled' : 'Closed'}
+                        </Badge>
+                      </div>
+                      <ul className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold py-1">
+                        {order.items.map((item: any) => (
+                          <li key={item.id} className="py-1 flex justify-between">
+                            <span>{item.quantity}x {item.menu_item_name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* --- Realtime New Order Alert Dialog --- */}
