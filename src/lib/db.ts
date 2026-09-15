@@ -1405,10 +1405,15 @@ export const db = {
       const activeCount = tblOrders.length;
       const paymentPending = tblOrders.some(o => o.payment_status !== 'paid');
 
+      // BUG-TABLE-OCCUPANCY-FIX: A table is occupied if it has live active dine-in orders (activeCount > 0)
+      // OR if a staff member explicitly marked it occupied without an order session (manual_occupied === true && !current_session_id).
+      // If activeCount === 0 and current_session_id exists, that dining session has already completed or cancelled.
+      const isManualStaffHold = state.manual_occupied === true && !state.current_session_id;
+
       let status: 'available' | 'occupied' | 'inactive' | 'reserved' = 'available';
       if (!qrEnabled || isArchived) {
         status = 'inactive';
-      } else if (activeCount > 0 || state.manual_occupied === true || state.occupancy_status === 'occupied') {
+      } else if (activeCount > 0 || isManualStaffHold) {
         status = 'occupied';
       } else if (state.occupancy_status === 'reserved') {
         status = 'reserved';
@@ -1484,7 +1489,7 @@ export const db = {
         reservation_party_name: status === 'reserved' ? (state.reservation_party_name || null) : null,
         reservation_time: status === 'reserved' ? (state.reservation_time || null) : null,
         reservation_id: status === 'reserved' ? (state.reservation_id || null) : null,
-        current_session_id: state.current_session_id || null,
+        current_session_id: status === 'occupied' ? (state.current_session_id || null) : null,
         active_order_count: activeCount,
         payment_pending: paymentPending,
         assigned_waiters: assigned
