@@ -4287,6 +4287,15 @@ export const db = {
       const { data: refreshData } = await supabase.auth.refreshSession();
       token = refreshData?.session?.access_token;
     }
+    if (!token && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('smartdine_auth_token_v2');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+        }
+      } catch (e) {}
+    }
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -4392,6 +4401,15 @@ export const db = {
       const { data: refreshData } = await supabase.auth.refreshSession();
       token = refreshData?.session?.access_token;
     }
+    if (!token && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('smartdine_auth_token_v2');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+        }
+      } catch (e) {}
+    }
     const { data: { user } } = await supabase.auth.getUser();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -4419,6 +4437,15 @@ export const db = {
     if (!token) {
       const { data: refreshData } = await supabase.auth.refreshSession();
       token = refreshData?.session?.access_token;
+    }
+    if (!token && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('smartdine_auth_token_v2');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+        }
+      } catch (e) {}
     }
     const { data: { user } } = await supabase.auth.getUser();
     const headers: Record<string, string> = {
@@ -4448,6 +4475,15 @@ export const db = {
     if (!token) {
       const { data: refreshData } = await supabase.auth.refreshSession();
       token = refreshData?.session?.access_token;
+    }
+    if (!token && typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('smartdine_auth_token_v2');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+        }
+      } catch (e) {}
     }
     const { data: { user } } = await supabase.auth.getUser();
     const headers: Record<string, string> = {
