@@ -49,6 +49,7 @@ diagnostic_report.json
 *.apk
 *.zip
 *.mp4
+*.exe
 live_*.png
 screenshot_*.png
 apk_*.png

@@ -136,14 +136,16 @@ export async function POST(req: Request) {
 
         if (currentRests && currentRests.length > 0) {
           for (const rest of currentRests) {
+            const hasMsg = Boolean(String(message || '').trim());
             const updatedSettings = {
               ...(rest.settings || {}),
-              broadcast_announcement: {
+              broadcast_announcement: hasMsg ? {
                 id: `bcast_${Date.now()}`,
                 message: String(message || '').trim(),
                 author: adminEmail,
-                created_at: nowIso
-              }
+                created_at: nowIso,
+                active: true
+              } : null
             };
             await supabaseAdmin
               .from('restaurants')
