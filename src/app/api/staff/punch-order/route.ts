@@ -372,7 +372,7 @@ export async function POST(req: Request) {
         tableStates[tableId] = {
           ...existingTableState,
           occupancy_status: 'occupied',
-          manual_occupied: true,
+          manual_occupied: false,
           occupied_at: existingTableState.occupied_at || new Date().toISOString(),
           current_session_id: createdOrder.id
         };
