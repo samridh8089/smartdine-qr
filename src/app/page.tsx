@@ -409,9 +409,9 @@ export default function LandingPage() {
         'Cloud Backup',
       ],
       floatingBar: {
-        title: '3-Day Trial for ₹3',
-        subtitle: 'Razorpay se sirf ₹3 pay karo',
-        cta: 'Start 3-Day Trial for ₹3',
+        title: '3-Day Trial ₹3',
+        subtitle: 'Instant activation',
+        cta: 'Start Trial',
         microcopy: 'No Laptop Required • Razorpay Secure • Instant Activation',
       },
       footer: {
@@ -727,9 +727,9 @@ export default function LandingPage() {
         'Cloud Backup',
       ],
       floatingBar: {
-        title: '3-Day Trial for ₹3',
-        subtitle: 'Pay just ₹3 via Razorpay',
-        cta: 'Start a 3-Day Trial for ₹3',
+        title: '3-Day Trial ₹3',
+        subtitle: 'Instant activation',
+        cta: 'Start Trial',
         microcopy: 'No Laptop Required • Razorpay Secure • Instant Activation',
       },
       footer: {
@@ -855,10 +855,10 @@ export default function LandingPage() {
         </div>
       )}
 
-      {/* Header / Navbar - Light Premium Sticky Bar */}
-      <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 py-3.5 px-4 sm:px-8 md:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs">
+      {/* Header / Navbar - Light Premium Sticky Bar (64px mobile height) */}
+      <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 h-16 px-3.5 sm:px-8 md:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs">
         <Link href={`/?lang=${language}`} className="flex items-center gap-2 sm:gap-3 shrink-0" aria-label="CleverOps Home">
-          <img src="/logo.png" alt="CleverOps Restaurant Operating System Logo" className="h-7.5 sm:h-9 w-auto object-contain" />
+          <img src="/logo.png" alt="CleverOps Restaurant Operating System Logo" className="h-8 sm:h-9 w-auto object-contain" />
           <span className="font-black text-sm sm:text-lg tracking-tight text-slate-900">CleverOps</span>
         </Link>
 
@@ -909,32 +909,35 @@ export default function LandingPage() {
           </Link>
         </nav>
 
-        {/* Mobile Header Buttons */}
-        <div className="flex md:hidden items-center gap-1.5 shrink-0">
+        {/* Mobile Header Actions (Trial ₹3 Primary CTA + Hamburger) */}
+        <div className="flex md:hidden items-center gap-2 shrink-0">
+          {/* Primary CTA: Trial ₹3 */}
           <Link href={`/signup?plan=trial&lang=${language}`} className="shrink-0">
-            <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-lg text-[11px] font-bold shadow-xs whitespace-nowrap min-h-[32px] flex items-center justify-center">
+            <button className="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-3 sm:px-3.5 rounded-xl text-xs font-bold shadow-xs shadow-emerald-600/20 h-10 min-h-[44px] flex items-center justify-center cursor-pointer">
               {t.nav.trialCtaMobile}
             </button>
           </Link>
+
+          {/* Hamburger Menu (44x44px touch target) */}
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center shrink-0 cursor-pointer"
+            className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors h-11 w-11 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shrink-0"
             aria-label="Toggle navigation menu"
           >
-            {mobileMenuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
 
         {/* Mobile Navbar overlay */}
         {mobileMenuOpen && (
-          <nav aria-label="Mobile Navigation" className="absolute top-full left-0 w-full bg-white border-b border-slate-200 flex flex-col p-5 space-y-4 shadow-xl z-40 md:hidden animate-pop">
-            {/* Mobile Language Switcher (Segmented control) */}
+          <nav aria-label="Mobile Navigation" className="absolute top-16 left-0 w-full bg-white border-b border-slate-200 flex flex-col p-5 space-y-4 shadow-xl z-40 md:hidden animate-pop">
+            {/* Mobile Language Switcher inside Drawer */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
               <span className="text-xs font-bold text-slate-700">Language / भाषा:</span>
               <div className="inline-flex items-center p-0.5 rounded-lg border border-slate-200 bg-white text-xs font-bold shadow-2xs" role="group" aria-label="Language selector">
                 <button
                   onClick={() => { handleNavbarSwitch('hi'); setMobileMenuOpen(false); }}
-                  className={`px-3 py-1.5 rounded-md transition-all cursor-pointer min-h-[32px] flex items-center justify-center ${
+                  className={`px-3 py-1.5 rounded-md transition-all cursor-pointer min-h-[36px] flex items-center justify-center ${
                     language === 'hi'
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'bg-transparent text-slate-600 hover:text-slate-900'
@@ -946,7 +949,7 @@ export default function LandingPage() {
                 </button>
                 <button
                   onClick={() => { handleNavbarSwitch('en'); setMobileMenuOpen(false); }}
-                  className={`px-3 py-1.5 rounded-md transition-all cursor-pointer min-h-[32px] flex items-center justify-center ${
+                  className={`px-3 py-1.5 rounded-md transition-all cursor-pointer min-h-[36px] flex items-center justify-center ${
                     language === 'en'
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'bg-transparent text-slate-600 hover:text-slate-900'
@@ -959,13 +962,13 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <a href="#preview" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700">{t.nav.productPreview}</a>
-            <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700">{t.nav.noHardwareNeeded}</a>
-            <a href="#profit-intelligence" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700">{t.nav.smartCosting}</a>
-            <a href="#roles" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700">{t.nav.demoVideos}</a>
-            <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700">{t.nav.pricing}</a>
+            <a href="#preview" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 min-h-[44px] flex items-center">{t.nav.productPreview}</a>
+            <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 min-h-[44px] flex items-center">{t.nav.noHardwareNeeded}</a>
+            <a href="#profit-intelligence" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 min-h-[44px] flex items-center">{t.nav.smartCosting}</a>
+            <a href="#roles" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 min-h-[44px] flex items-center">{t.nav.demoVideos}</a>
+            <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 min-h-[44px] flex items-center">{t.nav.pricing}</a>
             <div className="h-px bg-slate-100 my-1" />
-            <Link href={`/login?lang=${language}`} onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700">
+            <Link href={`/login?lang=${language}`} onClick={() => setMobileMenuOpen(false)} className="text-sm font-semibold text-slate-700 min-h-[44px] flex items-center">
               {t.nav.signIn}
             </Link>
             <Link href={`/signup?plan=trial&lang=${language}`} onClick={() => setMobileMenuOpen(false)}>
@@ -977,43 +980,43 @@ export default function LandingPage() {
         )}
       </header>
 
-      <main className="flex-1">
+      <main className="flex-1 pb-28 md:pb-0">
 
-      {/* 1. Hero Section (Compressed Mobile First-Fold) */}
-      <section className="px-4 sm:px-8 md:px-12 pt-3 pb-3 sm:pt-14 sm:pb-14 md:pt-18 md:pb-16 max-w-4xl mx-auto text-center space-y-2.5 sm:space-y-6">
-        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 px-3 py-0.5 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-bold text-emerald-800">
-          <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-          <span>{t.hero.pill}</span>
+      {/* 1. Hero Section (Standardized Mobile First-Fold) */}
+      <section className="px-4 sm:px-8 md:px-12 pt-7 pb-6 sm:pt-14 sm:pb-14 md:pt-18 md:pb-16 max-w-4xl mx-auto text-center space-y-4 sm:space-y-6">
+        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 px-3.5 py-1.5 rounded-full text-xs font-bold text-emerald-800 max-w-full">
+          <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+          <span className="leading-tight">{t.hero.pill}</span>
         </div>
         
-        {/* Headline */}
-        <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-tight sm:leading-[1.15]">
+        {/* Headline: 30px on mobile, desktop unchanged */}
+        <h1 className="text-[30px] sm:text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.18] sm:leading-[1.15]">
           {t.hero.titlePrefix} <span className="text-emerald-600">{t.hero.titleHighlight}</span>
         </h1>
         
-        {/* Subheadline */}
-        <p className="text-xs sm:text-base md:text-lg text-slate-600 max-w-xl sm:max-w-2xl mx-auto leading-relaxed">
+        {/* Subheadline: Paragraph max width 100% on mobile */}
+        <p className="text-[15px] sm:text-base md:text-lg text-slate-600 w-full max-w-full sm:max-w-2xl mx-auto leading-relaxed">
           {t.hero.subtitle}
         </p>
         
-        {/* Action CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-3 pt-0.5 w-full max-w-xs sm:max-w-none mx-auto">
+        {/* Action CTAs: Primary height 56px, Secondary height 50px */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1 w-full max-w-sm sm:max-w-none mx-auto">
           <Link href={`/signup?plan=trial&lang=${language}`} className="w-full sm:w-auto">
-            <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl text-sm md:text-base font-bold shadow-sm shadow-emerald-600/20 transition-all cursor-pointer min-h-[48px] flex items-center justify-center gap-2">
+            <button className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-7 rounded-2xl text-base font-bold shadow-sm shadow-emerald-600/20 transition-all cursor-pointer h-14 min-h-[56px] flex items-center justify-center gap-2">
               <span>{t.hero.trialCta}</span>
             </button>
           </Link>
           <a href="#roles" className="w-full sm:w-auto">
-            <button className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-6 py-3 rounded-xl text-sm md:text-base font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 min-h-[48px]">
+            <button className="w-full sm:w-auto bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-6 rounded-2xl text-sm md:text-base font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 h-[50px] min-h-[50px]">
               <Play className="h-4 w-4 fill-slate-700 text-slate-700" />
               <span>{t.hero.demoCta}</span>
             </button>
           </a>
         </div>
 
-        {/* Microcopy */}
-        <div className="space-y-0.5">
-          <p className="text-xs sm:text-sm text-slate-700 font-bold">
+        {/* 3. Trust Line: Smaller typography, subtle divider, better spacing */}
+        <div className="pt-3 pb-1 max-w-md mx-auto space-y-1.5 border-t border-slate-200/80 mt-4">
+          <p className="text-xs sm:text-sm text-slate-800 font-bold">
             {t.hero.microcopy1}
           </p>
           <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
@@ -1021,30 +1024,33 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* 4 Hero Trust Pills — "Built for Restaurant Owners" */}
-        <div className="pt-1 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 max-w-3xl mx-auto">
-          <div className="flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs">
-            <Laptop className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>{t.hero.pills[0]}</span>
+        {/* 4. Feature Cards: 2-column grid, equal heights, icon above text, 16px padding, 16px radius */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto pt-2">
+          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
+            <Laptop className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[0]}</span>
           </div>
-          <div className="flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs">
-            <Users className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>{t.hero.pills[1]}</span>
+          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
+            <Users className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[1]}</span>
           </div>
-          <div className="flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs">
-            <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>{t.hero.pills[2]}</span>
+          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
+            <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[2]}</span>
           </div>
-          <div className="flex items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs">
-            <Zap className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span>{t.hero.pills[3]}</span>
+          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
+            <Zap className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[3]}</span>
           </div>
         </div>
 
-        {/* What You Get — 2 Rows x 3 Chips */}
-        <div className="pt-0.5 grid grid-cols-3 gap-1.5 sm:gap-2 max-w-xl mx-auto">
+        {/* 5. Small Feature Pills: 42-46px height, better horizontal padding, wrapping allowed, consistent gaps */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-xl mx-auto pt-1">
           {t.hero.chips.map((chip, idx) => (
-            <span key={idx} className="h-8 sm:h-auto inline-flex items-center justify-center px-2 sm:px-3.5 py-1 rounded-xl text-[10.5px] sm:text-xs font-bold bg-white border border-slate-200 text-slate-700 shadow-2xs text-center">
+            <span 
+              key={idx} 
+              className="min-h-[44px] inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 shadow-2xs text-center leading-tight break-words"
+            >
               {chip}
             </span>
           ))}
@@ -1078,22 +1084,22 @@ export default function LandingPage() {
       </section>
 
       {/* 2. Dashboard Preview Section (Authentic Snapshot, Clearly Labeled Demo) */}
-      <section id="preview" className="px-4 sm:px-6 md:px-12 py-5 sm:py-14 max-w-5xl mx-auto w-full space-y-3 sm:space-y-6 scroll-mt-16">
-        <div className="text-center space-y-1 sm:space-y-2">
-          <div className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-3 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold text-slate-700">
-            <Layers className="h-3 w-3 text-emerald-600" />
+      <section id="preview" className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 max-w-5xl mx-auto w-full space-y-4 sm:space-y-6 scroll-mt-16">
+        <div className="text-center space-y-2">
+          <div className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full text-xs font-bold text-slate-700">
+            <Layers className="h-3.5 w-3.5 text-emerald-600" />
             <span>{t.preview.badge}</span>
           </div>
-          <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">{t.preview.title}</h2>
+          <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">{t.preview.title}</h2>
           <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">{t.preview.subtitle}</p>
         </div>
 
-        {/* 4 Role Tab Switcher with Enhanced Emerald Active Feedback */}
-        <div className="flex justify-center w-full px-1">
-          <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1 overflow-x-auto max-w-full scrollbar-none">
+        {/* 4 Role Tab Switcher: Smooth Horizontally Scrollable on Mobile (Min 110px each) */}
+        <div className="w-full -mx-4 px-4 sm:mx-0 sm:px-0 flex justify-start sm:justify-center overflow-x-auto scrollbar-none scroll-smooth">
+          <div className="inline-flex bg-slate-100 p-1 rounded-2xl border border-slate-200 gap-1.5 snap-x snap-mandatory min-w-max mx-auto">
             <button
               onClick={() => setActivePreviewTab('owner')}
-              className={`px-3.5 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[38px] ${
+              className={`min-w-[110px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[44px] snap-start flex items-center justify-center ${
                 activePreviewTab === 'owner'
                   ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 hover:text-slate-900'
@@ -1103,7 +1109,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => setActivePreviewTab('kitchen')}
-              className={`px-3.5 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[38px] ${
+              className={`min-w-[110px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[44px] snap-start flex items-center justify-center ${
                 activePreviewTab === 'kitchen'
                   ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 hover:text-slate-900'
@@ -1113,7 +1119,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => setActivePreviewTab('waiter')}
-              className={`px-3.5 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[38px] ${
+              className={`min-w-[110px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[44px] snap-start flex items-center justify-center ${
                 activePreviewTab === 'waiter'
                   ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 hover:text-slate-900'
@@ -1123,7 +1129,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => setActivePreviewTab('cashier')}
-              className={`px-3.5 sm:px-5 py-2 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[38px] ${
+              className={`min-w-[110px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[44px] snap-start flex items-center justify-center ${
                 activePreviewTab === 'cashier'
                   ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 hover:text-slate-900'
@@ -1136,57 +1142,57 @@ export default function LandingPage() {
 
         {/* Role Explanation Subtitle */}
         <div className="text-center">
-          <p className="text-xs sm:text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200/80 py-1.5 px-4 rounded-full inline-block">
+          <p className="text-xs sm:text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200/80 py-1.5 px-4 rounded-full inline-block leading-snug">
             {t.preview.subtitles[activePreviewTab]}
           </p>
         </div>
 
         {/* Authentic UI Snapshot Container — Clearly Marked as Demo Preview */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-3.5 sm:p-6 shadow-sm w-full transition-all duration-200 space-y-3">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm w-full transition-all duration-200 space-y-4">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{t.preview.demoHeader}</span>
             <span className="text-[10px] font-extrabold uppercase text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
               {t.preview.sampleTag}
             </span>
           </div>
 
-          {/* Owner Tab */}
+          {/* Owner Tab: 2-column metrics, larger numbers, smaller labels */}
           {activePreviewTab === 'owner' && (
             <div className="space-y-3 sm:space-y-4 animate-fade-in">
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-0.5">
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase">{t.preview.owner.todaySales}</p>
-                  <p className="text-lg font-black text-slate-900">₹24,850</p>
-                  <p className="text-[10px] text-emerald-600 font-bold">{t.preview.owner.salesDemo}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+                <div className="bg-slate-50 p-3.5 sm:p-4 rounded-xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{t.preview.owner.todaySales}</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">₹24,850</p>
+                  <p className="text-xs text-emerald-600 font-bold">{t.preview.owner.salesDemo}</p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-0.5">
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase">{t.preview.owner.activeTables}</p>
-                  <p className="text-lg font-black text-slate-900">12 / 16</p>
-                  <p className="text-[10px] text-slate-500">{t.preview.owner.occupancy}</p>
+                <div className="bg-slate-50 p-3.5 sm:p-4 rounded-xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{t.preview.owner.activeTables}</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">12 / 16</p>
+                  <p className="text-xs text-slate-500">{t.preview.owner.occupancy}</p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-0.5">
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase">{t.preview.owner.pendingBills}</p>
-                  <p className="text-lg font-black text-slate-900">₹3,890</p>
-                  <p className="text-[10px] text-slate-500">{t.preview.owner.tablesCheckout}</p>
+                <div className="bg-slate-50 p-3.5 sm:p-4 rounded-xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{t.preview.owner.pendingBills}</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">₹3,890</p>
+                  <p className="text-xs text-slate-500">{t.preview.owner.tablesCheckout}</p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-0.5">
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase">{t.preview.owner.kitchenQueue}</p>
-                  <p className="text-lg font-black text-slate-900">4 Orders</p>
-                  <p className="text-[10px] text-emerald-600 font-bold">{t.preview.owner.avgPrep}</p>
+                <div className="bg-slate-50 p-3.5 sm:p-4 rounded-xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{t.preview.owner.kitchenQueue}</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">4 Orders</p>
+                  <p className="text-xs text-emerald-600 font-bold">{t.preview.owner.avgPrep}</p>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-0.5">
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase">{t.preview.owner.staffOnline}</p>
-                  <p className="text-lg font-black text-slate-900">5 Active</p>
-                  <p className="text-[10px] text-slate-500">{t.preview.owner.allRolesSynced}</p>
+                <div className="bg-slate-50 p-3.5 sm:p-4 rounded-xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{t.preview.owner.staffOnline}</p>
+                  <p className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">5 Active</p>
+                  <p className="text-xs text-slate-500">{t.preview.owner.allRolesSynced}</p>
                 </div>
-                <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200 space-y-0.5">
-                  <p className="text-[10px] font-semibold text-amber-800 uppercase">{t.preview.owner.lowStock}</p>
-                  <p className="text-lg font-black text-amber-900">3 Items</p>
-                  <p className="text-[10px] text-amber-700 font-bold">{t.preview.owner.alertTriggered}</p>
+                <div className="bg-amber-50/80 p-3.5 sm:p-4 rounded-xl border border-amber-200 space-y-1">
+                  <p className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider">{t.preview.owner.lowStock}</p>
+                  <p className="text-xl sm:text-2xl font-black text-amber-900 leading-tight">3 Items</p>
+                  <p className="text-xs text-amber-700 font-bold">{t.preview.owner.alertTriggered}</p>
                 </div>
               </div>
 
-              <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
+              <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 font-semibold text-amber-900">
                   <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
                   <span>{t.preview.owner.riceAlert}</span>
@@ -1198,8 +1204,8 @@ export default function LandingPage() {
 
           {/* Kitchen Display Tab */}
           {activePreviewTab === 'kitchen' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 animate-fade-in">
-              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 sm:p-3.5 space-y-1.5 sm:space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
+              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center text-xs font-bold text-amber-900">
                   <span>{t.preview.kitchen.batch1}</span>
                   <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px]">{t.preview.kitchen.statusNew}</span>
@@ -1207,7 +1213,7 @@ export default function LandingPage() {
                 <p className="text-xs font-semibold text-slate-800">{t.preview.kitchen.items1}</p>
                 <p className="text-[10px] text-slate-500">{t.preview.kitchen.notes1}</p>
               </div>
-              <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3 sm:p-3.5 space-y-1.5 sm:space-y-2">
+              <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center text-xs font-bold text-blue-900">
                   <span>{t.preview.kitchen.batch2}</span>
                   <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px]">{t.preview.kitchen.statusPrep}</span>
@@ -1215,7 +1221,7 @@ export default function LandingPage() {
                 <p className="text-xs font-semibold text-slate-800">{t.preview.kitchen.items2}</p>
                 <p className="text-[10px] text-slate-500">{t.preview.kitchen.notes2}</p>
               </div>
-              <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 sm:p-3.5 space-y-1.5 sm:space-y-2">
+              <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center text-xs font-bold text-emerald-900">
                   <span>{t.preview.kitchen.batch3}</span>
                   <span className="bg-emerald-100 px-2 py-0.5 rounded text-[10px]">{t.preview.kitchen.statusReady}</span>
@@ -1228,8 +1234,8 @@ export default function LandingPage() {
 
           {/* Waiter Tab */}
           {activePreviewTab === 'waiter' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs animate-fade-in">
-              <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3 sm:p-3.5 space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fade-in">
+              <div className="bg-purple-50/70 border border-purple-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-purple-900">
                   <span>{t.preview.waiter.card1Title}</span>
                   <span className="bg-purple-100 px-2 py-0.5 rounded text-[10px]">{t.preview.waiter.card1Badge}</span>
@@ -1237,7 +1243,7 @@ export default function LandingPage() {
                 <p className="text-slate-700 font-medium">{t.preview.waiter.card1Desc}</p>
                 <p className="text-[10px] text-slate-500">{t.preview.waiter.card1Time}</p>
               </div>
-              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 sm:p-3.5 space-y-1.5">
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-emerald-900">
                   <span>{t.preview.waiter.card2Title}</span>
                   <span className="bg-emerald-100 px-2 py-0.5 rounded text-[10px]">₹1,450</span>
@@ -1245,13 +1251,13 @@ export default function LandingPage() {
                 <p className="text-slate-700 font-medium">{t.preview.waiter.card2Desc}</p>
                 <p className="text-[10px] text-emerald-700 font-bold">{t.preview.waiter.card2Time}</p>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-3.5 space-y-1.5">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-slate-900">
                   <span>{t.preview.waiter.card3Title}</span>
                   <span className="bg-slate-200 px-2 py-0.5 rounded text-[10px]">{t.preview.waiter.card3Badge}</span>
                 </div>
                 <p className="text-slate-700 font-medium">{t.preview.waiter.card3Desc}</p>
-                <button className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded w-full mt-1 cursor-pointer">
+                <button className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2.5 rounded-xl w-full mt-1 cursor-pointer min-h-[44px] flex items-center justify-center">
                   {t.preview.waiter.punchButton}
                 </button>
               </div>
@@ -1260,34 +1266,34 @@ export default function LandingPage() {
 
           {/* Cashier Tab */}
           {activePreviewTab === 'cashier' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs animate-fade-in">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-3.5 space-y-1.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fade-in">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-slate-900">
                   <span>{t.preview.cashier.card1Title}</span>
                   <span className="text-emerald-600 font-extrabold text-sm">₹1,450</span>
                 </div>
                 <p className="text-slate-600">{t.preview.cashier.card1Subtotal}</p>
-                <div className="bg-emerald-600 text-white font-bold text-center py-1.5 rounded text-[11px]">
+                <div className="bg-emerald-600 text-white font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
                   {t.preview.cashier.card1Action}
                 </div>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-3.5 space-y-1.5">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-slate-900">
                   <span>{t.preview.cashier.card2Title}</span>
                   <span className="text-slate-900 font-bold">₹2,100</span>
                 </div>
                 <p className="text-slate-600">{t.preview.cashier.card2Status}</p>
-                <div className="bg-slate-100 border border-slate-200 text-slate-700 font-bold text-center py-1.5 rounded text-[11px]">
+                <div className="bg-slate-100 border border-slate-200 text-slate-700 font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
                   {t.preview.cashier.card2Action}
                 </div>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 sm:p-3.5 space-y-1.5">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-slate-900">
                   <span>{t.preview.cashier.card3Title}</span>
                   <span className="text-slate-900 font-bold">{t.preview.cashier.card3Total}</span>
                 </div>
                 <p className="text-slate-600">{t.preview.cashier.card3Breakdown}</p>
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-center py-1.5 rounded text-[11px]">
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
                   {t.preview.cashier.card3Action}
                 </div>
               </div>
@@ -1297,10 +1303,10 @@ export default function LandingPage() {
       </section>
 
       {/* 3. Dedicated "No Laptop Required" Objection Remover Section */}
-      <section id="why-us" className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 bg-slate-50 border-b border-slate-200/80 scroll-mt-16">
-        <div className="max-w-5xl mx-auto space-y-4 sm:space-y-8">
-          <div className="text-center space-y-1 sm:space-y-2">
-            <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+      <section id="why-us" className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 bg-slate-50 border-b border-slate-200/80 scroll-mt-16">
+        <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
               {t.whyUs.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">
@@ -1308,33 +1314,33 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-5">
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-2 shadow-2xs">
-              <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-2.5 shadow-2xs">
+              <div className="h-11 w-11 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
                 <Smartphone className="h-5 w-5" />
               </div>
-              <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">{t.whyUs.card1Title}</h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <h3 className="font-extrabold text-slate-900 text-[20px] sm:text-lg leading-snug">{t.whyUs.card1Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.whyUs.card1Desc}
               </p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-2 shadow-2xs">
-              <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-2.5 shadow-2xs">
+              <div className="h-11 w-11 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
                 <Laptop className="h-5 w-5" />
               </div>
-              <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">{t.whyUs.card2Title}</h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <h3 className="font-extrabold text-slate-900 text-[20px] sm:text-lg leading-snug">{t.whyUs.card2Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.whyUs.card2Desc}
               </p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-2 shadow-2xs">
-              <div className="h-10 w-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-2.5 shadow-2xs">
+              <div className="h-11 w-11 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
                 <Zap className="h-5 w-5" />
               </div>
-              <h3 className="font-extrabold text-slate-900 text-base sm:text-lg">{t.whyUs.card3Title}</h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <h3 className="font-extrabold text-slate-900 text-[20px] sm:text-lg leading-snug">{t.whyUs.card3Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.whyUs.card3Desc}
               </p>
             </div>
@@ -1343,10 +1349,10 @@ export default function LandingPage() {
       </section>
 
       {/* 4. Restaurant Reality Section ("Restaurant Band Hone Ke Baad...") */}
-      <section className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 bg-white border-b border-slate-200/80">
-        <div className="max-w-5xl mx-auto space-y-4 sm:space-y-8">
-          <div className="text-center space-y-1 sm:space-y-2">
-            <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+      <section className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 bg-white border-b border-slate-200/80">
+        <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
               {t.reality.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
@@ -1356,20 +1362,20 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Column 1: Without CleverOps */}
-            <div className="bg-slate-50/80 border border-red-200 rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xs">
-              <div className="flex items-center justify-between pb-3 border-b border-red-100">
-                <span className="text-base font-black text-red-900">{t.reality.col1Title}</span>
-                <span className="text-[11px] font-extrabold uppercase text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200">
+            <div className="bg-slate-50/80 border border-red-200 rounded-2xl p-6 sm:p-7 space-y-5 shadow-2xs">
+              <div className="flex items-center justify-between pb-3.5 border-b border-red-100 gap-2">
+                <span className="text-base sm:text-lg font-black text-red-950">{t.reality.col1Title}</span>
+                <span className="text-xs font-extrabold uppercase text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200 shrink-0">
                   {t.reality.col1Badge}
                 </span>
               </div>
-              <ul className="space-y-3.5 text-xs sm:text-sm text-slate-700">
+              <ul className="space-y-4 text-xs sm:text-sm text-slate-700">
                 {t.reality.col1List.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5">
+                  <li key={idx} className="flex items-start gap-3">
                     <XCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="text-slate-900">{item.strong}</strong>
-                      <p className="text-slate-500 text-xs">{item.p}</p>
+                      <strong className="text-slate-900 block font-bold text-[13.5px] sm:text-sm mb-0.5">{item.strong}</strong>
+                      <p className="text-slate-500 text-xs leading-relaxed">{item.p}</p>
                     </div>
                   </li>
                 ))}
@@ -1377,20 +1383,20 @@ export default function LandingPage() {
             </div>
 
             {/* Column 2: With CleverOps */}
-            <div className="bg-white border border-emerald-300 rounded-2xl p-5 sm:p-6 space-y-4 shadow-2xs ring-1 ring-emerald-500/20">
-              <div className="flex items-center justify-between pb-3 border-b border-emerald-100">
-                <span className="text-base font-black text-emerald-950">{t.reality.col2Title}</span>
-                <span className="text-[11px] font-extrabold uppercase text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            <div className="bg-white border border-emerald-300 rounded-2xl p-6 sm:p-7 space-y-5 shadow-2xs ring-1 ring-emerald-500/20">
+              <div className="flex items-center justify-between pb-3.5 border-b border-emerald-100 gap-2">
+                <span className="text-base sm:text-lg font-black text-emerald-950">{t.reality.col2Title}</span>
+                <span className="text-xs font-extrabold uppercase text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
                   {t.reality.col2Badge}
                 </span>
               </div>
-              <ul className="space-y-3.5 text-xs sm:text-sm text-slate-700">
+              <ul className="space-y-4 text-xs sm:text-sm text-slate-700">
                 {t.reality.col2List.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5">
+                  <li key={idx} className="flex items-start gap-3">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <strong className="text-slate-900">{item.strong}</strong>
-                      <p className="text-slate-600 text-xs">{item.p}</p>
+                      <strong className="text-slate-900 block font-bold text-[13.5px] sm:text-sm mb-0.5">{item.strong}</strong>
+                      <p className="text-slate-600 text-xs leading-relaxed">{item.p}</p>
                     </div>
                   </li>
                 ))}
@@ -1401,10 +1407,10 @@ export default function LandingPage() {
       </section>
 
       {/* 5. Smart Costing & Food Cost Intelligence Section (Inventory USP) */}
-      <section id="profit-intelligence" className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 bg-slate-50 border-b border-slate-200/80 scroll-mt-16">
-        <div className="max-w-5xl mx-auto space-y-4 sm:space-y-8">
-          <div className="text-center space-y-1 sm:space-y-2">
-            <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+      <section id="profit-intelligence" className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 bg-slate-50 border-b border-slate-200/80 scroll-mt-16">
+        <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
               {t.smartCosting.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-2xl mx-auto leading-relaxed">
@@ -1413,11 +1419,11 @@ export default function LandingPage() {
           </div>
 
           {/* Highlight Impact Callout */}
-          <div className="bg-white border border-emerald-200 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-2 shadow-2xs text-center">
-            <span className="inline-block text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-0.5 rounded-full border border-emerald-200">
+          <div className="bg-white border border-emerald-200 rounded-2xl p-5 sm:p-6 space-y-2.5 shadow-2xs text-center">
+            <span className="inline-block text-[11px] font-extrabold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
               {t.smartCosting.badge}
             </span>
-            <p className="text-sm sm:text-base font-black text-slate-900 leading-relaxed">
+            <p className="text-base sm:text-base font-black text-slate-900 leading-relaxed">
               {t.smartCosting.impactHeadline}
             </p>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto leading-relaxed">
@@ -1426,20 +1432,20 @@ export default function LandingPage() {
           </div>
 
           {/* Practical Recipe Cost Calculation Example Card */}
-          <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-3 shadow-2xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-slate-100">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 space-y-3.5 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 pb-2.5 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-black text-slate-900">{t.smartCosting.demoDish}</span>
+                <span className="text-sm font-black text-slate-900">{t.smartCosting.demoDish}</span>
                 <span className="text-[10px] font-extrabold uppercase text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                   {t.smartCosting.demoTag}
                 </span>
               </div>
-              <span className="text-[11px] font-semibold text-slate-500">{t.smartCosting.menuPrice}</span>
+              <span className="text-xs font-semibold text-slate-500">{t.smartCosting.menuPrice}</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Before */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-1">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-1">
                 <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">{t.smartCosting.beforeTitle}</span>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-slate-600">{t.smartCosting.paneerRate}</span>
@@ -1449,13 +1455,13 @@ export default function LandingPage() {
                   <span className="text-slate-600">{t.smartCosting.baseCost}</span>
                   <span className="font-extrabold text-emerald-700">₹48</span>
                 </div>
-                <div className="pt-0.5 text-[10.5px] text-emerald-800 font-semibold">
+                <div className="pt-0.5 text-xs text-emerald-800 font-semibold">
                   {t.smartCosting.beforeProfit}
                 </div>
               </div>
 
               {/* After */}
-              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-1">
+              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 space-y-1">
                 <span className="text-[10px] font-bold uppercase text-amber-800 tracking-wider">{t.smartCosting.afterTitle}</span>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-amber-900">{t.smartCosting.paneerRate}</span>
@@ -1465,57 +1471,57 @@ export default function LandingPage() {
                   <span className="text-amber-900">{t.smartCosting.baseCost}</span>
                   <span className="font-extrabold text-amber-900">₹62</span>
                 </div>
-                <div className="pt-0.5 text-[10.5px] text-amber-900 font-bold">
+                <div className="pt-0.5 text-xs text-amber-900 font-bold">
                   {t.smartCosting.afterProfit}
                 </div>
               </div>
             </div>
 
-            <div className="p-2.5 bg-emerald-50 border border-emerald-200/80 rounded-xl text-center">
+            <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-center">
               <p className="text-xs font-bold text-emerald-950">
                 {t.smartCosting.highlightBanner}
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 shadow-2xs">
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base">{t.smartCosting.card1Title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2 shadow-2xs">
+              <h3 className="font-bold text-slate-900 text-base leading-snug">{t.smartCosting.card1Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.smartCosting.card1Desc}
               </p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 shadow-2xs">
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base">{t.smartCosting.card2Title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2 shadow-2xs">
+              <h3 className="font-bold text-slate-900 text-base leading-snug">{t.smartCosting.card2Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.smartCosting.card2Desc}
               </p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 shadow-2xs">
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base">{t.smartCosting.card3Title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2 shadow-2xs">
+              <h3 className="font-bold text-slate-900 text-base leading-snug">{t.smartCosting.card3Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.smartCosting.card3Desc}
               </p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 shadow-2xs">
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base">{t.smartCosting.card4Title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2 shadow-2xs">
+              <h3 className="font-bold text-slate-900 text-base leading-snug">{t.smartCosting.card4Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.smartCosting.card4Desc}
               </p>
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-1.5 shadow-2xs sm:col-span-2 lg:col-span-2">
-              <h3 className="font-bold text-slate-900 text-sm sm:text-base">{t.smartCosting.card5Title}</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2 shadow-2xs sm:col-span-2 lg:col-span-2">
+              <h3 className="font-bold text-slate-900 text-base leading-snug">{t.smartCosting.card5Title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">
                 {t.smartCosting.card5Desc}
               </p>
             </div>
           </div>
 
-          <div className="text-center bg-emerald-50/80 border border-emerald-200 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 shadow-2xs">
+          <div className="text-center bg-emerald-50/80 border border-emerald-200 rounded-2xl p-4 shadow-2xs">
             <p className="text-xs sm:text-sm font-bold text-emerald-950">
               {t.smartCosting.bottomTag}
             </p>
@@ -1524,10 +1530,10 @@ export default function LandingPage() {
       </section>
 
       {/* 6. Real 6-Step Daily Workflow Timeline */}
-      <section className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 bg-white border-b border-slate-200/80">
-        <div className="max-w-5xl mx-auto space-y-4 sm:space-y-8">
-          <div className="text-center space-y-1 sm:space-y-2">
-            <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+      <section className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 bg-white border-b border-slate-200/80">
+        <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
               {t.workflow.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">
@@ -1535,7 +1541,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {t.workflow.steps.map((step, idx) => {
               const colors = [
                 'bg-emerald-50 text-emerald-800',
@@ -1554,13 +1560,13 @@ export default function LandingPage() {
                 'text-emerald-400'
               ];
               return (
-                <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl sm:rounded-2xl p-4 sm:p-5 space-y-2 shadow-2xs">
+                <div key={idx} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2.5 shadow-2xs">
                   <div className={`inline-flex items-center gap-1.5 ${colors[idx % colors.length]} font-black text-xs px-2.5 py-1 rounded-md`}>
                     <Clock className={`h-3.5 w-3.5 ${iconColors[idx % iconColors.length]}`} />
                     <span>{step.time}</span>
                   </div>
-                  <h3 className="font-bold text-slate-900 text-sm sm:text-base">{step.title}</h3>
-                  <p className="text-xs text-slate-600 leading-relaxed">
+                  <h3 className="font-bold text-slate-900 text-base leading-snug">{step.title}</h3>
+                  <p className="text-sm text-slate-600 leading-relaxed">
                     {step.desc}
                   </p>
                 </div>
@@ -1571,9 +1577,9 @@ export default function LandingPage() {
       </section>
 
       {/* 7. Believable Demo Videos Section (45 sec Demo Cards) */}
-      <section id="roles" className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 max-w-5xl mx-auto w-full space-y-4 sm:space-y-8 scroll-mt-16 bg-slate-50 border-b border-slate-200/80">
-        <div className="text-center space-y-1 sm:space-y-2">
-          <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+      <section id="roles" className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 max-w-5xl mx-auto w-full space-y-6 sm:space-y-8 scroll-mt-16 bg-slate-50 border-b border-slate-200/80">
+        <div className="text-center space-y-2">
+          <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
             {t.demoVideos.title}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">
@@ -1583,7 +1589,7 @@ export default function LandingPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Card 1: Owner App */}
-          <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xs p-4 sm:p-5 flex flex-col justify-between space-y-3 sm:space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs p-5 flex flex-col justify-between space-y-4">
             <div className="aspect-[16/9] bg-slate-50 border border-slate-200/80 rounded-xl flex flex-col items-center justify-center gap-2 p-4 text-center group cursor-pointer hover:bg-slate-100/60 transition-colors relative">
               <div className="h-11 w-11 bg-white rounded-full flex items-center justify-center shadow-xs border border-slate-200 group-hover:scale-105 transition-transform">
                 <Play className="h-4 w-4 fill-emerald-600 text-emerald-600 ml-0.5" />
@@ -1595,7 +1601,7 @@ export default function LandingPage() {
               <div className="inline-block text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md mb-1 border border-emerald-200/60">
                 {t.demoVideos.card1Badge}
               </div>
-              <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">{t.demoVideos.card1Header}</h3>
+              <h3 className="font-extrabold text-slate-900 text-base">{t.demoVideos.card1Header}</h3>
               <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                 {t.demoVideos.card1Desc}
               </p>
@@ -1603,7 +1609,7 @@ export default function LandingPage() {
           </div>
 
           {/* Card 2: Kitchen Display */}
-          <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xs p-4 sm:p-5 flex flex-col justify-between space-y-3 sm:space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs p-5 flex flex-col justify-between space-y-4">
             <div className="aspect-[16/9] bg-slate-50 border border-slate-200/80 rounded-xl flex flex-col items-center justify-center gap-2 p-4 text-center group cursor-pointer hover:bg-slate-100/60 transition-colors relative">
               <div className="h-11 w-11 bg-white rounded-full flex items-center justify-center shadow-xs border border-slate-200 group-hover:scale-105 transition-transform">
                 <Play className="h-4 w-4 fill-emerald-600 text-emerald-600 ml-0.5" />
@@ -1615,7 +1621,7 @@ export default function LandingPage() {
               <div className="inline-block text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md mb-1 border border-emerald-200/60">
                 {t.demoVideos.card2Badge}
               </div>
-              <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">{t.demoVideos.card2Header}</h3>
+              <h3 className="font-extrabold text-slate-900 text-base">{t.demoVideos.card2Header}</h3>
               <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                 {t.demoVideos.card2Desc}
               </p>
@@ -1623,7 +1629,7 @@ export default function LandingPage() {
           </div>
 
           {/* Card 3: Waiter App */}
-          <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xs p-4 sm:p-5 flex flex-col justify-between space-y-3 sm:space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs p-5 flex flex-col justify-between space-y-4">
             <div className="aspect-[16/9] bg-slate-50 border border-slate-200/80 rounded-xl flex flex-col items-center justify-center gap-2 p-4 text-center group cursor-pointer hover:bg-slate-100/60 transition-colors relative">
               <div className="h-11 w-11 bg-white rounded-full flex items-center justify-center shadow-xs border border-slate-200 group-hover:scale-105 transition-transform">
                 <Play className="h-4 w-4 fill-emerald-600 text-emerald-600 ml-0.5" />
@@ -1635,7 +1641,7 @@ export default function LandingPage() {
               <div className="inline-block text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md mb-1 border border-emerald-200/60">
                 {t.demoVideos.card3Badge}
               </div>
-              <h3 className="font-extrabold text-slate-900 text-sm sm:text-base">{t.demoVideos.card3Header}</h3>
+              <h3 className="font-extrabold text-slate-900 text-base">{t.demoVideos.card3Header}</h3>
               <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                 {t.demoVideos.card3Desc}
               </p>
@@ -1645,10 +1651,10 @@ export default function LandingPage() {
       </section>
 
       {/* 8. Feature Showcase Carousel (Scrollable Mobile) */}
-      <section id="features" className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 bg-white border-b border-slate-200/80 scroll-mt-16">
+      <section id="features" className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 bg-white border-b border-slate-200/80 scroll-mt-16">
         <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10">
-          <div className="text-center space-y-1 sm:space-y-2">
-            <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+          <div className="text-center space-y-2">
+            <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
               {t.features.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">
@@ -1656,7 +1662,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="flex overflow-x-auto snap-x snap-mandatory gap-3.5 pb-4 md:grid md:grid-cols-3 lg:grid-cols-4 md:gap-6 md:pb-0 scrollbar-none">
+          <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 md:grid md:grid-cols-3 lg:grid-cols-4 md:gap-6 md:pb-0 scrollbar-none">
             {t.features.items.map((feat, idx) => {
               const Icon = featureIcons[idx % featureIcons.length];
               const color = featureColors[idx % featureColors.length];
@@ -1685,7 +1691,7 @@ export default function LandingPage() {
       </section>
 
       {/* 9. Case Studies & Stories Section (Honest Placeholder) */}
-      <section className="px-4 sm:px-6 md:px-12 py-8 sm:py-14 bg-slate-50 border-b border-slate-200/80">
+      <section className="px-4 sm:px-6 md:px-12 py-10 sm:py-14 bg-slate-50 border-b border-slate-200/80">
         <div className="max-w-4xl mx-auto text-center space-y-3">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3.5 py-1.5 rounded-full shadow-2xs">
             <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
@@ -1698,10 +1704,10 @@ export default function LandingPage() {
       </section>
 
       {/* 10. Traditional POS Comparison Matrix */}
-      <section id="comparison" className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 bg-white border-b border-slate-200/80 scroll-mt-16">
-        <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6">
-          <div className="text-center space-y-1 sm:space-y-2">
-            <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+      <section id="comparison" className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 bg-white border-b border-slate-200/80 scroll-mt-16">
+        <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
               {t.comparison.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">
@@ -1709,9 +1715,9 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xs divide-y divide-slate-100">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs divide-y divide-slate-100">
             {/* Table Header */}
-            <div className="grid grid-cols-3 bg-slate-100/80 p-3 sm:p-4 text-xs sm:text-sm font-bold">
+            <div className="grid grid-cols-3 bg-slate-100/80 p-3.5 sm:p-4 text-xs sm:text-sm font-bold">
               <div className="text-slate-600">{t.comparison.headers[0]}</div>
               <div className="text-slate-500">{t.comparison.headers[1]}</div>
               <div className="text-emerald-700 flex items-center gap-1.5">
@@ -1722,7 +1728,7 @@ export default function LandingPage() {
 
             {/* Rows */}
             {t.comparison.rows.map((row, idx) => (
-              <div key={idx} className="grid grid-cols-3 p-3 sm:p-4 text-xs sm:text-sm">
+              <div key={idx} className="grid grid-cols-3 p-3.5 sm:p-4 text-xs sm:text-sm">
                 <div className="font-semibold text-slate-800">{row.feature}</div>
                 <div className="text-slate-500">{row.pos}</div>
                 <div className="text-emerald-700 font-bold">{row.clever}</div>
@@ -1733,10 +1739,10 @@ export default function LandingPage() {
       </section>
 
       {/* 11. FAQ Accordion Section */}
-      <section className="px-4 sm:px-6 md:px-12 py-8 sm:py-16 bg-slate-50 border-b border-slate-200/80">
-        <div className="max-w-3xl mx-auto space-y-4 sm:space-y-8">
-          <div className="text-center space-y-1 sm:space-y-2">
-            <h2 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight leading-tight">
+      <section className="px-4 sm:px-6 md:px-12 pt-14 pb-12 sm:py-16 bg-slate-50 border-b border-slate-200/80">
+        <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8">
+          <div className="text-center space-y-2">
+            <h2 className="text-[28px] sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
               {t.faqs.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">
@@ -1744,7 +1750,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {t.faqs.list.map((faq, idx) => (
               <div 
                 key={idx} 
@@ -1802,10 +1808,10 @@ export default function LandingPage() {
       </section>
 
       {/* 13. Pricing Comparison Matrix Section */}
-      <section id="pricing" className="px-4 sm:px-8 md:px-12 py-10 sm:py-16 max-w-6xl mx-auto space-y-10 scroll-mt-16">
+      <section id="pricing" className="px-4 sm:px-8 md:px-12 pt-14 pb-12 sm:py-16 max-w-6xl mx-auto space-y-8 sm:space-y-10 scroll-mt-16">
         <div className="flex flex-col items-center space-y-4">
           <div className="text-center space-y-2">
-            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{t.pricing.title}</h2>
+            <h2 className="text-[28px] md:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">{t.pricing.title}</h2>
             <p className="text-xs sm:text-sm text-slate-400 font-semibold uppercase">{t.pricing.subtitle}</p>
           </div>
 
@@ -1813,7 +1819,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
             <button
               onClick={() => setBillingInterval('monthly')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer min-h-[40px] ${
                 billingInterval === 'monthly'
                   ? 'bg-slate-900 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-600'
@@ -1823,7 +1829,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => setBillingInterval('yearly')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer min-h-[40px] ${
                 billingInterval === 'yearly'
                   ? 'bg-slate-900 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-600'
@@ -1835,7 +1841,7 @@ export default function LandingPage() {
         </div>
 
         {/* Pricing Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           {pricingPlans.map(plan => {
             const price = billingInterval === 'yearly' ? plan.price_yearly : plan.price_monthly;
             const pricePeriod = billingInterval === 'yearly' ? t.pricing.perYear : t.pricing.perMonth;
@@ -1843,8 +1849,8 @@ export default function LandingPage() {
             const planDesc = t.pricing.plans[plan.id as keyof typeof t.pricing.plans] || plan.name;
 
             return (
-              <Card key={plan.id} className="flex flex-col justify-between hover:shadow-lg transition-all duration-300 hover:scale-101 animate-fade-in bg-white border border-slate-200">
-                <CardContent className="p-8 space-y-6 flex-1 flex flex-col justify-between">
+              <Card key={plan.id} className="flex flex-col justify-between hover:shadow-lg transition-all duration-300 hover:scale-101 animate-fade-in bg-white border border-slate-200 rounded-2xl">
+                <CardContent className="p-6 sm:p-8 space-y-6 flex-1 flex flex-col justify-between">
                   <div className="space-y-4">
                     <div>
                       <h3 className="font-black text-slate-900 text-xl capitalize">{plan.name} {t.pricing.planSuffix}</h3>
@@ -1852,8 +1858,8 @@ export default function LandingPage() {
                     </div>
 
                     <div className="flex items-baseline">
-                      <span className="text-4xl font-black text-slate-950">{formatPrice(price)}</span>
-                      <span className="text-slate-400 text-xs font-semibold">{pricePeriod}</span>
+                      <span className="text-3xl sm:text-4xl font-black text-slate-950">{formatPrice(price)}</span>
+                      <span className="text-slate-400 text-xs font-semibold ml-1">{pricePeriod}</span>
                     </div>
 
                     <Badge variant="neutral" className="w-full justify-center bg-slate-50 border-slate-100 text-slate-600 font-semibold py-1">
@@ -2011,22 +2017,17 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* 15. Sticky Mobile CTA Floating Bar (Enhanced Trust Reassurance) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/98 backdrop-blur-md border-t border-slate-200 py-2 px-3.5 flex flex-col gap-1 shadow-lg md:hidden">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-col">
-            <span className="text-xs font-black text-slate-900">{t.floatingBar.title}</span>
-            <span className="text-[10px] text-slate-500 font-medium">{t.floatingBar.subtitle}</span>
-          </div>
-          <Link href={`/signup?plan=trial&lang=${language}`}>
-            <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm shadow-emerald-600/20 cursor-pointer min-h-[44px]">
-              {t.floatingBar.cta}
-            </button>
-          </Link>
+      {/* 15. Sticky Mobile CTA Floating Bar (72px Clean Modern SaaS) */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg px-4 flex items-center justify-between h-[72px] pb-[env(safe-area-inset-bottom)] md:hidden">
+        <div className="flex flex-col justify-center pr-2 min-w-0">
+          <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight truncate">{t.floatingBar.title}</span>
+          <span className="text-[11px] text-slate-500 font-medium truncate">{t.floatingBar.subtitle}</span>
         </div>
-        <div className="text-[9.5px] font-semibold text-slate-500 text-center tracking-tight border-t border-slate-100/80 pt-1">
-          {t.floatingBar.microcopy}
-        </div>
+        <Link href={`/signup?plan=trial&lang=${language}`} className="shrink-0">
+          <button className="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs shadow-emerald-600/20 cursor-pointer h-11 min-h-[44px] flex items-center justify-center whitespace-nowrap">
+            {t.floatingBar.cta}
+          </button>
+        </Link>
       </div>
 
     </div>
