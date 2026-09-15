@@ -487,8 +487,14 @@ export default function DashboardPage() {
         const cleanMsg = rawMsg.replace(/^[📢ℹ️⚠️🚨\s]+/, '').trim();
         const announcementKey = announcement?.id || announcement?.created_at || cleanMsg;
         const isDismissed = Boolean(dismissedAnnouncementKey && dismissedAnnouncementKey === announcementKey);
+        const isActive = Boolean(
+          announcement &&
+          announcement.active === true &&
+          cleanMsg &&
+          !isDismissed
+        );
 
-        if (!cleanMsg || isDismissed) return null;
+        if (!isActive) return null;
 
         return (
           <div className="relative rounded-2xl bg-gradient-to-r from-sky-50 via-indigo-50/70 to-blue-50/50 dark:from-sky-950/70 dark:via-indigo-950/60 dark:to-slate-900/80 border border-sky-200/90 dark:border-sky-800/80 p-4 sm:p-5 shadow-sm dark:shadow-xl flex items-start justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">

@@ -8,7 +8,6 @@ import { db, Profile, Restaurant, isSubscriptionExpired } from '@/lib/db';
 import { DEFAULT_PLAN_SPECS, parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import MockBanner from '@/components/shared/MockBanner';
-import InstallAppButton from '@/components/shared/InstallAppButton';
 import buildInfo from '@/lib/build-info.json';
 import { dashboardStore } from '@/lib/dashboardStore';
 import { PreviewModeProvider } from '@/context/PreviewModeContext';
@@ -628,30 +627,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </button>
             </div>
 
-            {/* Portal Switcher for Owners / Managers */}
-            {(dbRole === 'owner' || dbRole === 'manager') && (
-              <div className="px-4 pt-4 pb-2 border-b border-slate-800 bg-slate-950/20">
-                <label className="block text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
-                  Active Portal View
-                </label>
-                <select
-                  value={activeRole}
-                  onChange={(e) => {
-                    const newRole = e.target.value as any;
-                    setActiveRole(newRole);
-                    if (newRole === 'kitchen') router.push('/dashboard/kds');
-                    else if (newRole === 'waiter') router.push('/dashboard/orders');
-                    else router.push('/dashboard');
-                  }}
-                  className="block w-full px-2.5 py-1.5 text-xs text-slate-200 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                >
-                  <option value="owner">Owner Portal</option>
-                  <option value="waiter">Waiter Portal</option>
-                  <option value="kitchen">Kitchen Portal</option>
-                </select>
-              </div>
-            )}
-
             {/* Navigation Links */}
             <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
               {filteredMenuItems.map((item) => {
@@ -711,9 +686,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </p>
                 </div>
               </div>
-              <div className="mb-3">
-                <InstallAppButton className="w-full justify-center py-2" />
-              </div>
               <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-all cursor-pointer"
@@ -765,7 +737,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
 
               <div className="flex items-center gap-3">
-                <InstallAppButton />
                 {restaurant?.subscription_plan && (
                   <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">
                     {planSpec.name} Plan

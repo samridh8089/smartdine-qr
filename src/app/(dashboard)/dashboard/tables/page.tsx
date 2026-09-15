@@ -13,13 +13,11 @@ import Link from 'next/link';
 import { 
   Plus, QrCode, Download, ExternalLink, Trash2, 
   AlertTriangle, Printer, HelpCircle, Calendar, ShoppingBag,
-  Layers, LayoutGrid, Sparkles, FileText, Archive
+  Sparkles, FileText, Archive
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { dashboardStore } from '@/lib/dashboardStore';
-import FloorCanvasWrapper from '@/components/floorplan/FloorCanvasWrapper';
-import { FloorPlanItem } from '@/components/floorplan/types';
 import { useQRDesign } from '@/components/qr-studio/storage';
 import { QRCardRenderer } from '@/components/qr-studio/QRCardRenderer';
 import { 
@@ -69,8 +67,6 @@ export default function TablesPage() {
   });
 
   const [nowTime, setNowTime] = useState(Date.now());
-  const [viewMode, setViewMode] = useState<'floorplan' | 'grid'>('floorplan');
-  const [floorPlanMode, setFloorPlanMode] = useState<'view' | 'edit'>('view');
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
 
@@ -78,41 +74,6 @@ export default function TablesPage() {
   const { designConfig: qrDesign } = useQRDesign(restaurant);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const floorPlanItems = useMemo<FloorPlanItem[]>(() => {
-    if (tables && tables.length > 0) {
-      return tables.map((t, idx) => ({
-        id: t.id,
-        table_uuid: t.table_uuid || t.id,
-        display_number: t.display_number || t.name.replace(/^Table\s*/i, ''),
-        tableNumber: t.display_number || t.name.replace(/^Table\s*/i, ''),
-        name: t.name,
-        kind: 'table' as const,
-        shape: 'square' as const,
-        x: 80 + (idx % 4) * 140,
-        y: 80 + Math.floor(idx / 4) * 140,
-        width: 80,
-        height: 80,
-        rotation: 0,
-        seats: t.seats || t.capacity || 4,
-        zone_id: t.zone_id,
-        zone_name: t.zone_name,
-        assigned_waiter_id: t.assigned_waiter_id,
-        assignment_source: t.assignment_source,
-        service_badges: t.service_badges,
-        status: (t.occupancy_status || 'available') as any,
-        occupiedAt: t.occupied_at || undefined,
-        elapsedMinutes: t.occupied_at
-          ? Math.max(0, Math.floor((Date.now() - new Date(t.occupied_at).getTime()) / 60000))
-          : undefined,
-        reservationPartyName: t.reservation_party_name || undefined,
-        reservationTime: t.reservation_time || undefined,
-        dbTableId: t.id,
-        qrCodeUrl: qrCodes[t.id]
-      }));
-    }
-    return [];
-  }, [tables, qrCodes]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -569,44 +530,14 @@ export default function TablesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Title Bar & View Toggle */}
+      {/* Title Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-3">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-              {viewMode === 'floorplan' ? 'Restaurant Floor Plan' : 'Table Management'}
-            </h2>
-            <div className="flex items-center bg-[#F5F5F4] p-0.5 rounded-lg border border-[#E7E5E4]">
-              <button
-                type="button"
-                onClick={() => setViewMode('floorplan')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                  viewMode === 'floorplan'
-                    ? 'bg-white text-[#171717] shadow-xs'
-                    : 'text-[#737373] hover:text-[#171717]'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Floor Plan</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                  viewMode === 'grid'
-                    ? 'bg-white text-[#171717] shadow-xs'
-                    : 'text-[#737373] hover:text-[#171717]'
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Grid View</span>
-              </button>
-            </div>
-          </div>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Tables & QR Codes
+          </h2>
           <p className="text-xs text-slate-500 font-normal mt-0.5">
-            {viewMode === 'floorplan'
-              ? 'Interactive 2D Floor Plan with live table sessions, drag-to-merge, and blueprint builder.'
-              : 'Generate QR codes for tables, merge dining groups, and monitor order flows by location.'}
+            Generate QR codes for tables, merge dining groups, and monitor order flows by location.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -646,7 +577,7 @@ export default function TablesPage() {
             </>
           )}
 
-          {selectedTableIds.length >= 2 && viewMode === 'grid' && (
+          {selectedTableIds.length >= 2 && (
             <Button size="sm" variant="outline" className="border-gray-300 dark:border-gray-700 text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800" onClick={handleOpenMergeModal}>
               Merge ({selectedTableIds.length}) Tables
             </Button>
@@ -656,28 +587,6 @@ export default function TablesPage() {
           </Button>
         </div>
       </div>
-
-      {viewMode === 'floorplan' ? (
-        <FloorCanvasWrapper
-          restaurantId={restaurantId}
-          restaurantName={restaurant?.name || 'The Foody Hub'}
-          restaurantSlug={restaurantSlug || 'thefoodyhub'}
-          mode={floorPlanMode}
-          onModeChange={setFloorPlanMode}
-          initialItems={floorPlanItems}
-          zones={zones}
-          onDataMutated={() => fetchTablesData(restaurantId, true)}
-          onViewQR={(item) => {
-            const tbl = tables.find(t => t.id === item.id || t.name === item.name);
-            if (tbl) {
-              printTableQR(tbl);
-            } else {
-              alert(`Table ${item.tableNumber} QR: ${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${restaurantSlug}/table/${item.id}`);
-            }
-          }}
-        />
-      ) : (
-        <>
 
       {/* Live Occupancy Header Widget */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
@@ -1221,8 +1130,6 @@ export default function TablesPage() {
             );
           })}
         </div>
-      )}
-        </>
       )}
 
       {/* --- Create Table Modal --- */}
