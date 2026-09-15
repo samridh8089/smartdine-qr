@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -8,10 +9,8 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
   try {
-    const authHeader = req.headers.get('Authorization') || '';
-    const token = authHeader.replace('Bearer ', '').trim();
     const body = await req.json();
-    const { targetUserId, newPassword, requesterUserId: clientRequesterId } = body;
+    const { targetUserId, newPassword } = body;
 
     if (!targetUserId || !newPassword) {
       return NextResponse.json({ error: 'targetUserId and newPassword are required' }, { status: 400 });
@@ -21,46 +20,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Password must be at least 6 characters long' }, { status: 400 });
     }
 
-    // 1. Resolve requester Auth User via verified JWT token
-    let user: any = null;
-    if (token) {
-      const { data } = await supabaseAdmin.auth.getUser(token);
-      if (data?.user) user = data.user;
+    // 1. Resolve requester Auth User via verified JWT token, headers, or cookies
+    const authCheck = await verifyStaffRequest(req, ['owner', 'manager', 'super_admin']);
+    if (!authCheck.isAuthorized && authCheck.response) {
+      return authCheck.response;
     }
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthenticated user session: valid token required' }, { status: 401 });
-    }
-
-    // 2. Resolve requester profile from DB with robust fallbacks
-    let requesterProfile: any = null;
-    const { data: profById } = await supabaseAdmin.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    if (profById) {
-      requesterProfile = profById;
-    } else if (user.email) {
-      const { data: profByEmail } = await supabaseAdmin.from('profiles').select('*').eq('email', user.email).maybeSingle();
-      if (profByEmail) requesterProfile = profByEmail;
-    }
-
-    // If profile row doesn't exist in profiles table, construct profile object from Auth user metadata & restaurant lookup
-    if (!requesterProfile) {
-      const isSuperAdmin = false; // require DB profile for super_admin
-      const role = (user.user_metadata?.role) || 'owner';
-      let restId = user.user_metadata?.restaurant_id || null;
-
-      if (!restId && role === 'owner') {
-        const { data: rest } = await supabaseAdmin.from('restaurants').select('id').order('created_at', { ascending: false }).limit(1).maybeSingle();
-        if (rest) restId = rest.id;
-      }
-
-      requesterProfile = {
-        id: user.id,
-        email: user.email,
-        full_name: user.user_metadata?.fullName || user.email,
-        role: role,
-        restaurant_id: restId
-      };
-    }
+    const requesterProfile = authCheck.profile;
 
     // Check requester role
     if (!['owner', 'manager', 'super_admin'].includes(requesterProfile.role)) {
