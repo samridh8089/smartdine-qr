@@ -4281,9 +4281,20 @@ export const db = {
     const resolvedDept = department || (role === 'waiter' ? 'waiter' : role === 'kitchen' ? 'kitchen' : 'general');
     const resolvedPhone = phone || '';
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    let token = sessionData?.session?.access_token;
+    if (!token) {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      token = refreshData?.session?.access_token;
+    }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+
     const res = await fetch('/api/staff/create-invite', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         name: fullName,
         email: cleanEmail,
@@ -4375,10 +4386,20 @@ export const db = {
 
   async deleteStaffProfile(id: string): Promise<void> {
     const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
+    const { data: sessionData } = await supabase.auth.getSession();
+    let token = sessionData?.session?.access_token;
+    if (!token) {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      token = refreshData?.session?.access_token;
+    }
     const { data: { user } } = await supabase.auth.getUser();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
     const res = await fetch(`${baseUrl}/api/staff/delete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         targetUserId: id,
         requesterUserId: user?.id
@@ -4393,10 +4414,20 @@ export const db = {
 
   async updateStaffPassword(targetUserId: string, newPassword: string): Promise<void> {
     const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
+    const { data: sessionData } = await supabase.auth.getSession();
+    let token = sessionData?.session?.access_token;
+    if (!token) {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      token = refreshData?.session?.access_token;
+    }
     const { data: { user } } = await supabase.auth.getUser();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
     const res = await fetch(`${baseUrl}/api/staff/reset-password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         targetUserId,
         newPassword,
@@ -4412,10 +4443,20 @@ export const db = {
 
   async changeOwnerPassword(currentPassword: string, newPassword: string): Promise<void> {
     const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
+    const { data: sessionData } = await supabase.auth.getSession();
+    let token = sessionData?.session?.access_token;
+    if (!token) {
+      const { data: refreshData } = await supabase.auth.refreshSession();
+      token = refreshData?.session?.access_token;
+    }
     const { data: { user } } = await supabase.auth.getUser();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
     const res = await fetch(`${baseUrl}/api/auth/change-owner-password`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         currentPassword,
         newPassword,
