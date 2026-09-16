@@ -223,12 +223,6 @@ export async function POST(req: Request) {
                     .eq('id', restId);
                 }
               }
-
-              // 2. Release tables row status
-              await supabaseAdmin
-                .from('tables')
-                .update({ status: 'available' })
-                .eq('id', tableId);
             }
           } catch (relErr) {
             console.warn('[update-order-status] Table release sync warning:', relErr);

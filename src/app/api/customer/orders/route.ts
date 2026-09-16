@@ -614,8 +614,8 @@ export async function POST(req: Request) {
           current_session_id: createdOrder.id
         };
 
-        // Parallelize settings update and tables row update
-        void Promise.all([
+        // Update restaurant settings table_states
+        void Promise.resolve(
           supabase
             .from('restaurants')
             .update({
@@ -624,12 +624,8 @@ export async function POST(req: Request) {
                 table_states: tableStates
               }
             })
-            .eq('id', restaurantId),
-          supabase
-            .from('tables')
-            .update({ status: 'occupied' })
-            .eq('id', tableId)
-        ]).catch(tableSyncErr => {
+            .eq('id', restaurantId)
+        ).catch((tableSyncErr: any) => {
           console.error('[CustomerOrder] Table status sync error:', tableSyncErr);
         });
 

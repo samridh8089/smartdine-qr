@@ -69,9 +69,10 @@ export default function FounderControlCenter({
     if (profile?.full_name) {
       params.set('name', profile.full_name);
     }
+    params.set('v', `v4_${reloadKey}_${Date.now()}`);
     const qs = params.toString();
     return `/founder-control-center.html${qs ? `?${qs}` : ''}`;
-  }, [restaurantId, userRole, profile?.full_name]);
+  }, [restaurantId, userRole, profile?.full_name, reloadKey]);
 
   // ── 4. ALL useCallback HOOKS ──
   const handleExit = useCallback(() => {
