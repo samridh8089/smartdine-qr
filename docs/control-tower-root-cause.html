@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartDine Root Cause AI • Automated Diagnostic Engine</title>
+  <style>
+    :root {
+      --bg-primary: #070b12;
+      --bg-secondary: #0c1322;
+      --bg-card: #141f36;
+      --border-color: #263859;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-danger: #ef4444;
+      --accent-green: #10b981;
+      --accent-blue: #38bdf8;
+      --accent-pink: #ec4899;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      padding: 32px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 20px;
+    }
+    h1 { font-size: 24px; font-weight: 800; }
+    .diag-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .diag-header {
+      background: var(--bg-card);
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .diag-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .diag-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 6px;
+    }
+    .diag-box {
+      background: var(--bg-card);
+      padding: 10px 14px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    code {
+      font-family: var(--font-mono);
+      color: var(--accent-blue);
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>🤖 SmartDine Root Cause AI Diagnostic Workbench</h1>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">Zero-Guess Automated Incident Deduction • Trace Stoppage Analysis</div>
+      </div>
+      <div>
+        <a href="smartdine-control-tower-v4.html" style="background:var(--accent-blue);color:#000;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;">Back to V4 NOC ➔</a>
+      </div>
+    </header>
+
+    
+      <div class="diag-card">
+        <div class="diag-header">
+          <div>
+            <strong style="font-size:15px;color:var(--text-primary);">Takeaway Order Cancelled & Stock Restored</strong>
+            <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">(Order #<code>36af5507</code>)</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:var(--accent-pink);background:rgba(236,72,153,0.15);padding:3px 8px;border-radius:4px;">AI DIAGNOSED</span>
+        </div>
+        <div class="diag-body">
+          <div style="font-size:13px;color:var(--text-primary);">
+            <strong style="color:var(--accent-danger);">Flow Stoppage Point:</strong> <code>order_cancel (07:38:49 IST)</code>
+          </div>
+          <p style="font-size:13px;color:var(--text-secondary);">Customer cancelled takeaway order prior to kitchen preparation. Lifecycle router executed safe food disposition via inv_reversal and restored 8 BOM inventory reservations back to available stock pool.</p>
+
+          <div class="diag-grid">
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">AFFECTED SOURCE FILE</span>
+              <span style="font-size:11px;"><code>src/app/api/staff/update-order-status/route.ts</code></span>
+            </div>
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">FUNCTION / ROUTE</span>
+              <span style="font-size:11px;"><code>handleStatusTransition("cancelled")</code></span>
+            </div>
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">TRIGGER MECHANISM</span>
+              <span style="font-size:11px;color:var(--text-secondary);">Manual staff cancellation (Deepak Soni)</span>
+            </div>
+          </div>
+
+          <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--accent-green);">
+            ✔ <strong>Verified System Evidence:</strong> Zero ghost stock deductions; inventory ledger balanced to 0.00.
+          </div>
+        </div>
+      </div>
+    
+      <div class="diag-card">
+        <div class="diag-header">
+          <div>
+            <strong style="font-size:15px;color:var(--text-primary);">Concurrency Double-Tap Intercepted</strong>
+            <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">(Order #<code>ERR-IDEM-308</code>)</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:var(--accent-pink);background:rgba(236,72,153,0.15);padding:3px 8px;border-radius:4px;">AI DIAGNOSED</span>
+        </div>
+        <div class="diag-body">
+          <div style="font-size:13px;color:var(--text-primary);">
+            <strong style="color:var(--accent-danger);">Flow Stoppage Point:</strong> <code>order_idempotency (07:37:39 IST)</code>
+          </div>
+          <p style="font-size:13px;color:var(--text-secondary);">A rapid double-tap submitted duplicate preparing request. Idempotency guard matched existing idempotency_key and served cached HTTP 200 response without duplicating inventory_transactions insertion.</p>
+
+          <div class="diag-grid">
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">AFFECTED SOURCE FILE</span>
+              <span style="font-size:11px;"><code>src/app/api/staff/update-order-status/route.ts</code></span>
+            </div>
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">FUNCTION / ROUTE</span>
+              <span style="font-size:11px;"><code>verifyIdempotencyKey()</code></span>
+            </div>
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">TRIGGER MECHANISM</span>
+              <span style="font-size:11px;color:var(--text-secondary);">Line cook double-click on touch KDS within 94ms</span>
+            </div>
+          </div>
+
+          <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--accent-green);">
+            ✔ <strong>Verified System Evidence:</strong> Exactly-once inventory write verified: 1 deduction transaction recorded in DB.
+          </div>
+        </div>
+      </div>
+    
+      <div class="diag-card">
+        <div class="diag-header">
+          <div>
+            <strong style="font-size:15px;color:var(--text-primary);">Takeaway Pineapple Juice (Full) - Completed</strong>
+            <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">(Order #<code>f479606c</code>)</span>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:var(--accent-pink);background:rgba(236,72,153,0.15);padding:3px 8px;border-radius:4px;">AI DIAGNOSED</span>
+        </div>
+        <div class="diag-body">
+          <div style="font-size:13px;color:var(--text-primary);">
+            <strong style="color:var(--accent-danger);">Flow Stoppage Point:</strong> <code>bill_settlement (07:38:15 IST)</code>
+          </div>
+          <p style="font-size:13px;color:var(--text-secondary);">Healthy completed flow. Order progressed sequentially from placement -> KDS accept -> 250g pineapple deduction -> served -> ₹94.50 cash payment verified.</p>
+
+          <div class="diag-grid">
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">AFFECTED SOURCE FILE</span>
+              <span style="font-size:11px;"><code>src/app/api/billing/settle/route.ts</code></span>
+            </div>
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">FUNCTION / ROUTE</span>
+              <span style="font-size:11px;"><code>POST()</code></span>
+            </div>
+            <div class="diag-box">
+              <span style="font-size:10px;color:var(--text-muted);font-weight:700;">TRIGGER MECHANISM</span>
+              <span style="font-size:11px;color:var(--text-secondary);">Cash paid marked by Deepak Soni</span>
+            </div>
+          </div>
+
+          <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--accent-green);">
+            ✔ <strong>Verified System Evidence:</strong> Grand total matches subtotal + 5% CGST/SGST (₹4.50 tax).
+          </div>
+        </div>
+      </div>
+    
+  </div>
+</body>
+</html>

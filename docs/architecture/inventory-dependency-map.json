@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "SmartDine Offline Batch Lifecycle & Inventory Dataflow",
+    "quality_profile": "showcase",
+    "viewBox": [1080, 520]
+  },
+  "stages": [
+    {"label": "Offline Capture"},
+    {"label": "Deduplication"},
+    {"label": "Sync Gateway"},
+    {"label": "Lifecycle & Engine"},
+    {"label": "Broadcast & Audit"}
+  ],
+  "nodes": [
+    {"id": "kds_action", "type": "frontend", "label": "KDS & POS Action", "sublabel": "offline ticket", "stage": 0, "row": 0},
+    {"id": "local_queue", "type": "database", "label": "Offline Queue", "sublabel": "sync_queue table", "stage": 0, "row": 1},
+    {"id": "dedup_check", "type": "backend", "label": "Deduplication", "sublabel": "verify batch ID", "stage": 1, "row": 0},
+    {"id": "conflict_log", "type": "database", "label": "Conflict Logs", "sublabel": "stale rejection", "stage": 1, "row": 1},
+    {"id": "online_trigger", "type": "frontend", "label": "Online Event", "sublabel": "reconnect listener", "stage": 2, "row": 0},
+    {"id": "auth_route", "type": "backend", "label": "Lifecycle Route", "sublabel": "update-status API", "stage": 2, "row": 1},
+    {"id": "batch_db", "type": "database", "label": "order_batches", "sublabel": "atomic row lock", "stage": 3, "row": 0},
+    {"id": "inv_engine", "type": "backend", "label": "Inventory Engine", "sublabel": "reserve & consume", "stage": 3, "row": 1},
+    {"id": "realtime_bus", "type": "frontend", "label": "Realtime Bus", "sublabel": "KDS & Waiter", "stage": 4, "row": 0},
+    {"id": "audit_trail", "type": "database", "label": "Audit & Tables", "sublabel": "events & release", "stage": 4, "row": 1}
+  ],
+  "flows": [
+    {"from": "kds_action", "to": "local_queue", "label": "offline enqueue", "variant": "default", "labelAt": [100, 210]},
+    {"from": "local_queue", "to": "dedup_check", "label": "queued batch", "variant": "emphasis"},
+    {"from": "dedup_check", "to": "conflict_log", "label": "stale log", "variant": "dashed", "labelAt": [315, 210]},
+    {"from": "online_trigger", "to": "auth_route", "label": "online trigger", "variant": "default", "labelAt": [530, 210]},
+    {"from": "dedup_check", "to": "auth_route", "label": "valid batch", "variant": "emphasis"},
+    {"from": "auth_route", "to": "batch_db", "label": "status lock", "variant": "emphasis"},
+    {"from": "auth_route", "to": "inv_engine", "label": "stock change", "variant": "emphasis", "labelAt": [745, 210]},
+    {"from": "batch_db", "to": "realtime_bus", "label": "live broadcast", "variant": "dashed"},
+    {"from": "inv_engine", "to": "audit_trail", "label": "audit entry", "variant": "dashed"}
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Authoritative Sync Contract",
+      "items": [
+        "Zero direct database writes: all client status changes routed through /api/staff/update-order-status",
+        "Offline queue stores idempotency keys: kds_batch_${batchId}_${nextStatus}_${timestamp}",
+        "Automatic queue drainage triggered by window online event and component mount"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Deduplication & Concurrency Guard",
+      "items": [
+        "Existing order ID and batch ID prevent duplicate server processing on reconnection",
+        "Atomic conditional row lock (in status ALLOWED_PRIOR_STATUSES) prevents stale overwrites",
+        "Frozen inventory engine consumes at preparing, restores on cancellation with audit trail"
+      ]
+    }
+  ]
+}

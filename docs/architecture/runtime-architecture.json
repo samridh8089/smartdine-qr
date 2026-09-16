@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "SmartDine Runtime Architecture",
+    "quality_profile": "showcase",
+    "viewBox": [1380, 620]
+  },
+  "components": [
+    {"id":"customer","type":"external","label":"Customer","sublabel":"QR browser","pos":[40,260],"size":[145,62]},
+    {"id":"staff","type":"external","label":"Staff","sublabel":"KDS / orders / waiter","pos":[40,430],"size":[145,62]},
+    {"id":"web","type":"frontend","label":"Next.js web","sublabel":"customer + dashboard routes","pos":[260,260],"size":[175,62]},
+    {"id":"api","type":"backend","label":"Route handlers","sublabel":"customer order + staff status","pos":[520,260],"size":[185,62]},
+    {"id":"domain","type":"backend","label":"Domain services","sublabel":"db.ts + inventory engine","pos":[790,260],"size":[185,62]},
+    {"id":"database","type":"database","label":"Supabase PostgreSQL","sublabel":"orders, batches, inventory","pos":[1060,260],"size":[190,62]},
+    {"id":"push","type":"cloud","label":"Push providers","sublabel":"FCM / Web Push","pos":[790,430],"size":[185,62]},
+    {"id":"realtime","type":"messagebus","label":"Supabase Realtime","sublabel":"changes + broadcasts","pos":[1060,430],"size":[190,62]},
+    {"id":"auth","type":"security","label":"Supabase Auth","sublabel":"staff JWT / roles","pos":[520,100],"size":[185,62]}
+  ],
+  "connections": [
+    {"from":"customer","to":"web","label":"QR menu","variant":"emphasis"},
+    {"from":"staff","to":"web","label":"dashboard","variant":"emphasis"},
+    {"from":"web","to":"api","label":"HTTPS routes","variant":"emphasis"},
+    {"from":"api","to":"auth","label":"JWT check","variant":"security"},
+    {"from":"api","to":"domain","label":"update lifecycle","variant":"emphasis"},
+    {"from":"domain","to":"database","label":"durable state","variant":"emphasis"},
+    {"from":"domain","to":"push","label":"ready alerts","variant":"dashed","labelAt":[883,350]},
+    {"from":"database","to":"realtime","label":"postgres changes","variant":"dashed","labelAt":[1155,350]},
+    {"from":"realtime","to":"web","label":"live UI updates","variant":"dashed","fromSide":"bottom","toSide":"bottom","via":[[1155,540],[347.5,540]],"labelAt":[750,530]}
+  ],
+  "cards": [
+    {"dot":"cyan","title":"Server paths","items":["POST /api/customer/orders creates and reserves", "POST /api/staff/update-order-status authorizes and advances state", "db.ts calls frozen inventoryEngine.ts"]},
+    {"dot":"emerald","title":"Database truth","items":["orders, order_batches, order_items hold the lifecycle", "inventory_reservations holds promises", "inventory_transactions records consumption"]},
+    {"dot":"violet","title":"Live delivery","items":["KDS, orders, waiter, and customer tracking subscribe to database changes", "Server broadcast supplements Postgres changes", "Ready can send FCM / web push"]}
+  ]
+}

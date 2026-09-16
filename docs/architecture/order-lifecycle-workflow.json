@@ -1,0 +1,28 @@
+{
+  "schema_version":2,
+  "diagram_type":"workflow",
+  "meta":{"title":"SmartDine Order State Workflow","quality_profile":"showcase","viewBox":[1060,700]},
+  "lanes":[{"id":"customer","label":"Customer"},{"id":"server","label":"Next.js server"},{"id":"kitchen","label":"Kitchen + waiter"},{"id":"inventory","label":"Frozen inventory engine"}],
+  "phases":[{"id":"order","label":"Order","fromCol":0,"toCol":1},{"id":"kitchenflow","label":"Kitchen workflow","fromCol":2,"toCol":4},{"id":"service","label":"Service","fromCol":5,"toCol":5}],
+  "mainPath":["qr","created","accepted","preparing","ready","served"],
+  "nodes":[
+    {"id":"qr","lane":"customer","col":0,"type":"external","label":"QR menu order","sublabel":"menu order"},
+    {"id":"created","lane":"server","col":1,"type":"backend","label":"New order batch","sublabel":"order & items","width":140},
+    {"id":"reserved","lane":"inventory","col":1,"type":"database","label":"Reserved","sublabel":"reservations","width":140},
+    {"id":"accepted","lane":"kitchen","col":2,"type":"frontend","label":"KDS accepts","sublabel":"accepted"},
+    {"id":"preparing","lane":"kitchen","col":3,"type":"frontend","label":"Preparing","sublabel":"preparing"},
+    {"id":"consumed","lane":"inventory","col":3,"type":"database","label":"Consumed","sublabel":"stock consumed","width":140},
+    {"id":"ready","lane":"kitchen","col":4,"type":"frontend","label":"Ready","sublabel":"waiter alert","width":140},
+    {"id":"served","lane":"kitchen","col":5,"type":"frontend","label":"Waiter served","sublabel":"served"}
+  ],
+  "edges":[
+    {"from":"qr","to":"created","label":"POST /api/customer/orders","variant":"emphasis","role":"main"},
+    {"from":"created","to":"reserved","label":"reserveInventoryForOrderBatch","variant":"emphasis","role":"async"},
+    {"from":"created","to":"accepted","label":"realtime KDS queue","variant":"dashed","role":"async"},
+    {"from":"accepted","to":"preparing","label":"POST /api/staff/update-order-status","variant":"emphasis","role":"main"},
+    {"from":"preparing","to":"consumed","label":"transition lifecycle consumes","variant":"emphasis","role":"async"},
+    {"from":"preparing","to":"ready","label":"KDS marks ready","variant":"emphasis","role":"main"},
+    {"from":"ready","to":"served","label":"waiter status update","variant":"emphasis","role":"main"}
+  ],
+  "cards":[{"dot":"cyan","title":"State authority","items":["Route handler checks staff role and tenant", "db.ts enforces allowed transitions", "inventoryEngine.ts synchronizes batch and parent order"]},{"dot":"violet","title":"Realtime","items":["KDS sees new/changed batches through postgres_changes", "Waiter sees ready batch via postgres_changes and broadcast", "Customer tracking also observes order + batch changes"]}]
+}

@@ -1,129 +1,111 @@
 'use client';
 
 /**
- * CleverOps Founder Control Center — Dedicated Route
+ * Phase-19: Founder Control Center
  * Route: /dashboard/founder/control-center
  *
- * Strictly adheres to React Hook Safety Guardrail:
- * All hooks declared at the top level in exact order before any conditional returns.
+ * Access: owner, manager, super_admin (via 5-tap logo or Ctrl+Shift+M)
+ * This page NEVER appears in the sidebar.
  */
 
-import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRestaurant } from '@/app/(dashboard)/layout';
-import FounderControlCenter from '@/components/founder/FounderControlCenter';
+import dynamic from 'next/dynamic';
 
-function FounderControlCenterContent() {
+// Dynamically import to avoid SSR issues with Konva / large component tree
+const FounderControlCenter = dynamic(
+  () => import('@/components/founder/FounderControlCenter'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex-1 flex items-center justify-center bg-slate-950 min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-emerald-400 font-mono text-sm">Initializing Founder Control Center...</p>
+        </div>
+      </div>
+    ),
+  }
+);
+
+export default function FounderControlCenterPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  // ── 1. useState Declarations ──────────────────────────────────────────────
-  const [hasLoaded, setHasLoaded] = useState<boolean>(false);
-
-  // ── 2. useRef Declarations (None needed) ──────────────────────────────────
-
-  // ── 3. useMemo Declarations ───────────────────────────────────────────────
+  // All hooks FIRST — React Hook Safety Rule
   const { restaurant, profile, dbRole } = useRestaurant();
+  const [hasFounderSession, setHasFounderSession] = useState<boolean>(false);
 
-  const urlRestaurantId = useMemo(() => {
-    return searchParams.get('restaurantId') || '';
-  }, [searchParams]);
-
-  const targetRestaurantId = useMemo(() => {
-    return (
-      urlRestaurantId ||
-      restaurant?.id ||
-      profile?.restaurant_id ||
-      '81fa8201-51d7-4da5-98f5-a52dbff4e6ae'
-    );
-  }, [urlRestaurantId, restaurant?.id, profile?.restaurant_id]);
-
+  // Access control check: authorized role (owner, manager, super_admin)
   const isRoleAuthorized = useMemo(() => {
     if (!profile) return false;
-    const roleStr = (profile.role as string) || dbRole || '';
     return (
-      roleStr === 'super_admin' ||
-      roleStr === 'owner' ||
-      roleStr === 'manager' ||
       dbRole === 'super_admin' ||
+      (profile.role as string) === 'super_admin' ||
       dbRole === 'owner' ||
       dbRole === 'manager'
     );
   }, [profile, dbRole]);
 
-  // ── 4. useCallback Declarations ───────────────────────────────────────────
-  const handleExit = useCallback(() => {
-    router.push('/dashboard');
-  }, [router]);
+  // Strict RBAC: founder mode requires an authorized role
+  const isAuthorized = isRoleAuthorized;
 
-  // ── 5. useEffect Declarations ─────────────────────────────────────────────
-  // Mark loaded
-  useEffect(() => {
-    setHasLoaded(true);
-  }, []);
-
-  // Persist founder mode in session storage
+  // Once authorized via role, persist founder session in sessionStorage
   useEffect(() => {
     if (isRoleAuthorized && typeof window !== 'undefined') {
       sessionStorage.setItem('founder_mode', 'true');
     }
   }, [isRoleAuthorized]);
 
-  // Redirect unauthorized users
   useEffect(() => {
-    if (profile && !isRoleAuthorized) {
+    if (profile && !isAuthorized) {
       router.replace('/dashboard');
     }
-  }, [profile, isRoleAuthorized, router]);
+  }, [profile, isAuthorized, router]);
 
-  // Ensure restaurantId is reflected in URL so it survives refresh
-  useEffect(() => {
-    if (targetRestaurantId && !urlRestaurantId && typeof window !== 'undefined') {
-      router.replace(`/dashboard/founder/control-center?restaurantId=${targetRestaurantId}`);
-    }
-  }, [targetRestaurantId, urlRestaurantId, router]);
-
-  // ── Conditional Returns (Only AFTER all hooks) ────────────────────────────
-  if (!profile && !hasLoaded) {
+  // Don't render until we know the user is authorized
+  if (!profile) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#070b12] min-h-screen">
+      <div className="flex-1 flex items-center justify-center bg-slate-950 min-h-screen">
         <div className="h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (profile && !isRoleAuthorized) {
+  if (!isAuthorized) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#070b12] min-h-screen">
-        <p className="text-rose-400 font-mono text-sm">Access Denied: Founder authorization required.</p>
+      <div className="flex-1 flex items-center justify-center bg-slate-950 min-h-screen">
+        <p className="text-rose-400 font-mono text-sm">Access Denied</p>
+      </div>
+    );
+  }
+
+  const restaurantId = restaurant?.id || profile?.restaurant_id || '';
+
+  if (!restaurantId) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-slate-950 min-h-screen">
+        <div className="text-center space-y-3">
+          <p className="text-amber-400 font-mono text-sm">No restaurant context available.</p>
+          <p className="text-slate-500 text-xs">
+            Super Admin: please impersonate a restaurant first, then access the Founder Control Center.
+          </p>
+          <button
+            onClick={() => router.push('/super-admin')}
+            className="mt-4 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg text-xs hover:bg-slate-700"
+          >
+            Go to Super Admin Panel
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#070b12] overflow-hidden" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
+    <div className="fixed inset-0 z-50 bg-slate-950 overflow-hidden" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
       <FounderControlCenter
-        restaurantId={targetRestaurantId}
+        restaurantId={restaurantId}
         profile={profile}
-        onExit={handleExit}
       />
     </div>
-  );
-}
-
-export default function FounderControlCenterPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex-1 flex items-center justify-center bg-[#070b12] min-h-screen">
-          <div className="flex flex-col items-center gap-3">
-            <div className="h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-emerald-400 font-mono text-xs">Initializing Control Tower V4...</p>
-          </div>
-        </div>
-      }
-    >
-      <FounderControlCenterContent />
-    </Suspense>
   );
 }

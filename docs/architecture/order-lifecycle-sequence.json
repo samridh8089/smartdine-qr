@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {"title":"SmartDine Order Lifecycle: QR to Served","quality_profile":"showcase","viewBox":[1040,980],"column_fit":"spread"},
+  "participants":[
+    {"id":"customer","type":"external","label":"Customer","sublabel":"QR browser"},
+    {"id":"menu","type":"frontend","label":"Customer Menu","sublabel":"web client"},
+    {"id":"create","type":"backend","label":"Order API","sublabel":"POST /orders"},
+    {"id":"db","type":"database","label":"PostgreSQL","sublabel":"orders, stock"},
+    {"id":"kds","type":"frontend","label":"KDS","sublabel":"kitchen view"},
+    {"id":"status","type":"backend","label":"Status API","sublabel":"staff status"},
+    {"id":"engine","type":"backend","label":"Inventory","sublabel":"engine.ts"},
+    {"id":"waiter","type":"frontend","label":"Waiter","sublabel":"waiter view"}
+  ],
+  "segments":[{"from":150,"to":405,"label":"Create + reserve"},{"from":430,"to":810,"label":"Kitchen progress"},{"from":825,"to":895,"label":"Serve"}],
+  "messages":[
+    {"from":"customer","to":"menu","y":180,"label":"scan QR; select dishes","variant":"emphasis"},
+    {"from":"menu","to":"create","y":225,"label":"POST /api/customer/orders","variant":"emphasis"},
+    {"from":"create","to":"db","y":270,"label":"read restaurant, table, menu, active order","variant":"default"},
+    {"from":"create","to":"db","y":315,"label":"INSERT orders, order_batches, order_items","variant":"emphasis"},
+    {"from":"create","to":"engine","y":360,"label":"reserveInventoryForOrderBatch","variant":"emphasis"},
+    {"from":"engine","to":"db","y":395,"label":"UPDATE reserved_stock; INSERT inventory_reservations","variant":"emphasis"},
+    {"from":"db","to":"kds","y":455,"label":"postgres_changes: orders / order_batches","variant":"dashed"},
+    {"from":"kds","to":"status","y":500,"label":"POST status=accepted, batchId","variant":"emphasis"},
+    {"from":"status","to":"engine","y":545,"label":"db.updateBatchStatus → transition(...accepted)","variant":"emphasis"},
+    {"from":"engine","to":"db","y":590,"label":"UPDATE order_batches + parent orders","variant":"default"},
+    {"from":"kds","to":"status","y":635,"label":"POST status=preparing, batchId","variant":"emphasis"},
+    {"from":"status","to":"engine","y":680,"label":"transition(...preparing)","variant":"emphasis"},
+    {"from":"engine","to":"db","y":725,"label":"consume reservation: UPDATE stock; INSERT transaction","variant":"emphasis"},
+    {"from":"kds","to":"status","y":770,"label":"POST status=ready, batchId","variant":"emphasis"},
+    {"from":"db","to":"waiter","y":805,"label":"postgres_changes / broadcast: ready","variant":"dashed"},
+    {"from":"waiter","to":"status","y":838,"label":"POST status=served, batchId","variant":"emphasis"},
+    {"from":"status","to":"db","y":864,"label":"UPDATE batch & items to served","variant":"emphasis"},
+    {"from":"status","to":"waiter","y":890,"label":"broadcast served + audit events","variant":"dashed"}
+  ],
+  "cards":[{"dot":"emerald","title":"Inventory timing","items":["Reserve at order creation", "Consume on preparing (also defensively at later states)", "Serving does not perform a second stock decrement"]},{"dot":"cyan","title":"Unified Status API","items":["KDS, Waiter & Orders Dashboard route strictly through /api/staff/update-order-status", "Direct database bypasses eliminated from dashboard/orders", "Guarantees Realtime broadcast, table release & event bus execution"]}]
+}

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartDine NOC Performance Health • Live Telemetry Gauges</title>
+  <style>
+    :root {
+      --bg-primary: #070b12;
+      --bg-secondary: #0c1322;
+      --bg-card: #141f36;
+      --border-color: #263859;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-green: #10b981;
+      --accent-blue: #38bdf8;
+      --accent-purple: #8b5cf6;
+      --accent-main: #f59e0b;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      padding: 32px;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 20px;
+    }
+    h1 { font-size: 24px; font-weight: 800; }
+    .gauges-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .gauge-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gauge-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .gauge-val-big {
+      font-size: 32px;
+      font-weight: 800;
+    }
+    .gauge-status {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+    }
+    .meter-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: var(--bg-card);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .meter-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--accent-green);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>📊 SmartDine NOC Performance Health Dashboard</h1>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:4px;">Live Telemetry • Supabase Connection Pools • WebSocket Heartbeats</div>
+      </div>
+      <div>
+        <a href="smartdine-control-tower-v4.html" style="background:var(--accent-blue);color:#000;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;">Back to V4 NOC ➔</a>
+      </div>
+    </header>
+
+    <div class="gauges-grid">
+      <div class="gauge-box">
+        <div class="gauge-top">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:700;">API ROUTE LATENCY</span>
+          <span class="gauge-status" style="background:rgba(16,185,129,0.15);color:var(--accent-green);">HEALTHY</span>
+        </div>
+        <div class="gauge-val-big" style="color:var(--accent-green);">32ms</div>
+        <div style="font-size:11px;color:var(--text-secondary);">p95: 48ms • p99: 74ms</div>
+        <div class="meter-bar-bg"><div class="meter-bar-fill" style="width:32%;"></div></div>
+      </div>
+
+      <div class="gauge-box">
+        <div class="gauge-top">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:700;">DB POSTGRES POOL</span>
+          <span class="gauge-status" style="background:rgba(56,189,248,0.15);color:var(--accent-blue);">OPTIMAL</span>
+        </div>
+        <div class="gauge-val-big" style="color:var(--accent-blue);">18ms</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Active Pool: 14 / 20 • Wait: 0.3ms</div>
+        <div class="meter-bar-bg"><div class="meter-bar-fill" style="width:24%;background:var(--accent-blue);"></div></div>
+      </div>
+
+      <div class="gauge-box">
+        <div class="gauge-top">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:700;">REALTIME WEBSOCKET DELAY</span>
+          <span class="gauge-status" style="background:rgba(139,92,246,0.15);color:var(--accent-purple);">LOW JITTER</span>
+        </div>
+        <div class="gauge-val-big" style="color:var(--accent-purple);">12ms</div>
+        <div style="font-size:11px;color:var(--text-secondary);">RTT: 11.8ms • Missed Heartbeats: 0</div>
+        <div class="meter-bar-bg"><div class="meter-bar-fill" style="width:16%;background:var(--accent-purple);"></div></div>
+      </div>
+
+      <div class="gauge-box">
+        <div class="gauge-top">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:700;">WEBSOCKET DROPS (24H)</span>
+          <span class="gauge-status" style="background:rgba(16,185,129,0.15);color:var(--accent-green);">CONNECTED</span>
+        </div>
+        <div class="gauge-val-big" style="color:var(--accent-green);">0 Drops</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Uptime: 99.98% • Dropped Frames: 0</div>
+        <div class="meter-bar-bg"><div class="meter-bar-fill" style="width:100%;"></div></div>
+      </div>
+
+      <div class="gauge-box">
+        <div class="gauge-top">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:700;">JS HEAP MEMORY</span>
+          <span class="gauge-status" style="background:rgba(236,72,153,0.15);color:#ec4899);">NOMINAL</span>
+        </div>
+        <div class="gauge-val-big" style="color:#ec4899;">42.8 MB</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Heap Total: 64 MB • RSS: 98 MB</div>
+        <div class="meter-bar-bg"><div class="meter-bar-fill" style="width:45%;background:#ec4899;"></div></div>
+      </div>
+
+      <div class="gauge-box">
+        <div class="gauge-top">
+          <span style="font-size:12px;color:var(--text-muted);font-weight:700;">CLIENT CPU LOAD</span>
+          <span class="gauge-status" style="background:rgba(16,185,129,0.15);color:var(--accent-green);">60 FPS</span>
+        </div>
+        <div class="gauge-val-big" style="color:var(--accent-green);">4.2%</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Animation Jank: 0% • 100 Orders Active</div>
+        <div class="meter-bar-bg"><div class="meter-bar-fill" style="width:10%;"></div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
