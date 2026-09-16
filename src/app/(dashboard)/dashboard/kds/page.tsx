@@ -19,10 +19,131 @@ import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { dashboardStore } from '@/lib/dashboardStore';
 
 
+// ─── Phase 4 Hardened: KDS Offline Lifecycle Queue ───────────────────────
+export interface KdsOfflineQueueItem {
+  id: string; // Idempotency key: kds_batch_${batchId}_${nextStatus}_${timestamp}
+  batchId: string;
+  nextStatus: OrderBatch['status'];
+  staffName: string;
+  cancellationReason?: string;
+  timestamp: string;
+}
+
+export function getKdsOfflineQueue(restaurantId: string): KdsOfflineQueueItem[] {
+  if (typeof window === 'undefined' || !restaurantId) return [];
+  try {
+    const raw = localStorage.getItem(`smartdine_kds_offline_queue_${restaurantId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('Failed to read KDS offline queue from localStorage:', e);
+    return [];
+  }
+}
+
+export function saveKdsOfflineQueue(restaurantId: string, queue: KdsOfflineQueueItem[]): void {
+  if (typeof window === 'undefined' || !restaurantId) return;
+  try {
+    localStorage.setItem(`smartdine_kds_offline_queue_${restaurantId}`, JSON.stringify(queue));
+  } catch (e) {
+    console.error('Failed to save KDS offline queue to localStorage:', e);
+  }
+}
+
+export function enqueueKdsBatchUpdate(
+  restaurantId: string,
+  batchId: string,
+  nextStatus: OrderBatch['status'],
+  staffName: string,
+  cancellationReason?: string
+): void {
+  const current = getKdsOfflineQueue(restaurantId);
+  // Deduplicate by batchId: always reflect latest state, preventing duplicate inflight transitions
+  const filtered = current.filter(item => item.batchId !== batchId);
+  filtered.push({
+    id: `kds_batch_${batchId}_${nextStatus}_${Date.now()}`,
+    batchId,
+    nextStatus,
+    staffName,
+    cancellationReason,
+    timestamp: new Date().toISOString()
+  });
+  saveKdsOfflineQueue(restaurantId, filtered);
+}
+
+export async function syncKdsOfflineBatchQueue(
+  restaurantId: string
+): Promise<{ synced: number; failed: number }> {
+  if (typeof window === 'undefined' || !restaurantId) return { synced: 0, failed: 0 };
+  const queue = getKdsOfflineQueue(restaurantId);
+  if (queue.length === 0) return { synced: 0, failed: 0 };
+
+  let synced = 0;
+  let failed = 0;
+  const remainingQueue: KdsOfflineQueueItem[] = [];
+
+  const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+  let token = sessionData?.session?.access_token || '';
+  if (!token && typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('smartdine_auth_token_v2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        token = parsed.access_token || parsed[0] || '';
+      }
+    } catch (_) {}
+  }
+  const impersonated = typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_impersonated_profile') : null;
+
+  for (const item of queue) {
+    try {
+      const res = await fetch('/api/staff/update-order-status', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          ...(token ? { 'x-staff-token': token } : {}),
+          ...(impersonated ? { 'x-impersonated-profile': impersonated } : {}),
+          ...(restaurantId ? { 'x-restaurant-id': restaurantId } : {}),
+          'x-staff-role': 'kitchen'
+        },
+        body: JSON.stringify({
+          batchId: item.batchId,
+          newStatus: item.nextStatus,
+          staffName: item.staffName || 'Kitchen Staff',
+          cancellationReason: item.cancellationReason
+        })
+      });
+
+      if (res.ok || res.status === 409) {
+        // 200 OK or 409 Conflict (already transitioned concurrently on server)
+        synced++;
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        console.warn(`[KDS Offline Sync] Item ${item.id} failed:`, errJson);
+        remainingQueue.push(item);
+        failed++;
+      }
+    } catch (err) {
+      console.warn(`[KDS Offline Sync] Network failure during item ${item.id} sync:`, err);
+      remainingQueue.push(item);
+      failed++;
+    }
+  }
+
+  saveKdsOfflineQueue(restaurantId, remainingQueue);
+  if (synced > 0) {
+    window.dispatchEvent(new Event('storage'));
+  }
+  return { synced, failed };
+}
+
 export default function KitchenDisplayPage() {
   const { restaurant, profile, alarmMuted, setAlarmMuted } = useRestaurant();
   const restId = restaurant?.id || profile?.restaurant_id;
   const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
+
+  // ─── 1. useState Declarations ──────────────────────────────────────────
   const [restaurantId, setRestaurantId] = useState(restId || '');
   const [orders, setOrders] = useState<Order[]>(() => {
     if (!initialCachedOrders) return [];
@@ -32,24 +153,9 @@ export default function KitchenDisplayPage() {
   const [loading, setLoading] = useState(() => !initialCachedOrders);
   const [searchQuery, setSearchQuery] = useState('');
   const [processingBatchIds, setProcessingBatchIds] = useState<string[]>([]);
-  const processingBatchIdsRef = useRef<Set<string>>(new Set());
-
-  // sound toggle mapped to global layout alarm state
-  const soundEnabled = !alarmMuted;
-  const setSoundEnabled = (enabled: boolean) => {
-    setAlarmMuted(!enabled);
-  };
-
-  // Real-time new order alert popup state
   const [newOrderAlert, setNewOrderAlert] = useState<Order | null>(null);
-  
-  // Real-time toast state
   const [toast, setToast] = useState<{ message: string; visible: boolean } | null>(null);
-
-  // Time state for relative elapsed calculations
   const [nowTime, setNowTime] = useState<number>(Date.now());
-
-  // Cancellation reason modal state
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
@@ -62,39 +168,85 @@ export default function KitchenDisplayPage() {
   const [isAcceptingAlert, setIsAcceptingAlert] = useState(false);
   const [isCancellingBatch, setIsCancellingBatch] = useState(false);
 
-
-
-
-  // Update timer every second for real-time kitchen SLA countdown/stopwatch
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setNowTime(Date.now());
-    }, 1000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, []);
-
+  // ─── 2. useRef Declarations ───────────────────────────────────────────
+  const processingBatchIdsRef = useRef<Set<string>>(new Set());
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
+  const alertedOrderIds = useRef<Set<string>>(new Set());
+  const alertedBatchIds = useRef<Set<string>>(new Set());
+  const reloadFnRef = useRef<(restId: string) => Promise<void>>(async () => {});
 
-  // Unlock audio on first user click/tap anywhere on page & Register Service Worker Web Push
-  useEffect(() => {
-    const handleUnlock = () => {
-      unlockAudio();
-    };
-    window.addEventListener('click', handleUnlock, { once: true });
-    window.addEventListener('touchstart', handleUnlock, { once: true });
+  // ─── 3. useMemo Declarations ──────────────────────────────────────────
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return orders;
+    return orders.filter(order => matchesOrderSearchQuery(order, q, restaurant?.name || '', orders));
+  }, [orders, searchQuery, restaurant?.name]);
 
-    if (profile?.id && restaurantId) {
-      registerServiceWorkerAndPush(profile.id, restaurantId, 'kitchen');
-    }
+  // Extract active batches from active orders (BUG-RES-001: reservations excluded; OP-001: deduplicate batch tickets)
+  const activeBatches = useMemo(() => {
+    const seenBatchIds = new Set<string>();
+    return filteredOrders.filter(o => o.order_type !== 'reservation').reduce((acc: any[], order) => {
+      if (order.batches) {
+        order.batches.forEach(batch => {
+          if (!batch || !batch.id || seenBatchIds.has(batch.id)) return;
+          const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
+          if (!isCancelled) {
+            seenBatchIds.add(batch.id);
+            acc.push({
+              ...batch,
+              table_name: order.table_name,
+              restaurant_id: order.restaurant_id,
+              order_id: order.id,
+              payment_status: order.payment_status || 'pending',
+              order_status: order.status,
+              order_type: order.order_type || 'dine_in',
+              customer_arrival_minutes: order.customer_arrival_minutes,
+              takeaway_notes: order.takeaway_notes
+            });
+          }
+        });
+      }
+      return acc;
+    }, []);
+  }, [filteredOrders]);
 
-    return () => {
-      window.removeEventListener('click', handleUnlock);
-      window.removeEventListener('touchstart', handleUnlock);
-    };
-  }, [profile?.id, restaurantId]);
+  const newOrders = useMemo(() => 
+    activeBatches
+      .filter(b => b.status === 'new' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [activeBatches]
+  );
+  const preparingOrders = useMemo(() => 
+    activeBatches
+      .filter(b => (b.status === 'accepted' || b.status === 'preparing') && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [activeBatches]
+  );
+  const readyOrders = useMemo(() => 
+    activeBatches
+      .filter(b => b.status === 'ready' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [activeBatches]
+  );
+  const servedOrders = useMemo(() => 
+    activeBatches
+      .filter(b => b.status === 'served' && b.order_status !== 'completed' && b.payment_status !== 'paid' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(b.served_at || b.created_at).getTime() - new Date(a.served_at || a.created_at).getTime()),
+    [activeBatches]
+  );
+  const completedOrders = useMemo(() => 
+    activeBatches
+      .filter(b => (b.status === 'completed' || b.order_status === 'completed' || b.payment_status === 'paid') && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
+      .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()),
+    [activeBatches]
+  );
+
+  // sound toggle mapped to global layout alarm state
+  const soundEnabled = !alarmMuted;
+  const setSoundEnabled = (enabled: boolean) => {
+    setAlarmMuted(!enabled);
+  };
 
   const showDesktopNotification = (title: string, body: string, url = '/dashboard/kds') => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -120,10 +272,6 @@ export default function KitchenDisplayPage() {
       }
     }
   };
-
-  // Prevent duplicate chimes/alerts for the same order
-  const alertedOrderIds = useRef<Set<string>>(new Set());
-  const alertedBatchIds = useRef<Set<string>>(new Set());
 
   const loadKdsData = async (restId: string) => {
     try {
@@ -230,11 +378,212 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  const reloadFnRef = useRef(safeReloadKdsData);
+  const updateBatchStatus = async (
+    batchId: string, 
+    nextStatus: OrderBatch['status'], 
+    cancellationReasonText?: string
+  ) => {
+    if (processingBatchIds.includes(batchId) || processingBatchIdsRef.current.has(batchId)) return;
+    processingBatchIdsRef.current.add(batchId);
+    setProcessingBatchIds(prev => [...prev, batchId]);
+
+    // Find original status for ID-based patch rollback
+    const origStatus = orders
+      .flatMap(o => o.batches || [])
+      .find((b: any) => b.id === batchId)?.status || 'new';
+
+    // Optimistic UI state update: kitchen screen updates instantly
+    setOrders(prev => prev.map(order => {
+      if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
+      return {
+        ...order,
+        batches: order.batches.map((b: any) => 
+          b.id === batchId ? { 
+            ...b, 
+            status: nextStatus,
+            ...(cancellationReasonText ? { special_instructions: `[CANCELLED] ${cancellationReasonText}` } : {})
+          } : b
+        )
+      };
+    }));
+
+    if (nextStatus === 'accepted') {
+      window.dispatchEvent(new Event('stop-kitchen-sound'));
+    }
+
+    const staffName = profile?.full_name || 'Kitchen Staff';
+
+    // 1. If currently offline: queue locally and keep optimistic state without rollback
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      enqueueKdsBatchUpdate(restaurantId, batchId, nextStatus, staffName, cancellationReasonText);
+      setToast({ message: 'Kitchen update saved offline. Will sync when back online.', visible: true });
+      setTimeout(() => setToast(null), 3500);
+      processingBatchIdsRef.current.delete(batchId);
+      setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
+      return;
+    }
+
+    // 2. Online: dispatch through authoritative lifecycle route /api/staff/update-order-status
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      let token = sessionData?.session?.access_token || '';
+      if (!token && typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('smartdine_auth_token_v2');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            token = parsed.access_token || parsed[0] || '';
+          }
+        } catch (_) {}
+      }
+      const impersonated = typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_impersonated_profile') : null;
+
+      const res = await fetch('/api/staff/update-order-status', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+          ...(token ? { 'x-staff-token': token } : {}),
+          ...(impersonated ? { 'x-impersonated-profile': impersonated } : {}),
+          ...(restaurantId ? { 'x-restaurant-id': restaurantId } : {}),
+          'x-staff-role': profile?.role || 'kitchen'
+        },
+        body: JSON.stringify({
+          batchId,
+          newStatus: nextStatus,
+          staffName,
+          cancellationReason: cancellationReasonText
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        if (res.status === 409) {
+          console.warn('API status conflict:', errJson);
+          setErrorMessage(errJson.error || 'Ticket was already updated by another staff member.');
+          setTimeout(() => setErrorMessage(''), 5000);
+          if (restaurantId) await safeReloadKdsData(restaurantId);
+          return;
+        }
+        throw new Error(errJson.error || `Failed with HTTP ${res.status}`);
+      }
+      window.dispatchEvent(new Event('storage'));
+    } catch (err: any) {
+      // 3. Fallback: on network error, queue instead of rolling back the kitchen ticket
+      const isNetworkErr = (typeof navigator !== 'undefined' && !navigator.onLine) || 
+        err.message?.includes('fetch') || 
+        err.message?.includes('Network');
+
+      if (isNetworkErr) {
+        enqueueKdsBatchUpdate(restaurantId, batchId, nextStatus, staffName, cancellationReasonText);
+        setToast({ message: 'Network offline. Saved to sync queue.', visible: true });
+        setTimeout(() => setToast(null), 3500);
+      } else {
+        // Rollback only on actual business rule rejection
+        setOrders(prev => prev.map(order => {
+          if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
+          return {
+            ...order,
+            batches: order.batches.map((b: any) => 
+              b.id === batchId ? { ...b, status: origStatus } : b
+            )
+          };
+        }));
+        setErrorMessage(`Failed to update status: ${err.message || 'Network error'}`);
+        setTimeout(() => setErrorMessage(''), 5000);
+        if (restaurantId) await safeReloadKdsData(restaurantId);
+      }
+    } finally {
+      processingBatchIdsRef.current.delete(batchId);
+      setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
+    }
+  };
+
+  const cancelBatch = (batchId: string) => {
+    setOrderToCancel(batchId);
+    setCancellationReason('');
+    setCancelModalOpen(true);
+  };
+
+  const getTimeElapsed = (dateString: string, currentNow: number) => {
+    return formatExactTimestamp(dateString);
+  };
+
+  const getSlaTimerInfo = (dateString: string, currentNow: number) => {
+    const start = new Date(dateString).getTime();
+    const elapsedMs = Math.max(0, currentNow - start);
+    const totalSeconds = Math.floor(elapsedMs / 1000);
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+    if (mins < 10) {
+      return {
+        formatted,
+        mins,
+        status: 'green' as const,
+        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+        dotClass: 'bg-emerald-500',
+        label: 'Within SLA'
+      };
+    } else if (mins < 15) {
+      return {
+        formatted,
+        mins,
+        status: 'yellow' as const,
+        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+        dotClass: 'bg-amber-500 animate-ping',
+        label: 'Near SLA'
+      };
+    } else {
+      return {
+        formatted,
+        mins,
+        status: 'red' as const,
+        badgeClass: 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700 animate-pulse',
+        dotClass: 'bg-rose-600 animate-ping',
+        label: 'SLA Breached'
+      };
+    }
+  };
+
+  // ─── 4. useEffect Declarations ─────────────────────────────────────────
+
+  // Update timer every second for real-time kitchen SLA countdown/stopwatch
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTime(Date.now());
+    }, 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
+  // Unlock audio on first user click/tap anywhere on page & Register Service Worker Web Push
+  useEffect(() => {
+    const handleUnlock = () => {
+      unlockAudio();
+    };
+    window.addEventListener('click', handleUnlock, { once: true });
+    window.addEventListener('touchstart', handleUnlock, { once: true });
+
+    if (profile?.id && restaurantId) {
+      registerServiceWorkerAndPush(profile.id, restaurantId, 'kitchen');
+    }
+
+    return () => {
+      window.removeEventListener('click', handleUnlock);
+      window.removeEventListener('touchstart', handleUnlock);
+    };
+  }, [profile?.id, restaurantId]);
+
+  // Keep reloadFnRef in sync
   useEffect(() => {
     reloadFnRef.current = safeReloadKdsData;
   });
 
+  // Load restaurant data when restaurant changes
   useEffect(() => {
     if (restaurant?.id) {
       setRestaurantId(restaurant.id);
@@ -439,192 +788,35 @@ export default function KitchenDisplayPage() {
     };
   }, [restaurantId]);
 
-  const updateBatchStatus = async (batchId: string, nextStatus: OrderBatch['status']) => {
-    if (processingBatchIds.includes(batchId) || processingBatchIdsRef.current.has(batchId)) return;
-    processingBatchIdsRef.current.add(batchId);
-    setProcessingBatchIds(prev => [...prev, batchId]);
-
-    // Find original status for ID-based patch rollback
-    const origStatus = orders
-      .flatMap(o => o.batches || [])
-      .find((b: any) => b.id === batchId)?.status || 'new';
-
-    // Optimistic UI state update
-    setOrders(prev => prev.map(order => {
-      if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
-      return {
-        ...order,
-        batches: order.batches.map((b: any) => 
-          b.id === batchId ? { ...b, status: nextStatus } : b
-        )
-      };
-    }));
-
-    try {
-      if (nextStatus === 'accepted') {
-        window.dispatchEvent(new Event('stop-kitchen-sound'));
+  // Auto-sync offline batch updates when connectivity returns
+  useEffect(() => {
+    const handleOnline = async () => {
+      if (!restaurantId) return;
+      console.log('[KDS] Connectivity restored. Draining offline batch queue...');
+      const { synced } = await syncKdsOfflineBatchQueue(restaurantId);
+      if (synced > 0) {
+        setToast({ message: `Synced ${synced} offline kitchen update(s)!`, visible: true });
+        setTimeout(() => setToast(null), 4000);
+        await safeReloadKdsData(restaurantId);
       }
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || '';
-      const res = await fetch('/api/staff/update-order-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          batchId,
-          newStatus: nextStatus,
-          staffName: profile?.full_name || 'Kitchen Staff'
-        })
-      });
+    };
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        if (res.status === 409) {
-          console.warn('API status conflict:', errJson);
-          setErrorMessage(errJson.error || 'Ticket was already updated by another staff member.');
-          setTimeout(() => setErrorMessage(''), 5000);
-          if (restaurantId) await safeReloadKdsData(restaurantId);
-          return;
+    window.addEventListener('online', handleOnline);
+
+    // Also drain any pending queue on component mount if online
+    if (typeof navigator !== 'undefined' && navigator.onLine && restaurantId) {
+      syncKdsOfflineBatchQueue(restaurantId).then(({ synced }) => {
+        if (synced > 0) {
+          safeReloadKdsData(restaurantId);
         }
-        throw new Error(errJson.error || `Failed with HTTP ${res.status}`);
-      }
-      window.dispatchEvent(new Event('storage'));
-    } catch (err: any) {
-      // Functional ID-based patch rollback (preserves concurrent realtime updates on other orders)
-      setOrders(prev => prev.map(order => {
-        if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
-        return {
-          ...order,
-          batches: order.batches.map((b: any) => 
-            b.id === batchId ? { ...b, status: origStatus } : b
-          )
-        };
-      }));
-      setErrorMessage(`Failed to update status: ${err.message || 'Network error'}`);
-      setTimeout(() => setErrorMessage(''), 5000);
-      if (restaurantId) await safeReloadKdsData(restaurantId);
-    } finally {
-      processingBatchIdsRef.current.delete(batchId);
-      setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
+      });
     }
-  };
 
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [restaurantId]);
 
-
-  const cancelBatch = (batchId: string) => {
-    setOrderToCancel(batchId);
-    setCancellationReason('');
-    setCancelModalOpen(true);
-  };
-
-  const getTimeElapsed = (dateString: string, currentNow: number) => {
-    return formatExactTimestamp(dateString);
-  };
-
-  const getSlaTimerInfo = (dateString: string, currentNow: number) => {
-    const start = new Date(dateString).getTime();
-    const elapsedMs = Math.max(0, currentNow - start);
-    const totalSeconds = Math.floor(elapsedMs / 1000);
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    const formatted = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-
-    if (mins < 10) {
-      return {
-        formatted,
-        mins,
-        status: 'green' as const,
-        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
-        dotClass: 'bg-emerald-500',
-        label: 'Within SLA'
-      };
-    } else if (mins < 15) {
-      return {
-        formatted,
-        mins,
-        status: 'yellow' as const,
-        badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
-        dotClass: 'bg-amber-500 animate-ping',
-        label: 'Near SLA'
-      };
-    } else {
-      return {
-        formatted,
-        mins,
-        status: 'red' as const,
-        badgeClass: 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700 animate-pulse',
-        dotClass: 'bg-rose-600 animate-ping',
-        label: 'SLA Breached'
-      };
-    }
-  };
-
-  const filteredOrders = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return orders;
-    return orders.filter(order => matchesOrderSearchQuery(order, q, restaurant?.name || '', orders));
-  }, [orders, searchQuery, restaurant?.name]);
-
-  // Extract active batches from active orders (BUG-RES-001: reservations excluded; OP-001: deduplicate batch tickets)
-  const activeBatches = useMemo(() => {
-    const seenBatchIds = new Set<string>();
-    return filteredOrders.filter(o => o.order_type !== 'reservation').reduce((acc: any[], order) => {
-      if (order.batches) {
-        order.batches.forEach(batch => {
-          if (!batch || !batch.id || seenBatchIds.has(batch.id)) return;
-          const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
-          if (!isCancelled) {
-            seenBatchIds.add(batch.id);
-            acc.push({
-              ...batch,
-              table_name: order.table_name,
-              restaurant_id: order.restaurant_id,
-              order_id: order.id,
-              payment_status: order.payment_status || 'pending',
-              order_status: order.status,
-              order_type: order.order_type || 'dine_in',
-              customer_arrival_minutes: order.customer_arrival_minutes,
-              takeaway_notes: order.takeaway_notes
-            });
-          }
-        });
-      }
-      return acc;
-    }, []);
-  }, [filteredOrders]);
-
-  const newOrders = useMemo(() => 
-    activeBatches
-      .filter(b => b.status === 'new' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
-    [activeBatches]
-  );
-  const preparingOrders = useMemo(() => 
-    activeBatches
-      .filter(b => (b.status === 'accepted' || b.status === 'preparing') && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
-    [activeBatches]
-  );
-  const readyOrders = useMemo(() => 
-    activeBatches
-      .filter(b => b.status === 'ready' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
-      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
-    [activeBatches]
-  );
-  const servedOrders = useMemo(() => 
-    activeBatches
-      .filter(b => b.status === 'served' && b.order_status !== 'completed' && b.payment_status !== 'paid' && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
-      .sort((a, b) => new Date(b.served_at || b.created_at).getTime() - new Date(a.served_at || a.created_at).getTime()),
-    [activeBatches]
-  );
-  const completedOrders = useMemo(() => 
-    activeBatches
-      .filter(b => (b.status === 'completed' || b.order_status === 'completed' || b.payment_status === 'paid') && b.status !== 'cancelled' && !b.special_instructions?.includes('[CANCELLED]'))
-      .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()),
-    [activeBatches]
-  );
 
   if (loading) {
     return (
@@ -1303,10 +1495,10 @@ export default function KitchenDisplayPage() {
                   if (newOrderAlert) {
                     const newBatches = newOrderAlert.batches?.filter(b => b.status === 'new') || [];
                     for (const batch of newBatches) {
-                      await db.updateBatchStatus(batch.id, 'accepted', profile?.full_name || 'Kitchen Staff');
+                      await updateBatchStatus(batch.id, 'accepted');
                     }
                     if (restaurantId) {
-                      await loadKdsData(restaurantId);
+                      await safeReloadKdsData(restaurantId);
                       window.dispatchEvent(new Event('storage'));
                     }
                     setNewOrderAlert(null);
@@ -1483,10 +1675,9 @@ export default function KitchenDisplayPage() {
                       } : b)
                     })));
 
-                    await db.updateBatchStatus(
+                    await updateBatchStatus(
                       batchIdToCancel,
                       'cancelled',
-                      profile?.full_name || 'Kitchen Staff',
                       cancelReasonText
                     );
 
