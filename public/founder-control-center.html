@@ -1390,6 +1390,13 @@
     </div>
   </header>
 
+  <!-- ─── FLOATING LIVE ACTIVITY HUD BANNER ─── -->
+  <div id="live-activity-banner" style="position:fixed;top:72px;left:50%;transform:translateX(-50%);z-index:900;background:rgba(15,23,42,0.92);border:1px solid rgba(16,185,129,0.5);box-shadow:0 10px 30px rgba(0,0,0,0.6), 0 0 15px rgba(16,185,129,0.3);padding:8px 20px;border-radius:24px;display:none;align-items:center;gap:10px;font-size:12px;font-weight:700;backdrop-filter:blur(8px);pointer-events:none;transition:all 0.3s ease;">
+    <span class="live-pulse-dot" style="width:10px;height:10px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;animation:nodePulseGlow 1s infinite alternate;"></span>
+    <span id="live-activity-text" style="color:#f8fafc;font-family:var(--font-mono);">WAITING FOR LIVE PHONE ORDER...</span>
+  </div>
+
+
   <!-- ─── ORDER FLOW PLAYBACK HUD ─── -->
   <div id="flow-playback-hud" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:999; background:rgba(12, 19, 34, 0.95); border:1px solid #10b981; box-shadow:0 8px 32px rgba(16,185,129,0.4); border-radius:16px; padding:10px 22px; align-items:center; gap:16px; color:#fff; backdrop-filter:blur(12px);">
     <div style="display:flex; align-items:center; gap:10px;">
@@ -1492,6 +1499,15 @@
             <div class="sidebar-section-content">
               <div class="floor-grid" id="floor-grid-cards">
                 <!-- Populated by renderFloorGrid() in JS -->
+              </div>
+              <div id="recent-orders-container" style="margin-top:14px;border-top:1px solid var(--border-color);padding-top:10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <span style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;">⚡ Recent Completed & Live Orders</span>
+                  <span style="font-size:10px;color:var(--accent-data);font-weight:bold;" id="live-order-sync-badge">● LIVE SYNC</span>
+                </div>
+                <div id="recent-orders-list" style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="color:var(--text-muted);font-size:11px;text-align:center;padding:10px;">Syncing orders...</div>
+                </div>
               </div>
             </div>
           </div>
@@ -3053,7 +3069,7 @@
       // Parameterized deep link: ?restaurant=... or ?restaurantId=...
       const urlParams = new URLSearchParams(window.location.search);
       const deepRestId = urlParams.get('restaurant') || urlParams.get('restaurantId');
-      const deepRestName = urlParams.get('name') || 'CleverOps Live Tenant';
+      const deepRestName = urlParams.get('name') || 'The Foody Hub';
       const deepUserRole = urlParams.get('role');
 
       if (deepUserRole && deepUserRole !== 'super_admin') {
@@ -3965,13 +3981,82 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
     let liveSupabaseClient = null;
 
+        // ─── AUDIO SYNTHESIZER CHIME ENGINE (WebAudio API) ───
+    function playLiveChime(status) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        const now = ctx.currentTime;
+        const s = (status || '').toLowerCase();
+
+        if (s === 'new') {
+          // High alert chime
+          gain.gain.setValueAtTime(0.2, now);
+          osc.frequency.setValueAtTime(880, now);
+          osc.frequency.exponentialRampToValueAtTime(1174, now + 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        } else if (s === 'accepted') {
+          // Double harmony chime
+          gain.gain.setValueAtTime(0.18, now);
+          osc.frequency.setValueAtTime(587, now);
+          osc.frequency.setValueAtTime(880, now + 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+          osc.start(now);
+          osc.stop(now + 0.32);
+        } else if (s === 'preparing') {
+          // Warm prep tone
+          gain.gain.setValueAtTime(0.18, now);
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.linearRampToValueAtTime(659, now + 0.15);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        } else if (s === 'ready') {
+          // Pass bell ding
+          gain.gain.setValueAtTime(0.25, now);
+          osc.frequency.setValueAtTime(1046, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+          osc.start(now);
+          osc.stop(now + 0.45);
+        } else if (s === 'served') {
+          // Service chime
+          gain.gain.setValueAtTime(0.18, now);
+          osc.frequency.setValueAtTime(523, now);
+          osc.frequency.linearRampToValueAtTime(784, now + 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        } else if (s === 'completed') {
+          // Settlement cash register ding
+          gain.gain.setValueAtTime(0.22, now);
+          osc.frequency.setValueAtTime(1318, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+          osc.start(now);
+          osc.stop(now + 0.5);
+        }
+      } catch (audioErr) {
+        console.warn('[NOC Audio] AudioContext notice:', audioErr);
+      }
+    }
+
+    let recentCompletedOrders = [];
+
     function renderFloorGrid() {
       const r = RESTAURANTS.find(x => x.id === currentRestaurantId) || RESTAURANTS[0];
       const gridEl = document.getElementById('floor-grid-cards');
       if (!gridEl) return;
 
       const activeCount = liveTables.filter(t => t.status !== 'available').length;
-      document.getElementById('floor-table-count').innerText = `${liveTables.length} (${activeCount} Active)`;
+      const countEl = document.getElementById('floor-table-count');
+      if (countEl) countEl.innerText = `${liveTables.length} (${activeCount} Active)`;
 
       gridEl.innerHTML = liveTables.map(t => `
         <div class="table-chip ${t.status}" id="chip-${t.id}" onclick="onTableClick('${t.id}', '${t.orderId}')">
@@ -3981,6 +4066,39 @@
           <span style="font-size:10px;color:var(--accent-main);">${t.amount || '-'}</span>
         </div>
       `).join('');
+
+      // Populate Recent Orders Ticker
+      const recentListEl = document.getElementById('recent-orders-list');
+      if (recentListEl && recentCompletedOrders.length > 0) {
+        const statusColors = {
+          new: '#38bdf8',
+          accepted: '#f59e0b',
+          preparing: '#f97316',
+          ready: '#10b981',
+          served: '#8b5cf6',
+          completed: '#059669',
+          cancelled: '#ef4444'
+        };
+        recentListEl.innerHTML = recentCompletedOrders.map(o => {
+          const color = statusColors[o.status] || '#94a3b8';
+          const tName = o.table_name || 'Table';
+          const amt = '₹' + Number(o.total || 0).toLocaleString('en-IN');
+          const time = o.updated_at ? new Date(o.updated_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-card);padding:6px 10px;border-radius:6px;border-left:3px solid ${color};font-size:11px;">
+              <div>
+                <span style="font-weight:700;color:var(--text-primary);">${tName}</span>
+                <span style="color:var(--text-muted);margin-left:4px;font-size:10px;">#${o.id.slice(0,6)}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="color:var(--accent-main);font-weight:700;">${amt}</span>
+                <span style="font-size:9px;font-weight:800;text-transform:uppercase;color:${color};background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:4px;">${o.status}</span>
+                <span style="font-size:9px;color:var(--text-muted);">${time}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
     }
 
     // ─── UPGRADED HIGH-RESILIENT SUPABASE LIVE NOC ENGINE ───
@@ -3988,21 +4106,27 @@
       if (!liveSupabaseClient) return;
       try {
         const restId = currentRestaurantId || '81fa8201-51d7-4da5-98f5-a52dbff4e6ae';
-        const { data: dbTables, error } = await liveSupabaseClient
-          .from('tables')
-          .select('id, name, table_number, status, capacity')
-          .eq('restaurant_id', restId);
+        const [tRes, rRes] = await Promise.all([
+          liveSupabaseClient.from('tables').select('id, name').eq('restaurant_id', restId),
+          liveSupabaseClient.from('restaurants').select('settings').eq('id', restId).single()
+        ]);
 
-        if (dbTables && dbTables.length > 0) {
-          liveTables = dbTables.map((t, idx) => ({
-            id: t.name || `T-${t.table_number || idx + 1}`,
-            tableId: t.id,
-            type: 'Dine In',
-            seats: t.capacity || 4,
-            status: t.status || 'available',
-            orderId: '',
-            amount: ''
-          }));
+        const dbTables = tRes.data || [];
+        const tableStates = rRes.data?.settings?.table_states || {};
+
+        if (dbTables.length > 0) {
+          liveTables = dbTables.map((t, idx) => {
+            const tState = tableStates[t.id] || {};
+            return {
+              id: t.name || `T-${idx + 1}`,
+              tableId: t.id,
+              type: 'Dine In',
+              seats: tState.seats || tState.capacity || 4,
+              status: tState.occupancy_status || 'available',
+              orderId: tState.current_session_id || '',
+              amount: ''
+            };
+          });
           renderFloorGrid();
           logDevEvent('TABLES', 'LOADED', `Loaded ${dbTables.length} tables from database`);
         }
@@ -4038,6 +4162,7 @@
               onRealtimeOrderEvent('new-order', {
                 newStatus: ord.status || 'new',
                 orderId: ord.id,
+                tableName: ord.table_name,
                 updatedOrder: ord
               });
             } else if (p.eventType === 'UPDATE') {
@@ -4045,6 +4170,7 @@
               onRealtimeOrderEvent('order-status-updated', {
                 newStatus: ord.status,
                 orderId: ord.id,
+                tableName: ord.table_name,
                 updatedOrder: ord
               });
             }
@@ -4062,17 +4188,6 @@
               });
             }
             syncLiveOrdersFromSupabase();
-          })
-          // Tables Floor Plan Sync
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'tables', filter: `restaurant_id=eq.${restId}` }, (p) => {
-            logDevEvent('PG_TABLES', p.eventType, JSON.stringify(p.new || {}));
-            if (p.new) {
-              onRealtimeTableEvent({
-                tableId: p.new.id,
-                tableName: p.new.name,
-                status: p.new.status
-              });
-            }
           })
           // System Events Bus (QR scans, Cart additions, Checkouts, Inventory)
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_events', filter: `restaurant_id=eq.${restId}` }, (p) => {
@@ -4119,10 +4234,10 @@
           })
           .subscribe();
 
-        // 5. Periodic 3-Second Background Auto-Sync
+        // 5. Periodic 2.5-Second Background Auto-Sync
         setInterval(() => {
           syncLiveOrdersFromSupabase();
-        }, 3000);
+        }, 2500);
 
       } catch (err) {
         console.warn('[NOC Realtime] Init error:', err);
@@ -4133,16 +4248,29 @@
       if (!liveSupabaseClient) return;
       try {
         const restId = currentRestaurantId || '81fa8201-51d7-4da5-98f5-a52dbff4e6ae';
-        const { data: activeOrders } = await liveSupabaseClient
-          .from('orders')
-          .select('id, table_name, table_id, status, total, order_batches(id, status)')
-          .eq('restaurant_id', restId)
-          .not('status', 'in', '(completed,cancelled)');
+        
+        // Fetch active orders and 5 most recent orders in parallel
+        const [activeRes, recentRes] = await Promise.all([
+          liveSupabaseClient
+            .from('orders')
+            .select('id, table_name, table_id, status, total, order_batches(id, status)')
+            .eq('restaurant_id', restId)
+            .not('status', 'in', '(completed,cancelled)'),
+          liveSupabaseClient
+            .from('orders')
+            .select('id, table_name, table_id, status, total, created_at, updated_at')
+            .eq('restaurant_id', restId)
+            .order('created_at', { ascending: false })
+            .limit(5)
+        ]);
+
+        const activeOrders = activeRes.data || [];
+        recentCompletedOrders = recentRes.data || [];
 
         // Reset tables to available first if they don't have active orders
         const activeTableNames = new Set();
 
-        if (activeOrders && activeOrders.length > 0) {
+        if (activeOrders.length > 0) {
           activeOrders.forEach(ord => {
             const tName = (ord.table_name || '').trim();
             if (!tName) return;
@@ -4206,8 +4334,25 @@
       const newStatus = payload?.newStatus || payload?.status || 'new';
       const orderId = payload?.orderId || payload?.updatedOrder?.id || '';
       const tableName = payload?.updatedOrder?.table_name || payload?.tableName || 'Table';
+      const amount = payload?.updatedOrder?.total ? ('₹' + Number(payload.updatedOrder.total).toLocaleString('en-IN')) : '';
 
-      showToast(`⚡ Order Event: ${tableName} ➔ ${newStatus.toUpperCase()}`, 'info');
+      // Play audio chime for live feedback
+      playLiveChime(newStatus);
+
+      // Show toast
+      showToast(`⚡ Live Order Event: ${tableName} ➔ ${newStatus.toUpperCase()} ${amount ? '(' + amount + ')' : ''}`, 'info');
+
+      // Update Top Floating Activity Banner
+      const banner = document.getElementById('live-activity-banner');
+      const bannerText = document.getElementById('live-activity-text');
+      if (banner && bannerText) {
+        bannerText.innerHTML = `⚡ <strong>LIVE EVENT:</strong> [${tableName}] Order #${(orderId||'').slice(0,8)} ➔ <span style="color:#10b981;text-transform:uppercase;">${newStatus}</span> ${amount ? '• ' + amount : ''}`;
+        banner.style.display = 'inline-flex';
+        banner.style.borderColor = '#10b981';
+        setTimeout(() => {
+          if (banner) banner.style.borderColor = 'rgba(16,185,129,0.5)';
+        }, 3000);
+      }
 
       // Update Live Floor card dynamically
       if (tableName) {
@@ -4230,8 +4375,8 @@
 
         if (matchingTable) {
           matchingTable.status = (newStatus === 'completed' || newStatus === 'cancelled') ? 'available' : newStatus;
-          if (payload?.updatedOrder?.total) {
-            matchingTable.amount = '₹' + Number(payload.updatedOrder.total).toLocaleString('en-IN');
+          if (amount) {
+            matchingTable.amount = amount;
           }
           matchingTable.orderId = (newStatus === 'completed' || newStatus === 'cancelled') ? '' : orderId;
           renderFloorGrid();
@@ -4264,6 +4409,7 @@
       if (eventType === 'qr_scanned') {
         const tName = ev?.metadata?.table_name || 'Table';
         showToast(`📱 QR Scanned at ${tName}`, 'info');
+        playLiveChime('accepted');
         pulseArchitectureNodes(['cust_qr_scan', 'cust_menu'], 'edge-e_qr_to_menu');
       } else if (eventType === 'cart_updated') {
         showToast(`🛒 Item Added to Cart`, 'info');
@@ -4273,6 +4419,7 @@
         pulseArchitectureNodes(['cust_checkout'], 'edge-e_cart_to_checkout');
       } else if (eventType === 'order_created') {
         showToast(`⚡ New Order Placed!`, 'success');
+        playLiveChime('new');
         pulseArchitectureNodes(['cust_order_placement', 'order_new'], 'edge-e_placement_to_new');
       } else if (eventType === 'inventory_reserved') {
         pulseArchitectureNodes(['inv_reservation'], 'edge-e_placement_to_inv_res');
@@ -4287,13 +4434,13 @@
       let edgeId = 'edge-e_placement_to_new';
 
       if (statusLower === 'accepted') {
-        nodeIds = ['kds_accept', 'order_accepted'];
+        nodeIds = ['kds_accept', 'order_accepted', 'inv_reservation'];
         edgeId = 'edge-e_kds_accept_to_order_accepted';
       } else if (statusLower === 'preparing') {
         nodeIds = ['kds_preparing', 'order_preparing', 'inv_consumption'];
         edgeId = 'edge-e_kds_prep_to_order_prep';
       } else if (statusLower === 'ready') {
-        nodeIds = ['kds_ready', 'order_ready', 'notif_waiter_alerts'];
+        nodeIds = ['kds_ready', 'order_ready'];
         edgeId = 'edge-e_kds_ready_to_order_ready';
       } else if (statusLower === 'served') {
         nodeIds = ['waiter_serve', 'order_served'];
@@ -4541,27 +4688,7 @@
       setTimeout(initSupabaseLiveNoc, 300);
     }
 
-  
-    // ─── CONTROL TOWER NAVIGATION & HOST MESSAGING ───
-    function exitControlCenter() {
-      try {
-        if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'SMARTDINE_EXIT_CONTROL_CENTER' }, '*');
-        } else {
-          window.location.href = '/dashboard';
-        }
-      } catch (err) {
-        window.location.href = '/dashboard';
-      }
-    }
-
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        exitControlCenter();
-      }
-    });
-
-    </script>
+  </script>
 
 </body>
 </html>

@@ -5,11 +5,12 @@
  * Route: /dashboard/founder/control-center
  *
  * Access: owner, manager, super_admin (via 5-tap logo or Ctrl+Shift+M)
- * This page NEVER appears in the sidebar.
+ * Strict Compliance: CleverOps React Hooks Safety Guardrail
+ * All hooks declared first; zero hooks below conditional returns.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useRestaurant } from '@/app/(dashboard)/layout';
 import dynamic from 'next/dynamic';
 
@@ -29,11 +30,16 @@ const FounderControlCenter = dynamic(
   }
 );
 
-export default function FounderControlCenterPage() {
+function FounderControlCenterInner() {
   const router = useRouter();
-  // All hooks FIRST — React Hook Safety Rule
+  const searchParams = useSearchParams();
   const { restaurant, profile, dbRole } = useRestaurant();
   const [hasFounderSession, setHasFounderSession] = useState<boolean>(false);
+
+  const restaurantId = useMemo(() => {
+    const fromQuery = searchParams.get('restaurantId') || searchParams.get('restaurant');
+    return fromQuery || restaurant?.id || profile?.restaurant_id || '';
+  }, [searchParams, restaurant?.id, profile?.restaurant_id]);
 
   // Access control check: authorized role (owner, manager, super_admin)
   const isRoleAuthorized = useMemo(() => {
@@ -46,7 +52,6 @@ export default function FounderControlCenterPage() {
     );
   }, [profile, dbRole]);
 
-  // Strict RBAC: founder mode requires an authorized role
   const isAuthorized = isRoleAuthorized;
 
   // Once authorized via role, persist founder session in sessionStorage
@@ -79,8 +84,6 @@ export default function FounderControlCenterPage() {
     );
   }
 
-  const restaurantId = restaurant?.id || profile?.restaurant_id || '';
-
   if (!restaurantId) {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-950 min-h-screen">
@@ -107,5 +110,19 @@ export default function FounderControlCenterPage() {
         profile={profile}
       />
     </div>
+  );
+}
+
+export default function FounderControlCenterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center bg-slate-950 min-h-screen">
+          <div className="h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <FounderControlCenterInner />
+    </Suspense>
   );
 }
