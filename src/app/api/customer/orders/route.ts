@@ -583,7 +583,7 @@ export async function POST(req: Request) {
     }
     timer.end('order_insert');
 
-    // 5. REALTIME BROADCAST PUSH PHASE
+    // 5. REALTIME BROADCAST PUSH PHASE (Non-blocking background dispatch)
     timer.start('realtime');
     const realtimePayload = {
       event: 'INSERT',
@@ -591,14 +591,14 @@ export async function POST(req: Request) {
       timestamp: Date.now()
     };
 
-    // Broadcast on tenant-scoped channels instantly (Live Orders, KDS, Overview Dashboard)
-    await broadcastOrderRealtimeEvent({
+    // Fire-and-forget non-blocking broadcast across Live Orders, KDS, Control Tower
+    void broadcastOrderRealtimeEvent({
       restaurantId,
       orderId: createdOrder.id,
       eventType: 'new-order',
       payload: realtimePayload,
       client: supabase
-    });
+    }).catch(err => console.warn('[CustomerOrder] Realtime broadcast error:', err));
 
     // P1-07: Table Status Sync — automatically occupy table on dine-in order creation
     const isDiningOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';
@@ -613,24 +613,28 @@ export async function POST(req: Request) {
           occupied_at: existingTableState.occupied_at || new Date().toISOString(),
           current_session_id: createdOrder.id
         };
-        await supabase
-          .from('restaurants')
-          .update({
-            settings: {
-              ...restaurant.settings,
-              table_states: tableStates
-            }
-          })
-          .eq('id', restaurantId);
 
-        // Update tables row status in database
-        await supabase
-          .from('tables')
-          .update({ status: 'occupied' })
-          .eq('id', tableId);
+        // Parallelize settings update and tables row update
+        void Promise.all([
+          supabase
+            .from('restaurants')
+            .update({
+              settings: {
+                ...restaurant.settings,
+                table_states: tableStates
+              }
+            })
+            .eq('id', restaurantId),
+          supabase
+            .from('tables')
+            .update({ status: 'occupied' })
+            .eq('id', tableId)
+        ]).catch(tableSyncErr => {
+          console.error('[CustomerOrder] Table status sync error:', tableSyncErr);
+        });
 
         // Broadcast table-status-updated event across all channels
-        await broadcastOrderRealtimeEvent({
+        void broadcastOrderRealtimeEvent({
           restaurantId,
           orderId: createdOrder.id,
           eventType: 'table-status-updated',
@@ -642,7 +646,7 @@ export async function POST(req: Request) {
             orderId: createdOrder.id
           },
           client: supabase
-        });
+        }).catch(() => {});
       } catch (tableSyncErr) {
         console.error('[CustomerOrder] Table status sync error:', tableSyncErr);
       }
