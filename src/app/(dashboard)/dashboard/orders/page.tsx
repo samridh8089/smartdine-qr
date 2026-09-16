@@ -109,6 +109,36 @@ export function getOrderDisplayInfo(order: Order, restaurantName = '', allOrders
   return { tableDisplay, shortOrderId };
 }
 
+async function callUpdateOrderStatusApi(params: {
+  orderId?: string;
+  batchId?: string;
+  newStatus: Order['status'];
+  staffName?: string;
+  cancellationReason?: string;
+}) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token || '';
+  const res = await fetch('/api/staff/update-order-status', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(params)
+  });
+
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    const err: any = new Error(errJson.error || errJson.message || `Failed to update status: HTTP ${res.status}`);
+    if (res.status === 409) {
+      err.code = errJson.code || 'STALE_STATUS_CONFLICT';
+    }
+    throw err;
+  }
+
+  return res.json();
+}
+
 export default function OrdersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -250,7 +280,11 @@ export default function OrdersPage() {
           .neq('payment_status', 'paid');
 
         for (const o of (groupOrders || [])) {
-          await db.updateOrderStatus(o.id, 'completed', profile?.full_name || 'Cashier');
+          await callUpdateOrderStatusApi({
+            orderId: o.id,
+            newStatus: 'completed',
+            staffName: profile?.full_name || activeRole || 'Cashier'
+          });
         }
       }
 
@@ -826,33 +860,13 @@ export default function OrdersPage() {
       if (status === 'served') {
         window.dispatchEvent(new Event('stop-waiter-sound'));
       }
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || '';
-      const res = await fetch('/api/staff/update-order-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          orderId: orderIdToUpdate,
-          newStatus: status,
-          staffName: profile?.full_name || activeRole || 'Staff Member',
-          cancellationReason
-        })
+      const resData = await callUpdateOrderStatusApi({
+        orderId: orderIdToUpdate,
+        newStatus: status,
+        staffName: profile?.full_name || activeRole || 'Staff Member',
+        cancellationReason
       });
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        if (res.status === 409) {
-          const conflictErr: any = new Error(errJson.error || 'Status conflict');
-          conflictErr.code = errJson.code || 'STALE_STATUS_CONFLICT';
-          throw conflictErr;
-        }
-        throw new Error(errJson.error || `Failed to update order status: HTTP ${res.status}`);
-      }
-
-      const resData = await res.json();
       const updated = resData.order;
       if (updated) {
         optimisticStatusMapRef.current[orderIdToUpdate] = updated.status;
@@ -915,27 +929,12 @@ export default function OrdersPage() {
     }
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token || '';
-      const res = await fetch('/api/staff/update-order-status', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          orderId: order.id,
-          newStatus,
-          staffName: profile?.full_name || activeRole || 'Staff Member'
-        })
+      const resData = await callUpdateOrderStatusApi({
+        orderId: order.id,
+        newStatus,
+        staffName: profile?.full_name || activeRole || 'Staff Member'
       });
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `Failed to update order status: HTTP ${res.status}`);
-      }
-
-      const resData = await res.json();
       const updated = resData.order;
       if (updated) {
         optimisticStatusMapRef.current[order.id] = updated.status;
@@ -1024,13 +1023,14 @@ export default function OrdersPage() {
     window.dispatchEvent(new Event('storage'));
 
     try {
-      // 1. Cancel the order in database
-      const updated = await db.updateOrderStatus(
-        orderIdToCancel,
-        'cancelled',
-        profile?.full_name || activeRole || 'Staff Member',
-        fullReason
-      );
+      // 1. Cancel the order via centralized API
+      const statusRes = await callUpdateOrderStatusApi({
+        orderId: orderIdToCancel,
+        newStatus: 'cancelled',
+        staffName: profile?.full_name || activeRole || 'Staff Member',
+        cancellationReason: fullReason
+      });
+      const updated = statusRes?.order;
 
       // 2. Update refund status if specified
       if (refundStatusSelection !== 'none') {
@@ -1472,12 +1472,13 @@ export default function OrdersPage() {
         return;
       }
 
-      // Authoritative lifecycle completion: consumes any unconsumed inventory, syncs batches & items
-      const updated = await db.updateOrderStatus(
-        targetOrderId, 
-        'completed', 
-        profile?.full_name || activeRole || 'Staff Member'
-      );
+      // Authoritative lifecycle completion via centralized API: consumes any unconsumed inventory, syncs batches & items
+      const statusRes = await callUpdateOrderStatusApi({
+        orderId: targetOrderId,
+        newStatus: 'completed',
+        staffName: profile?.full_name || activeRole || 'Staff Member'
+      });
+      const updated = statusRes?.order;
 
       // Release Table Occupancy immediately so table becomes Available across Floor Layout & Dashboard (B5)
       if (selectedOrder.table_id) {
@@ -1666,11 +1667,17 @@ export default function OrdersPage() {
     } : o));
     showToast("Reservation marked as No-Show.", "No-Show", "info");
     if (isUuid) {
-      await supabase.from('orders').update({
-        status: 'cancelled',
-        cancellation_reason: 'No-Show: Guest did not arrive within grace period',
-        cancelled_at: new Date().toISOString()
-      }).eq('id', order.id);
+      try {
+        await callUpdateOrderStatusApi({
+          orderId: order.id,
+          newStatus: 'cancelled',
+          cancellationReason: 'No-Show: Guest did not arrive within grace period',
+          staffName: profile?.full_name || activeRole || 'Staff Member'
+        });
+      } catch (err: any) {
+        console.error('Failed to cancel reservation via API:', err);
+        showToast('Failed to cancel reservation on server: ' + err.message, 'Error', 'error');
+      }
     }
   };
 
@@ -1684,11 +1691,17 @@ export default function OrdersPage() {
     } : o));
     showToast("Reservation cancelled.", "Cancelled", "info");
     if (isUuid) {
-      await supabase.from('orders').update({
-        status: 'cancelled',
-        cancellation_reason: 'Cancelled by restaurant staff / guest request',
-        cancelled_at: new Date().toISOString()
-      }).eq('id', order.id);
+      try {
+        await callUpdateOrderStatusApi({
+          orderId: order.id,
+          newStatus: 'cancelled',
+          cancellationReason: 'Cancelled by restaurant staff / guest request',
+          staffName: profile?.full_name || activeRole || 'Staff Member'
+        });
+      } catch (err: any) {
+        console.error('Failed to cancel reservation via API:', err);
+        showToast('Failed to cancel reservation on server: ' + err.message, 'Error', 'error');
+      }
     }
   };
 

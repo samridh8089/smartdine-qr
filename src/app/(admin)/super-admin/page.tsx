@@ -615,11 +615,17 @@ export default function SuperAdminPage() {
           e.preventDefault();
           setShortcutsModalOpen(prev => !prev);
         }
+        // Ctrl+Shift+M → Open Founder Control Center (passing selected restaurant)
+        else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
+          e.preventDefault();
+          const targetRestId = selectedRestId || activeRestaurant?.id || (availableRestaurants[0]?.id) || '';
+          router.push(`/dashboard/founder/control-center?restaurantId=${targetRestId}`);
+        }
       };
 
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [activeRestaurant]);
+    }, [activeRestaurant, selectedRestId, availableRestaurants, router]);
 
     // Realtime Postgres Changes Subscription for System Events
     useEffect(() => {

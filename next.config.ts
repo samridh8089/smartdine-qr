@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 
+// Sanitize masked environment variables from Vercel CLI / env pull
+if (process.env.SUPABASE_SERVICE_ROLE_KEY === '[SENSITIVE]') {
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
 const securityHeaders = [
   {
     key: 'X-Frame-Options',

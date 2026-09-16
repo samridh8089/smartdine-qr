@@ -4,7 +4,10 @@ import { ServerTimer } from '@/lib/serverTiming';
 import { generateRequestId, logEvent } from '@/lib/logger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
+  ? serviceKey
+  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 const REQUIRED_ENV_VARS = [
   'NEXT_PUBLIC_SUPABASE_URL',

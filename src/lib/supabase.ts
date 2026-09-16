@@ -4,8 +4,9 @@ import { validateMagicBytes, MAX_FILE_SIZE_BYTES, sanitizeFilename } from './fil
 
 const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const isServer = typeof window === 'undefined';
-const rawKey = (isServer && process.env.SUPABASE_SERVICE_ROLE_KEY)
-  ? process.env.SUPABASE_SERVICE_ROLE_KEY
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const rawKey = (isServer && serviceKey && serviceKey !== '[SENSITIVE]')
+  ? serviceKey
   : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : (process.env.NODE_ENV === 'production' ? '' : 'https://placeholder.supabase.co');

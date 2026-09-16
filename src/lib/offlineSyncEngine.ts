@@ -16,7 +16,7 @@ export interface SyncQueueItem {
   id: string; // UUID
   restaurant_id: string;
   user_id: string;
-  action_type: 'create_order' | 'update_order_status' | 'create_booking' | 'update_table' | 'staff_punch' | 'process_payment';
+  action_type: 'create_order' | 'update_order_status' | 'update_batch_status' | 'create_booking' | 'update_table' | 'staff_punch' | 'process_payment';
   payload: any;
   status: 'pending' | 'syncing' | 'completed' | 'failed' | 'conflict';
   sync_status: 'pending' | 'syncing' | 'completed' | 'failed' | 'conflict';
@@ -463,6 +463,50 @@ export class OfflineStorageManager {
     );
   }
 
+  // Pending Updates Operations (Order batch lifecycle & order status updates)
+  async savePendingUpdate(update: PendingUpdate): Promise<void> {
+    await this.db.run(
+      `INSERT OR REPLACE INTO pending_updates (id, sync_queue_id, entity_type, entity_id, updated_fields, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        update.id,
+        update.sync_queue_id,
+        update.entity_type,
+        update.entity_id,
+        JSON.stringify(update.updated_fields),
+        update.timestamp
+      ]
+    );
+  }
+
+  async queueBatchUpdate(
+    restaurantId: string,
+    userId: string,
+    batchId: string,
+    nextStatus: string,
+    cancellationReason?: string,
+    staffName?: string
+  ): Promise<SyncQueueItem> {
+    const queueId = 'q_bup_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const payload = { batchId, newStatus: nextStatus, cancellationReason, staffName };
+    const { item } = await this.enqueueAction({
+      id: queueId,
+      restaurant_id: restaurantId,
+      user_id: userId,
+      action_type: 'update_batch_status',
+      payload
+    });
+    await this.savePendingUpdate({
+      id: 'pup_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      sync_queue_id: queueId,
+      entity_type: 'order_batch',
+      entity_id: batchId,
+      updated_fields: { status: nextStatus, cancellationReason },
+      timestamp: new Date().toISOString()
+    });
+    return item;
+  }
+
   // Conflict Recording
   async recordConflict(queueId: string, actionType: string, localPayload: any, serverState: any, reason: string): Promise<void> {
     const id = 'conf_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
@@ -614,16 +658,41 @@ export class OfflineSyncEngine {
 
             if (orderErr) throw orderErr;
 
-            // Insert batches & items
+            // Insert batches & items with inventory reservation
             if (item.payload.items && item.payload.items.length > 0) {
-              await supabaseClient
+              const { data: batchData } = await supabaseClient
                 .from('order_batches')
                 .insert({
                   order_id: newOrder.id,
                   batch_number: 1,
                   status: 'new',
                   items: item.payload.items
-                });
+                })
+                .select()
+                .single();
+
+              if (batchData?.id) {
+                try {
+                  const { reserveInventoryForOrderBatch } = await import('@/lib/inventoryEngine');
+                  const formattedItems = (item.payload.items || []).map((i: any) => ({
+                    menuItemId: i.menu_item_id || i.menuItemId || i.id,
+                    quantity: i.quantity || 1,
+                    menuItemName: i.menu_item_name || i.menuItemName || i.name,
+                    variantId: i.variant_id || i.variantId,
+                    variantName: i.variant_name || i.variantName
+                  }));
+                  await reserveInventoryForOrderBatch(
+                    item.restaurant_id,
+                    newOrder.id,
+                    batchData.id,
+                    formattedItems,
+                    item.user_id,
+                    'Offline Sync'
+                  );
+                } catch (resErr) {
+                  console.warn('[OfflineSyncEngine] Inventory reservation notice:', resErr);
+                }
+              }
             }
 
             await this.storage.markQueueItemStatus(item.id, 'completed');
@@ -631,44 +700,106 @@ export class OfflineSyncEngine {
               await this.storage.markOrderSynced(item.payload.offlineId);
             }
             synced++;
-          } else if (item.action_type === 'update_order_status') {
-            // Conflict Detection & Non-Destructive Resolution
-            const { data: serverOrder, error: fetchErr } = await supabaseClient
-              .from('orders')
-              .select('id, status, updated_at')
-              .eq('id', item.payload.orderId)
-              .maybeSingle();
+          } else if (item.action_type === 'update_order_status' || item.action_type === 'update_batch_status') {
+            const targetBatchId = item.payload.batchId;
+            const targetOrderId = item.payload.orderId;
+            const targetStatus = item.payload.newStatus || item.payload.status;
 
-            if (fetchErr || !serverOrder) {
-              throw new Error(fetchErr?.message || 'Order not found on server');
-            }
+            // 1. Deduplication & Conflict Detection using existing order ID or batch ID
+            if (targetBatchId) {
+              const { data: serverBatch } = await supabaseClient
+                .from('order_batches')
+                .select('id, status, order_id')
+                .eq('id', targetBatchId)
+                .maybeSingle();
 
-            // If server order is already 'completed' or 'cancelled', protect from silent overwrite
-            if (['completed', 'cancelled'].includes(serverOrder.status) && item.payload.newStatus !== serverOrder.status) {
-              conflicts++;
-              const reason = `Order is already ${serverOrder.status} on server. Offline update to ${item.payload.newStatus} preserved in conflict log.`;
-              
-              await this.storage.recordConflict(item.id, item.action_type, item.payload, serverOrder, reason);
-              await this.storage.markQueueItemStatus(item.id, 'conflict', reason);
-              
-              if (this.onConflictCallback) {
-                this.onConflictCallback({ action: item, serverState: serverOrder, reason });
+              if (serverBatch) {
+                // Prevent duplicate processing if already in target status or terminal state
+                if (serverBatch.status === targetStatus || ['served', 'completed', 'cancelled'].includes(serverBatch.status)) {
+                  await this.storage.markQueueItemStatus(item.id, 'completed');
+                  synced++;
+                  continue;
+                }
               }
-              continue;
+            } else if (targetOrderId) {
+              const { data: serverOrder, error: fetchErr } = await supabaseClient
+                .from('orders')
+                .select('id, status, updated_at')
+                .eq('id', targetOrderId)
+                .maybeSingle();
+
+              if (fetchErr || !serverOrder) {
+                throw new Error(fetchErr?.message || 'Order not found on server');
+              }
+
+              // If server order is already 'completed' or 'cancelled', protect from silent overwrite
+              if (['completed', 'cancelled'].includes(serverOrder.status) && targetStatus !== serverOrder.status) {
+                conflicts++;
+                const reason = `Order is already ${serverOrder.status} on server. Offline update to ${targetStatus} preserved in conflict log.`;
+                
+                await this.storage.recordConflict(item.id, item.action_type, item.payload, serverOrder, reason);
+                await this.storage.markQueueItemStatus(item.id, 'conflict', reason);
+                
+                if (this.onConflictCallback) {
+                  this.onConflictCallback({ action: item, serverState: serverOrder, reason });
+                }
+                continue;
+              }
+
+              // Prevent duplicate processing if order is already at target status
+              if (serverOrder.status === targetStatus) {
+                await this.storage.markQueueItemStatus(item.id, 'completed');
+                synced++;
+                continue;
+              }
             }
 
-            const { error: updErr } = await supabaseClient
-              .from('orders')
-              .update({
-                status: item.payload.newStatus,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', item.payload.orderId);
+            // 2. Sync through authoritative lifecycle route /api/staff/update-order-status
+            const apiEndpoint = (typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')) + '/api/staff/update-order-status';
+            let syncDone = false;
 
-            if (updErr) throw updErr;
+            try {
+              if (typeof fetch !== 'undefined') {
+                const res = await fetch(apiEndpoint, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(item.payload.token ? { 'Authorization': `Bearer ${item.payload.token}` } : {})
+                  },
+                  body: JSON.stringify({
+                    orderId: targetOrderId,
+                    batchId: targetBatchId,
+                    newStatus: targetStatus,
+                    staffName: item.payload.staffName || 'Offline Sync',
+                    cancellationReason: item.payload.cancellationReason
+                  })
+                });
 
-            await this.storage.markQueueItemStatus(item.id, 'completed');
-            synced++;
+                if (res.ok || res.status === 409) {
+                  // 200 OK or 409 Conflict (already transitioned concurrently on server)
+                  syncDone = true;
+                } else {
+                  const errJson = await res.json().catch(() => ({}));
+                  throw new Error(errJson.error || `HTTP ${res.status}`);
+                }
+              } else {
+                throw new Error('fetch_not_available');
+              }
+            } catch (fetchErr: any) {
+              // Direct fallback to db lifecycle methods when self-fetch is unavailable (e.g. unit tests or embedded mode)
+              const { db } = await import('@/lib/db');
+              if (targetBatchId) {
+                await db.updateBatchStatus(targetBatchId, targetStatus, item.payload.staffName || 'Offline Sync', item.payload.cancellationReason);
+              } else if (targetOrderId) {
+                await db.updateOrderStatus(targetOrderId, targetStatus, item.payload.staffName || 'Offline Sync', item.payload.cancellationReason);
+              }
+              syncDone = true;
+            }
+
+            if (syncDone) {
+              await this.storage.markQueueItemStatus(item.id, 'completed');
+              synced++;
+            }
           } else if (item.action_type === 'process_payment') {
             // Payment settlement synchronization
             const { error: payErr } = await supabaseClient

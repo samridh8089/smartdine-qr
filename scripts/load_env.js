@@ -12,7 +12,7 @@ try {
         if (eqIdx > 0) {
           const key = trimmed.substring(0, eqIdx).trim();
           const val = trimmed.substring(eqIdx + 1).replace(/^['"]|['"]$/g, '').trim();
-          if (!process.env[key]) {
+          if (val && val !== '[SENSITIVE]' && !process.env[key]) {
             process.env[key] = val;
           }
         }

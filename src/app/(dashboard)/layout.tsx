@@ -315,17 +315,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         handleExitImpersonation();
         return;
       }
-      if (e.ctrlKey && e.shiftKey && e.key === 'M') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
         e.preventDefault();
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('founder_mode', 'true');
         }
-        router.push('/dashboard/founder/control-center');
+        const targetUrl = restaurant?.id 
+          ? `/dashboard/founder/control-center?restaurantId=${restaurant.id}`
+          : '/dashboard/founder/control-center';
+        router.push(targetUrl);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [router, isImpersonating]);
+  }, [router, isImpersonating, restaurant?.id]);
 
   // Global Realtime Alarm Listener
   useEffect(() => {
@@ -608,7 +611,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   if (typeof window !== 'undefined') {
                     sessionStorage.setItem('founder_mode', 'true');
                   }
-                  router.push('/dashboard/founder/control-center');
+                  const targetUrl = restaurant?.id
+                    ? `/dashboard/founder/control-center?restaurantId=${restaurant.id}`
+                    : '/dashboard/founder/control-center';
+                  router.push(targetUrl);
                 } else {
                   logoTapTimerRef.current = setTimeout(() => setLogoTapCount(0), 3000);
                 }

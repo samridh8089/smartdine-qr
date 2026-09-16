@@ -9,7 +9,10 @@ import { logSystemEvent, getOrderCorrelationId, type SystemEventType } from '@/l
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
+  ? serviceKey
+  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
@@ -140,8 +143,8 @@ export async function POST(req: Request) {
     const targetOrderId = orderId || updatedBatch?.order_id || updatedOrder?.id;
 
     if (restId && restId !== 'demo-rest') {
-      // Instant Parallel Broadcast across Live Orders, KDS, Dashboard, & Customer Tracking UI
-      await broadcastOrderRealtimeEvent({
+      // Instant Non-blocking Parallel Broadcast across Live Orders, KDS, Dashboard, & Customer Tracking UI
+      void broadcastOrderRealtimeEvent({
         restaurantId: restId,
         orderId: targetOrderId,
         batchId,
@@ -154,10 +157,10 @@ export async function POST(req: Request) {
           updatedBatch
         },
         client: supabaseAdmin
-      });
+      }).catch(err => console.warn('[update-order-status] Realtime broadcast error:', err));
 
       if (effectiveStatus === 'completed' || updatedOrder?.payment_status === 'paid') {
-        await broadcastOrderRealtimeEvent({
+        void broadcastOrderRealtimeEvent({
           restaurantId: restId,
           orderId: targetOrderId,
           batchId,
@@ -169,7 +172,7 @@ export async function POST(req: Request) {
             updatedOrder
           },
           client: supabaseAdmin
-        });
+        }).catch(err => console.warn('[update-order-status] Realtime payment broadcast error:', err));
       }
 
       // P1-07: Table status lifecycle sync — release table upon completed or cancelled
@@ -232,7 +235,7 @@ export async function POST(req: Request) {
           }
         }
 
-        await broadcastOrderRealtimeEvent({
+        void broadcastOrderRealtimeEvent({
           restaurantId: restId,
           orderId: targetOrderId,
           eventType: 'table-status-updated',
@@ -244,7 +247,7 @@ export async function POST(req: Request) {
             newStatus: effectiveStatus
           },
           client: supabaseAdmin
-        });
+        }).catch(err => console.warn('[update-order-status] Realtime table broadcast error:', err));
       }
 
       // Background reservation healing (non-blocking)
@@ -435,7 +438,12 @@ export async function POST(req: Request) {
     res.headers.set('Server-Timing', `db;dur=${dbDur}, total;dur=${totalDur}`);
     return res;
   } catch (err: any) {
-    return handleApiError('Staff-Update-Order-Status', err, 'Failed to update order status. Please try again.', 500);
+    console.error('[Staff-Update-Order-Status] Actual error:', err);
+    return NextResponse.json({ 
+      error: err.message || 'Failed to update order status.',
+      stack: err.stack,
+      details: err
+    }, { status: 500 });
   }
 }
 

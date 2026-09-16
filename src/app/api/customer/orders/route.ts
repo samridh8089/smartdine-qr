@@ -10,7 +10,10 @@ import { logSystemEvent, getOrderCorrelationId } from '@/lib/systemEventLogger';
 import { checkBookingOverlap } from '@/lib/utils';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
+  ? serviceKey
+  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
@@ -134,10 +137,14 @@ export async function POST(req: Request) {
         : Promise.resolve({ data: [], error: null })
     ]);
 
+    if (rRes.error) {
+      console.error('[CustomerOrder] Restaurant query error:', rRes.error);
+    }
     const restaurant = rRes.data;
     if (!restaurant) {
       timer.end('inventory');
-      return NextResponse.json({ error: `Restaurant not found for ID: ${restaurantId}` }, { status: 404 });
+      const errDetail = rRes.error ? ` (DB Error: ${rRes.error.message})` : '';
+      return NextResponse.json({ error: `Restaurant not found for ID: ${restaurantId}${errDetail}` }, { status: 404 });
     }
 
     // Enforce active SaaS license: reject customer orders if restaurant subscription is expired or suspended
