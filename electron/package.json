@@ -1,0 +1,52 @@
+{
+  "name": "smartdine-desktop",
+  "version": "1.0.0",
+  "description": "SmartDine Restaurant Operating System — Native Windows Desktop Shell",
+  "main": "main.cjs",
+  "author": "CleverOps",
+  "private": true,
+  "dependencies": {},
+  "build": {
+    "appId": "com.cleverops.smartdine",
+    "productName": "SmartDine",
+    "electronVersion": "44.3.0",
+    "directories": {
+      "output": "../out-electron-build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../public",
+        "to": "public",
+        "filter": ["icon.png", "favicon.ico", "favicon-32x32.png"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "../public/icon-512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SmartDine POS"
+    },
+    "portable": {
+      "splashImage": "../public/icon-512.png"
+    }
+  }
+}

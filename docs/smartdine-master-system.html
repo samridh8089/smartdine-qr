@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartDine Master Digital Twin Architecture</title>
+  <style>
+    :root {
+      --bg-primary: #090d16;
+      --bg-secondary: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #27354f;
+      --border-color: #334155;
+      --border-focus: #38bdf8;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-main: #f59e0b;
+      --accent-data: #10b981;
+      --accent-realtime: #8b5cf6;
+      --accent-security: #06b6d4;
+      --accent-audit: #64748b;
+      --accent-alternate: #f43f5e;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f1f5f9;
+      --border-color: #e2e8f0;
+      --border-focus: #0284c7;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent-main: #d97706;
+      --accent-data: #059669;
+      --accent-realtime: #7c3aed;
+      --accent-security: #0891b2;
+      --accent-audit: #475569;
+      --accent-alternate: #e11d48;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    header {
+      height: 60px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      color: white;
+      font-size: 16px;
+      letter-spacing: -1px;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      font-weight: 600;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .simulation-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sim-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .sim-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-focus);
+      transform: translateY(-1px);
+    }
+
+    .sim-btn.primary {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #ffffff;
+      border: none;
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    }
+
+    .tool-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .search-input {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      width: 180px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      width: 240px;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.15s ease;
+    }
+
+    .icon-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-card-hover);
+      border-color: var(--border-focus);
+    }
+
+    .workspace {
+      position: relative;
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    .side-panel-left {
+      width: 260px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .metrics-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .metric-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .metric-value {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .metric-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: pulseAnimation 1.5s infinite;
+    }
+
+    @keyframes pulseAnimation {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .canvas-container {
+      flex: 1;
+      position: relative;
+      background-color: var(--bg-primary);
+      background-image: radial-gradient(var(--border-color) 1px, transparent 1px);
+      background-size: 24px 24px;
+      overflow: hidden;
+      cursor: grab;
+    }
+
+    .canvas-container:active {
+      cursor: grabbing;
+    }
+
+    #master-svg {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+    }
+
+    .module-box {
+      fill: var(--bg-secondary);
+      fill-opacity: 0.65;
+      stroke: var(--border-color);
+      stroke-width: 1.5;
+      rx: 16;
+      transition: all 0.3s ease;
+    }
+
+    .module-label {
+      font-size: 15px;
+      font-weight: 800;
+      fill: var(--text-primary);
+      letter-spacing: -0.2px;
+    }
+
+    .module-badge {
+      font-size: 11px;
+      font-weight: 600;
+      fill: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .module-badge:hover {
+      fill: var(--border-focus);
+    }
+
+    .node-group {
+      cursor: pointer;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+
+    .node-group:hover .node-rect {
+      fill: var(--bg-card-hover);
+      stroke: var(--border-focus);
+      stroke-width: 2;
+      filter: drop-shadow(0 6px 16px rgba(56, 189, 248, 0.25));
+    }
+
+    .node-rect {
+      fill: var(--bg-card);
+      stroke: var(--border-color);
+      stroke-width: 1.2;
+      rx: 10;
+      transition: all 0.2s ease;
+    }
+
+    .node-type-stripe {
+      rx: 10;
+    }
+
+    .node-title {
+      font-size: 12px;
+      font-weight: 700;
+      fill: var(--text-primary);
+    }
+
+    .node-file {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      fill: var(--text-muted);
+    }
+
+    .node-tag {
+      font-size: 9px;
+      font-weight: 600;
+      fill: var(--text-secondary);
+    }
+
+    .edge-path {
+      fill: none;
+      stroke-width: 1.8;
+      cursor: pointer;
+      transition: stroke-width 0.2s, stroke 0.2s;
+    }
+
+    .edge-path:hover {
+      stroke-width: 3.5 !important;
+      filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.8));
+    }
+
+    .edge-path.main { stroke: var(--accent-main); }
+    .edge-path.data { stroke: var(--accent-data); stroke-dasharray: 4, 3; }
+    .edge-path.realtime { stroke: var(--accent-realtime); stroke-dasharray: 6, 3; }
+    .edge-path.security { stroke: var(--accent-security); }
+    .edge-path.audit { stroke: var(--accent-audit); stroke-dasharray: 2, 3; }
+    .edge-path.alternate { stroke: var(--accent-alternate); stroke-dasharray: 5, 4; }
+
+    .flow-particle {
+      fill: #ffffff;
+      stroke: #f59e0b;
+      stroke-width: 2.5;
+      filter: drop-shadow(0 0 10px #f59e0b) drop-shadow(0 0 20px #ef4444);
+      pointer-events: none;
+    }
+
+    .side-panel-right {
+      width: 300px;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+    }
+
+    .timeline-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .timeline-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-left: 3px solid #3b82f6;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .timeline-item:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-focus);
+      transform: translateX(2px);
+    }
+
+    .timeline-time {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .timeline-title {
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .timeline-detail {
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
+
+    .inspector-drawer {
+      position: absolute;
+      bottom: 20px;
+      left: 280px;
+      right: 320px;
+      max-height: 280px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-focus);
+      border-radius: 12px;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.4);
+      z-index: 80;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .inspector-header {
+      padding: 10px 16px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .inspector-title {
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .inspector-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      padding: 14px 16px;
+      overflow-y: auto;
+      font-size: 11px;
+    }
+
+    .inspector-field {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      background: var(--bg-card);
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+
+    .field-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .field-value {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    .mini-map-box {
+      position: absolute;
+      bottom: 20px;
+      right: 320px;
+      width: 180px;
+      height: 135px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      z-index: 60;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+
+    #minimap-svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .minimap-view-rect {
+      fill: rgba(56, 189, 248, 0.15);
+      stroke: var(--border-focus);
+      stroke-width: 1.5;
+    }
+
+    body.presentation-mode header,
+    body.presentation-mode .side-panel-left,
+    body.presentation-mode .side-panel-right,
+    body.presentation-mode .mini-map-box {
+      display: none !important;
+    }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand-section">
+      <div class="brand-logo">SD</div>
+      <div class="brand-title">
+        SmartDine Master Digital Twin
+        <span class="badge-pill">77 Nodes • 92 Edges</span>
+      </div>
+    </div>
+    <div class="simulation-controls">
+      <button class="sim-btn primary" id="btn-run-full-flow" onclick="runFlowSimulation('full')">
+        ▶ Order Flow (New → Served)
+      </button>
+      <button class="sim-btn" onclick="runFlowSimulation('reject')">⚠ Reject Flow</button>
+      <button class="sim-btn" onclick="runFlowSimulation('cancel')">✕ Cancel Flow</button>
+      <button class="sim-btn" onclick="runFlowSimulation('refund')">↺ Refund Flow</button>
+      <button class="sim-btn" onclick="runFlowSimulation('reverse_inventory')">⚡ Reverse Inventory</button>
+    </div>
+    <div class="tool-group">
+      <input type="text" id="search-box" class="search-input" placeholder="Search node, table, API..." oninput="onSearch(this.value)">
+      <button class="icon-btn" title="Zoom In" onclick="zoom(1.25)">+</button>
+      <button class="icon-btn" title="Zoom Out" onclick="zoom(0.8)">-</button>
+      <button class="icon-btn" title="Reset View" onclick="resetView()">⟲</button>
+      <button class="icon-btn" id="btn-theme" title="Toggle Theme" onclick="toggleTheme()">🌓</button>
+      <button class="icon-btn" title="Presentation Mode" onclick="togglePresentation()">📺</button>
+      <button class="icon-btn" title="Export PNG" onclick="exportPNG()">📷</button>
+      <button class="icon-btn" title="Export SVG" onclick="exportSVG()">⬇</button>
+    </div>
+  </header>
+  <div class="workspace">
+    <aside class="side-panel-left" id="panel-left">
+      <div class="panel-header">
+        Live Metrics
+        <div class="pulse-dot" title="Realtime Connected"></div>
+      </div>
+      <div class="metrics-scroll">
+        <div class="metric-card">
+          <div class="metric-title">Active Orders</div>
+          <div class="metric-value"><span id="metric-active-orders">14</span> <span style="font-size:12px;color:#10b981;">● Live</span></div>
+          <div class="metric-sub">Across 14 active tables</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Kitchen Load (KDS)</div>
+          <div class="metric-value"><span id="metric-kitchen-load">4</span> <span style="font-size:12px;color:#f59e0b;">Prep / 2 Queued</span></div>
+          <div class="metric-sub">Avg Prep: 8m 42s</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Waiter Service Calls</div>
+          <div class="metric-value"><span id="metric-waiter-calls">3</span> <span style="font-size:12px;color:#8b5cf6;">Pending</span></div>
+          <div class="metric-sub">Tables: T-02, T-05, T-12</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Inventory Health</div>
+          <div class="metric-value"><span id="metric-stock-status">2</span> <span style="font-size:12px;color:#ef4444;">Low Stock</span></div>
+          <div class="metric-sub">Pineapple Syrup, Basmati Rice</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Settled Revenue Today</div>
+          <div class="metric-value"><span id="metric-revenue">₹24,850.00</span></div>
+          <div class="metric-sub">GST Collected: ₹1,242.50</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Frozen Inventory Engine</div>
+          <div class="metric-value" style="font-size: 13px; color: #10b981;">100% PROTECTED</div>
+          <div class="metric-sub">Exact-once consumption locked</div>
+        </div>
+      </div>
+    </aside>
+    <main class="canvas-container" id="canvas-container">
+      <svg id="master-svg" viewBox="0 0 5400 4000">
+        <defs>
+          <marker id="arrow-main" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#f59e0b" />
+          </marker>
+          <marker id="arrow-data" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#10b981" />
+          </marker>
+          <marker id="arrow-realtime" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#8b5cf6" />
+          </marker>
+          <marker id="arrow-security" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#06b6d4" />
+          </marker>
+          <marker id="arrow-audit" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#64748b" />
+          </marker>
+          <marker id="arrow-alternate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#f43f5e" />
+          </marker>
+        </defs>
+        <g id="modules-group"><g id="mod-group-customer_layer" class="module-container"><rect class="module-box" x="80" y="100" width="960" height="820" style="stroke:#3b82f6;" /><text class="module-label" x="104" y="136">Customer Layer</text><text class="module-badge" x="900" y="136" onclick="toggleModule('customer_layer')">[Toggle Module]</text></g>
+<g id="mod-group-order_engine" class="module-container"><rect class="module-box" x="1100" y="100" width="1300" height="820" style="stroke:#f59e0b;" /><text class="module-label" x="1124" y="136">Order Engine & Lifecycle</text><text class="module-badge" x="2260" y="136" onclick="toggleModule('order_engine')">[Toggle Module]</text></g>
+<g id="mod-group-kitchen_kds" class="module-container"><rect class="module-box" x="2460" y="100" width="1320" height="820" style="stroke:#ef4444;" /><text class="module-label" x="2484" y="136">Kitchen (KDS)</text><text class="module-badge" x="3640" y="136" onclick="toggleModule('kitchen_kds')">[Toggle Module]</text></g>
+<g id="mod-group-waiter_system" class="module-container"><rect class="module-box" x="3840" y="100" width="1460" height="820" style="stroke:#8b5cf6;" /><text class="module-label" x="3864" y="136">Waiter Operations</text><text class="module-badge" x="5160" y="136" onclick="toggleModule('waiter_system')">[Toggle Module]</text></g>
+<g id="mod-group-owner_dashboard" class="module-container"><rect class="module-box" x="80" y="1880" width="1320" height="840" style="stroke:#06b6d4;" /><text class="module-label" x="104" y="1916">Owner Dashboard</text><text class="module-badge" x="1260" y="1916" onclick="toggleModule('owner_dashboard')">[Toggle Module]</text></g>
+<g id="mod-group-inventory_engine" class="module-container"><rect class="module-box" x="80" y="980" width="1320" height="840" style="stroke:#10b981;" /><text class="module-label" x="104" y="1016">Inventory Engine (Frozen)</text><text class="module-badge" x="1260" y="1016" onclick="toggleModule('inventory_engine')">[Toggle Module]</text></g>
+<g id="mod-group-billing_system" class="module-container"><rect class="module-box" x="3880" y="980" width="1420" height="840" style="stroke:#ec4899;" /><text class="module-label" x="3904" y="1016">Billing & Payments</text><text class="module-badge" x="5160" y="1016" onclick="toggleModule('billing_system')">[Toggle Module]</text></g>
+<g id="mod-group-auth_security" class="module-container"><rect class="module-box" x="3880" y="1880" width="1420" height="840" style="stroke:#64748b;" /><text class="module-label" x="3904" y="1916">Authentication & Security</text><text class="module-badge" x="5160" y="1916" onclick="toggleModule('auth_security')">[Toggle Module]</text></g>
+<g id="mod-group-notifications_service" class="module-container"><rect class="module-box" x="1460" y="980" width="1150" height="840" style="stroke:#a855f7;" /><text class="module-label" x="1484" y="1016">Notifications Service</text><text class="module-badge" x="2470" y="1016" onclick="toggleModule('notifications_service')">[Toggle Module]</text></g>
+<g id="mod-group-offline_engine" class="module-container"><rect class="module-box" x="2670" y="980" width="1150" height="840" style="stroke:#14b8a6;" /><text class="module-label" x="2694" y="1016">Offline Engine (SQLite)</text><text class="module-badge" x="3680" y="1016" onclick="toggleModule('offline_engine')">[Toggle Module]</text></g>
+<g id="mod-group-reports_analytics" class="module-container"><rect class="module-box" x="1460" y="1880" width="1150" height="840" style="stroke:#6366f1;" /><text class="module-label" x="1484" y="1916">Reports & Analytics</text><text class="module-badge" x="2470" y="1916" onclick="toggleModule('reports_analytics')">[Toggle Module]</text></g>
+<g id="mod-group-audit_system" class="module-container"><rect class="module-box" x="2670" y="1880" width="1150" height="840" style="stroke:#475569;" /><text class="module-label" x="2694" y="1916">Audit & Forensic System</text><text class="module-badge" x="3680" y="1916" onclick="toggleModule('audit_system')">[Toggle Module]</text></g>
+<g id="mod-group-infrastructure_layer" class="module-container"><rect class="module-box" x="80" y="2780" width="5220" height="480" style="stroke:#2563eb;" /><text class="module-label" x="104" y="2816">Infrastructure Layer</text><text class="module-badge" x="5160" y="2816" onclick="toggleModule('infrastructure_layer')">[Toggle Module]</text></g></g>
+        <g id="edges-group"><path id="edge-e_qr_to_menu" class="edge-path main" d="M 377 218 C 413.5 218, 413.5 218, 450 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_qr_to_menu')" data-from="cust_qr_scan" data-to="cust_menu"><title>Loads Menu</title></path>
+<path id="edge-e_menu_to_cart" class="edge-path main" d="M 670 218 C 706.5 218, 706.5 218, 743 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_menu_to_cart')" data-from="cust_menu" data-to="cust_cart"><title>Add to Cart</title></path>
+<path id="edge-e_cart_to_special" class="edge-path alternate" d="M 743 218 C 560 218, 560 343, 377 343" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_cart_to_special')" data-from="cust_cart" data-to="cust_special_instructions"><title>Custom Notes</title></path>
+<path id="edge-e_special_to_cart" class="edge-path alternate" d="M 377 343 C 560 343, 560 218, 743 218" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_special_to_cart')" data-from="cust_special_instructions" data-to="cust_cart"><title>Notes Saved</title></path>
+<path id="edge-e_cart_to_checkout" class="edge-path main" d="M 743 218 C 706.5 218, 706.5 343, 670 343" marker-end="url(#arrow-main)" onclick="selectEdge('e_cart_to_checkout')" data-from="cust_cart" data-to="cust_checkout"><title>Checkout</title></path>
+<path id="edge-e_checkout_to_placement" class="edge-path main" d="M 670 343 C 706.5 343, 706.5 343, 743 343" marker-end="url(#arrow-main)" onclick="selectEdge('e_checkout_to_placement')" data-from="cust_checkout" data-to="cust_order_placement"><title>Submit Order</title></path>
+<path id="edge-e_placement_to_new" class="edge-path main" d="M 963 343 C 1073 343, 1073 218, 1183 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_placement_to_new')" data-from="cust_order_placement" data-to="order_new"><title>Batch Created (new)</title></path>
+<path id="edge-e_placement_to_recipe" class="edge-path data" d="M 853 381 C 719 381, 719 1060, 585 1060" marker-end="url(#arrow-data)" onclick="selectEdge('e_placement_to_recipe')" data-from="cust_order_placement" data-to="inv_recipe_lookup"><title>Query BOM Recipe</title></path>
+<path id="edge-e_recipe_to_scaling" class="edge-path data" d="M 695 1098 C 740 1098, 740 1098, 785 1098" marker-end="url(#arrow-data)" onclick="selectEdge('e_recipe_to_scaling')" data-from="inv_recipe_lookup" data-to="inv_scaling"><title>Apply Multiplier</title></path>
+<path id="edge-e_scaling_to_reserve" class="edge-path data" d="M 1005 1098 C 1050 1098, 1050 1098, 1095 1098" marker-end="url(#arrow-data)" onclick="selectEdge('e_scaling_to_reserve')" data-from="inv_scaling" data-to="inv_reservation"><title>Hold ACTIVE Reservation</title></path>
+<path id="edge-e_new_to_kds" class="edge-path realtime" d="M 1403 218 C 1974 218, 1974 218, 2545 218" marker-end="url(#arrow-realtime)" onclick="selectEdge('e_new_to_kds')" data-from="order_new" data-to="kds_dashboard"><title>Render on KDS</title></path>
+<path id="edge-e_kds_audio" class="edge-path alternate" d="M 2765 218 C 2810 218, 2810 343, 2855 343" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_kds_audio')" data-from="kds_dashboard" data-to="kds_audio_alert"><title>Play Alert Bell</title></path>
+<path id="edge-e_kds_to_accept_btn" class="edge-path main" d="M 2765 218 C 2810 218, 2810 218, 2855 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_kds_to_accept_btn')" data-from="kds_dashboard" data-to="kds_accept"><title>Chef Taps Accept</title></path>
+<path id="edge-e_kds_accept_to_order_accepted" class="edge-path main" d="M 2855 218 C 2281.5 218, 2281.5 218, 1708 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_kds_accept_to_order_accepted')" data-from="kds_accept" data-to="order_accepted"><title>Status: accepted</title></path>
+<path id="edge-e_kds_to_prep_btn" class="edge-path main" d="M 2765 218 C 2965 218, 2965 218, 3165 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_kds_to_prep_btn')" data-from="kds_dashboard" data-to="kds_preparing"><title>Chef Taps Preparing</title></path>
+<path id="edge-e_kds_prep_to_order_prep" class="edge-path main" d="M 3165 218 C 2589 218, 2589 218, 2013 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_kds_prep_to_order_prep')" data-from="kds_preparing" data-to="order_preparing"><title>Status: preparing</title></path>
+<path id="edge-e_prep_to_consume" class="edge-path main" d="M 1793 218 C 1089 218, 1089 1223, 385 1223" marker-end="url(#arrow-main)" onclick="selectEdge('e_prep_to_consume')" data-from="order_preparing" data-to="inv_consumption"><title>Exact-Once Stock Deduction</title></path>
+<path id="edge-e_consume_to_idempotency" class="edge-path security" d="M 385 1223 C 784 1223, 784 468, 1183 468" marker-end="url(#arrow-security)" onclick="selectEdge('e_consume_to_idempotency')" data-from="inv_consumption" data-to="order_idempotency"><title>Check Idempotency Key</title></path>
+<path id="edge-e_kds_to_ready_btn" class="edge-path main" d="M 2765 218 C 3120 218, 3120 218, 3475 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_kds_to_ready_btn')" data-from="kds_dashboard" data-to="kds_ready"><title>Chef Taps Ready</title></path>
+<path id="edge-e_kds_ready_to_order_ready" class="edge-path main" d="M 3475 218 C 2896.5 218, 2896.5 218, 2318 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_kds_ready_to_order_ready')" data-from="kds_ready" data-to="order_ready"><title>Status: ready</title></path>
+<path id="edge-e_order_ready_to_waiter_pickup" class="edge-path realtime" d="M 2318 218 C 3303 218, 3303 218, 4288 218" marker-end="url(#arrow-realtime)" onclick="selectEdge('e_order_ready_to_waiter_pickup')" data-from="order_ready" data-to="waiter_pickup"><title>Alert Waiter for Pickup</title></path>
+<path id="edge-e_waiter_pickup_to_serve" class="edge-path main" d="M 4508 218 C 4570.5 218, 4570.5 218, 4633 218" marker-end="url(#arrow-main)" onclick="selectEdge('e_waiter_pickup_to_serve')" data-from="waiter_pickup" data-to="waiter_serve"><title>Waiter Delivers Food</title></path>
+<path id="edge-e_waiter_serve_to_order_served" class="edge-path main" d="M 4633 218 C 3018 218, 3018 343, 1403 343" marker-end="url(#arrow-main)" onclick="selectEdge('e_waiter_serve_to_order_served')" data-from="waiter_serve" data-to="order_served"><title>Status: served</title></path>
+<path id="edge-e_kds_to_reject_btn" class="edge-path alternate" d="M 2655 256 C 2655 256, 2655 305, 2655 305" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_kds_to_reject_btn')" data-from="kds_dashboard" data-to="kds_reject"><title>Chef Taps Reject</title></path>
+<path id="edge-e_kds_reject_to_order_reject" class="edge-path alternate" d="M 2545 343 C 2279 343, 2279 343, 2013 343" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_kds_reject_to_order_reject')" data-from="kds_reject" data-to="order_reject"><title>Status: rejected</title></path>
+<path id="edge-e_reject_to_reversal" class="edge-path alternate" d="M 1793 343 C 1244 343, 1244 1223, 695 1223" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_reject_to_reversal')" data-from="order_reject" data-to="inv_reversal"><title>Release Uncooked Stock</title></path>
+<path id="edge-e_order_to_cancel" class="edge-path alternate" d="M 1598 256 C 1598 256, 1598 305, 1598 305" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_order_to_cancel')" data-from="order_accepted" data-to="order_cancel"><title>Cancel Request</title></path>
+<path id="edge-e_cancel_to_reversal" class="edge-path alternate" d="M 1488 343 C 1091.5 343, 1091.5 1223, 695 1223" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_cancel_to_reversal')" data-from="order_cancel" data-to="inv_reversal"><title>Reverse Inventory / Disposition</title></path>
+<path id="edge-e_order_to_recall" class="edge-path alternate" d="M 2208 256 C 2208 256, 2208 305, 2208 305" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_order_to_recall')" data-from="order_ready" data-to="order_recall"><title>Accidental Tap Recall</title></path>
+<path id="edge-e_offline_action_to_queue" class="edge-path alternate" d="M 2655 256 C 2771.5 256, 2771.5 1060, 2888 1060" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_offline_action_to_queue')" data-from="kds_dashboard" data-to="offline_sqlite_queue"><title>Offline Fallback Buffer</title></path>
+<path id="edge-e_queue_to_optimistic" class="edge-path alternate" d="M 2998 1098 C 3066.5 1098, 3066.5 1098, 3135 1098" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_queue_to_optimistic')" data-from="offline_sqlite_queue" data-to="offline_order_batches"><title>Optimistic UI Render</title></path>
+<path id="edge-e_sync_worker_to_retry" class="edge-path alternate" d="M 3355 1223 C 3423.5 1223, 3423.5 1098, 3492 1098" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_sync_worker_to_retry')" data-from="offline_sync_worker" data-to="offline_retry_engine"><title>Network Restored (Online)</title></path>
+<path id="edge-e_retry_to_dedup" class="edge-path alternate" d="M 3492 1098 C 3245 1098, 3245 1223, 2998 1223" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_retry_to_dedup')" data-from="offline_retry_engine" data-to="offline_dedup"><title>Validate & Deduplicate</title></path>
+<path id="edge-e_dedup_to_server_api" class="edge-path main" d="M 2888 1261 C 2054.5 1261, 2054.5 2860, 1221 2860" marker-end="url(#arrow-main)" onclick="selectEdge('e_dedup_to_server_api')" data-from="offline_dedup" data-to="infra_api_routes"><title>Replay Sync Payload</title></path>
+<path id="edge-e_menu_to_waiter_call" class="edge-path alternate" d="M 670 218 C 2306.5 218, 2306.5 218, 3943 218" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_menu_to_waiter_call')" data-from="cust_menu" data-to="waiter_call"><title>Customer Calls Waiter</title></path>
+<path id="edge-e_waiter_call_to_table_status" class="edge-path alternate" d="M 4163 218 C 4570.5 218, 4570.5 218, 4978 218" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_waiter_call_to_table_status')" data-from="waiter_call" data-to="waiter_table_status"><title>Update Table Badge</title></path>
+<path id="edge-e_served_to_bill_gen" class="edge-path main" d="M 1403 343 C 2690.5 343, 2690.5 1098, 3978 1098" marker-end="url(#arrow-main)" onclick="selectEdge('e_served_to_bill_gen')" data-from="order_served" data-to="bill_generation"><title>Generate Bill</title></path>
+<path id="edge-e_bill_gen_to_gst" class="edge-path data" d="M 4198 1098 C 4255.5 1098, 4255.5 1098, 4313 1098" marker-end="url(#arrow-data)" onclick="selectEdge('e_bill_gen_to_gst')" data-from="bill_generation" data-to="bill_gst"><title>Compute Taxes</title></path>
+<path id="edge-e_bill_gen_to_payment" class="edge-path main" d="M 4198 1098 C 4423 1098, 4423 1098, 4648 1098" marker-end="url(#arrow-main)" onclick="selectEdge('e_bill_gen_to_payment')" data-from="bill_generation" data-to="bill_payment"><title>Present Tender Options</title></path>
+<path id="edge-e_payment_to_settle" class="edge-path main" d="M 4648 1098 C 4423 1098, 4423 1223, 4198 1223" marker-end="url(#arrow-main)" onclick="selectEdge('e_payment_to_settle')" data-from="bill_payment" data-to="bill_settlement"><title>Settle & Close Table</title></path>
+<path id="edge-e_payment_to_refund" class="edge-path alternate" d="M 4868 1098 C 4925.5 1098, 4925.5 1098, 4983 1098" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_payment_to_refund')" data-from="bill_payment" data-to="bill_refund"><title>Dispute / Refund</title></path>
+<path id="edge-e_settle_to_revenue" class="edge-path data" d="M 3978 1223 C 2336.5 1223, 2336.5 2123, 695 2123" marker-end="url(#arrow-data)" onclick="selectEdge('e_settle_to_revenue')" data-from="bill_settlement" data-to="owner_revenue"><title>Update Daily Ledger</title></path>
+<path id="edge-e_revenue_to_overview" class="edge-path data" d="M 475 2123 C 430 2123, 430 1998, 385 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_revenue_to_overview')" data-from="owner_revenue" data-to="owner_overview"><title>Live Sales KPI</title></path>
+<path id="edge-e_settle_to_reports" class="edge-path data" d="M 3978 1223 C 2883 1223, 2883 1998, 1788 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_settle_to_reports')" data-from="bill_settlement" data-to="report_sales"><title>Aggregate Sales Data</title></path>
+<path id="edge-e_inv_to_report" class="edge-path data" d="M 385 1223 C 1155 1223, 1155 1998, 1925 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_inv_to_report')" data-from="inv_consumption" data-to="report_inventory"><title>Log Consumption Metrics</title></path>
+<path id="edge-e_restock_to_items" class="edge-path data" d="M 785 1223 C 585 1223, 585 1098, 385 1098" marker-end="url(#arrow-data)" onclick="selectEdge('e_restock_to_items')" data-from="inv_restock" data-to="inv_stock_lookup"><title>Replenish Available Stock</title></path>
+<path id="edge-e_inv_to_discrepancy" class="edge-path data" d="M 385 1098 C 740 1098, 740 1223, 1095 1223" marker-end="url(#arrow-data)" onclick="selectEdge('e_inv_to_discrepancy')" data-from="inv_stock_lookup" data-to="inv_audit"><title>Discrepancy Check</title></path>
+<path id="edge-e_order_to_audit_event" class="edge-path audit" d="M 1293 256 C 2090.5 256, 2090.5 1960, 2888 1960" marker-end="url(#arrow-audit)" onclick="selectEdge('e_order_to_audit_event')" data-from="order_new" data-to="audit_system_events"><title>Log order_created</title></path>
+<path id="edge-e_prep_to_lifecycle_audit" class="edge-path audit" d="M 1903 256 C 2752.5 256, 2752.5 1960, 3602 1960" marker-end="url(#arrow-audit)" onclick="selectEdge('e_prep_to_lifecycle_audit')" data-from="order_preparing" data-to="audit_lifecycle"><title>Forensic Lifecycle Audit</title></path>
+<path id="edge-e_owner_to_audit_log" class="edge-path audit" d="M 385 2123 C 1760 2123, 1760 1998, 3135 1998" marker-end="url(#arrow-audit)" onclick="selectEdge('e_owner_to_audit_log')" data-from="owner_staff_mgmt" data-to="audit_logs_table"><title>Record Management Action</title></path>
+<path id="edge-e_auth_to_guard" class="edge-path security" d="M 4198 1998 C 4255.5 1998, 4255.5 1998, 4313 1998" marker-end="url(#arrow-security)" onclick="selectEdge('e_auth_to_guard')" data-from="auth_supabase" data-to="auth_role_guard"><title>Validate Bearer Token</title></path>
+<path id="edge-e_guard_to_rls" class="edge-path security" d="M 4533 1998 C 4590.5 1998, 4590.5 1998, 4648 1998" marker-end="url(#arrow-security)" onclick="selectEdge('e_guard_to_rls')" data-from="auth_role_guard" data-to="auth_rls_policies"><title>Inject Tenant Context</title></path>
+<path id="edge-e_api_to_supabase_client" class="edge-path data" d="M 1331 2898 C 1588.5 2898, 1588.5 2898, 1846 2898" marker-end="url(#arrow-data)" onclick="selectEdge('e_api_to_supabase_client')" data-from="infra_api_routes" data-to="infra_supabase_client"><title>SDK Connection Pool</title></path>
+<path id="edge-e_supabase_client_to_postgres" class="edge-path data" d="M 2066 2898 C 2323 2898, 2323 2898, 2580 2898" marker-end="url(#arrow-data)" onclick="selectEdge('e_supabase_client_to_postgres')" data-from="infra_supabase_client" data-to="infra_postgres_db"><title>ACID Transaction Writes</title></path>
+<path id="edge-e_postgres_to_realtime_ws" class="edge-path realtime" d="M 2800 2898 C 3057 2898, 3057 2898, 3314 2898" marker-end="url(#arrow-realtime)" onclick="selectEdge('e_postgres_to_realtime_ws')" data-from="infra_postgres_db" data-to="infra_realtime_ws"><title>WAL Change Capture</title></path>
+<path id="edge-e_realtime_to_broadcast" class="edge-path messagebus" d="M 3424 2860 C 2551 2860, 2551 1136, 1678 1136" marker-end="url(#arrow-messagebus)" onclick="selectEdge('e_realtime_to_broadcast')" data-from="infra_realtime_ws" data-to="notif_realtime_broadcast"><title>Distribute Events</title></path>
+<path id="edge-e_offline_dedup_link" class="edge-path alternate" d="M 3135 1098 C 2421.5 1098, 2421.5 468, 1708 468" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_offline_dedup_link')" data-from="offline_order_batches" data-to="order_dup_protect"><title>Deduplication Filter</title></path>
+<path id="edge-e_dedup_to_retry_loop" class="edge-path alternate" d="M 1708 468 C 2600 468, 2600 1098, 3492 1098" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_dedup_to_retry_loop')" data-from="order_dup_protect" data-to="offline_retry_engine"><title>Enqueue Verified Items</title></path>
+<path id="edge-e_ws_to_kds_listener" class="edge-path realtime" d="M 3424 2860 C 3349.5 2860, 3349.5 381, 3275 381" marker-end="url(#arrow-realtime)" onclick="selectEdge('e_ws_to_kds_listener')" data-from="infra_realtime_ws" data-to="kds_realtime_listener"><title>Stream KDS Channel</title></path>
+<path id="edge-e_kds_listener_to_board" class="edge-path realtime" d="M 3165 343 C 2965 343, 2965 218, 2765 218" marker-end="url(#arrow-realtime)" onclick="selectEdge('e_kds_listener_to_board')" data-from="kds_realtime_listener" data-to="kds_dashboard"><title>Push Event to Board</title></path>
+<path id="edge-e_order_new_to_live_orders" class="edge-path realtime" d="M 1293 256 C 939 256, 939 1960, 585 1960" marker-end="url(#arrow-realtime)" onclick="selectEdge('e_order_new_to_live_orders')" data-from="order_new" data-to="owner_live_orders"><title>Realtime Feed to Live Grid</title></path>
+<path id="edge-e_live_orders_to_api" class="edge-path main" d="M 585 2036 C 903 2036, 903 2860, 1221 2860" marker-end="url(#arrow-main)" onclick="selectEdge('e_live_orders_to_api')" data-from="owner_live_orders" data-to="infra_api_routes"><title>Staff Order Status Update</title></path>
+<path id="edge-e_revenue_to_analytics" class="edge-path data" d="M 695 2123 C 740 2123, 740 1998, 785 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_revenue_to_analytics')" data-from="owner_revenue" data-to="owner_analytics"><title>Aggregates Sales Trends</title></path>
+<path id="edge-e_analytics_to_overview" class="edge-path data" d="M 785 1998 C 585 1998, 585 1998, 385 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_analytics_to_overview')" data-from="owner_analytics" data-to="owner_overview"><title>Chart Summaries to Overview</title></path>
+<path id="edge-e_report_sales_to_owner_reports" class="edge-path data" d="M 1568 1998 C 1441.5 1998, 1441.5 1998, 1315 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_report_sales_to_owner_reports')" data-from="report_sales" data-to="owner_reports"><title>Feeds Sales Data to UI</title></path>
+<path id="edge-e_overview_to_billing" class="edge-path alternate" d="M 385 1998 C 585 1998, 585 2123, 785 2123" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_overview_to_billing')" data-from="owner_overview" data-to="owner_billing"><title>Manage SaaS Plan</title></path>
+<path id="edge-e_owner_billing_to_edge" class="edge-path data" d="M 1005 2123 C 2527 2123, 2527 2898, 4049 2898" marker-end="url(#arrow-data)" onclick="selectEdge('e_owner_billing_to_edge')" data-from="owner_billing" data-to="infra_edge_functions"><title>Invoke Razorpay Checkout</title></path>
+<path id="edge-e_guard_to_rbac_roles" class="edge-path security" d="M 4533 1998 C 4758 1998, 4758 1998, 4983 1998" marker-end="url(#arrow-security)" onclick="selectEdge('e_guard_to_rbac_roles')" data-from="auth_role_guard" data-to="auth_roles"><title>Check Allowed Roles</title></path>
+<path id="edge-e_rbac_to_staff_mgmt" class="edge-path security" d="M 4983 1998 C 2684 1998, 2684 2123, 385 2123" marker-end="url(#arrow-security)" onclick="selectEdge('e_rbac_to_staff_mgmt')" data-from="auth_roles" data-to="owner_staff_mgmt"><title>Enforce Role Restrictions</title></path>
+<path id="edge-e_broadcast_to_kitchen_alerts" class="edge-path messagebus" d="M 1788 1098 C 2035 1098, 2035 1098, 2282 1098" marker-end="url(#arrow-messagebus)" onclick="selectEdge('e_broadcast_to_kitchen_alerts')" data-from="notif_realtime_broadcast" data-to="notif_kitchen_alerts"><title>Dispatch Kitchen Alert</title></path>
+<path id="edge-e_kitchen_alert_to_kds" class="edge-path frontend" d="M 2392 1060 C 2523.5 1060, 2523.5 256, 2655 256" marker-end="url(#arrow-frontend)" onclick="selectEdge('e_kitchen_alert_to_kds')" data-from="notif_kitchen_alerts" data-to="kds_dashboard"><title>Display Banner & Sound</title></path>
+<path id="edge-e_broadcast_to_waiter_alerts" class="edge-path messagebus" d="M 1678 1136 C 1678 1136, 1678 1185, 1678 1185" marker-end="url(#arrow-messagebus)" onclick="selectEdge('e_broadcast_to_waiter_alerts')" data-from="notif_realtime_broadcast" data-to="notif_waiter_alerts"><title>Dispatch Ready Alert</title></path>
+<path id="edge-e_waiter_alert_to_tables" class="edge-path frontend" d="M 1788 1223 C 3038 1223, 3038 218, 4288 218" marker-end="url(#arrow-frontend)" onclick="selectEdge('e_waiter_alert_to_tables')" data-from="notif_waiter_alerts" data-to="waiter_pickup"><title>Highlight Ready Table Card</title></path>
+<path id="edge-e_inv_audit_to_owner_alerts" class="edge-path alternate" d="M 1315 1223 C 1620 1223, 1620 1223, 1925 1223" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_inv_audit_to_owner_alerts')" data-from="inv_audit" data-to="notif_owner_alerts"><title>Trigger Low-Stock Warning</title></path>
+<path id="edge-e_owner_alert_to_overview" class="edge-path frontend" d="M 1925 1223 C 1155 1223, 1155 1998, 385 1998" marker-end="url(#arrow-frontend)" onclick="selectEdge('e_owner_alert_to_overview')" data-from="notif_owner_alerts" data-to="owner_overview"><title>Amber Alert Displayed</title></path>
+<path id="edge-e_order_served_to_staff_report" class="edge-path data" d="M 1293 381 C 1842.5 381, 1842.5 1960, 2392 1960" marker-end="url(#arrow-data)" onclick="selectEdge('e_order_served_to_staff_report')" data-from="order_served" data-to="report_staff"><title>Calculate Turnaround Time</title></path>
+<path id="edge-e_staff_report_to_owner_reports" class="edge-path data" d="M 2282 1998 C 1798.5 1998, 1798.5 1998, 1315 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_staff_report_to_owner_reports')" data-from="report_staff" data-to="owner_reports"><title>Embed Staff Speed Report</title></path>
+<path id="edge-e_bill_gst_to_report_revenue" class="edge-path data" d="M 4313 1098 C 3050.5 1098, 3050.5 2123, 1788 2123" marker-end="url(#arrow-data)" onclick="selectEdge('e_bill_gst_to_report_revenue')" data-from="bill_gst" data-to="report_revenue"><title>Accumulate CGST & SGST</title></path>
+<path id="edge-e_settle_to_report_revenue" class="edge-path data" d="M 3978 1223 C 2883 1223, 2883 2123, 1788 2123" marker-end="url(#arrow-data)" onclick="selectEdge('e_settle_to_report_revenue')" data-from="bill_settlement" data-to="report_revenue"><title>Accumulate Net Sales</title></path>
+<path id="edge-e_report_revenue_to_owner_reports" class="edge-path data" d="M 1568 2123 C 1441.5 2123, 1441.5 1998, 1315 1998" marker-end="url(#arrow-data)" onclick="selectEdge('e_report_revenue_to_owner_reports')" data-from="report_revenue" data-to="owner_reports"><title>Display Accounting Report</title></path>
+<path id="edge-e_audit_logs_to_report_trail" class="edge-path audit" d="M 3135 1998 C 2640 1998, 2640 2123, 2145 2123" marker-end="url(#arrow-audit)" onclick="selectEdge('e_audit_logs_to_report_trail')" data-from="audit_logs_table" data-to="report_audit_trail"><title>Query Security Log</title></path>
+<path id="edge-e_report_trail_to_owner_reports" class="edge-path audit" d="M 1925 2123 C 1620 2123, 1620 1998, 1315 1998" marker-end="url(#arrow-audit)" onclick="selectEdge('e_report_trail_to_owner_reports')" data-from="report_audit_trail" data-to="owner_reports"><title>Render Audit Log Table</title></path>
+<path id="edge-e_api_to_audit_error" class="edge-path audit" d="M 1331 2898 C 2054.5 2898, 2054.5 2123, 2778 2123" marker-end="url(#arrow-audit)" onclick="selectEdge('e_api_to_audit_error')" data-from="infra_api_routes" data-to="audit_error_events"><title>Intercept 500 Failures</title></path>
+<path id="edge-e_audit_error_to_system_events" class="edge-path audit" d="M 2888 2085 C 2888 2085, 2888 2036, 2888 2036" marker-end="url(#arrow-audit)" onclick="selectEdge('e_audit_error_to_system_events')" data-from="audit_error_events" data-to="audit_system_events"><title>Persist Forensic Error Event</title></path>
+<path id="edge-e_nextjs_to_qr_scan" class="edge-path frontend" d="M 487 2860 C 377 2860, 377 256, 267 256" marker-end="url(#arrow-frontend)" onclick="selectEdge('e_nextjs_to_qr_scan')" data-from="infra_nextjs" data-to="cust_qr_scan"><title>Serve Customer Web App</title></path>
+<path id="edge-e_nextjs_to_overview" class="edge-path frontend" d="M 487 2860 C 381 2860, 381 2036, 275 2036" marker-end="url(#arrow-frontend)" onclick="selectEdge('e_nextjs_to_overview')" data-from="infra_nextjs" data-to="owner_overview"><title>Serve Dashboard Shell</title></path>
+<path id="edge-e_payment_to_edge_webhook" class="edge-path alternate" d="M 4758 1136 C 4458.5 1136, 4458.5 2860, 4159 2860" marker-end="url(#arrow-alternate)" onclick="selectEdge('e_payment_to_edge_webhook')" data-from="bill_payment" data-to="infra_edge_functions"><title>Razorpay Payment Captured</title></path>
+<path id="edge-e_edge_webhook_to_settle" class="edge-path main" d="M 4159 2860 C 4123.5 2860, 4123.5 1261, 4088 1261" marker-end="url(#arrow-main)" onclick="selectEdge('e_edge_webhook_to_settle')" data-from="infra_edge_functions" data-to="bill_settlement"><title>Auto Settle On Signature Match</title></path>
+<path id="edge-e_storage_to_menu" class="edge-path data" d="M 4783 2898 C 2726.5 2898, 2726.5 218, 670 218" marker-end="url(#arrow-data)" onclick="selectEdge('e_storage_to_menu')" data-from="infra_storage" data-to="cust_menu"><title>Serve Dish Photos from CDN</title></path>
+<path id="edge-e_broadcast_to_fcm" class="edge-path messagebus" d="M 1788 1098 C 1856.5 1098, 1856.5 1098, 1925 1098" marker-end="url(#arrow-messagebus)" onclick="selectEdge('e_broadcast_to_fcm')" data-from="notif_realtime_broadcast" data-to="notif_fcm_push"><title>Dispatch Mobile Push</title></path>
+<path id="edge-e_fcm_to_waiter_device" class="edge-path messagebus" d="M 2145 1098 C 3216.5 1098, 3216.5 218, 4288 218" marker-end="url(#arrow-messagebus)" onclick="selectEdge('e_fcm_to_waiter_device')" data-from="notif_fcm_push" data-to="waiter_pickup"><title>Wakeup Android Device</title></path>
+<path id="edge-e_overview_to_storage" class="edge-path data" d="M 385 1998 C 2584 1998, 2584 2898, 4783 2898" marker-end="url(#arrow-data)" onclick="selectEdge('e_overview_to_storage')" data-from="owner_overview" data-to="infra_storage"><title>Upload Restaurant Assets</title></path></g>
+        <g id="nodes-group"><g id="node-cust_qr_scan" class="node-group" transform="translate(157, 180)" onclick="selectNode('cust_qr_scan')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#3b82f6" /><text class="node-title" x="14" y="24">QR Scan & Table Detect</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">MenuPage()</text></g>
+<g id="node-cust_menu" class="node-group" transform="translate(450, 180)" onclick="selectNode('cust_menu')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#3b82f6" /><text class="node-title" x="14" y="24">Interactive Digital Me</text><text class="node-file" x="14" y="44">CustomerMenu.tsx</text><text class="node-tag" x="14" y="62">CustomerMenu()</text></g>
+<g id="node-cust_cart" class="node-group" transform="translate(743, 180)" onclick="selectNode('cust_cart')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#3b82f6" /><text class="node-title" x="14" y="24">Client Cart State</text><text class="node-file" x="14" y="44">CustomerMenu.tsx</text><text class="node-tag" x="14" y="62">CartDrawer()</text></g>
+<g id="node-cust_special_instructions" class="node-group" transform="translate(157, 305)" onclick="selectNode('cust_special_instructions')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#3b82f6" /><text class="node-title" x="14" y="24">Special Instructions</text><text class="node-file" x="14" y="44">CustomerMenu.tsx</text><text class="node-tag" x="14" y="62">SpecialInstructionsModal</text></g>
+<g id="node-cust_checkout" class="node-group" transform="translate(450, 305)" onclick="selectNode('cust_checkout')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#3b82f6" /><text class="node-title" x="14" y="24">Checkout & Order Revie</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">CheckoutPage()</text></g>
+<g id="node-cust_order_placement" class="node-group" transform="translate(743, 305)" onclick="selectNode('cust_order_placement')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#3b82f6" /><text class="node-title" x="14" y="24">Order Placement Engine</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.createOrder()</text></g>
+<g id="node-order_new" class="node-group" transform="translate(1183, 180)" onclick="selectNode('order_new')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Batch Status: New</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.createOrder()</text></g>
+<g id="node-order_accepted" class="node-group" transform="translate(1488, 180)" onclick="selectNode('order_accepted')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Batch Status: Accepted</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.updateBatchStatus()</text></g>
+<g id="node-order_preparing" class="node-group" transform="translate(1793, 180)" onclick="selectNode('order_preparing')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Batch Status: Preparin</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.updateBatchStatus()</text></g>
+<g id="node-order_ready" class="node-group" transform="translate(2098, 180)" onclick="selectNode('order_ready')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Batch Status: Ready</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.updateBatchStatus()</text></g>
+<g id="node-order_served" class="node-group" transform="translate(1183, 305)" onclick="selectNode('order_served')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Batch Status: Served</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.updateBatchStatus()</text></g>
+<g id="node-order_cancel" class="node-group" transform="translate(1488, 305)" onclick="selectNode('order_cancel')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Cancel & Disposition</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">cancelOrderBatch()</text></g>
+<g id="node-order_reject" class="node-group" transform="translate(1793, 305)" onclick="selectNode('order_reject')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Reject Order Branch</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">rejectBatch()</text></g>
+<g id="node-order_recall" class="node-group" transform="translate(2098, 305)" onclick="selectNode('order_recall')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Batch Status Recall</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.recallBatchStatus()</text></g>
+<g id="node-order_idempotency" class="node-group" transform="translate(1183, 430)" onclick="selectNode('order_idempotency')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Idempotency Protection</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">consumeReservedInventory</text></g>
+<g id="node-order_dup_protect" class="node-group" transform="translate(1488, 430)" onclick="selectNode('order_dup_protect')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#f59e0b" /><text class="node-title" x="14" y="24">Duplicate Request Dedu</text><text class="node-file" x="14" y="44">offlineSyncEngine.ts</text><text class="node-tag" x="14" y="62">processSyncQueue()</text></g>
+<g id="node-kds_dashboard" class="node-group" transform="translate(2545, 180)" onclick="selectNode('kds_dashboard')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ef4444" /><text class="node-title" x="14" y="24">KDS Live Station Scree</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">KitchenDisplaySystem()</text></g>
+<g id="node-kds_accept" class="node-group" transform="translate(2855, 180)" onclick="selectNode('kds_accept')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ef4444" /><text class="node-title" x="14" y="24">KDS Accept Action</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">handleBatchStatusChange(</text></g>
+<g id="node-kds_preparing" class="node-group" transform="translate(3165, 180)" onclick="selectNode('kds_preparing')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ef4444" /><text class="node-title" x="14" y="24">KDS Start Prep Action</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">handleBatchStatusChange(</text></g>
+<g id="node-kds_ready" class="node-group" transform="translate(3475, 180)" onclick="selectNode('kds_ready')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ef4444" /><text class="node-title" x="14" y="24">KDS Mark Ready Action</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">handleBatchStatusChange(</text></g>
+<g id="node-kds_reject" class="node-group" transform="translate(2545, 305)" onclick="selectNode('kds_reject')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ef4444" /><text class="node-title" x="14" y="24">KDS Reject Ticket Acti</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">handleRejectBatch()</text></g>
+<g id="node-kds_audio_alert" class="node-group" transform="translate(2855, 305)" onclick="selectNode('kds_audio_alert')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ef4444" /><text class="node-title" x="14" y="24">Kitchen Chime & Bell A</text><text class="node-file" x="14" y="44">soundAlert.ts</text><text class="node-tag" x="14" y="62">playNewOrderAlert()</text></g>
+<g id="node-kds_realtime_listener" class="node-group" transform="translate(3165, 305)" onclick="selectNode('kds_realtime_listener')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ef4444" /><text class="node-title" x="14" y="24">KDS Realtime WebSocket</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">supabase.channel(`kds_${</text></g>
+<g id="node-waiter_call" class="node-group" transform="translate(3943, 180)" onclick="selectNode('waiter_call')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#8b5cf6" /><text class="node-title" x="14" y="24">Customer Waiter Call</text><text class="node-file" x="14" y="44">CustomerMenu.tsx</text><text class="node-tag" x="14" y="62">db.createCustomerRequest</text></g>
+<g id="node-waiter_pickup" class="node-group" transform="translate(4288, 180)" onclick="selectNode('waiter_pickup')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#8b5cf6" /><text class="node-title" x="14" y="24">Order Pickup Alert</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">onBatchReadyAlert()</text></g>
+<g id="node-waiter_serve" class="node-group" transform="translate(4633, 180)" onclick="selectNode('waiter_serve')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#8b5cf6" /><text class="node-title" x="14" y="24">Serve to Table Action</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">db.updateBatchStatus("se</text></g>
+<g id="node-waiter_table_status" class="node-group" transform="translate(4978, 180)" onclick="selectNode('waiter_table_status')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#8b5cf6" /><text class="node-title" x="14" y="24">Table Floor Status Man</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">db.toggleTableOccupancy(</text></g>
+<g id="node-owner_overview" class="node-group" transform="translate(165, 1960)" onclick="selectNode('owner_overview')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#06b6d4" /><text class="node-title" x="14" y="24">Executive Overview</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">DashboardOverview()</text></g>
+<g id="node-owner_live_orders" class="node-group" transform="translate(475, 1960)" onclick="selectNode('owner_live_orders')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#06b6d4" /><text class="node-title" x="14" y="24">Live Orders Management</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">OrdersPage()</text></g>
+<g id="node-owner_analytics" class="node-group" transform="translate(785, 1960)" onclick="selectNode('owner_analytics')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#06b6d4" /><text class="node-title" x="14" y="24">Sales Trends & Analyti</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">AnalyticsPage()</text></g>
+<g id="node-owner_reports" class="node-group" transform="translate(1095, 1960)" onclick="selectNode('owner_reports')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#06b6d4" /><text class="node-title" x="14" y="24">Financial & Accounting</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">ReportsPage()</text></g>
+<g id="node-owner_staff_mgmt" class="node-group" transform="translate(165, 2085)" onclick="selectNode('owner_staff_mgmt')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#06b6d4" /><text class="node-title" x="14" y="24">Staff Roles & PINs</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">StaffManagementPage()</text></g>
+<g id="node-owner_revenue" class="node-group" transform="translate(475, 2085)" onclick="selectNode('owner_revenue')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#06b6d4" /><text class="node-title" x="14" y="24">Revenue & Tender Settl</text><text class="node-file" x="14" y="44">billingEngine.ts</text><text class="node-tag" x="14" y="62">calculateBilling()</text></g>
+<g id="node-owner_billing" class="node-group" transform="translate(785, 2085)" onclick="selectNode('owner_billing')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#06b6d4" /><text class="node-title" x="14" y="24">SaaS Plan & Invoicing</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">BillingPage()</text></g>
+<g id="node-inv_stock_lookup" class="node-group" transform="translate(165, 1060)" onclick="selectNode('inv_stock_lookup')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Available Stock Lookup</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">calculateDishStockAvaila</text></g>
+<g id="node-inv_recipe_lookup" class="node-group" transform="translate(475, 1060)" onclick="selectNode('inv_recipe_lookup')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Recipe & Ingredient Ma</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">findMatchingRecipe()</text></g>
+<g id="node-inv_scaling" class="node-group" transform="translate(785, 1060)" onclick="selectNode('inv_scaling')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Ingredient Scaling & M</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">getPortionMultiplier()</text></g>
+<g id="node-inv_reservation" class="node-group" transform="translate(1095, 1060)" onclick="selectNode('inv_reservation')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Active Stock Reservati</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">reserveInventoryForOrder</text></g>
+<g id="node-inv_consumption" class="node-group" transform="translate(165, 1185)" onclick="selectNode('inv_consumption')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Exact-Once Stock Consu</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">consumeReservedInventory</text></g>
+<g id="node-inv_reversal" class="node-group" transform="translate(475, 1185)" onclick="selectNode('inv_reversal')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Stock Restoration & Ca</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">restoreInventoryForOrder</text></g>
+<g id="node-inv_restock" class="node-group" transform="translate(785, 1185)" onclick="selectNode('inv_restock')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Restock & Purchase Ent</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">recordRestockPurchase()</text></g>
+<g id="node-inv_audit" class="node-group" transform="translate(1095, 1185)" onclick="selectNode('inv_audit')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#10b981" /><text class="node-title" x="14" y="24">Stock Discrepancy & Va</text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">healUnconsumedActiveRese</text></g>
+<g id="node-bill_generation" class="node-group" transform="translate(3978, 1060)" onclick="selectNode('bill_generation')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ec4899" /><text class="node-title" x="14" y="24">Bill Generation Engine</text><text class="node-file" x="14" y="44">billingEngine.ts</text><text class="node-tag" x="14" y="62">calculateBilling()</text></g>
+<g id="node-bill_gst" class="node-group" transform="translate(4313, 1060)" onclick="selectNode('bill_gst')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ec4899" /><text class="node-title" x="14" y="24">GST & Tax Computation </text><text class="node-file" x="14" y="44">tax.ts</text><text class="node-tag" x="14" y="62">calculateOrderTax()</text></g>
+<g id="node-bill_payment" class="node-group" transform="translate(4648, 1060)" onclick="selectNode('bill_payment')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ec4899" /><text class="node-title" x="14" y="24">Multi-Tender Payment P</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.updateOrderPaymentSta</text></g>
+<g id="node-bill_refund" class="node-group" transform="translate(4983, 1060)" onclick="selectNode('bill_refund')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ec4899" /><text class="node-title" x="14" y="24">Payment Refund Engine</text><text class="node-file" x="14" y="44">route.ts</text><text class="node-tag" x="14" y="62">processRefund()</text></g>
+<g id="node-bill_settlement" class="node-group" transform="translate(3978, 1185)" onclick="selectNode('bill_settlement')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#ec4899" /><text class="node-title" x="14" y="24">Table Session Settleme</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">db.checkAndReleaseTableO</text></g>
+<g id="node-auth_supabase" class="node-group" transform="translate(3978, 1960)" onclick="selectNode('auth_supabase')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#64748b" /><text class="node-title" x="14" y="24">Supabase Auth & Sessio</text><text class="node-file" x="14" y="44">supabase.ts</text><text class="node-tag" x="14" y="62">supabase.auth.getUser()</text></g>
+<g id="node-auth_role_guard" class="node-group" transform="translate(4313, 1960)" onclick="selectNode('auth_role_guard')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#64748b" /><text class="node-title" x="14" y="24">Staff Role Guard & Mid</text><text class="node-file" x="14" y="44">staffAuthGuard.ts</text><text class="node-tag" x="14" y="62">verifyStaffRequest()</text></g>
+<g id="node-auth_rls_policies" class="node-group" transform="translate(4648, 1960)" onclick="selectNode('auth_rls_policies')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#64748b" /><text class="node-title" x="14" y="24">PostgreSQL Row Level S</text><text class="node-file" x="14" y="44">migrations</text><text class="node-tag" x="14" y="62">public.get_user_restaura</text></g>
+<g id="node-auth_roles" class="node-group" transform="translate(4983, 1960)" onclick="selectNode('auth_roles')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#64748b" /><text class="node-title" x="14" y="24">Multi-Role Permissions</text><text class="node-file" x="14" y="44">staffAuthGuard.ts</text><text class="node-tag" x="14" y="62">hasPermission()</text></g>
+<g id="node-notif_realtime_broadcast" class="node-group" transform="translate(1568, 1060)" onclick="selectNode('notif_realtime_broadcast')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#a855f7" /><text class="node-title" x="14" y="24">Realtime Broadcast Dis</text><text class="node-file" x="14" y="44">realtime.ts</text><text class="node-tag" x="14" y="62">broadcastOrderRealtimeEv</text></g>
+<g id="node-notif_fcm_push" class="node-group" transform="translate(1925, 1060)" onclick="selectNode('notif_fcm_push')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#a855f7" /><text class="node-title" x="14" y="24">FCM / Web Push Notific</text><text class="node-file" x="14" y="44">webPush.ts</text><text class="node-tag" x="14" y="62">sendWebPushNotification(</text></g>
+<g id="node-notif_kitchen_alerts" class="node-group" transform="translate(2282, 1060)" onclick="selectNode('notif_kitchen_alerts')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#a855f7" /><text class="node-title" x="14" y="24">Kitchen Sound & Visual</text><text class="node-file" x="14" y="44">soundAlert.ts</text><text class="node-tag" x="14" y="62">playNewOrderAlert()</text></g>
+<g id="node-notif_waiter_alerts" class="node-group" transform="translate(1568, 1185)" onclick="selectNode('notif_waiter_alerts')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#a855f7" /><text class="node-title" x="14" y="24">Waiter Food-Ready Chim</text><text class="node-file" x="14" y="44">layout.tsx</text><text class="node-tag" x="14" y="62">playReadyChime()</text></g>
+<g id="node-notif_owner_alerts" class="node-group" transform="translate(1925, 1185)" onclick="selectNode('notif_owner_alerts')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#a855f7" /><text class="node-title" x="14" y="24">Owner KPI & Low-Stock </text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">checkLowStockThresholds(</text></g>
+<g id="node-offline_sqlite_queue" class="node-group" transform="translate(2778, 1060)" onclick="selectNode('offline_sqlite_queue')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#14b8a6" /><text class="node-title" x="14" y="24">SQLite Persistent Offl</text><text class="node-file" x="14" y="44">offlineSyncEngine.ts</text><text class="node-tag" x="14" y="62">enqueueOfflineItem()</text></g>
+<g id="node-offline_order_batches" class="node-group" transform="translate(3135, 1060)" onclick="selectNode('offline_order_batches')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#14b8a6" /><text class="node-title" x="14" y="24">Offline Batches & Opti</text><text class="node-file" x="14" y="44">offlineSyncEngine.ts</text><text class="node-tag" x="14" y="62">applyOptimisticUpdate()</text></g>
+<g id="node-offline_retry_engine" class="node-group" transform="translate(3492, 1060)" onclick="selectNode('offline_retry_engine')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#14b8a6" /><text class="node-title" x="14" y="24">Exponential Backoff Re</text><text class="node-file" x="14" y="44">offlineSyncEngine.ts</text><text class="node-tag" x="14" y="62">processSyncQueue()</text></g>
+<g id="node-offline_dedup" class="node-group" transform="translate(2778, 1185)" onclick="selectNode('offline_dedup')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#14b8a6" /><text class="node-title" x="14" y="24">Server Deduplication G</text><text class="node-file" x="14" y="44">offlineSyncEngine.ts</text><text class="node-tag" x="14" y="62">validateSyncPayload()</text></g>
+<g id="node-offline_sync_worker" class="node-group" transform="translate(3135, 1185)" onclick="selectNode('offline_sync_worker')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#14b8a6" /><text class="node-title" x="14" y="24">Background Sync Worker</text><text class="node-file" x="14" y="44">offlineSyncEngine.ts</text><text class="node-tag" x="14" y="62">initOfflineSyncEngine()</text></g>
+<g id="node-report_sales" class="node-group" transform="translate(1568, 1960)" onclick="selectNode('report_sales')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#6366f1" /><text class="node-title" x="14" y="24">Sales & Product Mix Re</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">exportOrdersCSV()</text></g>
+<g id="node-report_inventory" class="node-group" transform="translate(1925, 1960)" onclick="selectNode('report_inventory')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#6366f1" /><text class="node-title" x="14" y="24">Theoretical vs Actual </text><text class="node-file" x="14" y="44">inventoryEngine.ts</text><text class="node-tag" x="14" y="62">getHourlyInventoryImpact</text></g>
+<g id="node-report_staff" class="node-group" transform="translate(2282, 1960)" onclick="selectNode('report_staff')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#6366f1" /><text class="node-title" x="14" y="24">Staff Performance & Sp</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">calculateStaffMetrics()</text></g>
+<g id="node-report_revenue" class="node-group" transform="translate(1568, 2085)" onclick="selectNode('report_revenue')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#6366f1" /><text class="node-title" x="14" y="24">Tax & Daily Revenue Se</text><text class="node-file" x="14" y="44">page.tsx</text><text class="node-tag" x="14" y="62">exportAccountingCSV()</text></g>
+<g id="node-report_audit_trail" class="node-group" transform="translate(1925, 2085)" onclick="selectNode('report_audit_trail')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#6366f1" /><text class="node-title" x="14" y="24">System Audit Trail Rep</text><text class="node-file" x="14" y="44">route.ts</text><text class="node-tag" x="14" y="62">db.getAuditLogs()</text></g>
+<g id="node-audit_system_events" class="node-group" transform="translate(2778, 1960)" onclick="selectNode('audit_system_events')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#475569" /><text class="node-title" x="14" y="24">System Event Bus Logge</text><text class="node-file" x="14" y="44">systemEventLogger.ts</text><text class="node-tag" x="14" y="62">logSystemEvent()</text></g>
+<g id="node-audit_logs_table" class="node-group" transform="translate(3135, 1960)" onclick="selectNode('audit_logs_table')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#475569" /><text class="node-title" x="14" y="24">Security & Management </text><text class="node-file" x="14" y="44">auditLogger.ts</text><text class="node-tag" x="14" y="62">createAuditLog()</text></g>
+<g id="node-audit_lifecycle" class="node-group" transform="translate(3492, 1960)" onclick="selectNode('audit_lifecycle')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#475569" /><text class="node-title" x="14" y="24">Lifecycle Forensic Aud</text><text class="node-file" x="14" y="44">db.ts</text><text class="node-tag" x="14" y="62">CLEVEROPS_LIFECYCLE_AUDI</text></g>
+<g id="node-audit_error_events" class="node-group" transform="translate(2778, 2085)" onclick="selectNode('audit_error_events')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#475569" /><text class="node-title" x="14" y="24">Forensic Error Event R</text><text class="node-file" x="14" y="44">errors.ts</text><text class="node-tag" x="14" y="62">handleApiError()</text></g>
+<g id="node-infra_nextjs" class="node-group" transform="translate(377, 2860)" onclick="selectNode('infra_nextjs')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#2563eb" /><text class="node-title" x="14" y="24">Next.js 14 App Router </text><text class="node-file" x="14" y="44">layout.tsx</text><text class="node-tag" x="14" y="62">RootLayout()</text></g>
+<g id="node-infra_api_routes" class="node-group" transform="translate(1111, 2860)" onclick="selectNode('infra_api_routes')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#2563eb" /><text class="node-title" x="14" y="24">Next.js Serverless API</text><text class="node-file" x="14" y="44">*</text><text class="node-tag" x="14" y="62">Route Handlers (GET, POS</text></g>
+<g id="node-infra_supabase_client" class="node-group" transform="translate(1846, 2860)" onclick="selectNode('infra_supabase_client')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#2563eb" /><text class="node-title" x="14" y="24">Supabase Multi-Role Cl</text><text class="node-file" x="14" y="44">supabase.ts</text><text class="node-tag" x="14" y="62">createClient()</text></g>
+<g id="node-infra_postgres_db" class="node-group" transform="translate(2580, 2860)" onclick="selectNode('infra_postgres_db')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#2563eb" /><text class="node-title" x="14" y="24">PostgreSQL Relational </text><text class="node-file" x="14" y="44">*</text><text class="node-tag" x="14" y="62">PostgreSQL 15 Core Engin</text></g>
+<g id="node-infra_realtime_ws" class="node-group" transform="translate(3314, 2860)" onclick="selectNode('infra_realtime_ws')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#2563eb" /><text class="node-title" x="14" y="24">Supabase Realtime WebS</text><text class="node-file" x="14" y="44">realtime.ts</text><text class="node-tag" x="14" y="62">supabase.channel()</text></g>
+<g id="node-infra_edge_functions" class="node-group" transform="translate(4049, 2860)" onclick="selectNode('infra_edge_functions')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#2563eb" /><text class="node-title" x="14" y="24">Razorpay Webhooks & Ed</text><text class="node-file" x="14" y="44">route.ts</text><text class="node-tag" x="14" y="62">POST(req)</text></g>
+<g id="node-infra_storage" class="node-group" transform="translate(4783, 2860)" onclick="selectNode('infra_storage')"><rect class="node-rect" width="220" height="76" /><rect class="node-type-stripe" width="6" height="76" fill="#2563eb" /><text class="node-title" x="14" y="24">Supabase S3 Object Sto</text><text class="node-file" x="14" y="44">route.ts</text><text class="node-tag" x="14" y="62">supabase.storage.from("r</text></g></g>
+        <circle id="flow-packet" class="flow-particle" r="9" cx="-100" cy="-100" style="display:none;" />
+      </svg>
+      <div id="inspector" class="inspector-drawer">
+        <div class="inspector-header">
+          <div class="inspector-title" id="insp-title">Connection Details</div>
+          <button class="icon-btn" onclick="closeInspector()">✕</button>
+        </div>
+        <div class="inspector-grid" id="insp-content"></div>
+      </div>
+      <div class="mini-map-box">
+        <svg id="minimap-svg" viewBox="0 0 5400 4000">
+<rect x="80" y="100" width="960" height="820" fill="#3b82f6" opacity="0.3" />
+<rect x="1100" y="100" width="1300" height="820" fill="#f59e0b" opacity="0.3" />
+<rect x="2460" y="100" width="1320" height="820" fill="#ef4444" opacity="0.3" />
+<rect x="3840" y="100" width="1460" height="820" fill="#8b5cf6" opacity="0.3" />
+<rect x="80" y="1880" width="1320" height="840" fill="#06b6d4" opacity="0.3" />
+<rect x="80" y="980" width="1320" height="840" fill="#10b981" opacity="0.3" />
+<rect x="3880" y="980" width="1420" height="840" fill="#ec4899" opacity="0.3" />
+<rect x="3880" y="1880" width="1420" height="840" fill="#64748b" opacity="0.3" />
+<rect x="1460" y="980" width="1150" height="840" fill="#a855f7" opacity="0.3" />
+<rect x="2670" y="980" width="1150" height="840" fill="#14b8a6" opacity="0.3" />
+<rect x="1460" y="1880" width="1150" height="840" fill="#6366f1" opacity="0.3" />
+<rect x="2670" y="1880" width="1150" height="840" fill="#475569" opacity="0.3" />
+<rect x="80" y="2780" width="5220" height="480" fill="#2563eb" opacity="0.3" />          <rect id="minimap-view" class="minimap-view-rect" x="0" y="0" width="1200" height="800" />
+        </svg>
+      </div>
+    </main>
+    <aside class="side-panel-right" id="panel-right">
+      <div class="panel-header">
+        Live Event Timeline
+        <span style="font-size:10px;color:var(--text-muted);cursor:pointer;" onclick="clearTimeline()">Clear</span>
+      </div>
+      <div class="timeline-list" id="timeline-list">
+        <div class="timeline-item" onclick="focusNode('order_new')">
+          <div class="timeline-time">12:41:02 IST</div>
+          <div class="timeline-title">New Order Received</div>
+          <div class="timeline-detail">Table Maharaja (T-12) • 8 ACTIVE Reservations</div>
+        </div>
+        <div class="timeline-item" onclick="focusNode('order_accepted')">
+          <div class="timeline-time">12:42:15 IST</div>
+          <div class="timeline-title">KDS Order Accepted</div>
+          <div class="timeline-detail">Chef accepted_at timestamp recorded</div>
+        </div>
+        <div class="timeline-item" onclick="focusNode('inv_consumption')">
+          <div class="timeline-time">12:43:00 IST</div>
+          <div class="timeline-title">Inventory Consumed</div>
+          <div class="timeline-detail">Exact-Once Deduction (8 ledger items)</div>
+        </div>
+        <div class="timeline-item" onclick="focusNode('order_ready')">
+          <div class="timeline-time">12:47:30 IST</div>
+          <div class="timeline-title">Order Ready</div>
+          <div class="timeline-detail">Pass Chime Fired • Waiter Pick-up Alert</div>
+        </div>
+        <div class="timeline-item" onclick="focusNode('order_served')">
+          <div class="timeline-time">12:48:15 IST</div>
+          <div class="timeline-title">Food Served</div>
+          <div class="timeline-detail">Table Maharaja • Zero additional stock deduct</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <script>
+    const NODES = [{"id":"cust_qr_scan","label":"QR Scan & Table Detect","module":"customer_layer","type":"frontend","filePath":"src/app/(customer)/menu/[...slug]/page.tsx","functionName":"MenuPage()","apiRoute":"/menu/[slug]","databaseTable":"tables","trigger":"Mobile Camera QR Scan","realtimeChannel":"customer_order_tracking_*","description":"Customer scans dynamic table QR code; parses restaurant slug and table ID from URL query."},{"id":"cust_menu","label":"Interactive Digital Menu","module":"customer_layer","type":"frontend","filePath":"src/components/customer/CustomerMenu.tsx","functionName":"CustomerMenu()","apiRoute":"/api/customer/menu","databaseTable":"categories, menu_items","trigger":"Menu browse / Category select","realtimeChannel":"cust_menu_stock_${restaurantId}","description":"Displays menu items categorized with live stock badges, veg/non-veg tags, and portion prices."},{"id":"cust_cart","label":"Client Cart State","module":"customer_layer","type":"frontend","filePath":"src/components/customer/CustomerMenu.tsx","functionName":"CartDrawer()","apiRoute":"N/A (Client State)","databaseTable":"localStorage","trigger":"Add item click","realtimeChannel":"N/A","description":"Stores selected dishes, portion variants (Half/Full), quantities, and special kitchen notes."},{"id":"cust_special_instructions","label":"Special Instructions","module":"customer_layer","type":"frontend","filePath":"src/components/customer/CustomerMenu.tsx","functionName":"SpecialInstructionsModal()","apiRoute":"N/A","databaseTable":"order_items (notes)","trigger":"Custom note entry","realtimeChannel":"N/A","description":"Collects dish-level preparation instructions (e.g., less spicy, no onion) saved into order items."},{"id":"cust_checkout","label":"Checkout & Order Review","module":"customer_layer","type":"frontend","filePath":"src/app/checkout/page.tsx","functionName":"CheckoutPage()","apiRoute":"N/A","databaseTable":"tables","trigger":"Proceed to Checkout","realtimeChannel":"N/A","description":"Displays itemized bill preview, GST breakdown, discount codes, and order submission button."},{"id":"cust_order_placement","label":"Order Placement Engine","module":"customer_layer","type":"backend","filePath":"src/lib/db.ts","functionName":"db.createOrder()","apiRoute":"/api/customer/orders","databaseTable":"orders, order_batches, order_items","trigger":"Customer clicks Place Order","realtimeChannel":"live_orders_${restaurantId}, kds_${restaurantId}","description":"Inserts order header and initial batch in status \"new\", creates item rows, holds stock reservations."},{"id":"order_new","label":"Batch Status: New","module":"order_engine","type":"database","filePath":"src/lib/db.ts","functionName":"db.createOrder()","apiRoute":"/api/customer/orders","databaseTable":"order_batches, orders","trigger":"Order insert trigger","realtimeChannel":"live_orders_${restaurantId}","description":"Initial state of an order batch upon placement. Active stock reservations held; 0 consumption."},{"id":"order_accepted","label":"Batch Status: Accepted","module":"order_engine","type":"backend","filePath":"src/lib/db.ts","functionName":"db.updateBatchStatus()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (accepted_at)","trigger":"Kitchen/Staff accept tap","realtimeChannel":"order-status-updated","description":"Batch acknowledged by kitchen; records accepted_at timestamp, dispatches realtime broadcast."},{"id":"order_preparing","label":"Batch Status: Preparing","module":"order_engine","type":"backend","filePath":"src/lib/db.ts","functionName":"db.updateBatchStatus()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches, inventory_transactions","trigger":"Kitchen marks preparing","realtimeChannel":"order-status-updated","description":"Cooking started. Triggers exact-once inventory consumption: reservations flip ACTIVE -> CONSUMED."},{"id":"order_ready","label":"Batch Status: Ready","module":"order_engine","type":"backend","filePath":"src/lib/db.ts","functionName":"db.updateBatchStatus()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (ready_at)","trigger":"Kitchen marks ready","realtimeChannel":"order-status-updated, waiter-alert","description":"Food prepared and ready on the pass. Records ready_at; sends chime and notification to waiters."},{"id":"order_served","label":"Batch Status: Served","module":"order_engine","type":"backend","filePath":"src/lib/db.ts","functionName":"db.updateBatchStatus()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (served_at)","trigger":"Waiter marks served","realtimeChannel":"order-status-updated","description":"Delivered to customer table. Idempotent check ensures zero extra stock deduction."},{"id":"order_cancel","label":"Cancel & Disposition","module":"order_engine","type":"backend","filePath":"src/lib/db.ts","functionName":"cancelOrderBatch()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches, inventory_transactions","trigger":"Staff cancel order","realtimeChannel":"order-status-updated","description":"Cancels batch. Releases reservations if unstarted, or records food disposition/waste if prepared."},{"id":"order_reject","label":"Reject Order Branch","module":"order_engine","type":"backend","filePath":"src/lib/db.ts","functionName":"rejectBatch()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (rejected)","trigger":"Kitchen rejects batch","realtimeChannel":"order-status-updated","description":"Kitchen rejects order with reason (e.g. out of stock); releases active reservations immediately."},{"id":"order_recall","label":"Batch Status Recall","module":"order_engine","type":"backend","filePath":"src/lib/db.ts","functionName":"db.recallBatchStatus()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","trigger":"Staff accidental tap recall","realtimeChannel":"order-status-updated","description":"Reverts mistaken status transitions while strictly preserving inventory transaction safety."},{"id":"order_idempotency","label":"Idempotency Protection","module":"order_engine","type":"security","filePath":"src/lib/inventoryEngine.ts","functionName":"consumeReservedInventoryForOrderBatch()","apiRoute":"Internal Engine Guard","databaseTable":"inventory_transactions (idempotency_key)","trigger":"Rapid double taps / network retries","realtimeChannel":"N/A","description":"Deterministic key ORDER_CONSUMPTION_<orderId>_<batchId> guarantees stock is consumed exactly once."},{"id":"order_dup_protect","label":"Duplicate Request Deduplication","module":"order_engine","type":"security","filePath":"src/lib/offlineSyncEngine.ts","functionName":"processSyncQueue()","apiRoute":"/api/staff/update-order-status","databaseTable":"sync_queue (payload_hash)","trigger":"Offline reconnect queue drain","realtimeChannel":"N/A","description":"Computes SHA/payload_hash and inspects seenKeys to prevent re-submitting synchronized actions."},{"id":"kds_dashboard","label":"KDS Live Station Screen","module":"kitchen_kds","type":"frontend","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","functionName":"KitchenDisplaySystem()","apiRoute":"N/A (Dashboard Route)","databaseTable":"order_batches, order_items","trigger":"Chef views orders","realtimeChannel":"kds_${restaurantId}","description":"Visual station board categorizing batches into New, Preparing, and Ready columns."},{"id":"kds_accept","label":"KDS Accept Action","module":"kitchen_kds","type":"frontend","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","functionName":"handleBatchStatusChange(\"accepted\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","trigger":"Chef taps Accept","realtimeChannel":"order-status-updated","description":"Kitchen confirms order receipt. Dispatches status update to server via authenticated staff API."},{"id":"kds_preparing","label":"KDS Start Prep Action","module":"kitchen_kds","type":"frontend","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","functionName":"handleBatchStatusChange(\"preparing\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","trigger":"Chef taps Start Preparing","realtimeChannel":"order-status-updated","description":"Puts ticket into cooking mode, invoking inventory deduction engine on the server."},{"id":"kds_ready","label":"KDS Mark Ready Action","module":"kitchen_kds","type":"frontend","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","functionName":"handleBatchStatusChange(\"ready\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","trigger":"Chef taps Mark Ready","realtimeChannel":"order-status-updated","description":"Signals cooking complete. Moves ticket to ready column and triggers waiter dispatch alert."},{"id":"kds_reject","label":"KDS Reject Ticket Action","module":"kitchen_kds","type":"frontend","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","functionName":"handleRejectBatch()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","trigger":"Chef taps Reject Ticket","realtimeChannel":"order-status-updated","description":"Prompts chef for rejection reason, marks batch rejected, and releases stock reservations."},{"id":"kds_audio_alert","label":"Kitchen Chime & Bell Audio","module":"kitchen_kds","type":"frontend","filePath":"src/lib/soundAlert.ts","functionName":"playNewOrderAlert()","apiRoute":"Web Audio API","databaseTable":"N/A","trigger":"Realtime new-order event","realtimeChannel":"kds_${restaurantId}","description":"Synthesizes audio bell tone when new order arrives to alert busy kitchen staff immediately."},{"id":"kds_realtime_listener","label":"KDS Realtime WebSocket Channel","module":"kitchen_kds","type":"messagebus","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","functionName":"supabase.channel(`kds_${restaurantId}`)","apiRoute":"Supabase Realtime v2","databaseTable":"order_batches (replication)","trigger":"Realtime Postgres event","realtimeChannel":"kds_${restaurantId}","description":"Listens for order_batches INSERT and UPDATE events to refresh KDS board with sub-100ms latency."},{"id":"waiter_call","label":"Customer Waiter Call","module":"waiter_system","type":"frontend","filePath":"src/components/customer/CustomerMenu.tsx","functionName":"db.createCustomerRequest()","apiRoute":"Direct DB/API","databaseTable":"customer_requests","trigger":"Customer taps Call Waiter","realtimeChannel":"customer_request_tracking_*","description":"Creates pending customer call ticket associated with table; alerts floor staff."},{"id":"waiter_pickup","label":"Order Pickup Alert","module":"waiter_system","type":"frontend","filePath":"src/app/(dashboard)/dashboard/tables/page.tsx","functionName":"onBatchReadyAlert()","apiRoute":"N/A","databaseTable":"order_batches","trigger":"order-status-updated (ready)","realtimeChannel":"tables_${restaurantId}","description":"Waiter UI shows glowing badge on table cards when food is ready on the pass."},{"id":"waiter_serve","label":"Serve to Table Action","module":"waiter_system","type":"frontend","filePath":"src/app/(dashboard)/dashboard/orders/page.tsx","functionName":"db.updateBatchStatus(\"served\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","trigger":"Waiter marks served","realtimeChannel":"order-status-updated","description":"Waiter confirms plate delivered to customer table; table order badge updates."},{"id":"waiter_table_status","label":"Table Floor Status Management","module":"waiter_system","type":"frontend","filePath":"src/app/(dashboard)/dashboard/tables/page.tsx","functionName":"db.toggleTableOccupancy()","apiRoute":"Direct DB / API","databaseTable":"tables","trigger":"Customer seat / Table clear","realtimeChannel":"tables_${restaurantId}","description":"Manages dynamic table states: available, occupied, reserved, or dirty with live floor plan map."},{"id":"owner_overview","label":"Executive Overview","module":"owner_dashboard","type":"frontend","filePath":"src/app/(dashboard)/dashboard/page.tsx","functionName":"DashboardOverview()","apiRoute":"/api/restaurant/stats","databaseTable":"orders, restaurants, tables","trigger":"Owner login / view","realtimeChannel":"overview_dashboard_${restaurantId}","description":"High-level executive metrics: today revenue, active orders, table occupancy, critical alerts."},{"id":"owner_live_orders","label":"Live Orders Management","module":"owner_dashboard","type":"frontend","filePath":"src/app/(dashboard)/dashboard/orders/page.tsx","functionName":"OrdersPage()","apiRoute":"/api/staff/update-order-status","databaseTable":"orders, order_batches","trigger":"Staff order oversight","realtimeChannel":"live_orders_${restaurantId}","description":"Full oversight of all active restaurant orders with quick status update, cancel, and bill buttons."},{"id":"owner_analytics","label":"Sales Trends & Analytics","module":"owner_dashboard","type":"frontend","filePath":"src/app/(dashboard)/dashboard/analytics/page.tsx","functionName":"AnalyticsPage()","apiRoute":"/api/admin/analytics","databaseTable":"orders, order_items","trigger":"Analytics view","realtimeChannel":"N/A","description":"Charts historical sales, popular dishes, peak order hours, and revenue trends over time."},{"id":"owner_reports","label":"Financial & Accounting Reports","module":"owner_dashboard","type":"frontend","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","functionName":"ReportsPage()","apiRoute":"N/A (Client computation & export)","databaseTable":"orders, order_items, payments","trigger":"CSV / PDF Export Click","realtimeChannel":"reports_${restaurantId}","description":"Generates GST accounting, daily sales ledger, payment mode breakdown, and itemized CSV/PDF exports."},{"id":"owner_staff_mgmt","label":"Staff Roles & PINs","module":"owner_dashboard","type":"frontend","filePath":"src/app/(dashboard)/dashboard/staff/page.tsx","functionName":"StaffManagementPage()","apiRoute":"/api/staff/list, /api/staff/create-invite","databaseTable":"profiles, table_assignments","trigger":"Invite staff / update role","realtimeChannel":"web_staff_realtime_${restaurant.id}","description":"Manages staff profiles (Manager, Kitchen, Waiter, Cashier), assigned tables, and PIN passwords."},{"id":"owner_revenue","label":"Revenue & Tender Settlement","module":"owner_dashboard","type":"backend","filePath":"src/lib/billingEngine.ts","functionName":"calculateBilling()","apiRoute":"N/A","databaseTable":"orders (total_amount, paid_amount)","trigger":"Order settlement","realtimeChannel":"N/A","description":"Tracks cash in drawer, UPI settlements, card transactions, and net restaurant profits."},{"id":"owner_billing","label":"SaaS Plan & Invoicing","module":"owner_dashboard","type":"frontend","filePath":"src/app/(dashboard)/dashboard/billing/page.tsx","functionName":"BillingPage()","apiRoute":"/api/razorpay/create-order","databaseTable":"restaurants (subscription_plan)","trigger":"Subscription upgrade / renewal","realtimeChannel":"realtime_pricing_plans_dashboard_layout","description":"Manages restaurant CleverOps subscription (Starter, Pro, Premium) and billing cycle."},{"id":"inv_stock_lookup","label":"Available Stock Lookup","module":"inventory_engine","type":"database","filePath":"src/lib/inventoryEngine.ts","functionName":"calculateDishStockAvailability()","apiRoute":"Internal Engine","databaseTable":"inventory_items","trigger":"Menu load / Order validation","realtimeChannel":"inventory_${restaurantId}","description":"Queries inventory_items current_stock and deducts ACTIVE reservations to return true available stock."},{"id":"inv_recipe_lookup","label":"Recipe & Ingredient Mapping","module":"inventory_engine","type":"database","filePath":"src/lib/inventoryEngine.ts","functionName":"findMatchingRecipe()","apiRoute":"Internal Engine","databaseTable":"inventory_recipes, inventory_recipe_ingredients","trigger":"Order batch item processing","realtimeChannel":"N/A","description":"Looks up BOM recipe by menu_item_id and variant_id, retrieving raw ingredients and units."},{"id":"inv_scaling","label":"Ingredient Scaling & Multipliers","module":"inventory_engine","type":"backend","filePath":"src/lib/inventoryEngine.ts","functionName":"getPortionMultiplier()","apiRoute":"Internal Engine","databaseTable":"inventory_recipe_ingredients","trigger":"Half/Full/Custom variant order","realtimeChannel":"N/A","description":"Scales raw ingredient quantities: Half = 0.5x, Full = 1.0x, Custom portion scaling."},{"id":"inv_reservation","label":"Active Stock Reservation","module":"inventory_engine","type":"database","filePath":"src/lib/inventoryEngine.ts","functionName":"reserveInventoryForOrderBatch()","apiRoute":"Internal Engine","databaseTable":"inventory_reservations (status: ACTIVE)","trigger":"Order placement (status: new)","realtimeChannel":"N/A","description":"Creates temporary reservations on raw stock; prevents overselling without premature stock write-off."},{"id":"inv_consumption","label":"Exact-Once Stock Consumption","module":"inventory_engine","type":"database","filePath":"src/lib/inventoryEngine.ts","functionName":"consumeReservedInventoryForOrderBatch()","apiRoute":"Internal Engine","databaseTable":"inventory_reservations, inventory_transactions","trigger":"Batch enters preparing","realtimeChannel":"inventory_${restaurantId}","description":"Flips reservations to CONSUMED; creates ORDER_CONSUMPTION ledger rows; updates current_stock."},{"id":"inv_reversal","label":"Stock Restoration & Cancellation","module":"inventory_engine","type":"backend","filePath":"src/lib/inventoryEngine.ts","functionName":"restoreInventoryForOrderBatch()","apiRoute":"Internal Engine","databaseTable":"inventory_transactions (ORDER_RESTORE)","trigger":"Order cancelled / rejected","realtimeChannel":"inventory_${restaurantId}","description":"Restores stock back into inventory if order cancelled prior to waste, logging RESTORATION transaction."},{"id":"inv_restock","label":"Restock & Purchase Entry","module":"inventory_engine","type":"backend","filePath":"src/lib/inventoryEngine.ts","functionName":"recordRestockPurchase()","apiRoute":"/api/inventory/restock","databaseTable":"inventory_items, inventory_transactions","trigger":"Stock purchase added","realtimeChannel":"inventory_${restaurantId}","description":"Increases raw item stock; calculates Weighted Average Cost (WAC) per unit; records RESTOCK ledger row."},{"id":"inv_audit","label":"Stock Discrepancy & Variance Audit","module":"inventory_engine","type":"backend","filePath":"src/lib/inventoryEngine.ts","functionName":"healUnconsumedActiveReservations()","apiRoute":"Internal Engine / System cron","databaseTable":"inventory_reservations, system_events","trigger":"Stale reservation audit","realtimeChannel":"N/A","description":"Self-healing engine cleans orphan reservations and audits physical vs theoretical stock variance."},{"id":"bill_generation","label":"Bill Generation Engine","module":"billing_system","type":"backend","filePath":"src/lib/billingEngine.ts","functionName":"calculateBilling()","apiRoute":"/api/billing/generate","databaseTable":"orders (subtotal, total_amount)","trigger":"Staff taps Generate Bill","realtimeChannel":"N/A","description":"Computes billable subtotal, discounts, taxable base, custom charges, and grand total."},{"id":"bill_gst","label":"GST & Tax Computation Engine","module":"billing_system","type":"backend","filePath":"src/lib/tax.ts","functionName":"calculateOrderTax()","apiRoute":"Internal Engine","databaseTable":"restaurants (settings)","trigger":"Bill computation","realtimeChannel":"N/A","description":"Calculates Indian GST splits: CGST (2.5%) + SGST (2.5%) = 5.0% or IGST with paisa precision rounding."},{"id":"bill_payment","label":"Multi-Tender Payment Processing","module":"billing_system","type":"frontend","filePath":"src/lib/db.ts","functionName":"db.updateOrderPaymentStatus()","apiRoute":"/api/payments/verify, /api/razorpay/verify-payment","databaseTable":"orders (payment_status, payment_mode)","trigger":"Cash, UPI QR, or Card Payment","realtimeChannel":"payment-updated","description":"Processes payment settlement: cash drawer, UPI dynamic QR, Razorpay webhooks, or card EDC machine."},{"id":"bill_refund","label":"Payment Refund Engine","module":"billing_system","type":"backend","filePath":"src/app/api/auth/onboarding-provision/route.ts","functionName":"processRefund()","apiRoute":"/api/razorpay/refund","databaseTable":"orders, audit_logs","trigger":"Owner initiates refund","realtimeChannel":"N/A","description":"Issues electronic refund via Razorpay API; logs transaction in audit trail; marks order refunded."},{"id":"bill_settlement","label":"Table Session Settlement & Close","module":"billing_system","type":"backend","filePath":"src/lib/db.ts","functionName":"db.checkAndReleaseTableOccupancy()","apiRoute":"/api/staff/settle-table","databaseTable":"tables (status: available), orders (status: completed)","trigger":"Bill paid & table cleared","realtimeChannel":"tables_${restaurantId}, live_orders_${restaurantId}","description":"Completes order session; frees table on floor plan to Available status for next customer."},{"id":"auth_supabase","label":"Supabase Auth & Session Engine","module":"auth_security","type":"security","filePath":"src/lib/supabase.ts","functionName":"supabase.auth.getUser()","apiRoute":"/auth/callback","databaseTable":"auth.users, profiles","trigger":"User sign in / session check","realtimeChannel":"N/A","description":"Issues JWT bearer tokens, maintains refresh tokens, securely authenticates user credentials."},{"id":"auth_role_guard","label":"Staff Role Guard & Middleware","module":"auth_security","type":"security","filePath":"src/lib/staffAuthGuard.ts","functionName":"verifyStaffRequest()","apiRoute":"Next.js API Middleware","databaseTable":"profiles (role, restaurant_id)","trigger":"API request interceptor","realtimeChannel":"N/A","description":"Protects backend routes: enforces allowed roles (kitchen, waiter, owner, super_admin)."},{"id":"auth_rls_policies","label":"PostgreSQL Row Level Security (RLS)","module":"auth_security","type":"security","filePath":"supabase/migrations","functionName":"public.get_user_restaurant_id()","apiRoute":"PostgreSQL RLS Engine","databaseTable":"All tables (orders, order_batches, inventory_*)","trigger":"Database SQL query","realtimeChannel":"N/A","description":"Strict multitenancy isolation: prevents any tenant from viewing or mutating another restaurant data."},{"id":"auth_roles","label":"Multi-Role Permissions (RBAC)","module":"auth_security","type":"security","filePath":"src/lib/staffAuthGuard.ts","functionName":"hasPermission()","apiRoute":"RBAC Policy Matrix","databaseTable":"profiles (role)","trigger":"Action authorization","realtimeChannel":"N/A","description":"Role-based access matrix segregating Owner, Manager, Kitchen, Waiter, Cashier, and Super Admin."},{"id":"notif_realtime_broadcast","label":"Realtime Broadcast Dispatcher","module":"notifications_service","type":"messagebus","filePath":"src/lib/realtime.ts","functionName":"broadcastOrderRealtimeEvent()","apiRoute":"Supabase Realtime Broadcast","databaseTable":"N/A","trigger":"Lifecycle status change","realtimeChannel":"Multiple target channels","description":"Parallel broadcast emitter fanning out order updates to KDS, Live Orders, Waiter, and Customer channels."},{"id":"notif_fcm_push","label":"FCM / Web Push Notification Engine","module":"notifications_service","type":"messagebus","filePath":"src/lib/webPush.ts","functionName":"sendWebPushNotification()","apiRoute":"/api/push/dispatch","databaseTable":"staff_profiles (push_token)","trigger":"Urgent order event","realtimeChannel":"Web Push Service","description":"Dispatches background push notifications to staff Android mobile devices and desktop browsers."},{"id":"notif_kitchen_alerts","label":"Kitchen Sound & Visual Alert","module":"notifications_service","type":"frontend","filePath":"src/lib/soundAlert.ts","functionName":"playNewOrderAlert()","apiRoute":"Web Audio synthesizer","databaseTable":"N/A","trigger":"new-order broadcast","realtimeChannel":"kds_${restaurantId}","description":"Triggers visual flash banner and audio chime on kitchen tablet displays when new batch arrives."},{"id":"notif_waiter_alerts","label":"Waiter Food-Ready Chime","module":"notifications_service","type":"frontend","filePath":"src/app/(dashboard)/layout.tsx","functionName":"playReadyChime()","apiRoute":"Audio notification","databaseTable":"N/A","trigger":"order_ready system event","realtimeChannel":"global_notifications_${restaurantId}","description":"Plays distinct ready chime on waiter phones/tablets alerting them that hot food is waiting for pickup."},{"id":"notif_owner_alerts","label":"Owner KPI & Low-Stock Alerts","module":"notifications_service","type":"frontend","filePath":"src/app/(dashboard)/dashboard/page.tsx","functionName":"checkLowStockThresholds()","apiRoute":"Client alert evaluator","databaseTable":"inventory_items (min_stock_level)","trigger":"Stock falls below minimum","realtimeChannel":"inventory_${restaurantId}","description":"Presents high-priority amber banner on owner dashboard when ingredients fall below reorder thresholds."},{"id":"offline_sqlite_queue","label":"SQLite Persistent Offline Queue","module":"offline_engine","type":"database","filePath":"src/lib/offlineSyncEngine.ts","functionName":"enqueueOfflineItem()","apiRoute":"Local SQLite / IndexedDB","databaseTable":"sync_queue (SQLite)","trigger":"Action taken while offline","realtimeChannel":"N/A","description":"Guarantees zero lost actions: buffers order punches and status updates in persistent local database."},{"id":"offline_order_batches","label":"Offline Batches & Optimistic UI","module":"offline_engine","type":"frontend","filePath":"src/lib/offlineSyncEngine.ts","functionName":"applyOptimisticUpdate()","apiRoute":"Local Cache","databaseTable":"pending_orders, pending_updates","trigger":"Staff tap while offline","realtimeChannel":"N/A","description":"Instantly updates local UI so waiters and chefs can continue service seamlessly without network lag."},{"id":"offline_retry_engine","label":"Exponential Backoff Retry Engine","module":"offline_engine","type":"backend","filePath":"src/lib/offlineSyncEngine.ts","functionName":"processSyncQueue()","apiRoute":"/api/staff/update-order-status","databaseTable":"sync_queue (retry_count)","trigger":"Network connection detected","realtimeChannel":"N/A","description":"Drains offline queue sequentially with exponential backoff and jitter to prevent thundering herd."},{"id":"offline_dedup","label":"Server Deduplication Guard","module":"offline_engine","type":"security","filePath":"src/lib/offlineSyncEngine.ts","functionName":"validateSyncPayload()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (id check)","trigger":"Offline queue drain replay","realtimeChannel":"N/A","description":"Uses existing order ID or batch ID to ensure replayed offline items never create duplicate records."},{"id":"offline_sync_worker","label":"Background Sync Worker","module":"offline_engine","type":"backend","filePath":"src/lib/offlineSyncEngine.ts","functionName":"initOfflineSyncEngine()","apiRoute":"Window online listener","databaseTable":"N/A","trigger":"navigator.onLine event","realtimeChannel":"N/A","description":"Hooks browser and Electron network status; triggers sync cycle automatically when internet returns."},{"id":"report_sales","label":"Sales & Product Mix Report","module":"reports_analytics","type":"frontend","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","functionName":"exportOrdersCSV()","apiRoute":"CSV Exporter","databaseTable":"orders, order_items","trigger":"Download Orders CSV","realtimeChannel":"N/A","description":"Exports detailed order history, item quantities sold, category totals, and payment breakdowns."},{"id":"report_inventory","label":"Theoretical vs Actual Inventory Report","module":"reports_analytics","type":"backend","filePath":"src/lib/inventoryEngine.ts","functionName":"getHourlyInventoryImpactReport()","apiRoute":"Internal Engine","databaseTable":"inventory_transactions, inventory_items","trigger":"Inventory Report view","realtimeChannel":"reports_${restaurantId}","description":"Analyzes recipe consumption rates, identifies prep station waste, and reports raw ingredient depletion."},{"id":"report_staff","label":"Staff Performance & Speed of Service","module":"reports_analytics","type":"frontend","filePath":"src/app/(dashboard)/dashboard/staff/page.tsx","functionName":"calculateStaffMetrics()","apiRoute":"Staff Reporting View","databaseTable":"order_batches, profiles","trigger":"Staff report tab view","realtimeChannel":"N/A","description":"Measures average prep duration (accepted -> ready) and waiter table turnaround efficiency."},{"id":"report_revenue","label":"Tax & Daily Revenue Settlement Report","module":"reports_analytics","type":"frontend","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","functionName":"exportAccountingCSV()","apiRoute":"CSV Exporter","databaseTable":"orders, payments","trigger":"Download Accounting CSV","realtimeChannel":"N/A","description":"Computes CGST, SGST, Net Sales, and Gross Tender breakdown formatted for chartered accountant filing."},{"id":"report_audit_trail","label":"System Audit Trail Report","module":"reports_analytics","type":"frontend","filePath":"src/app/api/restaurant/audit-logs/route.ts","functionName":"db.getAuditLogs()","apiRoute":"/api/restaurant/audit-logs","databaseTable":"audit_logs","trigger":"Audit log table query","realtimeChannel":"N/A","description":"Searchable log of all managerial modifications, menu price alterations, and security events."},{"id":"audit_system_events","label":"System Event Bus Logger","module":"audit_system","type":"backend","filePath":"src/lib/systemEventLogger.ts","functionName":"logSystemEvent()","apiRoute":"/api/system-events","databaseTable":"system_events","trigger":"Fire-and-forget lifecycle event","realtimeChannel":"founder_events_${restaurantId}","description":"High-throughput immutable event bus recording user, order, and device actions across the SaaS."},{"id":"audit_logs_table","label":"Security & Management Audit Log","module":"audit_system","type":"database","filePath":"src/lib/auditLogger.ts","functionName":"createAuditLog()","apiRoute":"/api/admin/audit-logs","databaseTable":"audit_logs","trigger":"Owner/Admin action","realtimeChannel":"N/A","description":"Records critical administrative actions (staff deletion, price edits, factory resets, impersonations)."},{"id":"audit_lifecycle","label":"Lifecycle Forensic Audit Logger","module":"audit_system","type":"backend","filePath":"src/lib/db.ts","functionName":"CLEVEROPS_LIFECYCLE_AUDIT","apiRoute":"Console & Database logger","databaseTable":"system_events","trigger":"Batch transition execution","realtimeChannel":"N/A","description":"Dumps JSON structured proof on every status change: oldStatus, newStatus, reservationFound, transactionIds."},{"id":"audit_error_events","label":"Forensic Error Event Recorder","module":"audit_system","type":"backend","filePath":"src/lib/errors.ts","functionName":"handleApiError()","apiRoute":"All Next.js API Routes","databaseTable":"system_events (metadata: error)","trigger":"Uncaught exception / API error","realtimeChannel":"N/A","description":"Captures stack trace, request body, and tenant context when unexpected runtime failures occur."},{"id":"infra_nextjs","label":"Next.js 14 App Router Framework","module":"infrastructure_layer","type":"frontend","filePath":"src/app/layout.tsx","functionName":"RootLayout()","apiRoute":"Server & Client Hybrid","databaseTable":"N/A","trigger":"HTTP request to application","realtimeChannel":"N/A","description":"Hosts customer QR web app, PWA service workers, and responsive staff dashboards."},{"id":"infra_api_routes","label":"Next.js Serverless API Routes","module":"infrastructure_layer","type":"backend","filePath":"src/app/api/*","functionName":"Route Handlers (GET, POST, PUT)","apiRoute":"48+ Serverless Endpoints","databaseTable":"Postgres (via Supabase SDK)","trigger":"REST API invocation","realtimeChannel":"N/A","description":"Serverless backend API handling order lifecycle, staff auth guards, payments, and system events."},{"id":"infra_supabase_client","label":"Supabase Multi-Role Client Pool","module":"infrastructure_layer","type":"cloud","filePath":"src/lib/supabase.ts","functionName":"createClient()","apiRoute":"Supabase JS SDK","databaseTable":"PostgreSQL Connection Pool","trigger":"Database operations","realtimeChannel":"PostgREST / Realtime","description":"Manages anon client for public customer reads and service_role admin client for secure server writes."},{"id":"infra_postgres_db","label":"PostgreSQL Relational Database","module":"infrastructure_layer","type":"database","filePath":"supabase/migrations/*","functionName":"PostgreSQL 15 Core Engine","apiRoute":"PostgREST Direct Protocol","databaseTable":"22 Core Tables (orders, inventory_*, etc.)","trigger":"Foreign keys, Constraints, RLS","realtimeChannel":"WAL logical replication","description":"ACID transactional relational store powering all tenants, recipes, inventory ledgers, and orders."},{"id":"infra_realtime_ws","label":"Supabase Realtime WebSocket Hub","module":"infrastructure_layer","type":"messagebus","filePath":"src/lib/realtime.ts","functionName":"supabase.channel()","apiRoute":"WebSocket (WSS)","databaseTable":"WAL Replication & Broadcasts","trigger":"Database change / broadcast dispatch","realtimeChannel":"10+ Tenant-Scoped Channels","description":"Sub-second publish-subscribe cluster synchronizing kitchen, waiter, and customer clients worldwide."},{"id":"infra_edge_functions","label":"Razorpay Webhooks & Edge Functions","module":"infrastructure_layer","type":"backend","filePath":"src/app/api/webhooks/razorpay/route.ts","functionName":"POST(req)","apiRoute":"/api/webhooks/razorpay","databaseTable":"orders, payments","trigger":"External Payment Webhook","realtimeChannel":"payment-updated","description":"Cryptographically verifies Razorpay payment signatures (HMAC SHA256) and settles order status."},{"id":"infra_storage","label":"Supabase S3 Object Storage","module":"infrastructure_layer","type":"cloud","filePath":"src/app/api/ai-menu/upload-image/route.ts","functionName":"supabase.storage.from(\"restaurant-assets\")","apiRoute":"/api/ai-menu/upload-image","databaseTable":"storage.objects","trigger":"Asset upload","realtimeChannel":"N/A","description":"High-speed CDN bucket storing dish photographs, restaurant logos, and printable QR codes."}];
+    const EDGES = [{"id":"e_qr_to_menu","from":"cust_qr_scan","to":"cust_menu","label":"Loads Menu","type":"main","filePath":"src/app/(customer)/menu/[...slug]/page.tsx","callingFunction":"MenuPage()","calledFunction":"CustomerMenu()","apiRoute":"/menu/[slug]","databaseTable":"tables, categories, menu_items","realtimeChannel":"cust_menu_stock_${restaurantId}","auditEvent":"qr_scanned","idempotencyKey":"N/A"},{"id":"e_menu_to_cart","from":"cust_menu","to":"cust_cart","label":"Add to Cart","type":"main","filePath":"src/components/customer/CustomerMenu.tsx","callingFunction":"addToCart()","calledFunction":"CartDrawer.open()","apiRoute":"Client Action","databaseTable":"localStorage","realtimeChannel":"N/A","auditEvent":"cart_updated","idempotencyKey":"N/A"},{"id":"e_cart_to_special","from":"cust_cart","to":"cust_special_instructions","label":"Custom Notes","type":"alternate","filePath":"src/components/customer/CartDrawer.tsx","callingFunction":"onEditNotes()","calledFunction":"SpecialInstructionsModal.open()","apiRoute":"Client Modal","databaseTable":"order_items.notes","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_special_to_cart","from":"cust_special_instructions","to":"cust_cart","label":"Notes Saved","type":"alternate","filePath":"src/components/customer/SpecialInstructionsModal.tsx","callingFunction":"onSaveNotes()","calledFunction":"updateCartItem()","apiRoute":"Client Callback","databaseTable":"order_items.notes","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_cart_to_checkout","from":"cust_cart","to":"cust_checkout","label":"Checkout","type":"main","filePath":"src/components/customer/CartDrawer.tsx","callingFunction":"router.push(\"/checkout\")","calledFunction":"CheckoutPage()","apiRoute":"/checkout","databaseTable":"N/A","realtimeChannel":"N/A","auditEvent":"checkout_started","idempotencyKey":"N/A"},{"id":"e_checkout_to_placement","from":"cust_checkout","to":"cust_order_placement","label":"Submit Order","type":"main","filePath":"src/app/checkout/page.tsx","callingFunction":"handleSubmitOrder()","calledFunction":"db.createOrder()","apiRoute":"/api/customer/orders","databaseTable":"orders, order_batches, order_items","realtimeChannel":"live_orders_${restaurantId}","auditEvent":"order_created","idempotencyKey":"ORDER_CREATION_<tableId>_<timestamp>"},{"id":"e_placement_to_new","from":"cust_order_placement","to":"order_new","label":"Batch Created (new)","type":"main","filePath":"src/lib/db.ts","callingFunction":"db.createOrder()","calledFunction":"supabase.from(\"order_batches\").insert()","apiRoute":"/api/customer/orders","databaseTable":"order_batches","realtimeChannel":"live_orders_${restaurantId}, kds_${restaurantId}","auditEvent":"order_created","idempotencyKey":"N/A"},{"id":"e_placement_to_recipe","from":"cust_order_placement","to":"inv_recipe_lookup","label":"Query BOM Recipe","type":"data","filePath":"src/lib/inventoryEngine.ts","callingFunction":"reserveInventoryForOrderBatch()","calledFunction":"findMatchingRecipe()","apiRoute":"Internal Engine","databaseTable":"inventory_recipes, inventory_recipe_ingredients","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_recipe_to_scaling","from":"inv_recipe_lookup","to":"inv_scaling","label":"Apply Multiplier","type":"data","filePath":"src/lib/inventoryEngine.ts","callingFunction":"findMatchingRecipeWithScaling()","calledFunction":"getPortionMultiplier()","apiRoute":"Internal Engine","databaseTable":"inventory_recipe_ingredients","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_scaling_to_reserve","from":"inv_scaling","to":"inv_reservation","label":"Hold ACTIVE Reservation","type":"data","filePath":"src/lib/inventoryEngine.ts","callingFunction":"reserveInventoryForOrderBatch()","calledFunction":"supabase.from(\"inventory_reservations\").insert()","apiRoute":"Internal Engine","databaseTable":"inventory_reservations","realtimeChannel":"N/A","auditEvent":"inventory_reserved","idempotencyKey":"ORDER_RESERVATION_<orderId>_<batchId>"},{"id":"e_new_to_kds","from":"order_new","to":"kds_dashboard","label":"Render on KDS","type":"realtime","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"onRealtimeBatchInsert()","calledFunction":"setOrders()","apiRoute":"N/A","databaseTable":"order_batches","realtimeChannel":"kds_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_kds_audio","from":"kds_dashboard","to":"kds_audio_alert","label":"Play Alert Bell","type":"alternate","filePath":"src/lib/soundAlert.ts","callingFunction":"playNewOrderAlert()","calledFunction":"AudioContext.play()","apiRoute":"Web Audio API","databaseTable":"N/A","realtimeChannel":"kds_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_kds_to_accept_btn","from":"kds_dashboard","to":"kds_accept","label":"Chef Taps Accept","type":"main","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"handleBatchStatusChange(\"accepted\")","calledFunction":"fetch(\"/api/staff/update-order-status\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"kds_${restaurantId}","auditEvent":"order_accepted","idempotencyKey":"N/A"},{"id":"e_kds_accept_to_order_accepted","from":"kds_accept","to":"order_accepted","label":"Status: accepted","type":"main","filePath":"src/app/api/staff/update-order-status/route.ts","callingFunction":"POST()","calledFunction":"db.updateBatchStatus(batchId, \"accepted\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (accepted_at)","realtimeChannel":"order-status-updated","auditEvent":"order_accepted","idempotencyKey":"N/A"},{"id":"e_kds_to_prep_btn","from":"kds_dashboard","to":"kds_preparing","label":"Chef Taps Preparing","type":"main","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"handleBatchStatusChange(\"preparing\")","calledFunction":"fetch(\"/api/staff/update-order-status\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"kds_${restaurantId}","auditEvent":"order_preparing","idempotencyKey":"N/A"},{"id":"e_kds_prep_to_order_prep","from":"kds_preparing","to":"order_preparing","label":"Status: preparing","type":"main","filePath":"src/app/api/staff/update-order-status/route.ts","callingFunction":"POST()","calledFunction":"db.updateBatchStatus(batchId, \"preparing\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"order-status-updated","auditEvent":"order_preparing","idempotencyKey":"N/A"},{"id":"e_prep_to_consume","from":"order_preparing","to":"inv_consumption","label":"Exact-Once Stock Deduction","type":"main","filePath":"src/lib/inventoryEngine.ts","callingFunction":"consumeReservedInventoryForOrderBatch()","calledFunction":"supabase.from(\"inventory_transactions\").insert()","apiRoute":"Internal Engine","databaseTable":"inventory_transactions, inventory_reservations","realtimeChannel":"inventory_${restaurantId}","auditEvent":"inventory_consumed","idempotencyKey":"ORDER_CONSUMPTION_<orderId>_<batchId>"},{"id":"e_consume_to_idempotency","from":"inv_consumption","to":"order_idempotency","label":"Check Idempotency Key","type":"security","filePath":"src/lib/inventoryEngine.ts","callingFunction":"consumeReservedInventoryForOrderBatch()","calledFunction":"supabase.from(\"inventory_transactions\").select(\"idempotency_key\")","apiRoute":"Internal Engine Guard","databaseTable":"inventory_transactions","realtimeChannel":"N/A","auditEvent":"ALREADY_CONSUMED_IDEMPOTENT","idempotencyKey":"ORDER_CONSUMPTION_<orderId>_<batchId>"},{"id":"e_kds_to_ready_btn","from":"kds_dashboard","to":"kds_ready","label":"Chef Taps Ready","type":"main","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"handleBatchStatusChange(\"ready\")","calledFunction":"fetch(\"/api/staff/update-order-status\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"kds_${restaurantId}","auditEvent":"order_ready","idempotencyKey":"N/A"},{"id":"e_kds_ready_to_order_ready","from":"kds_ready","to":"order_ready","label":"Status: ready","type":"main","filePath":"src/app/api/staff/update-order-status/route.ts","callingFunction":"POST()","calledFunction":"db.updateBatchStatus(batchId, \"ready\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (ready_at)","realtimeChannel":"order-status-updated","auditEvent":"order_ready","idempotencyKey":"N/A"},{"id":"e_order_ready_to_waiter_pickup","from":"order_ready","to":"waiter_pickup","label":"Alert Waiter for Pickup","type":"realtime","filePath":"src/lib/realtime.ts","callingFunction":"broadcastOrderRealtimeEvent()","calledFunction":"onBatchReadyAlert()","apiRoute":"Supabase Broadcast","databaseTable":"order_batches","realtimeChannel":"tables_${restaurantId}","auditEvent":"order_ready","idempotencyKey":"N/A"},{"id":"e_waiter_pickup_to_serve","from":"waiter_pickup","to":"waiter_serve","label":"Waiter Delivers Food","type":"main","filePath":"src/app/(dashboard)/dashboard/orders/page.tsx","callingFunction":"handleStatusChange(\"served\")","calledFunction":"fetch(\"/api/staff/update-order-status\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"order-status-updated","auditEvent":"order_served","idempotencyKey":"N/A"},{"id":"e_waiter_serve_to_order_served","from":"waiter_serve","to":"order_served","label":"Status: served","type":"main","filePath":"src/app/api/staff/update-order-status/route.ts","callingFunction":"POST()","calledFunction":"db.updateBatchStatus(batchId, \"served\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches (served_at)","realtimeChannel":"order-status-updated","auditEvent":"order_served","idempotencyKey":"N/A"},{"id":"e_kds_to_reject_btn","from":"kds_dashboard","to":"kds_reject","label":"Chef Taps Reject","type":"alternate","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"handleRejectBatch()","calledFunction":"fetch(\"/api/staff/update-order-status\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"kds_${restaurantId}","auditEvent":"order_rejected","idempotencyKey":"N/A"},{"id":"e_kds_reject_to_order_reject","from":"kds_reject","to":"order_reject","label":"Status: rejected","type":"alternate","filePath":"src/app/api/staff/update-order-status/route.ts","callingFunction":"POST()","calledFunction":"rejectBatch()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"order-status-updated","auditEvent":"order_rejected","idempotencyKey":"N/A"},{"id":"e_reject_to_reversal","from":"order_reject","to":"inv_reversal","label":"Release Uncooked Stock","type":"alternate","filePath":"src/lib/inventoryEngine.ts","callingFunction":"releaseInventoryReservationForOrderBatch()","calledFunction":"supabase.from(\"inventory_reservations\").update({ status: \"CANCELLED\" })","apiRoute":"Internal Engine","databaseTable":"inventory_reservations","realtimeChannel":"inventory_${restaurantId}","auditEvent":"inventory_rollback","idempotencyKey":"N/A"},{"id":"e_order_to_cancel","from":"order_accepted","to":"order_cancel","label":"Cancel Request","type":"alternate","filePath":"src/lib/db.ts","callingFunction":"cancelOrderBatch()","calledFunction":"db.updateBatchStatus(batchId, \"cancelled\")","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"order-status-updated","auditEvent":"order_cancelled","idempotencyKey":"N/A"},{"id":"e_cancel_to_reversal","from":"order_cancel","to":"inv_reversal","label":"Reverse Inventory / Disposition","type":"alternate","filePath":"src/lib/inventoryEngine.ts","callingFunction":"restoreInventoryForOrderBatch()","calledFunction":"supabase.from(\"inventory_transactions\").insert()","apiRoute":"Internal Engine","databaseTable":"inventory_transactions","realtimeChannel":"inventory_${restaurantId}","auditEvent":"inventory_restored","idempotencyKey":"N/A"},{"id":"e_order_to_recall","from":"order_ready","to":"order_recall","label":"Accidental Tap Recall","type":"alternate","filePath":"src/lib/db.ts","callingFunction":"db.recallBatchStatus()","calledFunction":"supabase.from(\"order_batches\").update({ status: \"preparing\" })","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"order-status-updated","auditEvent":"order_recalled","idempotencyKey":"N/A"},{"id":"e_offline_action_to_queue","from":"kds_dashboard","to":"offline_sqlite_queue","label":"Offline Fallback Buffer","type":"alternate","filePath":"src/lib/offlineSyncEngine.ts","callingFunction":"enqueueOfflineItem()","calledFunction":"sqlite.run(\"INSERT INTO sync_queue ...\")","apiRoute":"SQLite Local Storage","databaseTable":"sync_queue (SQLite)","realtimeChannel":"N/A","auditEvent":"offline_enqueued","idempotencyKey":"N/A"},{"id":"e_queue_to_optimistic","from":"offline_sqlite_queue","to":"offline_order_batches","label":"Optimistic UI Render","type":"alternate","filePath":"src/lib/offlineSyncEngine.ts","callingFunction":"applyOptimisticUpdate()","calledFunction":"dispatch(\"OPTIMISTIC_BATCH_UPDATE\")","apiRoute":"Client State","databaseTable":"pending_orders","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_sync_worker_to_retry","from":"offline_sync_worker","to":"offline_retry_engine","label":"Network Restored (Online)","type":"alternate","filePath":"src/lib/offlineSyncEngine.ts","callingFunction":"initOfflineSyncEngine()","calledFunction":"processSyncQueue()","apiRoute":"/api/staff/update-order-status","databaseTable":"sync_queue","realtimeChannel":"N/A","auditEvent":"offline_sync_started","idempotencyKey":"N/A"},{"id":"e_retry_to_dedup","from":"offline_retry_engine","to":"offline_dedup","label":"Validate & Deduplicate","type":"alternate","filePath":"src/lib/offlineSyncEngine.ts","callingFunction":"processSyncQueue()","calledFunction":"validateSyncPayload()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"payload_hash"},{"id":"e_dedup_to_server_api","from":"offline_dedup","to":"infra_api_routes","label":"Replay Sync Payload","type":"main","filePath":"src/lib/offlineSyncEngine.ts","callingFunction":"fetch(\"/api/staff/update-order-status\")","calledFunction":"POST()","apiRoute":"/api/staff/update-order-status","databaseTable":"order_batches, inventory_transactions","realtimeChannel":"order-status-updated","auditEvent":"offline_sync_complete","idempotencyKey":"batch_id"},{"id":"e_menu_to_waiter_call","from":"cust_menu","to":"waiter_call","label":"Customer Calls Waiter","type":"alternate","filePath":"src/components/customer/CustomerMenu.tsx","callingFunction":"handleCallWaiter()","calledFunction":"db.createCustomerRequest()","apiRoute":"Direct DB/API","databaseTable":"customer_requests","realtimeChannel":"customer_request_tracking_*","auditEvent":"customer_call_created","idempotencyKey":"N/A"},{"id":"e_waiter_call_to_table_status","from":"waiter_call","to":"waiter_table_status","label":"Update Table Badge","type":"alternate","filePath":"src/app/(dashboard)/dashboard/tables/page.tsx","callingFunction":"onCustomerRequestInsert()","calledFunction":"setTables()","apiRoute":"N/A","databaseTable":"tables","realtimeChannel":"tables_${restaurantId}","auditEvent":"customer_call_accepted","idempotencyKey":"N/A"},{"id":"e_served_to_bill_gen","from":"order_served","to":"bill_generation","label":"Generate Bill","type":"main","filePath":"src/app/(dashboard)/dashboard/orders/page.tsx","callingFunction":"handleGenerateBill()","calledFunction":"calculateBilling()","apiRoute":"/api/billing/generate","databaseTable":"orders (subtotal, total_amount)","realtimeChannel":"N/A","auditEvent":"bill_generated","idempotencyKey":"N/A"},{"id":"e_bill_gen_to_gst","from":"bill_generation","to":"bill_gst","label":"Compute Taxes","type":"data","filePath":"src/lib/billingEngine.ts","callingFunction":"calculateBilling()","calledFunction":"calculateOrderTax()","apiRoute":"Internal Tax Engine","databaseTable":"restaurants (tax_settings)","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_bill_gen_to_payment","from":"bill_generation","to":"bill_payment","label":"Present Tender Options","type":"main","filePath":"src/components/dashboard/BillModal.tsx","callingFunction":"onSelectPaymentMode()","calledFunction":"db.updateOrderPaymentStatus()","apiRoute":"/api/payments/verify","databaseTable":"orders (payment_status: paid)","realtimeChannel":"payment-updated","auditEvent":"payment_success","idempotencyKey":"PAYMENT_<orderId>_<tenderType>"},{"id":"e_payment_to_settle","from":"bill_payment","to":"bill_settlement","label":"Settle & Close Table","type":"main","filePath":"src/lib/db.ts","callingFunction":"db.checkAndReleaseTableOccupancy()","calledFunction":"supabase.from(\"tables\").update({ status: \"available\" })","apiRoute":"/api/staff/settle-table","databaseTable":"tables, orders","realtimeChannel":"tables_${restaurantId}, live_orders_${restaurantId}","auditEvent":"session_closed","idempotencyKey":"N/A"},{"id":"e_payment_to_refund","from":"bill_payment","to":"bill_refund","label":"Dispute / Refund","type":"alternate","filePath":"src/app/api/auth/onboarding-provision/route.ts","callingFunction":"processRefund()","calledFunction":"razorpay.payments.refund()","apiRoute":"/api/razorpay/refund","databaseTable":"orders (refunded_amount)","realtimeChannel":"payment-updated","auditEvent":"payment_refunded","idempotencyKey":"REFUND_<paymentId>"},{"id":"e_settle_to_revenue","from":"bill_settlement","to":"owner_revenue","label":"Update Daily Ledger","type":"data","filePath":"src/lib/billingEngine.ts","callingFunction":"recordSettlement()","calledFunction":"updateDailyRevenue()","apiRoute":"N/A","databaseTable":"orders, payments","realtimeChannel":"overview_dashboard_${restaurantId}","auditEvent":"revenue_settled","idempotencyKey":"N/A"},{"id":"e_revenue_to_overview","from":"owner_revenue","to":"owner_overview","label":"Live Sales KPI","type":"data","filePath":"src/app/(dashboard)/dashboard/page.tsx","callingFunction":"fetchDashboardMetrics()","calledFunction":"setMetrics()","apiRoute":"/api/restaurant/stats","databaseTable":"orders, restaurants","realtimeChannel":"overview_dashboard_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_settle_to_reports","from":"bill_settlement","to":"report_sales","label":"Aggregate Sales Data","type":"data","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","callingFunction":"loadOrdersForReport()","calledFunction":"generateOrderReportData()","apiRoute":"N/A","databaseTable":"orders, order_items","realtimeChannel":"reports_${restaurantId}","auditEvent":"report_generated","idempotencyKey":"N/A"},{"id":"e_inv_to_report","from":"inv_consumption","to":"report_inventory","label":"Log Consumption Metrics","type":"data","filePath":"src/lib/inventoryEngine.ts","callingFunction":"getHourlyInventoryImpactReport()","calledFunction":"generateInventorySummary()","apiRoute":"Internal Engine","databaseTable":"inventory_transactions","realtimeChannel":"reports_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_restock_to_items","from":"inv_restock","to":"inv_stock_lookup","label":"Replenish Available Stock","type":"data","filePath":"src/lib/inventoryEngine.ts","callingFunction":"recordRestockPurchase()","calledFunction":"supabase.from(\"inventory_items\").update({ current_stock })","apiRoute":"/api/inventory/restock","databaseTable":"inventory_items, inventory_transactions","realtimeChannel":"inventory_${restaurantId}","auditEvent":"inventory_restocked","idempotencyKey":"RESTOCK_<purchaseInvoiceId>"},{"id":"e_inv_to_discrepancy","from":"inv_stock_lookup","to":"inv_audit","label":"Discrepancy Check","type":"data","filePath":"src/lib/inventoryEngine.ts","callingFunction":"healUnconsumedActiveReservations()","calledFunction":"logSystemEvent()","apiRoute":"Internal Engine","databaseTable":"inventory_reservations, system_events","realtimeChannel":"N/A","auditEvent":"inventory_audited","idempotencyKey":"N/A"},{"id":"e_order_to_audit_event","from":"order_new","to":"audit_system_events","label":"Log order_created","type":"audit","filePath":"src/lib/systemEventLogger.ts","callingFunction":"logSystemEvent()","calledFunction":"supabaseAdmin.from(\"system_events\").insert()","apiRoute":"/api/system-events","databaseTable":"system_events","realtimeChannel":"founder_events_${restaurantId}","auditEvent":"order_created","idempotencyKey":"N/A"},{"id":"e_prep_to_lifecycle_audit","from":"order_preparing","to":"audit_lifecycle","label":"Forensic Lifecycle Audit","type":"audit","filePath":"src/lib/db.ts","callingFunction":"db.updateBatchStatus()","calledFunction":"console.log(\"[CLEVEROPS_LIFECYCLE_AUDIT]\")","apiRoute":"/api/staff/update-order-status","databaseTable":"system_events","realtimeChannel":"N/A","auditEvent":"order_preparing","idempotencyKey":"ORDER_CONSUMPTION_<orderId>_<batchId>"},{"id":"e_owner_to_audit_log","from":"owner_staff_mgmt","to":"audit_logs_table","label":"Record Management Action","type":"audit","filePath":"src/lib/auditLogger.ts","callingFunction":"createAuditLog()","calledFunction":"supabaseAdmin.from(\"audit_logs\").insert()","apiRoute":"/api/admin/audit-logs","databaseTable":"audit_logs","realtimeChannel":"N/A","auditEvent":"staff_profile_updated","idempotencyKey":"N/A"},{"id":"e_auth_to_guard","from":"auth_supabase","to":"auth_role_guard","label":"Validate Bearer Token","type":"security","filePath":"src/lib/staffAuthGuard.ts","callingFunction":"verifyStaffRequest()","calledFunction":"supabase.auth.getUser(token)","apiRoute":"Next.js Middleware","databaseTable":"auth.users, profiles","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_guard_to_rls","from":"auth_role_guard","to":"auth_rls_policies","label":"Inject Tenant Context","type":"security","filePath":"supabase/migrations","callingFunction":"public.get_user_restaurant_id()","calledFunction":"PostgreSQL RLS Policy Evaluator","apiRoute":"PostgreSQL","databaseTable":"All tables","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_api_to_supabase_client","from":"infra_api_routes","to":"infra_supabase_client","label":"SDK Connection Pool","type":"data","filePath":"src/lib/supabase.ts","callingFunction":"createClient()","calledFunction":"PostgREST Gateway","apiRoute":"Supabase JS Protocol","databaseTable":"PostgreSQL Connection","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_supabase_client_to_postgres","from":"infra_supabase_client","to":"infra_postgres_db","label":"ACID Transaction Writes","type":"data","filePath":"supabase/migrations/*","callingFunction":"PostgREST Executor","calledFunction":"PostgreSQL Tables","apiRoute":"Direct SQL Connection","databaseTable":"22 Core Tables","realtimeChannel":"WAL logical replication","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_postgres_to_realtime_ws","from":"infra_postgres_db","to":"infra_realtime_ws","label":"WAL Change Capture","type":"realtime","filePath":"src/lib/realtime.ts","callingFunction":"supabase_realtime_publication","calledFunction":"supabase.channel().send()","apiRoute":"WebSocket Realtime Engine","databaseTable":"orders, order_batches, inventory_items","realtimeChannel":"kds_${restaurantId}, live_orders_${restaurantId}","auditEvent":"realtime_event_dispatched","idempotencyKey":"N/A"},{"id":"e_realtime_to_broadcast","from":"infra_realtime_ws","to":"notif_realtime_broadcast","label":"Distribute Events","type":"messagebus","filePath":"src/lib/realtime.ts","callingFunction":"broadcastOrderRealtimeEvent()","calledFunction":"channel.send({ type: \"broadcast\" })","apiRoute":"WebSocket","databaseTable":"N/A","realtimeChannel":"live_orders, kds, tables, overview","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_offline_dedup_link","from":"offline_order_batches","to":"order_dup_protect","label":"Deduplication Filter","type":"alternate","filePath":"src/lib/offlineSyncEngine.ts","callingFunction":"enqueueOfflineItem()","calledFunction":"order_dup_protect","apiRoute":"SQLite Client Engine","databaseTable":"sync_queue","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"payload_hash"},{"id":"e_dedup_to_retry_loop","from":"order_dup_protect","to":"offline_retry_engine","label":"Enqueue Verified Items","type":"alternate","filePath":"src/lib/offlineSyncEngine.ts","callingFunction":"validateSyncPayload()","calledFunction":"processSyncQueue()","apiRoute":"/api/staff/update-order-status","databaseTable":"sync_queue","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"seenKeys"},{"id":"e_ws_to_kds_listener","from":"infra_realtime_ws","to":"kds_realtime_listener","label":"Stream KDS Channel","type":"realtime","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"supabase.channel(`kds_${restaurantId}`)","calledFunction":"kds_realtime_listener","apiRoute":"WebSocket (WSS)","databaseTable":"order_batches","realtimeChannel":"kds_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_kds_listener_to_board","from":"kds_realtime_listener","to":"kds_dashboard","label":"Push Event to Board","type":"realtime","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"handleRealtimeUpdate()","calledFunction":"setOrders()","apiRoute":"Client React Hook","databaseTable":"order_batches","realtimeChannel":"kds_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_order_new_to_live_orders","from":"order_new","to":"owner_live_orders","label":"Realtime Feed to Live Grid","type":"realtime","filePath":"src/app/(dashboard)/dashboard/orders/page.tsx","callingFunction":"onNewOrder()","calledFunction":"OrdersPage.render()","apiRoute":"N/A","databaseTable":"orders","realtimeChannel":"live_orders_${restaurantId}","auditEvent":"order_created","idempotencyKey":"N/A"},{"id":"e_live_orders_to_api","from":"owner_live_orders","to":"infra_api_routes","label":"Staff Order Status Update","type":"main","filePath":"src/app/(dashboard)/dashboard/orders/page.tsx","callingFunction":"handleUpdateOrderStatus()","calledFunction":"fetch(\"/api/staff/update-order-status\")","apiRoute":"/api/staff/update-order-status","databaseTable":"orders, order_batches","realtimeChannel":"order-status-updated","auditEvent":"order_status_updated","idempotencyKey":"N/A"},{"id":"e_revenue_to_analytics","from":"owner_revenue","to":"owner_analytics","label":"Aggregates Sales Trends","type":"data","filePath":"src/app/(dashboard)/dashboard/analytics/page.tsx","callingFunction":"loadAnalyticsData()","calledFunction":"AnalyticsPage()","apiRoute":"/api/admin/analytics","databaseTable":"orders, payments","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_analytics_to_overview","from":"owner_analytics","to":"owner_overview","label":"Chart Summaries to Overview","type":"data","filePath":"src/app/(dashboard)/dashboard/page.tsx","callingFunction":"renderSalesCharts()","calledFunction":"DashboardOverview()","apiRoute":"N/A","databaseTable":"orders","realtimeChannel":"overview_dashboard_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_report_sales_to_owner_reports","from":"report_sales","to":"owner_reports","label":"Feeds Sales Data to UI","type":"data","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","callingFunction":"generateSalesCSV()","calledFunction":"ReportsPage()","apiRoute":"N/A","databaseTable":"orders, order_items","realtimeChannel":"reports_${restaurantId}","auditEvent":"report_downloaded","idempotencyKey":"N/A"},{"id":"e_overview_to_billing","from":"owner_overview","to":"owner_billing","label":"Manage SaaS Plan","type":"alternate","filePath":"src/app/(dashboard)/dashboard/billing/page.tsx","callingFunction":"router.push(\"/dashboard/billing\")","calledFunction":"BillingPage()","apiRoute":"N/A","databaseTable":"restaurants (subscription_plan)","realtimeChannel":"realtime_pricing_plans_dashboard_layout","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_owner_billing_to_edge","from":"owner_billing","to":"infra_edge_functions","label":"Invoke Razorpay Checkout","type":"data","filePath":"src/lib/db.ts","callingFunction":"createSubscriptionCheckout()","calledFunction":"fetch(\"/api/razorpay/create-order\")","apiRoute":"/api/razorpay/create-order","databaseTable":"subscriptions","realtimeChannel":"payment-updated","auditEvent":"subscription_initiated","idempotencyKey":"SUB_<restaurantId>_<timestamp>"},{"id":"e_guard_to_rbac_roles","from":"auth_role_guard","to":"auth_roles","label":"Check Allowed Roles","type":"security","filePath":"src/lib/staffAuthGuard.ts","callingFunction":"verifyStaffRequest()","calledFunction":"hasPermission()","apiRoute":"Middleware Interceptor","databaseTable":"profiles (role)","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_rbac_to_staff_mgmt","from":"auth_roles","to":"owner_staff_mgmt","label":"Enforce Role Restrictions","type":"security","filePath":"src/app/(dashboard)/dashboard/staff/page.tsx","callingFunction":"StaffManagementPage()","calledFunction":"db.getStaffProfiles()","apiRoute":"/api/staff/list","databaseTable":"profiles","realtimeChannel":"web_staff_realtime_${restaurant.id}","auditEvent":"staff_listed","idempotencyKey":"N/A"},{"id":"e_broadcast_to_kitchen_alerts","from":"notif_realtime_broadcast","to":"notif_kitchen_alerts","label":"Dispatch Kitchen Alert","type":"messagebus","filePath":"src/lib/soundAlert.ts","callingFunction":"broadcastOrderRealtimeEvent()","calledFunction":"playNewOrderAlert()","apiRoute":"Web Audio API","databaseTable":"N/A","realtimeChannel":"kds_${restaurantId}","auditEvent":"kitchen_alert_fired","idempotencyKey":"N/A"},{"id":"e_kitchen_alert_to_kds","from":"notif_kitchen_alerts","to":"kds_dashboard","label":"Display Banner & Sound","type":"frontend","filePath":"src/app/(dashboard)/dashboard/kds/page.tsx","callingFunction":"playNewOrderAlert()","calledFunction":"showVisualToast()","apiRoute":"Client Action","databaseTable":"N/A","realtimeChannel":"kds_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_broadcast_to_waiter_alerts","from":"notif_realtime_broadcast","to":"notif_waiter_alerts","label":"Dispatch Ready Alert","type":"messagebus","filePath":"src/app/(dashboard)/layout.tsx","callingFunction":"broadcastOrderRealtimeEvent()","calledFunction":"playReadyChime()","apiRoute":"Web Audio Chime","databaseTable":"N/A","realtimeChannel":"global_notifications_${restaurantId}","auditEvent":"waiter_alert_fired","idempotencyKey":"N/A"},{"id":"e_waiter_alert_to_tables","from":"notif_waiter_alerts","to":"waiter_pickup","label":"Highlight Ready Table Card","type":"frontend","filePath":"src/app/(dashboard)/dashboard/tables/page.tsx","callingFunction":"playReadyChime()","calledFunction":"highlightReadyCard()","apiRoute":"Client Action","databaseTable":"tables","realtimeChannel":"tables_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_inv_audit_to_owner_alerts","from":"inv_audit","to":"notif_owner_alerts","label":"Trigger Low-Stock Warning","type":"alternate","filePath":"src/app/(dashboard)/dashboard/page.tsx","callingFunction":"checkLowStockThresholds()","calledFunction":"renderLowStockBanner()","apiRoute":"Client Evaluator","databaseTable":"inventory_items","realtimeChannel":"inventory_${restaurantId}","auditEvent":"low_stock_warning","idempotencyKey":"N/A"},{"id":"e_owner_alert_to_overview","from":"notif_owner_alerts","to":"owner_overview","label":"Amber Alert Displayed","type":"frontend","filePath":"src/app/(dashboard)/dashboard/page.tsx","callingFunction":"renderLowStockBanner()","calledFunction":"DashboardOverview()","apiRoute":"N/A","databaseTable":"inventory_items","realtimeChannel":"overview_dashboard_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_order_served_to_staff_report","from":"order_served","to":"report_staff","label":"Calculate Turnaround Time","type":"data","filePath":"src/app/(dashboard)/dashboard/staff/page.tsx","callingFunction":"db.updateBatchStatus(\"served\")","calledFunction":"calculateStaffMetrics()","apiRoute":"Staff Reporting View","databaseTable":"order_batches (served_at)","realtimeChannel":"N/A","auditEvent":"staff_metric_updated","idempotencyKey":"N/A"},{"id":"e_staff_report_to_owner_reports","from":"report_staff","to":"owner_reports","label":"Embed Staff Speed Report","type":"data","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","callingFunction":"calculateStaffMetrics()","calledFunction":"ReportsPage.renderStaffTab()","apiRoute":"N/A","databaseTable":"order_batches, profiles","realtimeChannel":"reports_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_bill_gst_to_report_revenue","from":"bill_gst","to":"report_revenue","label":"Accumulate CGST & SGST","type":"data","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","callingFunction":"calculateOrderTax()","calledFunction":"exportAccountingCSV()","apiRoute":"CSV Exporter","databaseTable":"restaurants (settings)","realtimeChannel":"N/A","auditEvent":"tax_ledger_updated","idempotencyKey":"N/A"},{"id":"e_settle_to_report_revenue","from":"bill_settlement","to":"report_revenue","label":"Accumulate Net Sales","type":"data","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","callingFunction":"db.checkAndReleaseTableOccupancy()","calledFunction":"exportAccountingCSV()","apiRoute":"CSV Exporter","databaseTable":"orders, payments","realtimeChannel":"reports_${restaurantId}","auditEvent":"revenue_ledger_updated","idempotencyKey":"N/A"},{"id":"e_report_revenue_to_owner_reports","from":"report_revenue","to":"owner_reports","label":"Display Accounting Report","type":"data","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","callingFunction":"exportAccountingCSV()","calledFunction":"ReportsPage()","apiRoute":"N/A","databaseTable":"orders, payments","realtimeChannel":"reports_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_audit_logs_to_report_trail","from":"audit_logs_table","to":"report_audit_trail","label":"Query Security Log","type":"audit","filePath":"src/app/api/restaurant/audit-logs/route.ts","callingFunction":"supabaseAdmin.from(\"audit_logs\").select()","calledFunction":"db.getAuditLogs()","apiRoute":"/api/restaurant/audit-logs","databaseTable":"audit_logs","realtimeChannel":"N/A","auditEvent":"audit_trail_viewed","idempotencyKey":"N/A"},{"id":"e_report_trail_to_owner_reports","from":"report_audit_trail","to":"owner_reports","label":"Render Audit Log Table","type":"audit","filePath":"src/app/(dashboard)/dashboard/reports/page.tsx","callingFunction":"db.getAuditLogs()","calledFunction":"ReportsPage.renderAuditTab()","apiRoute":"N/A","databaseTable":"audit_logs","realtimeChannel":"reports_${restaurantId}","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_api_to_audit_error","from":"infra_api_routes","to":"audit_error_events","label":"Intercept 500 Failures","type":"audit","filePath":"src/lib/errors.ts","callingFunction":"handleApiError()","calledFunction":"audit_error_events","apiRoute":"All API Routes","databaseTable":"system_events (metadata: error)","realtimeChannel":"N/A","auditEvent":"api_error_recorded","idempotencyKey":"N/A"},{"id":"e_audit_error_to_system_events","from":"audit_error_events","to":"audit_system_events","label":"Persist Forensic Error Event","type":"audit","filePath":"src/lib/systemEventLogger.ts","callingFunction":"logSystemEvent()","calledFunction":"supabaseAdmin.from(\"system_events\").insert()","apiRoute":"/api/system-events","databaseTable":"system_events","realtimeChannel":"founder_events_${restaurantId}","auditEvent":"system_error","idempotencyKey":"N/A"},{"id":"e_nextjs_to_qr_scan","from":"infra_nextjs","to":"cust_qr_scan","label":"Serve Customer Web App","type":"frontend","filePath":"src/app/layout.tsx","callingFunction":"RootLayout()","calledFunction":"MenuPage()","apiRoute":"/menu/[slug]","databaseTable":"N/A","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_nextjs_to_overview","from":"infra_nextjs","to":"owner_overview","label":"Serve Dashboard Shell","type":"frontend","filePath":"src/app/(dashboard)/layout.tsx","callingFunction":"DashboardLayout()","calledFunction":"DashboardOverview()","apiRoute":"/dashboard","databaseTable":"N/A","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_payment_to_edge_webhook","from":"bill_payment","to":"infra_edge_functions","label":"Razorpay Payment Captured","type":"alternate","filePath":"src/app/api/webhooks/razorpay/route.ts","callingFunction":"POST()","calledFunction":"verifyWebhookSignature()","apiRoute":"/api/webhooks/razorpay","databaseTable":"payments, orders","realtimeChannel":"payment-updated","auditEvent":"payment_webhook_received","idempotencyKey":"EVENT_<event_id>"},{"id":"e_edge_webhook_to_settle","from":"infra_edge_functions","to":"bill_settlement","label":"Auto Settle On Signature Match","type":"main","filePath":"src/app/api/webhooks/razorpay/route.ts","callingFunction":"POST()","calledFunction":"db.updateOrderPaymentStatus()","apiRoute":"/api/webhooks/razorpay","databaseTable":"orders (payment_status: paid)","realtimeChannel":"payment-updated, tables_${restaurantId}","auditEvent":"payment_verified_webhook","idempotencyKey":"PAYMENT_CAPTURE_<payment_id>"},{"id":"e_storage_to_menu","from":"infra_storage","to":"cust_menu","label":"Serve Dish Photos from CDN","type":"data","filePath":"src/components/customer/MenuItemCard.tsx","callingFunction":"getPublicUrl(\"restaurant-assets\")","calledFunction":"MenuItemCard.render()","apiRoute":"Supabase Storage CDN","databaseTable":"storage.objects","realtimeChannel":"N/A","auditEvent":"N/A","idempotencyKey":"N/A"},{"id":"e_broadcast_to_fcm","from":"notif_realtime_broadcast","to":"notif_fcm_push","label":"Dispatch Mobile Push","type":"messagebus","filePath":"src/lib/webPush.ts","callingFunction":"sendWebPushNotification()","calledFunction":"webpush.sendNotification()","apiRoute":"/api/push/dispatch","databaseTable":"staff_profiles (push_token)","realtimeChannel":"Web Push Service","auditEvent":"push_sent","idempotencyKey":"N/A"},{"id":"e_fcm_to_waiter_device","from":"notif_fcm_push","to":"waiter_pickup","label":"Wakeup Android Device","type":"messagebus","filePath":"src/lib/registerWebPush.ts","callingFunction":"onPushMessageReceived()","calledFunction":"showNotification(\"Order Ready\")","apiRoute":"Web Push API","databaseTable":"N/A","realtimeChannel":"N/A","auditEvent":"push_delivered","idempotencyKey":"N/A"},{"id":"e_overview_to_storage","from":"owner_overview","to":"infra_storage","label":"Upload Restaurant Assets","type":"data","filePath":"src/app/api/ai-menu/upload-image/route.ts","callingFunction":"supabase.storage.from(\"restaurant-assets\").upload()","calledFunction":"POST()","apiRoute":"/api/ai-menu/upload-image","databaseTable":"storage.objects","realtimeChannel":"N/A","auditEvent":"asset_uploaded","idempotencyKey":"N/A"}];
+    const MODULES = [{"id":"customer_layer","name":"Customer Layer","color":"#3b82f6","bg":"#eff6ff","darkBg":"#1e293b"},{"id":"order_engine","name":"Order Engine & Lifecycle","color":"#f59e0b","bg":"#fffbeb","darkBg":"#332714"},{"id":"kitchen_kds","name":"Kitchen (KDS)","color":"#ef4444","bg":"#fef2f2","darkBg":"#381c1c"},{"id":"waiter_system","name":"Waiter Operations","color":"#8b5cf6","bg":"#f5f3ff","darkBg":"#2a1b4e"},{"id":"owner_dashboard","name":"Owner Dashboard","color":"#06b6d4","bg":"#ecfeff","darkBg":"#11333b"},{"id":"inventory_engine","name":"Inventory Engine (Frozen)","color":"#10b981","bg":"#ecfdf5","darkBg":"#0f3325"},{"id":"billing_system","name":"Billing & Payments","color":"#ec4899","bg":"#fdf2f8","darkBg":"#3b162b"},{"id":"auth_security","name":"Authentication & Security","color":"#64748b","bg":"#f8fafc","darkBg":"#1e293b"},{"id":"notifications_service","name":"Notifications Service","color":"#a855f7","bg":"#faf5ff","darkBg":"#32194d"},{"id":"offline_engine","name":"Offline Engine (SQLite)","color":"#14b8a6","bg":"#f0fdfa","darkBg":"#113835"},{"id":"reports_analytics","name":"Reports & Analytics","color":"#6366f1","bg":"#eef2ff","darkBg":"#1e214d"},{"id":"audit_system","name":"Audit & Forensic System","color":"#475569","bg":"#f1f5f9","darkBg":"#1a222d"},{"id":"infrastructure_layer","name":"Infrastructure Layer","color":"#2563eb","bg":"#eff6ff","darkBg":"#172554"}];
+
+    const nodeMap = new Map(NODES.map(n => [n.id, n]));
+    const edgeMap = new Map(EDGES.map(e => [e.id, e]));
+
+    const container = document.getElementById('canvas-container');
+    const svg = document.getElementById('master-svg');
+    const minimapView = document.getElementById('minimap-view');
+
+    let scale = 0.35;
+    let pointX = 60;
+    let pointY = 40;
+    let isPanning = false;
+    let startX = 0;
+    let startY = 0;
+
+    function updateTransform() {
+      svg.style.transform = 'translate(' + pointX + 'px, ' + pointY + 'px) scale(' + scale + ')';
+      const cw = container.clientWidth / scale;
+      const ch = container.clientHeight / scale;
+      minimapView.setAttribute('x', Math.max(0, -pointX / scale));
+      minimapView.setAttribute('y', Math.max(0, -pointY / scale));
+      minimapView.setAttribute('width', Math.min(5400, cw));
+      minimapView.setAttribute('height', Math.min(4000, ch));
+    }
+
+    container.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.node-group') || e.target.closest('.edge-path') || e.target.closest('.inspector-drawer')) return;
+      isPanning = true;
+      startX = e.clientX - pointX;
+      startY = e.clientY - pointY;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      pointX = e.clientX - startX;
+      pointY = e.clientY - startY;
+      updateTransform();
+    });
+
+    window.addEventListener('mouseup', () => { isPanning = false; });
+
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const xs = (e.clientX - pointX) / scale;
+      const ys = (e.clientY - pointY) / scale;
+      const delta = -e.deltaY;
+      if (delta > 0) scale *= 1.15;
+      else scale /= 1.15;
+      scale = Math.min(Math.max(0.15, scale), 2.5);
+      pointX = e.clientX - xs * scale;
+      pointY = e.clientY - ys * scale;
+      updateTransform();
+    });
+
+    function zoom(factor) {
+      const cx = container.clientWidth / 2;
+      const cy = container.clientHeight / 2;
+      const xs = (cx - pointX) / scale;
+      const ys = (cy - pointY) / scale;
+      scale = Math.min(Math.max(0.15, scale * factor), 2.5);
+      pointX = cx - xs * scale;
+      pointY = cy - ys * scale;
+      updateTransform();
+    }
+
+    function resetView() {
+      scale = 0.35;
+      pointX = 60;
+      pointY = 40;
+      updateTransform();
+    }
+
+    function focusNode(nodeId) {
+      const nodeEl = document.getElementById('node-' + nodeId);
+      if (!nodeEl) return;
+      const bbox = nodeEl.getBBox();
+      const cx = container.clientWidth / 2;
+      const cy = container.clientHeight / 2;
+      scale = 0.95;
+      pointX = cx - (bbox.x + bbox.width / 2) * scale;
+      pointY = cy - (bbox.y + bbox.height / 2) * scale;
+      updateTransform();
+      selectNode(nodeId);
+    }
+
+    const inspector = document.getElementById('inspector');
+    const inspTitle = document.getElementById('insp-title');
+    const inspContent = document.getElementById('insp-content');
+
+    function closeInspector() {
+      inspector.style.display = 'none';
+      clearHighlights();
+    }
+
+    function selectEdge(edgeId) {
+      const edge = edgeMap.get(edgeId);
+      if (!edge) return;
+      highlightEdge(edgeId);
+
+      const fromNode = nodeMap.get(edge.from);
+      const toNode = nodeMap.get(edge.to);
+
+      inspTitle.innerHTML = '🔗 Connection: <span style="color:#f59e0b">' + (fromNode ? fromNode.label : edge.from) + '</span> → <span style="color:#10b981">' + (toNode ? toNode.label : edge.to) + '</span>';
+      inspContent.innerHTML = 
+        '<div class="inspector-field"><span class="field-label">File Path</span><span class="field-value">' + (edge.filePath || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Calling Function</span><span class="field-value">' + (edge.callingFunction || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Called Function</span><span class="field-value">' + (edge.calledFunction || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">API Route</span><span class="field-value">' + (edge.apiRoute || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Database Table</span><span class="field-value">' + (edge.databaseTable || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Realtime Channel</span><span class="field-value">' + (edge.realtimeChannel || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Audit Event</span><span class="field-value">' + (edge.auditEvent || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Idempotency Key</span><span class="field-value">' + (edge.idempotencyKey || 'N/A') + '</span></div>';
+      inspector.style.display = 'flex';
+    }
+
+    function selectNode(nodeId) {
+      const node = nodeMap.get(nodeId);
+      if (!node) return;
+      highlightNode(nodeId);
+
+      inspTitle.innerHTML = '📦 Node: <span style="color:#38bdf8">' + node.label + '</span> (' + node.module + ')';
+      inspContent.innerHTML = 
+        '<div class="inspector-field"><span class="field-label">File Path</span><span class="field-value">' + node.filePath + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Function Name</span><span class="field-value">' + node.functionName + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">API Route</span><span class="field-value">' + (node.apiRoute || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Database Table</span><span class="field-value">' + (node.databaseTable || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Event Trigger</span><span class="field-value">' + (node.trigger || 'N/A') + '</span></div>' +
+        '<div class="inspector-field"><span class="field-label">Realtime Channel</span><span class="field-value">' + (node.realtimeChannel || 'N/A') + '</span></div>' +
+        '<div class="inspector-field" style="grid-column: span 2;"><span class="field-label">Technical Description</span><span class="field-value" style="font-family:var(--font-sans);">' + node.description + '</span></div>';
+      inspector.style.display = 'flex';
+    }
+
+    function clearHighlights() {
+      document.querySelectorAll('.node-rect').forEach(r => r.style.stroke = '');
+      document.querySelectorAll('.edge-path').forEach(p => p.style.strokeWidth = '');
+    }
+
+    function highlightEdge(edgeId) {
+      clearHighlights();
+      const p = document.getElementById('edge-' + edgeId);
+      if (p) p.style.strokeWidth = '4.5px';
+    }
+
+    function highlightNode(nodeId) {
+      clearHighlights();
+      const nodeEl = document.getElementById('node-' + nodeId);
+      if (nodeEl) {
+        const r = nodeEl.querySelector('.node-rect');
+        if (r) r.style.stroke = '#38bdf8';
+      }
+    }
+
+    function onSearch(query) {
+      const q = query.trim().toLowerCase();
+      if (!q) {
+        document.querySelectorAll('.node-group').forEach(n => n.style.opacity = '1');
+        return;
+      }
+      let firstMatch = null;
+      NODES.forEach(n => {
+        const match = n.label.toLowerCase().includes(q) ||
+                      n.id.toLowerCase().includes(q) ||
+                      (n.databaseTable && n.databaseTable.toLowerCase().includes(q)) ||
+                      (n.apiRoute && n.apiRoute.toLowerCase().includes(q)) ||
+                      (n.functionName && n.functionName.toLowerCase().includes(q));
+        const el = document.getElementById('node-' + n.id);
+        if (el) el.style.opacity = match ? '1' : '0.15';
+        if (match && !firstMatch) firstMatch = n.id;
+      });
+      if (firstMatch) focusNode(firstMatch);
+    }
+
+    let isSimulating = false;
+    const packet = document.getElementById('flow-packet');
+    const timelineList = document.getElementById('timeline-list');
+
+    const FLOW_PATHS = {
+      full: [
+        'cust_qr_scan', 'cust_menu', 'cust_cart', 'cust_checkout', 'cust_order_placement',
+        'order_new', 'kds_dashboard', 'kds_accept', 'order_accepted', 'kds_preparing',
+        'order_preparing', 'inv_consumption', 'kds_ready', 'order_ready', 'waiter_pickup',
+        'waiter_serve', 'order_served', 'bill_generation', 'bill_payment', 'bill_settlement'
+      ],
+      reject: [
+        'cust_order_placement', 'order_new', 'kds_dashboard', 'kds_reject', 'order_reject', 'inv_reversal'
+      ],
+      cancel: [
+        'order_accepted', 'order_cancel', 'inv_reversal'
+      ],
+      refund: [
+        'bill_payment', 'bill_refund', 'infra_edge_functions'
+      ],
+      reverse_inventory: [
+        'order_cancel', 'inv_reversal', 'inv_stock_lookup', 'inv_audit'
+      ]
+    };
+
+    function addTimelineEvent(title, detail) {
+      const timeStr = new Date().toLocaleTimeString('en-GB') + ' IST';
+      const item = document.createElement('div');
+      item.className = 'timeline-item';
+      item.innerHTML = '<div class="timeline-time">' + timeStr + '</div>' +
+                       '<div class="timeline-title">' + title + '</div>' +
+                       '<div class="timeline-detail">' + detail + '</div>';
+      timelineList.prepend(item);
+    }
+
+    function clearTimeline() {
+      timelineList.innerHTML = '';
+    }
+
+    async function runFlowSimulation(flowType = 'full') {
+      if (isSimulating) return;
+      isSimulating = true;
+      const sequence = FLOW_PATHS[flowType] || FLOW_PATHS.full;
+
+      packet.style.display = 'block';
+      addTimelineEvent('[Simulation Started]', 'Traversing ' + sequence.length + ' nodes for ' + flowType.toUpperCase() + ' flow');
+
+      for (let i = 0; i < sequence.length - 1; i++) {
+        const fromId = sequence[i];
+        const toId = sequence[i + 1];
+        const fromNode = nodeMap.get(fromId);
+        const toNode = nodeMap.get(toId);
+
+        focusNode(fromId);
+        addTimelineEvent('Step ' + (i+1) + ': ' + (fromNode ? fromNode.label : fromId), 'Transitioning to ' + (toNode ? toNode.label : toId));
+
+        const edge = EDGES.find(e => (e.from === fromId && e.to === toId) || (e.from === toId && e.to === fromId));
+        if (edge) highlightEdge(edge.id);
+
+        await animatePacketBetween(fromId, toId);
+      }
+
+      const finalNode = nodeMap.get(sequence[sequence.length - 1]);
+      focusNode(sequence[sequence.length - 1]);
+      addTimelineEvent('[Simulation Complete]', 'Final status reached: ' + (finalNode ? finalNode.label : ''));
+      packet.style.display = 'none';
+      isSimulating = false;
+    }
+
+    function animatePacketBetween(fromId, toId) {
+      return new Promise(resolve => {
+        const edgePath = document.querySelector('path[data-from="' + fromId + '"][data-to="' + toId + '"]') ||
+                         document.querySelector('path[data-from="' + toId + '"][data-to="' + fromId + '"]');
+        if (!edgePath) {
+          setTimeout(resolve, 400);
+          return;
+        }
+
+        const pathLen = edgePath.getTotalLength();
+        const duration = 650;
+        const startTime = performance.now();
+
+        function step(now) {
+          const elapsed = now - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const pt = edgePath.getPointAtLength(progress * pathLen);
+          packet.setAttribute('cx', pt.x);
+          packet.setAttribute('cy', pt.y);
+
+          if (progress < 1) {
+            requestAnimationFrame(step);
+          } else {
+            resolve();
+          }
+        }
+        requestAnimationFrame(step);
+      });
+    }
+
+    function toggleModule(modId) {
+      const container = document.getElementById('mod-group-' + modId);
+      const modNodes = NODES.filter(n => n.module === modId);
+      const isHidden = container.getAttribute('data-collapsed') === 'true';
+
+      container.setAttribute('data-collapsed', !isHidden);
+      modNodes.forEach(n => {
+        const el = document.getElementById('node-' + n.id);
+        if (el) el.style.display = isHidden ? 'block' : 'none';
+      });
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('smartdine-theme', next);
+    }
+
+    function togglePresentation() {
+      document.body.classList.toggle('presentation-mode');
+    }
+
+    function exportSVG() {
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'smartdine-master-system.svg';
+      a.click();
+    }
+
+    function exportPNG() {
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement('canvas');
+      canvas.width = 3840;
+      canvas.height = 2160;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = 'smartdine-master-system.png';
+        a.click();
+      };
+      img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+    }
+
+    updateTransform();
+</script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartDine Architecture Time Machine • Git Commit History</title>
+  <style>
+    :root {
+      --bg-primary: #070b12;
+      --bg-secondary: #0c1322;
+      --bg-card: #141f36;
+      --border-color: #263859;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-main: #f59e0b;
+      --accent-green: #10b981;
+      --accent-blue: #38bdf8;
+      --accent-purple: #8b5cf6;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      padding: 32px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 20px;
+    }
+    h1 { font-size: 24px; font-weight: 800; }
+    .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .slider-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .range-input {
+      width: 100%;
+      height: 10px;
+      border-radius: 5px;
+      background: var(--bg-card);
+      outline: none;
+      cursor: pointer;
+    }
+    .snapshots-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .snap-chip {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .snap-chip:hover, .snap-chip.active {
+      border-color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.1);
+      transform: translateY(-2px);
+    }
+    .detail-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .detail-header {
+      background: var(--bg-card);
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .detail-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    code {
+      font-family: var(--font-mono);
+      color: var(--accent-blue);
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>⏱ SmartDine Architecture Time Machine</h1>
+        <div class="subtitle">Git Commit Architecture History & Architectural Delta Slider</div>
+      </div>
+      <div>
+        <a href="smartdine-control-tower-v4.html" style="background:var(--accent-blue);color:#000;text-decoration:none;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;">Back to V4 NOC ➔</a>
+      </div>
+    </header>
+
+    <div class="slider-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong style="font-size:15px;color:var(--accent-main);">SCRUB ARCHITECTURE COMMIT SLIDER</strong>
+        <span style="font-size:12px;color:var(--text-muted);" id="lbl-active-commit">Milestone 5 of 5: v4.0 Engineering NOC</span>
+      </div>
+      <input type="range" class="range-input" min="1" max="5" value="5" id="slider" oninput="onSelectSnapshot(parseInt(this.value)-1)">
+      
+      <div class="snapshots-grid">
+        
+          <div class="snap-chip " id="chip-0" onclick="document.getElementById('slider').value = 1; onSelectSnapshot(0);">
+            <span style="font-size:10px;color:var(--text-muted);">2026-08-28</span>
+            <strong style="font-size:13px;">v1.0 Core QR Foundation</strong>
+            <span style="font-size:11px;color:var(--accent-blue);"><code>5201800</code></span>
+            <span style="font-size:11px;color:var(--accent-green);">42 nodes</span>
+          </div>
+        
+          <div class="snap-chip " id="chip-1" onclick="document.getElementById('slider').value = 2; onSelectSnapshot(1);">
+            <span style="font-size:10px;color:var(--text-muted);">2026-09-02</span>
+            <strong style="font-size:13px;">v1.5 Floor Layout & KDS Sync</strong>
+            <span style="font-size:11px;color:var(--accent-blue);"><code>3913df4</code></span>
+            <span style="font-size:11px;color:var(--accent-green);">58 nodes</span>
+          </div>
+        
+          <div class="snap-chip " id="chip-2" onclick="document.getElementById('slider').value = 3; onSelectSnapshot(2);">
+            <span style="font-size:10px;color:var(--text-muted);">2026-09-10</span>
+            <strong style="font-size:13px;">v2.0 Frozen Inventory & Idempotency</strong>
+            <span style="font-size:11px;color:var(--accent-blue);"><code>f7f626a</code></span>
+            <span style="font-size:11px;color:var(--accent-green);">72 nodes</span>
+          </div>
+        
+          <div class="snap-chip " id="chip-3" onclick="document.getElementById('slider').value = 4; onSelectSnapshot(3);">
+            <span style="font-size:10px;color:var(--text-muted);">2026-09-16</span>
+            <strong style="font-size:13px;">v3.0 Multi-Restaurant Control Tower</strong>
+            <span style="font-size:11px;color:var(--accent-blue);"><code>99006ad</code></span>
+            <span style="font-size:11px;color:var(--accent-green);">84 nodes</span>
+          </div>
+        
+          <div class="snap-chip active" id="chip-4" onclick="document.getElementById('slider').value = 5; onSelectSnapshot(4);">
+            <span style="font-size:10px;color:var(--text-muted);">2026-09-16</span>
+            <strong style="font-size:13px;">v4.0 Engineering NOC & Diagnostics</strong>
+            <span style="font-size:11px;color:var(--accent-blue);"><code>NOC-V4</code></span>
+            <span style="font-size:11px;color:var(--accent-green);">92 nodes</span>
+          </div>
+        
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-header">
+        <strong style="font-size:16px;" id="det-title">v4.0 Engineering NOC & Diagnostics (Commit: NOC-V4)</strong>
+        <span style="font-size:12px;color:var(--accent-green);font-weight:700;" id="det-author">Author: Antigravity NOC Team • 2026-09-16</span>
+      </div>
+      <div class="detail-body">
+        <p style="font-size:14px;color:var(--text-secondary);" id="det-desc">Live SQL Inspector, API Waterfall latency profiling, Root Cause AI debugger, and 180% NOC UX.</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;">
+          <div style="background:var(--bg-card);padding:14px;border-radius:8px;">
+            <strong style="font-size:12px;color:var(--accent-green);">NODES INTRODUCED:</strong>
+            <div style="margin-top:6px;font-size:13px;" id="det-added"><code>sql_inspector_node</code> <code>waterfall_profiler</code> <code>git_time_machine</code> <code>root_cause_ai</code> <code>error_heatmap_matrix</code> <code>perf_health_gauges</code> <code>auto_refresh_watcher</code> <code>dep_blast_radius</code></div>
+          </div>
+          <div style="background:var(--bg-card);padding:14px;border-radius:8px;">
+            <strong style="font-size:12px;color:var(--accent-purple);">MODIFIED EDGES:</strong>
+            <div style="margin-top:6px;font-size:13px;" id="det-edges"><code>edge_v4_sql_1</code> <code>edge_v4_waterfall_1</code> <code>edge_v4_ai_1</code></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SNAPS = [{"commit":"5201800","title":"v1.0 Core QR Foundation","date":"2026-08-28","author":"Deepak Soni","description":"Initial customer QR scan, table session detection, and menu browsing architecture.","nodesCount":42,"edgesCount":48,"addedNodes":["cust_qr_scan","cust_menu","cust_cart","order_new","kds_kitchen_screen"],"removedNodes":[],"modifiedEdges":["edge_cust_1","edge_order_1"],"stabilityScore":"85%"},{"commit":"3913df4","title":"v1.5 Floor Layout & KDS Sync","date":"2026-09-02","author":"Deepak Soni","description":"Floor Layout Manager v1.0 freeze, real-time table occupancy sync, and multi-station KDS routing.","nodesCount":58,"edgesCount":68,"addedNodes":["waiter_table_status","waiter_call","kds_realtime_sync","floor_layout_mgr"],"removedNodes":[],"modifiedEdges":["edge_kds_sync_1","edge_floor_1"],"stabilityScore":"92%"},{"commit":"f7f626a","title":"v2.0 Frozen Inventory & Idempotency","date":"2026-09-10","author":"Deepak Soni","description":"Phase 19/20 freeze of inventoryEngine.ts, atomic BOM recipe scaling, and exact-once consumption.","nodesCount":72,"edgesCount":84,"addedNodes":["inv_reservation","inv_consumption","inv_reversal","order_idempotency","offline_sqlite_queue"],"removedNodes":[],"modifiedEdges":["edge_inv_consume","edge_idem_1"],"stabilityScore":"98%"},{"commit":"99006ad","title":"v3.0 Multi-Restaurant Control Tower","date":"2026-09-16","author":"Deepak Soni","description":"Multi-tenant switcher, distributed X-Ray tracing, 7 isolated channels, and 160% readability upgrade.","nodesCount":84,"edgesCount":102,"addedNodes":["tenant_resolver","xray_tracer","impact_analyzer_engine","error_time_machine_node","dev_console_bus"],"removedNodes":[],"modifiedEdges":["edge_v3_tenant_1","edge_v3_xray_1"],"stabilityScore":"99.5%"},{"commit":"NOC-V4","title":"v4.0 Engineering NOC & Diagnostics","date":"2026-09-16","author":"Antigravity NOC Team","description":"Live SQL Inspector, API Waterfall latency profiling, Root Cause AI debugger, and 180% NOC UX.","nodesCount":92,"edgesCount":115,"addedNodes":["sql_inspector_node","waterfall_profiler","git_time_machine","root_cause_ai","error_heatmap_matrix","perf_health_gauges","auto_refresh_watcher","dep_blast_radius"],"removedNodes":[],"modifiedEdges":["edge_v4_sql_1","edge_v4_waterfall_1","edge_v4_ai_1"],"stabilityScore":"100%"}];
+    function onSelectSnapshot(idx) {
+      document.querySelectorAll('.snap-chip').forEach(c => c.classList.remove('active'));
+      const chip = document.getElementById('chip-' + idx);
+      if (chip) chip.classList.add('active');
+
+      const s = SNAPS[idx];
+      document.getElementById('lbl-active-commit').innerText = 'Milestone ' + (idx+1) + ' of 5: ' + s.title;
+      document.getElementById('det-title').innerText = s.title + ' (Commit: ' + s.commit + ')';
+      document.getElementById('det-author').innerText = 'Author: ' + s.author + ' • ' + s.date;
+      document.getElementById('det-desc').innerText = s.description;
+      document.getElementById('det-added').innerHTML = s.addedNodes.length ? s.addedNodes.map(n => '<code>' + n + '</code>').join(' ') : '<em>None</em>';
+      document.getElementById('det-edges').innerHTML = s.modifiedEdges.length ? s.modifiedEdges.map(e => '<code>' + e + '</code>').join(' ') : '<em>None</em>';
+    }
+  </script>
+</body>
+</html>
