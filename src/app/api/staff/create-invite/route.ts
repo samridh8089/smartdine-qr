@@ -165,8 +165,12 @@ export async function POST(req: Request) {
     }
 
     if (!existingAuthUser) {
-      const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      existingAuthUser = users ? users.find(u => u.email?.toLowerCase() === cleanEmail) : null;
+      try {
+        const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        existingAuthUser = authList?.users ? authList.users.find(u => u.email?.toLowerCase() === cleanEmail) : null;
+      } catch (listErr) {
+        console.warn('[create-invite] auth listUsers skipped:', listErr);
+      }
     }
 
     if (existingAuthUser) {
@@ -191,26 +195,49 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. User does not exist -> Create user cleanly using admin API
-    const { data: newAuthData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-      email: cleanEmail,
-      password: password || 'SmartDine123!',
-      email_confirm: false, // Triggers email confirmation
-      user_metadata: {
-        fullName: name,
-        role: role || 'staff',
-        department: resolvedDept,
-        phone: phone || '',
-        restaurant_id: restaurantId,
-        verification_status: 'pending_verification'
+    // 2. User does not exist -> Create user cleanly using admin API or signUp fallback
+    let newUser: any = null;
+    try {
+      const { data: newAuthData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+        email: cleanEmail,
+        password: password || 'SmartDine123!',
+        email_confirm: false, // Triggers email confirmation
+        user_metadata: {
+          fullName: name,
+          role: role || 'staff',
+          department: resolvedDept,
+          phone: phone || '',
+          restaurant_id: restaurantId,
+          verification_status: 'pending_verification'
+        }
+      });
+      if (newAuthData?.user) {
+        newUser = newAuthData.user;
       }
-    });
-
-    if (createErr) {
-      return NextResponse.json({ error: createErr.message || 'Failed to create auth user' }, { status: 500 });
+    } catch (adminErr) {
+      console.warn('[create-invite] admin.createUser threw:', adminErr);
     }
 
-    const newUser = newAuthData.user;
+    if (!newUser) {
+      const { data: signUpData, error: signUpErr } = await supabaseAdmin.auth.signUp({
+        email: cleanEmail,
+        password: password || 'SmartDine123!',
+        options: {
+          data: {
+            fullName: name,
+            role: role || 'staff',
+            department: resolvedDept,
+            phone: phone || '',
+            restaurant_id: restaurantId,
+            verification_status: 'pending_verification'
+          }
+        }
+      });
+      if (signUpErr || !signUpData?.user) {
+        return NextResponse.json({ error: signUpErr?.message || 'Failed to create staff account' }, { status: 500 });
+      }
+      newUser = signUpData.user;
+    }
 
     // Create profile row with explicit restaurant_id using valid columns
     await supabaseAdmin.from('profiles').upsert({
@@ -260,6 +287,29 @@ export async function POST(req: Request) {
       });
     } catch (e) {
       console.warn('createAndDispatchOtp error:', e);
+    }
+
+    // Broadcast staff-created event across Realtime channels
+    try {
+      const { broadcastStaffRealtimeEvent } = await import('@/lib/realtime');
+      await broadcastStaffRealtimeEvent({
+        restaurantId,
+        staffId: newUser.id,
+        action: 'create',
+        profile: {
+          id: newUser.id,
+          email: cleanEmail,
+          full_name: name,
+          role: role || 'staff',
+          department: resolvedDept,
+          phone: phone || '',
+          restaurant_id: restaurantId,
+          is_active: true
+        },
+        client: supabaseAdmin
+      });
+    } catch (bcErr) {
+      console.warn('[create-invite] broadcastStaffRealtimeEvent error:', bcErr);
     }
 
     return NextResponse.json({
