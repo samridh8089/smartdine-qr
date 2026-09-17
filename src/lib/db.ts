@@ -176,8 +176,10 @@ export interface Restaurant {
   phone: string;
   address: string;
   gst_number?: string;
+  timezone?: string;
   settings: {
     currency: string;
+    timezone?: string;
     gst_percentage: number;
     service_charge_percentage: number;
     theme_color?: string;
@@ -2071,12 +2073,20 @@ export const db = {
   },
 
   // --- Orders ---
-  async getOrders(restaurantId: string): Promise<Order[]> {
-    const { data, error } = await supabase
+  async getOrders(restaurantId: string, startDate?: string, endDate?: string): Promise<Order[]> {
+    let query = supabase
       .from('orders')
       .select('*, order_items(*), order_batches(*)')
-      .eq('restaurant_id', restaurantId)
-      .order('created_at', { ascending: false });
+      .eq('restaurant_id', restaurantId);
+
+    if (startDate) {
+      query = query.gte('created_at', startDate);
+    }
+    if (endDate) {
+      query = query.lte('created_at', endDate);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
     if (error || !data) return [];
 
     return data.map((o: any) => {
@@ -2908,7 +2918,7 @@ export const db = {
       return fullOrder;
   },
 
-  async updateOrderStatus(id: string, status: Order['status'], userName?: string, cancellationReason?: string): Promise<Order> {
+  async updateOrderStatus(id: string, status: Order['status'], userName?: string, cancellationReason?: string, client?: any): Promise<Order> {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isUuid) {
       return {
@@ -2956,7 +2966,8 @@ export const db = {
       orderUpdate.cancellation_reason = cancellationReason || 'Cancelled';
     }
 
-    const { data: lockResult, error: lockErr } = await supabase
+    const activeClient = client || supabase;
+    const { data: lockResult, error: lockErr } = await activeClient
       .from('orders')
       .update(orderUpdate)
       .eq('id', id)
@@ -3008,7 +3019,7 @@ export const db = {
       cancellationReason
     });
 
-    await supabase
+    await activeClient
       .from('order_batches')
       .update(batchUpdateData)
       .eq('order_id', id)
@@ -3016,7 +3027,7 @@ export const db = {
 
     if (['served', 'completed'].includes(status)) {
       try {
-        await supabase
+        await activeClient
           .from('order_items')
           .update({ is_served: true })
           .eq('order_id', id)
@@ -3024,7 +3035,7 @@ export const db = {
       } catch (e) {}
     } else if (status === 'cancelled') {
       try {
-        await supabase
+        await activeClient
           .from('order_items')
           .update({ is_cancelled: true })
           .eq('order_id', id);
@@ -5099,3 +5110,6 @@ export const db = {
     };
   }
 };
+
+export { getDayRangeInTimezone, getTodayDateString } from './timestamp';
+

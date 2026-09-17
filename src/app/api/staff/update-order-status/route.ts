@@ -22,6 +22,12 @@ export async function POST(req: Request) {
       return authCheck.response;
     }
 
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
+    const userClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
+      auth: { persistSession: false },
+      global: { headers: authHeader ? { Authorization: authHeader } : undefined }
+    });
+
     const body = await req.json();
 
     const normalizedBody = {
@@ -104,7 +110,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'orderId could not be resolved for completed status' }, { status: 400 });
       }
       try {
-        updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason);
+        updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason, userClient);
       } catch (dbErr: any) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
@@ -129,7 +135,7 @@ export async function POST(req: Request) {
       updatedBatch = bRes;
     } else if (orderId) {
       try {
-        updatedOrder = await db.updateOrderStatus(orderId, effectiveStatus, staffName, cancellationReason);
+        updatedOrder = await db.updateOrderStatus(orderId, effectiveStatus, staffName, cancellationReason, userClient);
       } catch (dbErr: any) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });

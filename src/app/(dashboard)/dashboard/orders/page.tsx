@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { db, Order, Restaurant, CustomerRequest, OrderBatch, VALID_ORDER_TRANSITIONS } from '@/lib/db';
+import { db, Order, Restaurant, CustomerRequest, OrderBatch, VALID_ORDER_TRANSITIONS, getDayRangeInTimezone, getTodayDateString } from '@/lib/db';
 import { calculateBillingTotals, calculateBillSplit } from '@/lib/billingEngine';
 import { recordAuditLog } from '@/lib/auditLogger';
 import { getActiveUser, supabase } from '@/lib/supabase';
@@ -152,6 +152,9 @@ export default function OrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(orderIdParam || null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    return getTodayDateString('Asia/Kolkata');
+  });
   const [loading, setLoading] = useState(() => !initialCachedOrders);
   const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
@@ -321,6 +324,10 @@ export default function OrdersPage() {
   useEffect(() => {
     selectedOrderIdRef.current = selectedOrderId;
   }, [selectedOrderId]);
+  const selectedDateRef = useRef<string>(selectedDate);
+  useEffect(() => {
+    selectedDateRef.current = selectedDate;
+  }, [selectedDate]);
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
 
@@ -373,9 +380,13 @@ export default function OrdersPage() {
     }
   };
 
-  const loadInitialData = async (restId: string) => {
+  const loadInitialData = async (restId: string, overrideDate?: string) => {
+    const targetDate = overrideDate !== undefined ? overrideDate : selectedDateRef.current;
+    const tz = (restaurant as any)?.timezone || restaurant?.settings?.timezone || 'Asia/Kolkata';
+    const { startIso, endIso } = getDayRangeInTimezone(targetDate, tz);
+
     const [allOrders, reqs, tbls] = await Promise.all([
-      db.getOrders(restId),
+      db.getOrders(restId, startIso, endIso),
       db.getCustomerRequests(restId),
       db.getTables(restId)
     ]);
@@ -521,15 +532,19 @@ export default function OrdersPage() {
     }
   }, [restaurant?.id]);
 
-  const safeReloadOrders = async (restId: string) => {
+  const safeReloadOrders = async (restId: string, overrideDate?: string) => {
     if (isReloadingRef.current) {
       pendingReloadRef.current = true;
       return;
     }
     isReloadingRef.current = true;
     try {
+      const targetDate = overrideDate !== undefined ? overrideDate : selectedDateRef.current;
+      const tz = (restaurant as any)?.timezone || restaurant?.settings?.timezone || 'Asia/Kolkata';
+      const { startIso, endIso } = getDayRangeInTimezone(targetDate, tz);
+
       const [allOrders, tbls] = await Promise.all([
-        db.getOrders(restId),
+        db.getOrders(restId, startIso, endIso),
         db.getTables(restId)
       ]);
       setAllTables(tbls || []);
@@ -1777,6 +1792,32 @@ export default function OrdersPage() {
     });
   }, [effectiveOrders, restaurant?.name, searchQuery, statusFilter, orderQueue]);
 
+  const restaurantTz = (restaurant as any)?.timezone || restaurant?.settings?.timezone || 'Asia/Kolkata';
+  const todayDateStr = getTodayDateString(restaurantTz);
+
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate);
+    if (restaurant?.id) {
+      safeReloadOrders(restaurant.id, newDate);
+    }
+  };
+
+  const handleSelectToday = () => {
+    const today = getTodayDateString(restaurantTz);
+    setSelectedDate(today);
+    if (restaurant?.id) {
+      safeReloadOrders(restaurant.id, today);
+    }
+  };
+
+  const handleClearDate = () => {
+    const today = getTodayDateString(restaurantTz);
+    setSelectedDate(today);
+    if (restaurant?.id) {
+      safeReloadOrders(restaurant.id, today);
+    }
+  };
+
   if (loading || !restaurant) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -1934,21 +1975,21 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-2.5 h-4.5 w-4.5 text-slate-400" />
+            <div className="flex items-center gap-1.5">
+              <div className="relative flex-1 min-w-[90px]">
+                <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search order ID, table..."
+                  placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="w-full pl-8 pr-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                className="px-2 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs focus:outline-none bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0"
               >
                 <option value="all">All States</option>
                 <option value="new">New</option>
@@ -1959,6 +2000,34 @@ export default function OrdersPage() {
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
+              <div className="flex items-center gap-1 shrink-0">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => handleDateChange(e.target.value)}
+                  className="px-1.5 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  title="Filter orders by date"
+                />
+                <button
+                  type="button"
+                  onClick={handleSelectToday}
+                  className={`px-2 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                    selectedDate === todayDateStr
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300 font-semibold'
+                      : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearDate}
+                  className="px-2 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  title="Clear filter and show today"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
 
             <div className="divide-y divide-slate-100 dark:divide-slate-800 space-y-1">

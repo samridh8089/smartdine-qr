@@ -84,6 +84,22 @@ export async function POST(req: Request) {
       } catch (e) {}
     }
 
+    // Broadcast staff-updated event across Realtime channels
+    if (restaurantId && staffId) {
+      try {
+        const { broadcastStaffRealtimeEvent } = await import('@/lib/realtime');
+        await broadcastStaffRealtimeEvent({
+          restaurantId,
+          staffId,
+          action: 'update',
+          profile: { id: staffId, email, is_verified: true, is_active: true },
+          client: supabaseAdmin
+        });
+      } catch (bcErr) {
+        console.warn('[verify-otp] broadcastStaffRealtimeEvent error:', bcErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Staff account successfully verified and activated!'
