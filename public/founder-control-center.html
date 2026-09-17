@@ -3,8 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartDine V3 Ultimate Control Tower + Multi-Restaurant Digital Twin</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/supabase.js"></script>
+  <script>
+    if (typeof supabase === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      document.head.appendChild(s);
+    }
+  </script>
   <style>
     /* ─── DESIGN SYSTEM & TYPOGRAPHY UPGRADE ─── */
     :root {
@@ -1084,6 +1090,15 @@
       z-index: 150;
       font-size: 14px;
     }
+  
+    /* Live Status Glow for Floor Table Chips */
+    .table-chip.new { border-color: #38bdf8 !important; background: rgba(56, 189, 248, 0.22) !important; box-shadow: 0 0 14px rgba(56, 189, 248, 0.5) !important; color: #38bdf8 !important; }
+    .table-chip.occupied { border-color: #3b82f6 !important; background: rgba(59, 130, 246, 0.22) !important; box-shadow: 0 0 14px rgba(59, 130, 246, 0.5) !important; color: #60a5fa !important; }
+    .table-chip.preparing { border-color: #f59e0b !important; background: rgba(245, 158, 11, 0.22) !important; box-shadow: 0 0 14px rgba(245, 158, 11, 0.5) !important; color: #fbbf24 !important; }
+    .table-chip.ready { border-color: #10b981 !important; background: rgba(16, 185, 129, 0.25) !important; box-shadow: 0 0 14px rgba(16, 185, 129, 0.5) !important; color: #34d399 !important; }
+    .table-chip.served { border-color: #8b5cf6 !important; background: rgba(139, 92, 246, 0.22) !important; box-shadow: 0 0 14px rgba(139, 92, 246, 0.5) !important; color: #a78bfa !important; }
+    .table-chip.available { border-color: #10b981; opacity: 0.75; }
+
   </style>
 
   <style>
@@ -1391,9 +1406,9 @@
   </header>
 
   <!-- ─── FLOATING LIVE ACTIVITY HUD BANNER ─── -->
-  <div id="live-activity-banner" style="position:fixed;top:72px;left:50%;transform:translateX(-50%);z-index:900;background:rgba(15,23,42,0.92);border:1px solid rgba(16,185,129,0.5);box-shadow:0 10px 30px rgba(0,0,0,0.6), 0 0 15px rgba(16,185,129,0.3);padding:8px 20px;border-radius:24px;display:none;align-items:center;gap:10px;font-size:12px;font-weight:700;backdrop-filter:blur(8px);pointer-events:none;transition:all 0.3s ease;">
-    <span class="live-pulse-dot" style="width:10px;height:10px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;animation:nodePulseGlow 1s infinite alternate;"></span>
-    <span id="live-activity-text" style="color:#f8fafc;font-family:var(--font-mono);">WAITING FOR LIVE PHONE ORDER...</span>
+  <div id="live-activity-banner" style="position:fixed;top:72px;left:50%;transform:translateX(-50%);z-index:900;background:rgba(15,23,42,0.95);border:2px solid #10b981;box-shadow:0 10px 30px rgba(0,0,0,0.8), 0 0 25px rgba(16,185,129,0.5);padding:10px 24px;border-radius:30px;display:none;align-items:center;gap:12px;font-size:13px;font-weight:700;backdrop-filter:blur(10px);pointer-events:none;transition:all 0.3s ease;">
+    <span class="live-pulse-dot" style="width:12px;height:12px;border-radius:50%;background:#10b981;box-shadow:0 0 10px #10b981;animation:nodePulseGlow 1s infinite alternate;"></span>
+    <span id="live-activity-text" style="color:#f8fafc;font-family:var(--font-mono);letter-spacing:0.5px;">WAITING FOR LIVE PHONE ORDER...</span>
   </div>
 
 
@@ -3107,7 +3122,7 @@
       }
 
       applyRestaurantUI(currentRestaurantId);
-      initRealtimeSubscriptions(currentRestaurantId);
+      initSupabaseLiveNoc();
       setupDevStreamHeartbeat();
       // Center diagram on initial Customer Journey node
       setTimeout(() => {
@@ -3983,6 +3998,8 @@
 
         // ─── AUDIO SYNTHESIZER CHIME ENGINE (WebAudio API) ───
     function playLiveChime(status) {
+      const ts = new Date().toISOString();
+      console.log(`[${ts}] playLiveChime() executed:`, { status });
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
@@ -3997,28 +4014,28 @@
 
         if (s === 'new') {
           // High alert chime
-          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.setValueAtTime(0.25, now);
           osc.frequency.setValueAtTime(880, now);
           osc.frequency.exponentialRampToValueAtTime(1174, now + 0.2);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+          osc.start(now);
+          osc.stop(now + 0.4);
+        } else if (s === 'accepted') {
+          // Double harmony chime
+          gain.gain.setValueAtTime(0.2, now);
+          osc.frequency.setValueAtTime(587, now);
+          osc.frequency.setValueAtTime(880, now + 0.12);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
           osc.start(now);
           osc.stop(now + 0.35);
-        } else if (s === 'accepted') {
-          // Double harmony chime
-          gain.gain.setValueAtTime(0.18, now);
-          osc.frequency.setValueAtTime(587, now);
-          osc.frequency.setValueAtTime(880, now + 0.12);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
-          osc.start(now);
-          osc.stop(now + 0.32);
         } else if (s === 'preparing') {
           // Warm prep tone
-          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.setValueAtTime(0.2, now);
           osc.frequency.setValueAtTime(440, now);
           osc.frequency.linearRampToValueAtTime(659, now + 0.15);
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
           osc.start(now);
-          osc.stop(now + 0.3);
+          osc.stop(now + 0.35);
         } else if (s === 'ready') {
           // Pass bell ding
           gain.gain.setValueAtTime(0.25, now);
@@ -4028,7 +4045,7 @@
           osc.stop(now + 0.45);
         } else if (s === 'served') {
           // Service chime
-          gain.gain.setValueAtTime(0.18, now);
+          gain.gain.setValueAtTime(0.2, now);
           osc.frequency.setValueAtTime(523, now);
           osc.frequency.linearRampToValueAtTime(784, now + 0.2);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
@@ -4036,21 +4053,129 @@
           osc.stop(now + 0.35);
         } else if (s === 'completed') {
           // Settlement cash register ding
-          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.setValueAtTime(0.25, now);
           osc.frequency.setValueAtTime(1318, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
           osc.start(now);
           osc.stop(now + 0.5);
+        } else {
+          gain.gain.setValueAtTime(0.15, now);
+          osc.frequency.setValueAtTime(660, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+          osc.start(now);
+          osc.stop(now + 0.25);
         }
       } catch (audioErr) {
         console.warn('[NOC Audio] AudioContext notice:', audioErr);
       }
     }
 
+    // ─── VISUAL EVENT HANDLERS (EXPLICIT FOR EVIDENCE) ───
+    function showLiveBanner(tableName, status, amount, orderId) {
+      const ts = new Date().toISOString();
+      console.log(`[${ts}] showLiveBanner() executed:`, { tableName, status, amount, orderId });
+
+      const banner = document.getElementById('live-activity-banner');
+      const bannerText = document.getElementById('live-activity-text');
+      if (banner && bannerText) {
+        const s = (status || '').toLowerCase();
+        const sColor = {
+          new: '#38bdf8',
+          accepted: '#f59e0b',
+          preparing: '#f97316',
+          ready: '#10b981',
+          served: '#8b5cf6',
+          completed: '#059669',
+          cancelled: '#ef4444'
+        }[s] || '#10b981';
+
+        bannerText.innerHTML = `⚡ <strong>LIVE EVENT:</strong> [${tableName || 'Table'}] Order #${(orderId||'').slice(0,8)} ➔ <span style="color:${sColor};text-transform:uppercase;font-weight:800;">${status}</span> ${amount ? '• ' + amount : ''}`;
+        banner.style.display = 'inline-flex';
+        banner.style.borderColor = sColor;
+        banner.style.boxShadow = `0 10px 30px rgba(0,0,0,0.8), 0 0 25px ${sColor}88`;
+
+        setTimeout(() => {
+          if (banner) {
+            banner.style.borderColor = 'rgba(16,185,129,0.5)';
+            banner.style.boxShadow = '0 10px 30px rgba(0,0,0,0.6), 0 0 15px rgba(16,185,129,0.3)';
+          }
+        }, 4000);
+      }
+
+      if (typeof showToast === 'function') {
+        showToast(`⚡ Live Order Event: ${tableName} ➔ ${(status||'').toUpperCase()} ${amount ? '(' + amount + ')' : ''}`, 'info');
+      }
+    }
+
+    function animateNode(nodeId, edgeId) {
+      const ts = new Date().toISOString();
+      console.log(`[${ts}] animateNode() executed:`, { nodeId, edgeId });
+      if (!nodeId) return;
+
+      // Auto-center camera smoothly
+      if (typeof centerOnNode === 'function') {
+        centerOnNode(nodeId, 1.35);
+      }
+
+      // Clear previous active nodes & edges
+      document.querySelectorAll('.node-group').forEach(g => g.classList.remove('flow-active'));
+      document.querySelectorAll('.edge-path').forEach(ep => ep.classList.remove('flow-active'));
+
+      const nodeEl = document.getElementById('node-' + nodeId);
+      if (nodeEl) {
+        nodeEl.classList.add('flow-active');
+      }
+
+      let edgeEl = null;
+      if (edgeId) {
+        edgeEl = document.getElementById(edgeId);
+        if (edgeEl) edgeEl.classList.add('flow-active');
+      }
+
+      setTimeout(() => {
+        if (nodeEl) nodeEl.classList.remove('flow-active');
+        if (edgeEl) edgeEl.classList.remove('flow-active');
+      }, 5000);
+    }
+
+    function updateFloorGrid(tableName, status, amount, orderId) {
+      const ts = new Date().toISOString();
+      console.log(`[${ts}] updateFloorGrid() executed:`, { tableName, status, amount, orderId });
+
+      if (tableName) {
+        let matchingTable = liveTables.find(t => 
+          t.id.toLowerCase() === tableName.toLowerCase() || 
+          tableName.toLowerCase().includes(t.id.toLowerCase())
+        );
+
+        if (!matchingTable) {
+          matchingTable = {
+            id: tableName,
+            tableId: tableName,
+            type: 'Dine In',
+            seats: 4,
+            status: 'available',
+            orderId: '',
+            amount: ''
+          };
+          liveTables.push(matchingTable);
+        }
+
+        if (matchingTable) {
+          const s = (status || '').toLowerCase();
+          const isEnded = s === 'completed' || s === 'cancelled' || s === 'rejected';
+          matchingTable.status = isEnded ? 'available' : (s === 'new' ? 'occupied' : s);
+          if (amount) matchingTable.amount = amount;
+          matchingTable.orderId = isEnded ? '' : orderId;
+        }
+      }
+
+      renderFloorGrid();
+    }
+
     let recentCompletedOrders = [];
 
     function renderFloorGrid() {
-      const r = RESTAURANTS.find(x => x.id === currentRestaurantId) || RESTAURANTS[0];
       const gridEl = document.getElementById('floor-grid-cards');
       if (!gridEl) return;
 
@@ -4102,6 +4227,8 @@
     }
 
     // ─── UPGRADED HIGH-RESILIENT SUPABASE LIVE NOC ENGINE ───
+    let knownOrderStatuses = {};
+
     async function loadRealFloorTables() {
       if (!liveSupabaseClient) return;
       try {
@@ -4136,13 +4263,18 @@
     }
 
     async function initSupabaseLiveNoc() {
+      if (window.__nocInitialized) return;
       if (typeof supabase === 'undefined' || !supabase.createClient) {
-        console.warn('[NOC Realtime] Supabase JS SDK not ready');
+        console.warn('[NOC Realtime] Supabase JS SDK not ready yet, retrying in 250ms...');
+        setTimeout(initSupabaseLiveNoc, 250);
         return;
       }
+      window.__nocInitialized = true;
+
       try {
         liveSupabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const restId = currentRestaurantId || '81fa8201-51d7-4da5-98f5-a52dbff4e6ae';
+        console.log("Listening Restaurant:", restId);
 
         // 1. Load real tenant tables from database
         await loadRealFloorTables();
@@ -4152,21 +4284,26 @@
 
         // 3. Robust Realtime Postgres Changes Subscription
         const pgChannel = liveSupabaseClient.channel(`founder_pg_${restId}_${Date.now()}`);
+        console.log("Channel:", pgChannel.topic);
 
         pgChannel
           // Orders Table Insert & Update
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restId}` }, (p) => {
-            logDevEvent('PG_ORDERS', p.eventType, JSON.stringify(p.new || {}));
-            if (p.eventType === 'INSERT') {
-              const ord = p.new;
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restId}` }, (payload) => {
+            console.log("Realtime Event", payload);
+            logDevEvent('PG_ORDERS', payload.eventType, JSON.stringify(payload.new || {}));
+            
+            const ord = payload.new || payload.old || {};
+            const orderRestId = ord.restaurant_id || restId;
+            console.log("Restaurant ID check -> Customer order restaurant ID:", orderRestId, "| Founder Control Center restaurant ID:", restId, "| Match:", orderRestId === restId);
+
+            if (payload.eventType === 'INSERT') {
               onRealtimeOrderEvent('new-order', {
                 newStatus: ord.status || 'new',
                 orderId: ord.id,
                 tableName: ord.table_name,
                 updatedOrder: ord
               });
-            } else if (p.eventType === 'UPDATE') {
-              const ord = p.new;
+            } else if (payload.eventType === 'UPDATE') {
               onRealtimeOrderEvent('order-status-updated', {
                 newStatus: ord.status,
                 orderId: ord.id,
@@ -4177,9 +4314,10 @@
             syncLiveOrdersFromSupabase();
           })
           // Order Batches Table Insert & Update
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'order_batches' }, (p) => {
-            logDevEvent('PG_BATCH', p.eventType, JSON.stringify(p.new || {}));
-            const b = p.new;
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'order_batches' }, (payload) => {
+            console.log("Realtime Event", payload);
+            logDevEvent('PG_BATCH', payload.eventType, JSON.stringify(payload.new || {}));
+            const b = payload.new;
             if (b && b.status) {
               onRealtimeOrderEvent('batch-status-updated', {
                 newStatus: b.status,
@@ -4190,13 +4328,15 @@
             syncLiveOrdersFromSupabase();
           })
           // System Events Bus (QR scans, Cart additions, Checkouts, Inventory)
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_events', filter: `restaurant_id=eq.${restId}` }, (p) => {
-            logDevEvent('SYSTEM_EVENT', p.new?.event_type || 'event', JSON.stringify(p.new || {}));
-            if (p.new) {
-              handleSystemEventNodePulse(p.new.event_type, p.new);
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'system_events', filter: `restaurant_id=eq.${restId}` }, (payload) => {
+            console.log("Realtime Event", payload);
+            logDevEvent('SYSTEM_EVENT', payload.new?.event_type || 'event', JSON.stringify(payload.new || {}));
+            if (payload.new) {
+              handleSystemEventNodePulse(payload.new.event_type, payload.new);
             }
           })
           .subscribe((status) => {
+            console.log("WS connection established:", pgChannel.topic, "Status:", status);
             if (status === 'SUBSCRIBED') {
               const badge = document.querySelector('.noc-badge');
               if (badge) {
@@ -4209,23 +4349,49 @@
           });
 
         // 4. WebSocket Broadcast Channels (Instant non-blocking emitter)
-        liveSupabaseClient.channel(`kds_${restId}`)
-          .on('broadcast', { event: 'order-status-updated' }, (p) => onRealtimeOrderEvent('order-status-updated', p?.payload || p))
-          .on('broadcast', { event: 'new-order' }, (p) => onRealtimeOrderEvent('new-order', p?.payload || p))
-          .on('broadcast', { event: 'payment-updated' }, (p) => onRealtimeOrderEvent('payment-updated', p?.payload || p))
+        const kdsChannel = liveSupabaseClient.channel(`kds_${restId}`);
+        console.log("Channel:", kdsChannel.topic);
+        kdsChannel
+          .on('broadcast', { event: 'order-status-updated' }, (p) => {
+            console.log("Realtime Event", p);
+            onRealtimeOrderEvent('order-status-updated', p?.payload || p);
+          })
+          .on('broadcast', { event: 'new-order' }, (p) => {
+            console.log("Realtime Event", p);
+            onRealtimeOrderEvent('new-order', p?.payload || p);
+          })
+          .on('broadcast', { event: 'payment-updated' }, (p) => {
+            console.log("Realtime Event", p);
+            onRealtimeOrderEvent('payment-updated', p?.payload || p);
+          })
+          .subscribe((status) => {
+            console.log("WS connection established:", kdsChannel.topic, "Status:", status);
+          });
+
+        const liveOrdersChannel = liveSupabaseClient.channel(`live_orders_${restId}`);
+        liveOrdersChannel
+          .on('broadcast', { event: 'order-status-updated' }, (p) => {
+            console.log("Realtime Event", p);
+            onRealtimeOrderEvent('order-status-updated', p?.payload || p);
+          })
+          .on('broadcast', { event: 'new-order' }, (p) => {
+            console.log("Realtime Event", p);
+            onRealtimeOrderEvent('new-order', p?.payload || p);
+          })
           .subscribe();
 
-        liveSupabaseClient.channel(`live_orders_${restId}`)
-          .on('broadcast', { event: 'order-status-updated' }, (p) => onRealtimeOrderEvent('order-status-updated', p?.payload || p))
-          .on('broadcast', { event: 'new-order' }, (p) => onRealtimeOrderEvent('new-order', p?.payload || p))
+        const tablesChannel = liveSupabaseClient.channel(`tables_${restId}`);
+        tablesChannel
+          .on('broadcast', { event: 'table-status-updated' }, (p) => {
+            console.log("Realtime Event", p);
+            onRealtimeTableEvent(p?.payload || p);
+          })
           .subscribe();
 
-        liveSupabaseClient.channel(`tables_${restId}`)
-          .on('broadcast', { event: 'table-status-updated' }, (p) => onRealtimeTableEvent(p?.payload || p))
-          .subscribe();
-
-        liveSupabaseClient.channel(`founder_events_${restId}`)
+        const founderChannel = liveSupabaseClient.channel(`founder_events_${restId}`);
+        founderChannel
           .on('broadcast', { event: '*' }, (p) => {
+            console.log("Realtime Event", p);
             const evData = p?.payload || p;
             logDevEvent('FOUNDER_BUS', p.event, JSON.stringify(evData));
             if (evData && evData.eventType) {
@@ -4234,10 +4400,10 @@
           })
           .subscribe();
 
-        // 5. Periodic 2.5-Second Background Auto-Sync
+        // 5. Periodic 2.0-Second Background Auto-Sync with State Transition Detection
         setInterval(() => {
           syncLiveOrdersFromSupabase();
-        }, 2500);
+        }, 2000);
 
       } catch (err) {
         console.warn('[NOC Realtime] Init error:', err);
@@ -4249,23 +4415,38 @@
       try {
         const restId = currentRestaurantId || '81fa8201-51d7-4da5-98f5-a52dbff4e6ae';
         
-        // Fetch active orders and 5 most recent orders in parallel
+        // Fetch active orders and 6 most recent orders in parallel
         const [activeRes, recentRes] = await Promise.all([
           liveSupabaseClient
             .from('orders')
-            .select('id, table_name, table_id, status, total, order_batches(id, status)')
+            .select('id, table_name, table_id, status, total, restaurant_id, order_batches(id, status)')
             .eq('restaurant_id', restId)
             .not('status', 'in', '(completed,cancelled)'),
           liveSupabaseClient
             .from('orders')
-            .select('id, table_name, table_id, status, total, created_at, updated_at')
+            .select('id, table_name, table_id, status, total, restaurant_id, created_at, updated_at')
             .eq('restaurant_id', restId)
             .order('created_at', { ascending: false })
-            .limit(5)
+            .limit(6)
         ]);
 
         const activeOrders = activeRes.data || [];
         recentCompletedOrders = recentRes.data || [];
+
+        // Detect state transitions via polling sync as a fail-safe
+        activeOrders.forEach(ord => {
+          const prev = knownOrderStatuses[ord.id];
+          if (prev && prev !== ord.status) {
+            console.log("[POLL SYNC] State Transition Detected:", ord.id, prev, "->", ord.status);
+            onRealtimeOrderEvent('order-status-updated', {
+              newStatus: ord.status,
+              orderId: ord.id,
+              tableName: ord.table_name,
+              updatedOrder: ord
+            });
+          }
+          knownOrderStatuses[ord.id] = ord.status;
+        });
 
         // Reset tables to available first if they don't have active orders
         const activeTableNames = new Set();
@@ -4329,67 +4510,51 @@
 
     function onRealtimeOrderEvent(eventType, rawPayload) {
       const payload = rawPayload?.payload || rawPayload;
+      console.log("Realtime Event", payload);
       logDevEvent('REALTIME', eventType, JSON.stringify(payload || {}));
 
-      const newStatus = payload?.newStatus || payload?.status || 'new';
-      const orderId = payload?.orderId || payload?.updatedOrder?.id || '';
-      const tableName = payload?.updatedOrder?.table_name || payload?.tableName || 'Table';
-      const amount = payload?.updatedOrder?.total ? ('₹' + Number(payload.updatedOrder.total).toLocaleString('en-IN')) : '';
+      const newStatus = (payload?.newStatus || payload?.status || 'new').toLowerCase();
+      const orderId = payload?.orderId || payload?.updatedOrder?.id || payload?.id || '';
+      const tableName = payload?.updatedOrder?.table_name || payload?.tableName || payload?.table_name || 'Table';
+      const rawTotal = payload?.updatedOrder?.total || payload?.total;
+      const amount = rawTotal ? ('₹' + Number(rawTotal).toLocaleString('en-IN')) : '';
 
-      // Play audio chime for live feedback
+      // 1. Play Audio Chime
       playLiveChime(newStatus);
 
-      // Show toast
-      showToast(`⚡ Live Order Event: ${tableName} ➔ ${newStatus.toUpperCase()} ${amount ? '(' + amount + ')' : ''}`, 'info');
+      // 2. Show Live Activity Banner
+      showLiveBanner(tableName, newStatus, amount, orderId);
 
-      // Update Top Floating Activity Banner
-      const banner = document.getElementById('live-activity-banner');
-      const bannerText = document.getElementById('live-activity-text');
-      if (banner && bannerText) {
-        bannerText.innerHTML = `⚡ <strong>LIVE EVENT:</strong> [${tableName}] Order #${(orderId||'').slice(0,8)} ➔ <span style="color:#10b981;text-transform:uppercase;">${newStatus}</span> ${amount ? '• ' + amount : ''}`;
-        banner.style.display = 'inline-flex';
-        banner.style.borderColor = '#10b981';
-        setTimeout(() => {
-          if (banner) banner.style.borderColor = 'rgba(16,185,129,0.5)';
-        }, 3000);
-      }
+      // 3. Update Floor Grid
+      updateFloorGrid(tableName, newStatus, amount, orderId);
 
-      // Update Live Floor card dynamically
-      if (tableName) {
-        let matchingTable = liveTables.find(t => 
-          t.id.toLowerCase() === tableName.toLowerCase() || 
-          tableName.toLowerCase().includes(t.id.toLowerCase())
-        );
-
-        if (!matchingTable && tableName) {
-          matchingTable = {
-            id: tableName,
-            type: 'Dine In',
-            seats: 4,
-            status: 'available',
-            orderId: '',
-            amount: ''
-          };
-          liveTables.push(matchingTable);
-        }
-
-        if (matchingTable) {
-          matchingTable.status = (newStatus === 'completed' || newStatus === 'cancelled') ? 'available' : newStatus;
-          if (amount) {
-            matchingTable.amount = amount;
-          }
-          matchingTable.orderId = (newStatus === 'completed' || newStatus === 'cancelled') ? '' : orderId;
-          renderFloorGrid();
-        }
-      }
-
-      // Pulse corresponding node on the architecture diagram!
+      // 4. Animate Architecture Node & Auto-Center Camera
       pulseArchitectureNodeForStatus(newStatus);
+
+      // 5. Update Recent Orders List
+      if (orderId) {
+        const existingIdx = recentCompletedOrders.findIndex(o => o.id === orderId);
+        const orderObj = {
+          id: orderId,
+          table_name: tableName,
+          status: newStatus,
+          total: rawTotal || 0,
+          updated_at: new Date().toISOString()
+        };
+        if (existingIdx !== -1) {
+          recentCompletedOrders[existingIdx] = orderObj;
+        } else {
+          recentCompletedOrders.unshift(orderObj);
+          if (recentCompletedOrders.length > 8) recentCompletedOrders.pop();
+        }
+        renderFloorGrid();
+      }
     }
 
     function onRealtimeTableEvent(rawPayload) {
       const payload = rawPayload?.payload || rawPayload;
       if (!payload) return;
+      console.log("Realtime Event", payload);
       logDevEvent('REALTIME', 'table-status-updated', JSON.stringify(payload));
       const tId = payload.tableName || payload.tableId;
       if (!tId) return;
@@ -4410,78 +4575,50 @@
         const tName = ev?.metadata?.table_name || 'Table';
         showToast(`📱 QR Scanned at ${tName}`, 'info');
         playLiveChime('accepted');
-        pulseArchitectureNodes(['cust_qr_scan', 'cust_menu'], 'edge-e_qr_to_menu');
+        animateNode('cust_qr_scan', 'edge-e_qr_to_menu');
       } else if (eventType === 'cart_updated') {
         showToast(`🛒 Item Added to Cart`, 'info');
-        pulseArchitectureNodes(['cust_cart'], 'edge-e_menu_to_cart');
+        animateNode('cust_cart', 'edge-e_menu_to_cart');
       } else if (eventType === 'checkout_started') {
         showToast(`💳 Checkout Started`, 'info');
-        pulseArchitectureNodes(['cust_checkout'], 'edge-e_cart_to_checkout');
+        animateNode('cust_checkout', 'edge-e_cart_to_checkout');
       } else if (eventType === 'order_created') {
         showToast(`⚡ New Order Placed!`, 'success');
         playLiveChime('new');
-        pulseArchitectureNodes(['cust_order_placement', 'order_new'], 'edge-e_placement_to_new');
+        animateNode('order_new', 'edge-e_placement_to_new');
       } else if (eventType === 'inventory_reserved') {
-        pulseArchitectureNodes(['inv_reservation'], 'edge-e_placement_to_inv_res');
+        animateNode('inv_reservation', 'edge-e_placement_to_inv_res');
       } else if (eventType === 'inventory_consumed') {
-        pulseArchitectureNodes(['inv_consumption'], 'edge-e_prep_to_inv_consume');
+        animateNode('inv_consumption', 'edge-e_prep_to_inv_consume');
       }
     }
 
     function pulseArchitectureNodeForStatus(status) {
       const statusLower = (status || '').toLowerCase();
-      let nodeIds = ['order_new'];
+      let nodeId = 'order_new';
       let edgeId = 'edge-e_placement_to_new';
 
       if (statusLower === 'accepted') {
-        nodeIds = ['kds_accept', 'order_accepted', 'inv_reservation'];
+        nodeId = 'kds_accept';
         edgeId = 'edge-e_kds_accept_to_order_accepted';
       } else if (statusLower === 'preparing') {
-        nodeIds = ['kds_preparing', 'order_preparing', 'inv_consumption'];
+        nodeId = 'kds_preparing';
         edgeId = 'edge-e_kds_prep_to_order_prep';
       } else if (statusLower === 'ready') {
-        nodeIds = ['kds_ready', 'order_ready'];
+        nodeId = 'kds_ready';
         edgeId = 'edge-e_kds_ready_to_order_ready';
       } else if (statusLower === 'served') {
-        nodeIds = ['waiter_serve', 'order_served'];
+        nodeId = 'waiter_serve';
         edgeId = 'edge-e_waiter_serve_to_order_served';
       } else if (statusLower === 'completed' || statusLower === 'paid') {
-        nodeIds = ['bill_generation', 'bill_payment', 'bill_settlement'];
+        nodeId = 'bill_settlement';
         edgeId = 'edge-e_payment_to_settle';
       } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
-        nodeIds = ['order_cancel', 'inv_reversal'];
+        nodeId = 'order_cancel';
         edgeId = 'edge-e_cancel_to_inv_reversal';
       }
 
-      pulseArchitectureNodes(nodeIds, edgeId);
-    }
-
-    function pulseArchitectureNodes(nodeIds, edgeId) {
-      if (!nodeIds || nodeIds.length === 0) return;
-      centerOnNode(nodeIds[0], 1.35);
-
-      document.querySelectorAll('.node-group').forEach(g => g.classList.remove('flow-active'));
-      document.querySelectorAll('.edge-path').forEach(ep => ep.classList.remove('flow-active'));
-
-      const activeEls = [];
-      nodeIds.forEach(id => {
-        const el = document.getElementById('node-' + id);
-        if (el) {
-          el.classList.add('flow-active');
-          activeEls.push(el);
-        }
-      });
-
-      let edgeEl = null;
-      if (edgeId) {
-        edgeEl = document.getElementById(edgeId);
-        if (edgeEl) edgeEl.classList.add('flow-active');
-      }
-
-      setTimeout(() => {
-        activeEls.forEach(el => el.classList.remove('flow-active'));
-        if (edgeEl) edgeEl.classList.remove('flow-active');
-      }, 5000);
+      animateNode(nodeId, edgeId);
     }
 
     // ─── DEV LOG FILTER HELPER (for error heatmap tiles) ───

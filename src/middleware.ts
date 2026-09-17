@@ -257,11 +257,11 @@ export async function middleware(request: NextRequest) {
 
   const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-inline' ${scriptEval} https://checkout.razorpay.com https://cdn.razorpay.com https://*.supabase.co https://www.cleverops.in https://cleverops.in;
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    script-src 'self' 'unsafe-inline' ${scriptEval} https://checkout.razorpay.com https://cdn.razorpay.com https://cdn.jsdelivr.net https://*.supabase.co https://www.cleverops.in https://cleverops.in;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;
     font-src 'self' https://fonts.gstatic.com data:;
     img-src 'self' data: blob: https:;
-    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://checkout.razorpay.com https://cdn.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com https://www.cleverops.in https://cleverops.in;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://checkout.razorpay.com https://cdn.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com https://lumberjack-cx.razorpay.com https://www.cleverops.in https://cleverops.in;
     frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com;
     object-src 'none';
     base-uri 'self';
