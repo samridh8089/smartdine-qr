@@ -25,6 +25,8 @@ release-rc2/
 tsconfig.tsbuildinfo
 .vercel/
 *.png
+*.idsig
+/tools/
 
 # Environment files
 .env*
