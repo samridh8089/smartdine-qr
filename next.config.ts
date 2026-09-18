@@ -34,6 +34,20 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion']
   },
+  async redirects() {
+    return [
+      {
+        source: '/app-release.apk',
+        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/app-release.apk',
+        permanent: false,
+      },
+      {
+        source: '/download-apk',
+        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/app-release.apk',
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {
