@@ -164,13 +164,15 @@ export function useSystemEvents({
             .limit(50);
 
           if (isMounted && orderRows && orderRows.length > 0) {
-            const synthesized: SystemEvent[] = orderRows.map((ord: any) => {
-              const status = ord.status || 'created';
+            const synthesized: SystemEvent[] = [];
+            orderRows.forEach((ord: any) => {
+              const status = (ord.status || 'created').toLowerCase();
               const evtType = `order_${status}`;
               const targetNode = EVENT_TO_NODE[evtType] || 'order_created';
               const orderCorrId = `corr_${ord.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`;
+              const time = ord.updated_at || ord.created_at || new Date().toISOString();
 
-              return {
+              synthesized.push({
                 id: `synth_${ord.id}_${status}`,
                 restaurant_id: restaurantId,
                 correlation_id: orderCorrId,
@@ -180,13 +182,55 @@ export function useSystemEvents({
                 event_type: evtType,
                 source_node: 'order_created',
                 target_node: targetNode,
-                created_at: ord.updated_at || ord.created_at || new Date().toISOString(),
+                created_at: time,
                 metadata: {
                   table_name: ord.table_name || 'Table',
                   total: ord.total,
                   payment_status: ord.payment_status,
                 },
-              };
+              });
+
+              // Subsystem nodes synthesis
+              if (status === 'preparing') {
+                synthesized.push({
+                  id: `synth_inv_${ord.id}_prep`,
+                  restaurant_id: restaurantId,
+                  correlation_id: orderCorrId,
+                  order_id: ord.id,
+                  actor_type: 'system',
+                  event_type: 'inventory_deducted',
+                  source_node: 'preparing',
+                  target_node: 'inventory',
+                  created_at: time,
+                  metadata: { note: 'Stock deduction recorded' },
+                });
+              } else if (status === 'served') {
+                synthesized.push({
+                  id: `synth_bill_${ord.id}_served`,
+                  restaurant_id: restaurantId,
+                  correlation_id: orderCorrId,
+                  order_id: ord.id,
+                  actor_type: 'system',
+                  event_type: 'bill_closed',
+                  source_node: 'served',
+                  target_node: 'billing',
+                  created_at: time,
+                  metadata: { note: 'Bill generated & taxes snapshot' },
+                });
+              } else if (status === 'completed') {
+                synthesized.push({
+                  id: `synth_rep_${ord.id}_comp`,
+                  restaurant_id: restaurantId,
+                  correlation_id: orderCorrId,
+                  order_id: ord.id,
+                  actor_type: 'system',
+                  event_type: 'report_generated',
+                  source_node: 'payment',
+                  target_node: 'reports',
+                  created_at: time,
+                  metadata: { note: 'Daily sales & revenue committed' },
+                });
+              }
             });
 
             synthesized.sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -228,7 +272,7 @@ export function useSystemEvents({
       .on('broadcast', { event: 'order-status-updated' }, ({ payload }) => {
         if (!isMounted || !payload) return;
         const ordId = payload.orderId || payload.updatedOrder?.id;
-        const newStat = payload.newStatus || payload.updatedOrder?.status || 'preparing';
+        const newStat = (payload.newStatus || payload.updatedOrder?.status || 'preparing').toLowerCase();
         const evtType = `order_${newStat}`;
         const corrId = ordId
           ? `corr_${ordId.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase()}`
@@ -248,6 +292,68 @@ export function useSystemEvents({
             batchId: payload.batchId,
           },
         });
+
+        // Subsystem cascades for inventory, billing, reports
+        if (newStat === 'preparing') {
+          ingestEvent({
+            id: `bc_inv_${ordId || Date.now()}_${Date.now()}`,
+            restaurant_id: restaurantId,
+            correlation_id: corrId,
+            order_id: ordId,
+            actor_type: 'system',
+            event_type: 'inventory_deducted',
+            target_node: 'inventory',
+            created_at: new Date().toISOString(),
+            metadata: { note: 'Exact-once stock deduction on cooking' },
+          });
+        } else if (newStat === 'served') {
+          ingestEvent({
+            id: `bc_bill_${ordId || Date.now()}_${Date.now()}`,
+            restaurant_id: restaurantId,
+            correlation_id: corrId,
+            order_id: ordId,
+            actor_type: 'system',
+            event_type: 'bill_closed',
+            target_node: 'billing',
+            created_at: new Date().toISOString(),
+            metadata: { note: 'Bill generated & GST computed' },
+          });
+        } else if (newStat === 'completed') {
+          ingestEvent({
+            id: `bc_pay_${ordId || Date.now()}_${Date.now()}`,
+            restaurant_id: restaurantId,
+            correlation_id: corrId,
+            order_id: ordId,
+            actor_type: 'system',
+            event_type: 'payment_success',
+            target_node: 'payment',
+            created_at: new Date().toISOString(),
+            metadata: { note: 'Tender settled & table released' },
+          });
+          ingestEvent({
+            id: `bc_rep_${ordId || Date.now()}_${Date.now()}`,
+            restaurant_id: restaurantId,
+            correlation_id: corrId,
+            order_id: ordId,
+            actor_type: 'system',
+            event_type: 'report_generated',
+            target_node: 'reports',
+            created_at: new Date().toISOString(),
+            metadata: { note: 'Sales and revenue ledger updated' },
+          });
+        } else if (newStat === 'cancelled') {
+          ingestEvent({
+            id: `bc_roll_${ordId || Date.now()}_${Date.now()}`,
+            restaurant_id: restaurantId,
+            correlation_id: corrId,
+            order_id: ordId,
+            actor_type: 'system',
+            event_type: 'inventory_rollback',
+            target_node: 'inventory',
+            created_at: new Date().toISOString(),
+            metadata: { note: 'Inventory restored to available stock' },
+          });
+        }
       })
       // Transport C: Realtime Broadcast on new-order
       .on('broadcast', { event: 'new-order' }, ({ payload }) => {
@@ -271,6 +377,18 @@ export function useSystemEvents({
             table_name: ord.table_name,
             total: ord.total,
           },
+        });
+
+        ingestEvent({
+          id: `bc_inv_res_${ordId || Date.now()}_${Date.now()}`,
+          restaurant_id: restaurantId,
+          correlation_id: corrId,
+          order_id: ordId,
+          actor_type: 'system',
+          event_type: 'inventory_reserved',
+          target_node: 'inventory',
+          created_at: new Date().toISOString(),
+          metadata: { note: 'BOM recipe ingredient reservation active' },
         });
       })
       // Transport D: Realtime Broadcast on payment-updated

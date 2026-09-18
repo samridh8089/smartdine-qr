@@ -2942,6 +2942,16 @@ export const db = {
       return currentOrder;
     }
 
+    // Terminal Order Protection: Cancelled or Completed orders can never be modified
+    if (currentOrder.status === 'cancelled' || currentOrder.status === 'completed') {
+      const terminalErr: any = new Error(
+        `Cannot modify order "${id}" because it is already in terminal state "${currentOrder.status}".`
+      );
+      terminalErr.code = 'ORDER_TERMINAL_STATE';
+      terminalErr.status = 409;
+      throw terminalErr;
+    }
+
     // BUG-ORD-003: Strict State Machine Validation
     const allowedTransitions = VALID_ORDER_TRANSITIONS[currentOrder.status] || [];
     if (!allowedTransitions.includes(status)) {
@@ -3092,6 +3102,16 @@ export const db = {
       return currentOrder;
     }
 
+    // Terminal Order Protection: Cancelled orders can never be paid
+    if (currentOrder && currentOrder.status === 'cancelled') {
+      const terminalErr: any = new Error(
+        `Cannot record payment status "${paymentStatus}" for cancelled order "${orderId}".`
+      );
+      terminalErr.code = 'ORDER_TERMINAL_STATE';
+      terminalErr.status = 409;
+      throw terminalErr;
+    }
+
     const updatePayload: any = { payment_status: paymentStatus };
     const now = new Date().toISOString();
     if (paymentStatus === 'customer_marked_paid' || paymentStatus === 'paid') {
@@ -3103,7 +3123,7 @@ export const db = {
       if (reference) updatePayload.payment_reference = reference;
     }
 
-    let updateQuery = supabase.from('orders').update(updatePayload).eq('id', orderId);
+    let updateQuery = supabase.from('orders').update(updatePayload).eq('id', orderId).neq('status', 'cancelled');
     if (paymentStatus === 'paid') {
       // BUG-ORD-002: Atomic conditional guard to prevent race conditions & duplicate payment marking
       updateQuery = updateQuery.neq('payment_status', 'paid');
@@ -3216,6 +3236,16 @@ export const db = {
     // BUG-ORD-003: "completed" is an order-level lifecycle state. If requested via batch, delegate to order level.
     if ((status as string) === 'completed') {
       return this.updateOrderStatus(orderId, 'completed', userName, cancellationReason);
+    }
+
+    // Terminal Order Protection: If parent order is cancelled or completed, batches can never be modified
+    if (currentOrder.status === 'cancelled' || currentOrder.status === 'completed') {
+      const terminalErr: any = new Error(
+        `Cannot update batch "${batchId}" because parent order "${orderId}" is in terminal state "${currentOrder.status}".`
+      );
+      terminalErr.code = 'ORDER_TERMINAL_STATE';
+      terminalErr.status = 409;
+      throw terminalErr;
     }
 
     // BUG-ORD-003: Strict State Machine Validation for Batch

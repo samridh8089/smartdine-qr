@@ -1397,6 +1397,13 @@ export default function OrdersPage() {
     const targetOrderId = selectedOrder.id;
     const origOrder = orders.find(o => o.id === targetOrderId);
 
+    if (origOrder?.status === 'cancelled' || selectedOrder.status === 'cancelled') {
+      showToast("Cannot collect payment for a cancelled order.", "Action Blocked", "error");
+      setPaymentModalOpen(false);
+      submittingPaymentRef.current = false;
+      return;
+    }
+
     const calcResult = calculateBillingTotals({
       items: selectedOrder.items || [],
       batches: selectedOrder.batches || [],
@@ -1460,7 +1467,7 @@ export default function OrdersPage() {
     window.dispatchEvent(new Event('storage'));
 
     try {
-      // BUG-ORD-002: Atomic conditional database update - only set paid if not already paid
+      // BUG-ORD-002: Atomic conditional database update - only set paid if not already paid and not cancelled
       const { data: updatedRows, error } = await supabase
         .from('orders')
         .update({
@@ -1477,6 +1484,7 @@ export default function OrdersPage() {
         })
         .eq('id', targetOrderId)
         .neq('payment_status', 'paid')
+        .neq('status', 'cancelled')
         .select();
 
       if (error) throw error;

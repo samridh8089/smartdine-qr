@@ -1289,10 +1289,149 @@
       filter: drop-shadow(0 0 14px #10b981) !important;
       opacity: 1 !important;
     }
-    .node-group.flow-active rect.node-card {
+    .node-group.flow-active .node-rect,
+    .node-group.flow-active rect.node-card,
+    .node-group.flow-active rect {
       stroke: #10b981 !important;
       stroke-width: 4px !important;
       animation: nodePulseGlow 1.2s ease-in-out infinite !important;
+    }
+    /* Subsystem-specific live glow */
+    .node-group.flow-active-infra .node-rect,
+    .node-group.flow-active-infra rect.node-card,
+    .node-group.flow-active-infra rect {
+      stroke: #06b6d4 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #06b6d4) !important;
+      animation: nodePulseGlow 0.8s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-infra {
+      stroke: #06b6d4 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.5s linear infinite !important;
+      filter: drop-shadow(0 0 16px #06b6d4) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-owner .node-rect,
+    .node-group.flow-active-owner rect.node-card,
+    .node-group.flow-active-owner rect {
+      stroke: #0ea5e9 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #0ea5e9) !important;
+      animation: nodePulseGlow 0.8s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-owner {
+      stroke: #0ea5e9 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.5s linear infinite !important;
+      filter: drop-shadow(0 0 16px #0ea5e9) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-kds .node-rect,
+    .node-group.flow-active-kds rect.node-card,
+    .node-group.flow-active-kds rect {
+      stroke: #ef4444 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #ef4444) !important;
+      animation: nodePulseGlow 0.8s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-kds {
+      stroke: #ef4444 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.5s linear infinite !important;
+      filter: drop-shadow(0 0 16px #ef4444) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-waiter .node-rect,
+    .node-group.flow-active-waiter rect.node-card,
+    .node-group.flow-active-waiter rect {
+      stroke: #8b5cf6 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #8b5cf6) !important;
+      animation: nodePulseGlow 0.8s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-waiter {
+      stroke: #8b5cf6 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.5s linear infinite !important;
+      filter: drop-shadow(0 0 16px #8b5cf6) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-audit .node-rect,
+    .node-group.flow-active-audit rect.node-card,
+    .node-group.flow-active-audit rect {
+      stroke: #94a3b8 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #e2e8f0) !important;
+      animation: nodePulseGlow 0.8s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-audit {
+      stroke: #94a3b8 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.5s linear infinite !important;
+      filter: drop-shadow(0 0 16px #94a3b8) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-inventory .node-rect {
+      stroke: #10b981 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #10b981) !important;
+      animation: nodePulseGlow 0.9s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-inventory {
+      stroke: #10b981 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.6s linear infinite !important;
+      filter: drop-shadow(0 0 16px #10b981) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-billing .node-rect {
+      stroke: #ec4899 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #ec4899) !important;
+      animation: nodePulseGlow 0.9s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-billing {
+      stroke: #ec4899 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.6s linear infinite !important;
+      filter: drop-shadow(0 0 16px #ec4899) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-reports .node-rect {
+      stroke: #6366f1 !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #6366f1) !important;
+      animation: nodePulseGlow 0.9s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-reports {
+      stroke: #6366f1 !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.6s linear infinite !important;
+      filter: drop-shadow(0 0 16px #6366f1) !important;
+      opacity: 1 !important;
+    }
+    .node-group.flow-active-order .node-rect {
+      stroke: #f59e0b !important;
+      stroke-width: 5px !important;
+      filter: drop-shadow(0 0 24px #f59e0b) !important;
+      animation: nodePulseGlow 0.9s ease-in-out infinite !important;
+    }
+    .edge-path.flow-active-order {
+      stroke: #f59e0b !important;
+      stroke-width: 6px !important;
+      stroke-dasharray: 10 6 !important;
+      animation: flowDash 0.6s linear infinite !important;
+      filter: drop-shadow(0 0 16px #f59e0b) !important;
+      opacity: 1 !important;
     }
   </style>
 
@@ -1380,6 +1519,7 @@
     <div class="observability-toolbar">
       <!-- Readability Zoom Presets -->
       <div class="zoom-preset-bar">
+        <button class="zoom-btn" id="btn-zoom-panoramic" onclick="setPanoramicNocView()" style="background:linear-gradient(135deg, rgba(6,182,212,0.25), rgba(99,102,241,0.2));border-color:#06b6d4;color:#38bdf8;font-weight:700;" title="Panoramic View showing all 13 interconnected layers live">🌐 Connected NOC</button>
         <button class="zoom-btn" onclick="zoomFitScreen()">Fit Screen</button>
         <button class="zoom-btn" onclick="zoomFitWidth()">Fit Width</button>
         <button class="zoom-btn" onclick="setZoom(1.0)">100%</button>
@@ -1416,7 +1556,7 @@
   <div id="flow-playback-hud" style="display:none; position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:999; background:rgba(12, 19, 34, 0.95); border:1px solid #10b981; box-shadow:0 8px 32px rgba(16,185,129,0.4); border-radius:16px; padding:10px 22px; align-items:center; gap:16px; color:#fff; backdrop-filter:blur(12px);">
     <div style="display:flex; align-items:center; gap:10px;">
       <span style="width:10px; height:10px; border-radius:50%; background:#10b981; display:inline-block; box-shadow:0 0 10px #10b981;"></span>
-      <strong id="flow-hud-step" style="font-size:13px; color:#38bdf8;">Step 1/21</strong>
+      <strong id="flow-hud-step" style="font-size:13px; color:#38bdf8;">Step 1/36</strong>
       <span id="flow-hud-desc" style="font-size:13px; color:#f8fafc; font-weight:600;">Customer scans QR</span>
     </div>
     <div style="display:flex; gap:8px;">
@@ -3289,12 +3429,31 @@
 
     function setZoom(val) {
       currentZoom = Math.max(0.25, Math.min(6.0, val));
+      window.currentZoom = currentZoom;
       localStorage.setItem('smartdine_diagram_zoom', currentZoom.toFixed(2));
       updateTransform();
 
       document.querySelectorAll('.zoom-btn').forEach(b => b.classList.remove('active'));
       if (Math.abs(currentZoom - 1.6) < 0.05) {
-        document.getElementById('btn-zoom-default').classList.add('active');
+        document.getElementById('btn-zoom-default')?.classList.add('active');
+      }
+    }
+
+    function setPanoramicNocView() {
+      const vW = viewport.clientWidth;
+      const vH = viewport.clientHeight;
+      const scaleX = vW / 7200;
+      const scaleY = vH / 4400;
+      const targetScale = Math.min(scaleX, scaleY) * 0.96;
+      setZoom(Math.max(0.22, Math.min(1.0, targetScale)));
+      panX = (vW - 7200 * currentZoom) / 2;
+      panY = 20;
+      updateTransform();
+      document.querySelectorAll('.zoom-btn').forEach(b => b.classList.remove('active'));
+      const pBtn = document.getElementById('btn-zoom-panoramic');
+      if (pBtn) pBtn.classList.add('active');
+      if (typeof showToast === 'function') {
+        showToast('🌐 Interconnected NOC View Active: API, Postgres, Realtime, Owner, KDS, Waiter, Inventory, Billing & Reports all visible!', 'info');
       }
     }
 
@@ -3389,6 +3548,12 @@
       document.querySelectorAll('.node-group').forEach(el => el.classList.remove('focused'));
       const el = document.getElementById('node-' + nodeId);
       if (el) el.classList.add('focused');
+
+      // Update NOC Breadcrumbs
+      const bcMod = document.getElementById('bc-module');
+      const bcNod = document.getElementById('bc-node');
+      if (bcMod && node.module) bcMod.innerText = String(node.module).replace(/_/g, ' ').toUpperCase();
+      if (bcNod && node.label) bcNod.innerText = node.label;
 
       renderNodeDetailsTab(node);
       // Auto-open right inspector drawer when clicking any node
@@ -4089,7 +4254,16 @@
           cancelled: '#ef4444'
         }[s] || '#10b981';
 
-        bannerText.innerHTML = `⚡ <strong>LIVE EVENT:</strong> [${tableName || 'Table'}] Order #${(orderId||'').slice(0,8)} ➔ <span style="color:${sColor};text-transform:uppercase;font-weight:800;">${status}</span> ${amount ? '• ' + amount : ''}`;
+        let subsystemDetail = '';
+        if (s === 'new') subsystemDetail = ' • 🌐 API ➔ DB ➔ REALTIME ➔ OWNER ➔ 📦 INVENTORY HOLD ➔ 👨‍🍳 KDS';
+        else if (s === 'accepted') subsystemDetail = ' • 🌐 API ➔ DB ➔ REALTIME ➔ 👨‍🍳 KDS ACCEPTED ➔ 📦 INVENTORY CONFIRMED';
+        else if (s === 'preparing') subsystemDetail = ' • 🌐 API ➔ DB ➔ 📊 OWNER ➔ 📉 INVENTORY DEDUCTED (Exact-Once) ➔ 📑 STOCK REPORT';
+        else if (s === 'ready') subsystemDetail = ' • 🌐 API ➔ DB ➔ REALTIME ➔ 🔔 KDS READY ➔ 🏃 WAITER ALERTED';
+        else if (s === 'served') subsystemDetail = ' • 🌐 API ➔ DB ➔ 🍽️ SERVED ➔ 🧾 BILL GENERATED (GST 5%) ➔ 📈 OWNER REPORTS';
+        else if (s === 'completed' || s === 'paid') subsystemDetail = ' • 🌐 API ➔ DB ➔ 💰 BILL SETTLED ➔ 📈 OWNER REVENUE ➔ 📊 SALES & TAX REPORTS';
+        else if (s === 'cancelled') subsystemDetail = ' • 🌐 API ➔ DB ➔ 🔄 INVENTORY RESTORED ➔ 📊 OWNER OVERVIEW ➔ 🗑️ WASTE AUDIT';
+
+        bannerText.innerHTML = `⚡ <strong>LIVE EVENT:</strong> [${tableName || 'Table'}] Order #${(orderId||'').slice(0,8)} ➔ <span style="color:${sColor};text-transform:uppercase;font-weight:800;">${status}</span> ${amount ? '• ' + amount : ''}<span style="color:#38bdf8;font-size:11px;font-weight:600;margin-left:6px;">${subsystemDetail}</span>`;
         banner.style.display = 'inline-flex';
         banner.style.borderColor = sColor;
         banner.style.boxShadow = `0 10px 30px rgba(0,0,0,0.8), 0 0 25px ${sColor}88`;
@@ -4099,7 +4273,7 @@
             banner.style.borderColor = 'rgba(16,185,129,0.5)';
             banner.style.boxShadow = '0 10px 30px rgba(0,0,0,0.6), 0 0 15px rgba(16,185,129,0.3)';
           }
-        }, 4000);
+        }, 5000);
       }
 
       if (typeof showToast === 'function') {
@@ -4107,35 +4281,91 @@
       }
     }
 
-    function animateNode(nodeId, edgeId) {
+    let activeCascadeTimers = [];
+
+    function animateNode(nodeId, edgeId, category = 'main', moduleName = null, nodeLabel = null, autoCenter = false) {
       const ts = new Date().toISOString();
-      console.log(`[${ts}] animateNode() executed:`, { nodeId, edgeId });
+      console.log(`[${ts}] animateNode() executed:`, { nodeId, edgeId, category, moduleName, nodeLabel });
       if (!nodeId) return;
-
-      // Auto-center camera smoothly
-      if (typeof centerOnNode === 'function') {
-        centerOnNode(nodeId, 1.35);
-      }
-
-      // Clear previous active nodes & edges
-      document.querySelectorAll('.node-group').forEach(g => g.classList.remove('flow-active'));
-      document.querySelectorAll('.edge-path').forEach(ep => ep.classList.remove('flow-active'));
 
       const nodeEl = document.getElementById('node-' + nodeId);
       if (nodeEl) {
+        if (nodeEl._flowTimer) clearTimeout(nodeEl._flowTimer);
         nodeEl.classList.add('flow-active');
+        if (category && category !== 'main') nodeEl.classList.add('flow-active-' + category);
+        nodeEl._flowTimer = setTimeout(() => {
+          nodeEl.classList.remove(...ALL_FLOW_CLASSES);
+          delete nodeEl._flowTimer;
+        }, 6000);
       }
 
       let edgeEl = null;
       if (edgeId) {
         edgeEl = document.getElementById(edgeId);
-        if (edgeEl) edgeEl.classList.add('flow-active');
+        if (edgeEl) {
+          if (edgeEl._flowTimer) clearTimeout(edgeEl._flowTimer);
+          edgeEl.classList.add('flow-active');
+          if (category && category !== 'main') edgeEl.classList.add('flow-active-' + category);
+          edgeEl._flowTimer = setTimeout(() => {
+            edgeEl.classList.remove(...ALL_FLOW_CLASSES);
+            delete edgeEl._flowTimer;
+          }, 6000);
+        }
       }
 
-      setTimeout(() => {
-        if (nodeEl) nodeEl.classList.remove('flow-active');
-        if (edgeEl) edgeEl.classList.remove('flow-active');
-      }, 5000);
+      // Update NOC Breadcrumbs dynamically to reflect live operational subsystem
+      const bcMod = document.getElementById('bc-module');
+      const bcNod = document.getElementById('bc-node');
+      if (bcMod && moduleName) bcMod.innerText = moduleName.toUpperCase();
+      if (bcNod && nodeLabel) bcNod.innerText = nodeLabel;
+
+      if (autoCenter && typeof centerOnNode === 'function') {
+        // If user is zoomed into a specific area (> 0.9), gently pan to focus
+        // If in Panoramic / Connected NOC view (<= 0.9), DO NOT force zoom in — keep entire interconnected canvas in view!
+        if (currentZoom > 0.9) {
+          centerOnNode(nodeId, 1.15);
+        } else {
+          // In wide view, simply focus node without shifting camera away from API/Owner/DB layers
+          if (nodeEl && typeof selectNode === 'function') {
+            document.querySelectorAll('.node-group').forEach(el => el.classList.remove('focused'));
+            nodeEl.classList.add('focused');
+          }
+        }
+      }
+    }
+
+    const ALL_FLOW_CLASSES = [
+      'flow-active', 'flow-active-inventory', 'flow-active-billing',
+      'flow-active-reports', 'flow-active-order', 'flow-active-infra',
+      'flow-active-owner', 'flow-active-kds', 'flow-active-waiter', 'flow-active-audit'
+    ];
+
+    function triggerSubsystemCascade(steps, bannerSummary = null) {
+      if (!Array.isArray(steps) || steps.length === 0) return;
+
+      // Clear any prior cascade timers
+      activeCascadeTimers.forEach(t => clearTimeout(t));
+      activeCascadeTimers = [];
+
+      // Clean up previous flow-active classes across all tiers and cancel pending timers
+      document.querySelectorAll('.node-group').forEach(g => {
+        if (g._flowTimer) clearTimeout(g._flowTimer);
+        delete g._flowTimer;
+        g.classList.remove(...ALL_FLOW_CLASSES);
+      });
+      document.querySelectorAll('.edge-path').forEach(ep => {
+        if (ep._flowTimer) clearTimeout(ep._flowTimer);
+        delete ep._flowTimer;
+        ep.classList.remove(...ALL_FLOW_CLASSES);
+      });
+
+      steps.forEach((step, idx) => {
+        const timer = setTimeout(() => {
+          animateNode(step.nodeId, step.edgeId, step.category || 'main', step.module, step.label, step.autoCenter || (idx === 0));
+          logDevEvent('CASCADE', step.module || 'SUBSYSTEM', `${step.nodeId}: ${step.label || 'Active'}`);
+        }, step.delay || 0);
+        activeCascadeTimers.push(timer);
+      });
     }
 
     function updateFloorGrid(tableName, status, amount, orderId) {
@@ -4569,56 +4799,177 @@
       }
     }
 
-    // Handles customer journey telemetry: QR scan, cart, checkout, inventory
+    // Handles all operational subsystem telemetry: QR scan, cart, checkout, inventory, billing, reports, audit
     function handleSystemEventNodePulse(eventType, ev) {
       if (eventType === 'qr_scanned') {
         const tName = ev?.metadata?.table_name || 'Table';
         showToast(`📱 QR Scanned at ${tName}`, 'info');
         playLiveChime('accepted');
-        animateNode('cust_qr_scan', 'edge-e_qr_to_menu');
+        animateNode('cust_qr_scan', 'edge-e_qr_to_menu', 'main', 'CUSTOMER LAYER', 'QR Scan & Table Detect', true);
       } else if (eventType === 'cart_updated') {
         showToast(`🛒 Item Added to Cart`, 'info');
-        animateNode('cust_cart', 'edge-e_menu_to_cart');
+        animateNode('cust_cart', 'edge-e_menu_to_cart', 'main', 'CUSTOMER LAYER', 'Client Cart State', true);
       } else if (eventType === 'checkout_started') {
         showToast(`💳 Checkout Started`, 'info');
-        animateNode('cust_checkout', 'edge-e_cart_to_checkout');
+        animateNode('cust_checkout', 'edge-e_cart_to_checkout', 'main', 'CUSTOMER LAYER', 'Checkout & Order Review', true);
       } else if (eventType === 'order_created') {
         showToast(`⚡ New Order Placed!`, 'success');
         playLiveChime('new');
-        animateNode('order_new', 'edge-e_placement_to_new');
+        pulseArchitectureNodeForStatus('new');
       } else if (eventType === 'inventory_reserved') {
-        animateNode('inv_reservation', 'edge-e_placement_to_inv_res');
-      } else if (eventType === 'inventory_consumed') {
-        animateNode('inv_consumption', 'edge-e_prep_to_inv_consume');
+        showToast(`📦 Live Inventory Reserved: BOM Recipe Scaling Active`, 'info');
+        triggerSubsystemCascade([
+          { nodeId: 'inv_recipe_lookup', edgeId: 'edge-e_recipe_to_scaling', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Recipe & Ingredient Mapping', autoCenter: true, delay: 0 },
+          { nodeId: 'inv_scaling', edgeId: 'edge-e_scaling_to_reserve', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Ingredient Scaling & Multiplier', delay: 350 },
+          { nodeId: 'inv_reservation', edgeId: null, category: 'inventory', module: 'INVENTORY ENGINE', label: 'Active Stock Reservation (HOLD)', delay: 700 }
+        ]);
+      } else if (eventType === 'inventory_consumed' || eventType === 'inventory_deducted') {
+        showToast(`📉 Live Inventory Deducted: Exact-Once Stock Consumption`, 'success');
+        triggerSubsystemCascade([
+          { nodeId: 'inv_consumption', edgeId: 'edge-e_consume_to_idempotency', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Exact-Once Stock Consumption', autoCenter: true, delay: 0 },
+          { nodeId: 'order_idempotency', edgeId: 'edge-e_inv_to_report', category: 'order', module: 'ORDER ENGINE', label: 'Idempotency Key Guard Verified', delay: 350 },
+          { nodeId: 'report_inventory', edgeId: null, category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Theoretical vs Actual Inventory Report', delay: 700 }
+        ]);
+      } else if (eventType === 'inventory_rollback' || eventType === 'inventory_reversed') {
+        showToast(`🔄 Live Inventory Restored to Stock`, 'warning');
+        triggerSubsystemCascade([
+          { nodeId: 'inv_reversal', edgeId: 'edge-e_inv_to_report', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Stock Restoration & Reversal', autoCenter: true, delay: 0 },
+          { nodeId: 'report_inventory', edgeId: null, category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Waste & Discrepancy Reconciliation', delay: 400 }
+        ]);
+      } else if (eventType === 'bill_generated' || eventType === 'bill_closed') {
+        showToast(`🧾 Live Bill Generated: Taxes & GST Calculated`, 'info');
+        triggerSubsystemCascade([
+          { nodeId: 'bill_generation', edgeId: 'edge-e_bill_gen_to_gst', category: 'billing', module: 'BILLING & PAYMENTS', label: 'Bill Generation Engine Active', autoCenter: true, delay: 0 },
+          { nodeId: 'bill_gst', edgeId: 'edge-e_bill_gst_to_report_revenue', category: 'billing', module: 'BILLING & PAYMENTS', label: 'GST & Tax Computation (CGST+SGST 5%)', delay: 400 },
+          { nodeId: 'report_revenue', edgeId: null, category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Tax & Daily Revenue Accrual', delay: 800 }
+        ]);
+      } else if (eventType === 'payment_success' || eventType === 'payment_updated') {
+        showToast(`💰 Live Payment Verified: Table Settled & Daily Ledger Updated`, 'success');
+        playLiveChime('completed');
+        pulseArchitectureNodeForStatus('completed');
+      } else if (eventType === 'report_generated') {
+        showToast(`📊 Live Reports & Analytics: KPI Summaries Recomputed`, 'info');
+        triggerSubsystemCascade([
+          { nodeId: 'report_sales', edgeId: 'edge-e_report_sales_to_owner_reports', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Sales & Product Mix Report', autoCenter: true, delay: 0 },
+          { nodeId: 'report_revenue', edgeId: 'edge-e_report_revenue_to_owner_reports', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Daily Tax & Revenue Settlement', delay: 350 },
+          { nodeId: 'report_inventory', edgeId: null, category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Hourly Inventory Impact Report', delay: 700 },
+          { nodeId: 'owner_reports', edgeId: null, category: 'reports', module: 'OWNER DASHBOARD', label: 'Financial & Accounting Reports Refreshed', delay: 1050 }
+        ]);
+      } else if (eventType === 'audit_written') {
+        showToast(`🛡️ Live Security Audit: Forensic Event Persisted`, 'info');
+        triggerSubsystemCascade([
+          { nodeId: 'audit_system_events', edgeId: 'edge-e_audit_logs_to_report_trail', category: 'audit', module: 'AUDIT SYSTEM', label: 'System Event Bus Logger', autoCenter: true, delay: 0 },
+          { nodeId: 'audit_logs_table', edgeId: 'edge-e_report_trail_to_owner_reports', category: 'audit', module: 'AUDIT SYSTEM', label: 'Security & Management Audit Log', delay: 350 },
+          { nodeId: 'report_audit_trail', edgeId: null, category: 'reports', module: 'REPORTS & ANALYTICS', label: 'System Audit Trail Report', delay: 700 }
+        ]);
       }
     }
 
     function pulseArchitectureNodeForStatus(status) {
       const statusLower = (status || '').toLowerCase();
-      let nodeId = 'order_new';
-      let edgeId = 'edge-e_placement_to_new';
 
-      if (statusLower === 'accepted') {
-        nodeId = 'kds_accept';
-        edgeId = 'edge-e_kds_accept_to_order_accepted';
+      if (statusLower === 'new' || statusLower === 'created') {
+        // Multi-Subsystem Interconnected Cascade:
+        // Infra API -> Supabase Client -> Postgres ACID DB -> Realtime WS -> Broadcast -> Owner Live Orders -> Owner Overview -> Order Engine -> BOM Inventory -> KDS Station -> Audit Log
+        triggerSubsystemCascade([
+          { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', category: 'infra', module: 'INFRASTRUCTURE', label: 'Next.js API Route (POST /api/orders)', delay: 0 },
+          { nodeId: 'infra_supabase_client', edgeId: 'edge-e_supabase_client_to_postgres', category: 'infra', module: 'INFRASTRUCTURE', label: 'Supabase Multi-Role Client Pool', delay: 180 },
+          { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', category: 'infra', module: 'INFRASTRUCTURE', label: 'PostgreSQL ACID Batch Insert', delay: 360 },
+          { nodeId: 'infra_realtime_ws', edgeId: 'edge-e_realtime_to_broadcast', category: 'infra', module: 'INFRASTRUCTURE', label: 'Supabase Realtime WAL Stream', delay: 540 },
+          { nodeId: 'notif_realtime_broadcast', edgeId: null, category: 'infra', module: 'NOTIFICATIONS', label: 'Realtime Broadcast Dispatcher', delay: 720 },
+          { nodeId: 'owner_live_orders', edgeId: 'edge-e_revenue_to_overview', category: 'owner', module: 'OWNER DASHBOARD', label: 'Owner Live Orders Grid Synchronized', delay: 900 },
+          { nodeId: 'owner_overview', edgeId: null, category: 'owner', module: 'OWNER DASHBOARD', label: 'Executive Overview Active Tables Updated', delay: 1080 },
+          { nodeId: 'cust_order_placement', edgeId: 'edge-e_placement_to_new', category: 'order', module: 'ORDER ENGINE', label: 'Order Placement Engine', delay: 1260 },
+          { nodeId: 'order_new', edgeId: 'edge-e_placement_to_recipe', category: 'order', module: 'ORDER ENGINE', label: 'Batch Created (new)', delay: 1440 },
+          { nodeId: 'inv_recipe_lookup', edgeId: 'edge-e_recipe_to_scaling', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Recipe & Ingredient Mapping', delay: 1620 },
+          { nodeId: 'inv_scaling', edgeId: 'edge-e_scaling_to_reserve', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Portion Multiplier & BOM Scaling', delay: 1800 },
+          { nodeId: 'inv_reservation', edgeId: 'edge-e_new_to_kds', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Active Stock Reservation (HOLD)', delay: 1980 },
+          { nodeId: 'kds_dashboard', edgeId: 'edge-e_kds_audio', category: 'kds', module: 'KITCHEN (KDS)', label: 'KDS Live Station Screen Alert', delay: 2160 },
+          { nodeId: 'audit_system_events', edgeId: null, category: 'audit', module: 'AUDIT SYSTEM', label: 'Forensic System Event Logger', delay: 2340 }
+        ]);
+      } else if (statusLower === 'accepted') {
+        // Infra API + Postgres DB + Realtime WS + KDS Accept + Order Accepted + Inventory Hold + Owner Grid
+        triggerSubsystemCascade([
+          { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', category: 'infra', module: 'INFRASTRUCTURE', label: 'API Status Patch (accepted)', delay: 0 },
+          { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', category: 'infra', module: 'INFRASTRUCTURE', label: 'PostgreSQL Batch Status Updated', delay: 180 },
+          { nodeId: 'infra_realtime_ws', edgeId: null, category: 'infra', module: 'INFRASTRUCTURE', label: 'Realtime WebSocket Broadcast', delay: 360 },
+          { nodeId: 'kds_accept', edgeId: 'edge-e_kds_accept_to_order_accepted', category: 'kds', module: 'KITCHEN (KDS)', label: 'Chef Taps Accept Ticket', delay: 540 },
+          { nodeId: 'order_accepted', edgeId: null, category: 'order', module: 'ORDER ENGINE', label: 'Batch Status: Accepted', delay: 720 },
+          { nodeId: 'owner_live_orders', edgeId: null, category: 'owner', module: 'OWNER DASHBOARD', label: 'Owner Live Orders Grid Synced', delay: 900 },
+          { nodeId: 'inv_reservation', edgeId: null, category: 'inventory', module: 'INVENTORY ENGINE', label: 'BOM Stock Reservation Confirmed', delay: 1080 }
+        ]);
       } else if (statusLower === 'preparing') {
-        nodeId = 'kds_preparing';
-        edgeId = 'edge-e_kds_prep_to_order_prep';
+        // Infra API + Postgres + Realtime + Owner Dashboard + KDS Prep + Order Prep + EXACT-ONCE Stock Deduction + Idempotency + Inventory Report + Audit
+        triggerSubsystemCascade([
+          { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', category: 'infra', module: 'INFRASTRUCTURE', label: 'API Status Patch (preparing)', delay: 0 },
+          { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', category: 'infra', module: 'INFRASTRUCTURE', label: 'PostgreSQL ACID State Mutation', delay: 180 },
+          { nodeId: 'infra_realtime_ws', edgeId: null, category: 'infra', module: 'INFRASTRUCTURE', label: 'Realtime WebSocket Event Stream', delay: 360 },
+          { nodeId: 'owner_live_orders', edgeId: 'edge-e_revenue_to_overview', category: 'owner', module: 'OWNER DASHBOARD', label: 'Owner Live Orders Grid Active', delay: 540 },
+          { nodeId: 'owner_overview', edgeId: null, category: 'owner', module: 'OWNER DASHBOARD', label: 'Executive KPI Sync', delay: 700 },
+          { nodeId: 'kds_preparing', edgeId: 'edge-e_kds_prep_to_order_prep', category: 'kds', module: 'KITCHEN (KDS)', label: 'Chef Marks Start Cooking', delay: 880 },
+          { nodeId: 'order_preparing', edgeId: 'edge-e_prep_to_consume', category: 'order', module: 'ORDER ENGINE', label: 'Batch Status: Preparing', delay: 1060 },
+          { nodeId: 'inv_consumption', edgeId: 'edge-e_consume_to_idempotency', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Exact-Once Stock Deduction (Frozen Engine)', delay: 1240 },
+          { nodeId: 'order_idempotency', edgeId: 'edge-e_inv_to_report', category: 'order', module: 'ORDER ENGINE', label: 'Idempotency Key Guard Verified', delay: 1420 },
+          { nodeId: 'report_inventory', edgeId: 'edge-e_prep_to_lifecycle_audit', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Theoretical vs Actual Inventory Report', delay: 1600 },
+          { nodeId: 'audit_lifecycle', edgeId: null, category: 'audit', module: 'AUDIT SYSTEM', label: 'Forensic Lifecycle Audit Recorded', delay: 1780 }
+        ]);
       } else if (statusLower === 'ready') {
-        nodeId = 'kds_ready';
-        edgeId = 'edge-e_kds_ready_to_order_ready';
+        // Infra API + Postgres + Realtime + Owner Dashboard + KDS Ready + Order Ready + Waiter Pickup Alert + Push Bell
+        triggerSubsystemCascade([
+          { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', category: 'infra', module: 'INFRASTRUCTURE', label: 'API Status Patch (ready)', delay: 0 },
+          { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', category: 'infra', module: 'INFRASTRUCTURE', label: 'PostgreSQL Ready State Committed', delay: 180 },
+          { nodeId: 'infra_realtime_ws', edgeId: null, category: 'infra', module: 'INFRASTRUCTURE', label: 'Realtime WebSocket Fan-Out', delay: 360 },
+          { nodeId: 'owner_live_orders', edgeId: null, category: 'owner', module: 'OWNER DASHBOARD', label: 'Owner Live Orders Grid Synced', delay: 540 },
+          { nodeId: 'kds_ready', edgeId: 'edge-e_kds_ready_to_order_ready', category: 'kds', module: 'KITCHEN (KDS)', label: 'Chef Marks Order Ready on Pass', delay: 720 },
+          { nodeId: 'order_ready', edgeId: 'edge-e_order_ready_to_waiter_pickup', category: 'order', module: 'ORDER ENGINE', label: 'Batch Status: Ready', delay: 900 },
+          { nodeId: 'waiter_pickup', edgeId: 'edge-e_broadcast_to_waiter_alerts', category: 'waiter', module: 'WAITER OPERATIONS', label: 'Floor Waiter Pickup Alerted', delay: 1080 },
+          { nodeId: 'notif_waiter_alerts', edgeId: null, category: 'waiter', module: 'NOTIFICATIONS SERVICE', label: 'Waiter Device Alert Bell Dispatched', delay: 1260 }
+        ]);
       } else if (statusLower === 'served') {
-        nodeId = 'waiter_serve';
-        edgeId = 'edge-e_waiter_serve_to_order_served';
+        // Multi-Subsystem Cascade: Infra API + Postgres + Realtime + Owner Dashboard + Waiter Serve + Order Served + BILL GENERATION + GST TAXES + TAX REVENUE ACCRUAL + STAFF REPORT + OWNER REPORTS
+        triggerSubsystemCascade([
+          { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', category: 'infra', module: 'INFRASTRUCTURE', label: 'API Status Patch (served)', delay: 0 },
+          { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', category: 'infra', module: 'INFRASTRUCTURE', label: 'PostgreSQL Served State Committed', delay: 180 },
+          { nodeId: 'infra_realtime_ws', edgeId: null, category: 'infra', module: 'INFRASTRUCTURE', label: 'Realtime WebSocket Stream', delay: 360 },
+          { nodeId: 'owner_live_orders', edgeId: null, category: 'owner', module: 'OWNER DASHBOARD', label: 'Owner Live Orders Grid Synced', delay: 540 },
+          { nodeId: 'waiter_serve', edgeId: 'edge-e_waiter_serve_to_order_served', category: 'waiter', module: 'WAITER OPERATIONS', label: 'Waiter Confirms Plate Served', delay: 720 },
+          { nodeId: 'order_served', edgeId: 'edge-e_served_to_bill_gen', category: 'order', module: 'ORDER ENGINE', label: 'Batch Status: Served', delay: 900 },
+          { nodeId: 'bill_generation', edgeId: 'edge-e_bill_gen_to_gst', category: 'billing', module: 'BILLING & PAYMENTS', label: 'Bill Generation Engine Active', delay: 1080 },
+          { nodeId: 'bill_gst', edgeId: 'edge-e_bill_gst_to_report_revenue', category: 'billing', module: 'BILLING & PAYMENTS', label: 'GST & Tax Computation (CGST+SGST 5%)', delay: 1260 },
+          { nodeId: 'report_revenue', edgeId: 'edge-e_order_served_to_staff_report', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Tax & Daily Revenue Accrual', delay: 1440 },
+          { nodeId: 'report_staff', edgeId: 'edge-e_staff_report_to_owner_reports', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Staff Turnaround Time Calculated', delay: 1620 },
+          { nodeId: 'owner_reports', edgeId: null, category: 'reports', module: 'OWNER DASHBOARD', label: 'Financial & Accounting Reports Refreshed', delay: 1800 }
+        ]);
       } else if (statusLower === 'completed' || statusLower === 'paid') {
-        nodeId = 'bill_settlement';
-        edgeId = 'edge-e_payment_to_settle';
+        // Multi-Subsystem Cascade: Infra API + Postgres + Realtime + BILL PAYMENT + SETTLEMENT + OWNER REVENUE LEDGER + OWNER OVERVIEW + SALES REPORTS + ACCOUNTING REPORTS
+        triggerSubsystemCascade([
+          { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', category: 'infra', module: 'INFRASTRUCTURE', label: 'API Settlement Route (POST /api/orders/settle)', delay: 0 },
+          { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', category: 'infra', module: 'INFRASTRUCTURE', label: 'PostgreSQL ACID Settlement Transaction', delay: 180 },
+          { nodeId: 'infra_realtime_ws', edgeId: null, category: 'infra', module: 'INFRASTRUCTURE', label: 'Realtime WebSocket Broadcast', delay: 360 },
+          { nodeId: 'bill_payment', edgeId: 'edge-e_payment_to_settle', category: 'billing', module: 'BILLING & PAYMENTS', label: 'Multi-Tender Payment Collected', delay: 540 },
+          { nodeId: 'bill_settlement', edgeId: 'edge-e_settle_to_revenue', category: 'billing', module: 'BILLING & PAYMENTS', label: 'Table Session Settlement & Close Table', delay: 720 },
+          { nodeId: 'owner_revenue', edgeId: 'edge-e_revenue_to_overview', category: 'owner', module: 'OWNER DASHBOARD', label: 'Daily Revenue & Tender Ledger Closed', delay: 900 },
+          { nodeId: 'owner_overview', edgeId: 'edge-e_revenue_to_analytics', category: 'owner', module: 'OWNER DASHBOARD', label: 'Executive Dashboard KPI Summary', delay: 1080 },
+          { nodeId: 'owner_analytics', edgeId: 'edge-e_settle_to_reports', category: 'owner', module: 'OWNER DASHBOARD', label: 'Sales Trends & Velocity Analytics', delay: 1260 },
+          { nodeId: 'report_sales', edgeId: 'edge-e_report_sales_to_owner_reports', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Sales & Product Mix Report Updated', delay: 1440 },
+          { nodeId: 'report_revenue', edgeId: 'edge-e_report_revenue_to_owner_reports', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Daily Tax & Revenue Settlement Ledger Published', delay: 1620 },
+          { nodeId: 'owner_reports', edgeId: null, category: 'reports', module: 'OWNER DASHBOARD', label: 'Financial & Accounting Reports Refreshed', delay: 1800 },
+          { nodeId: 'audit_logs_table', edgeId: null, category: 'audit', module: 'AUDIT SYSTEM', label: 'Settlement Security Audit Recorded', delay: 1980 }
+        ]);
       } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
-        nodeId = 'order_cancel';
-        edgeId = 'edge-e_cancel_to_inv_reversal';
+        // Multi-Subsystem Cascade: Infra API + Postgres + Realtime + Owner Grid + Order Cancel + INVENTORY REVERSAL + WASTE REPORT + AUDIT
+        triggerSubsystemCascade([
+          { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', category: 'infra', module: 'INFRASTRUCTURE', label: 'API Cancel Route Handled', delay: 0 },
+          { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', category: 'infra', module: 'INFRASTRUCTURE', label: 'PostgreSQL Batch Cancellation Committed', delay: 180 },
+          { nodeId: 'infra_realtime_ws', edgeId: null, category: 'infra', module: 'INFRASTRUCTURE', label: 'Realtime WebSocket Sync', delay: 360 },
+          { nodeId: 'owner_live_orders', edgeId: 'edge-e_revenue_to_overview', category: 'owner', module: 'OWNER DASHBOARD', label: 'Owner Live Orders Grid Updated', delay: 540 },
+          { nodeId: 'owner_overview', edgeId: null, category: 'owner', module: 'OWNER DASHBOARD', label: 'Executive Overview KPI Synced', delay: 720 },
+          { nodeId: 'order_cancel', edgeId: 'edge-e_cancel_to_reversal', category: 'order', module: 'ORDER ENGINE', label: 'Cancel Request Handled', delay: 900 },
+          { nodeId: 'inv_reversal', edgeId: 'edge-e_inv_to_report', category: 'inventory', module: 'INVENTORY ENGINE', label: 'Stock Restoration & Cancellation Reversal', delay: 1100 },
+          { nodeId: 'report_inventory', edgeId: 'edge-e_prep_to_lifecycle_audit', category: 'reports', module: 'REPORTS & ANALYTICS', label: 'Waste & Discrepancy Reconciliation Logged', delay: 1300 },
+          { nodeId: 'audit_lifecycle', edgeId: null, category: 'audit', module: 'AUDIT SYSTEM', label: 'Cancellation Forensic Audit Recorded', delay: 1500 }
+        ]);
       }
-
-      animateNode(nodeId, edgeId);
     }
 
     // ─── DEV LOG FILTER HELPER (for error heatmap tiles) ───
@@ -4675,30 +5026,46 @@
       }
     });
 
-    // ─── LIVE ORDER FLOW ANIMATION ENGINE ───
+    // ─── LIVE ORDER FLOW ANIMATION ENGINE (36 INTERCONNECTED HOPS) ───
     const ORDER_FLOW_SEQUENCE = [
-      { nodeId: 'cust_qr_scan', edgeId: 'edge-e_qr_to_menu', title: '1. Customer scans Table QR at Table T-10', duration: 1800 },
-      { nodeId: 'cust_menu', edgeId: 'edge-e_menu_to_cart', title: '2. Browsing Digital Menu with live stock badges', duration: 1600 },
-      { nodeId: 'cust_cart', edgeId: 'edge-e_cart_to_checkout', title: '3. Cart validated with portion scaling & cooking notes', duration: 1600 },
-      { nodeId: 'cust_checkout', edgeId: 'edge-e_checkout_to_placement', title: '4. Customer reviews bill & taps Place Order', duration: 1600 },
-      { nodeId: 'cust_order_placement', edgeId: 'edge-e_placement_to_new', title: '5. db.createOrder() ➔ Order Batch inserted into Postgres', duration: 2000 },
-      { nodeId: 'order_new', edgeId: 'edge-e_new_to_kds', title: '6. Batch Status: NEW ➔ Dispatched to kds_${restaurantId}', duration: 2000 },
-      { nodeId: 'kds_dashboard', edgeId: 'edge-e_kds_to_accept_btn', title: '7. KDS Screen alerts Kitchen with audio chime', duration: 1800 },
-      { nodeId: 'kds_accept', edgeId: 'edge-e_kds_accept_to_order_accepted', title: '8. Chef taps Accept Ticket on kitchen station', duration: 1800 },
-      { nodeId: 'order_accepted', edgeId: null, title: '9. Batch Status: ACCEPTED ➔ accepted_at recorded', duration: 1600 },
-      { nodeId: 'inv_reservation', edgeId: null, title: '10. BOM Inventory Recipe Ingredients Reserved', duration: 2000 },
-      { nodeId: 'kds_preparing', edgeId: 'edge-e_kds_prep_to_order_prep', title: '11. Kitchen marks Start Preparing', duration: 1800 },
-      { nodeId: 'order_preparing', edgeId: 'edge-e_prep_to_consume', title: '12. Batch Status: PREPARING ➔ Cooking commences', duration: 1800 },
-      { nodeId: 'inv_consumption', edgeId: 'edge-e_consume_to_idempotency', title: '13. Exact-Once Stock Deduction (Frozen Engine Guard)', duration: 2200 },
-      { nodeId: 'kds_ready', edgeId: 'edge-e_kds_ready_to_order_ready', title: '14. Chef marks order Ready on the pass', duration: 1800 },
-      { nodeId: 'order_ready', edgeId: 'edge-e_order_ready_to_waiter_pickup', title: '15. Batch Status: READY ➔ Waiter alert chime dispatched', duration: 1800 },
-      { nodeId: 'waiter_pickup', edgeId: 'edge-e_waiter_pickup_to_serve', title: '16. Floor Waiter picks up hot plates for Table T-10', duration: 1800 },
-      { nodeId: 'waiter_serve', edgeId: 'edge-e_waiter_serve_to_order_served', title: '17. Food delivered to table & confirmed served', duration: 1800 },
-      { nodeId: 'order_served', edgeId: 'edge-e_served_to_bill_gen', title: '18. Batch Status: SERVED ➔ Table dining active', duration: 1800 },
-      { nodeId: 'bill_generation', edgeId: 'edge-e_bill_gen_to_payment', title: '19. Bill calculated with Indian GST (CGST 2.5% + SGST 2.5%)', duration: 2000 },
-      { nodeId: 'bill_payment', edgeId: 'edge-e_payment_to_settle', title: '20. Payment settlement via UPI QR / Cash drawer', duration: 2000 },
-      { nodeId: 'bill_settlement', edgeId: null, title: '21. Order Completed ➔ Table T-10 released to AVAILABLE', duration: 2400 }
+      { nodeId: 'cust_qr_scan', edgeId: 'edge-e_qr_to_menu', title: '1. Customer scans Table QR code at Table T-10', category: 'order', duration: 1600 },
+      { nodeId: 'cust_menu', edgeId: 'edge-e_menu_to_cart', title: '2. Browsing Digital Menu with live stock badges', category: 'order', duration: 1500 },
+      { nodeId: 'cust_cart', edgeId: 'edge-e_cart_to_checkout', title: '3. Cart validated with portion scaling & cooking notes', category: 'order', duration: 1500 },
+      { nodeId: 'cust_checkout', edgeId: 'edge-e_checkout_to_placement', title: '4. Customer reviews bill & taps Place Order', category: 'order', duration: 1500 },
+      { nodeId: 'infra_api_routes', edgeId: 'edge-e_api_to_supabase_client', title: '5. Next.js Serverless API Route receives HTTP POST /api/orders', category: 'infra', duration: 1800 },
+      { nodeId: 'infra_supabase_client', edgeId: 'edge-e_supabase_client_to_postgres', title: '6. Supabase Multi-Role Client pools connection & verifies JWT', category: 'infra', duration: 1800 },
+      { nodeId: 'infra_postgres_db', edgeId: 'edge-e_postgres_to_realtime_ws', title: '7. PostgreSQL Core Engine executes ACID transaction & inserts batch', category: 'infra', duration: 1800 },
+      { nodeId: 'infra_realtime_ws', edgeId: 'edge-e_realtime_to_broadcast', title: '8. Supabase Realtime WebSocket detects WAL change & streams channel', category: 'infra', duration: 1800 },
+      { nodeId: 'notif_realtime_broadcast', edgeId: null, title: '9. Realtime Broadcast Dispatcher fans out live payload across all clients', category: 'infra', duration: 1600 },
+      { nodeId: 'owner_live_orders', edgeId: 'edge-e_revenue_to_overview', title: '10. Owner Dashboard Live Orders Grid instantly renders incoming ticket', category: 'owner', duration: 1800 },
+      { nodeId: 'owner_overview', edgeId: null, title: '11. Owner Executive Overview syncs Table T-10 occupied count', category: 'owner', duration: 1600 },
+      { nodeId: 'cust_order_placement', edgeId: 'edge-e_placement_to_new', title: '12. db.createOrder() ➔ Batch Created in Order Engine', category: 'order', duration: 1700 },
+      { nodeId: 'order_new', edgeId: 'edge-e_placement_to_recipe', title: '13. Batch Status: NEW ➔ Dispatched to KDS & Inventory Engine', category: 'order', duration: 1700 },
+      { nodeId: 'inv_recipe_lookup', edgeId: 'edge-e_recipe_to_scaling', title: '14. Querying BOM Recipe & Ingredients in Inventory Engine', category: 'inventory', duration: 1700 },
+      { nodeId: 'inv_scaling', edgeId: 'edge-e_scaling_to_reserve', title: '15. Calculating Portion Multipliers (Half/Full/Custom scaling)', category: 'inventory', duration: 1700 },
+      { nodeId: 'inv_reservation', edgeId: 'edge-e_new_to_kds', title: '16. Active Stock Reservation Held (Prevents overselling)', category: 'inventory', duration: 1800 },
+      { nodeId: 'kds_dashboard', edgeId: 'edge-e_kds_to_accept_btn', title: '17. Kitchen KDS Station Screen alerts Chef with audio chime', category: 'kds', duration: 1700 },
+      { nodeId: 'kds_accept', edgeId: 'edge-e_kds_accept_to_order_accepted', title: '18. Chef taps Accept Ticket on kitchen station', category: 'kds', duration: 1600 },
+      { nodeId: 'order_accepted', edgeId: null, title: '19. Batch Status: ACCEPTED ➔ accepted_at timestamp committed', category: 'order', duration: 1500 },
+      { nodeId: 'kds_preparing', edgeId: 'edge-e_kds_prep_to_order_prep', title: '20. Kitchen marks Start Cooking in KDS', category: 'kds', duration: 1600 },
+      { nodeId: 'order_preparing', edgeId: 'edge-e_prep_to_consume', title: '21. Batch Status: PREPARING ➔ Cooking commences', category: 'order', duration: 1600 },
+      { nodeId: 'inv_consumption', edgeId: 'edge-e_consume_to_idempotency', title: '22. Exact-Once Stock Deduction (Frozen Inventory Engine Guard)', category: 'inventory', duration: 2000 },
+      { nodeId: 'order_idempotency', edgeId: 'edge-e_inv_to_report', title: '23. Idempotency Key Guard Verified (No duplicate deduction)', category: 'order', duration: 1700 },
+      { nodeId: 'report_inventory', edgeId: null, title: '24. Theoretical vs Actual Inventory Consumption Logged', category: 'reports', duration: 1700 },
+      { nodeId: 'kds_ready', edgeId: 'edge-e_kds_ready_to_order_ready', title: '25. Chef marks order Ready on the pass', category: 'kds', duration: 1600 },
+      { nodeId: 'order_ready', edgeId: 'edge-e_order_ready_to_waiter_pickup', title: '26. Batch Status: READY ➔ Floor waiter alerted', category: 'order', duration: 1600 },
+      { nodeId: 'waiter_pickup', edgeId: 'edge-e_waiter_pickup_to_serve', title: '27. Floor Waiter picks up hot plates for Table T-10', category: 'waiter', duration: 1600 },
+      { nodeId: 'waiter_serve', edgeId: 'edge-e_waiter_serve_to_order_served', title: '28. Waiter delivers food to table & confirms served', category: 'waiter', duration: 1600 },
+      { nodeId: 'order_served', edgeId: 'edge-e_served_to_bill_gen', title: '29. Batch Status: SERVED ➔ Dining tab initialized', category: 'order', duration: 1600 },
+      { nodeId: 'bill_generation', edgeId: 'edge-e_bill_gen_to_gst', title: '30. Bill Generation Engine computes CGST & SGST 5% taxes', category: 'billing', duration: 1800 },
+      { nodeId: 'bill_gst', edgeId: 'edge-e_bill_gst_to_report_revenue', title: '31. GST Taxes Accrued to Daily Revenue Ledger', category: 'billing', duration: 1800 },
+      { nodeId: 'bill_payment', edgeId: 'edge-e_payment_to_settle', title: '32. Payment collected via UPI QR / Card / Cash', category: 'billing', duration: 1800 },
+      { nodeId: 'bill_settlement', edgeId: 'edge-e_settle_to_revenue', title: '33. Table Session Settled & Released back to AVAILABLE', category: 'billing', duration: 2000 },
+      { nodeId: 'owner_revenue', edgeId: 'edge-e_revenue_to_overview', title: '34. Owner Revenue & Tender Ledger Closed', category: 'owner', duration: 1800 },
+      { nodeId: 'report_sales', edgeId: 'edge-e_report_sales_to_owner_reports', title: '35. Sales & Product Mix Reports Aggregated in Real Time', category: 'reports', duration: 1800 },
+      { nodeId: 'owner_reports', edgeId: null, title: '36. Owner Financial Reports & Accounting Ledger Published', category: 'reports', duration: 2200 }
     ];
+    window.ORDER_FLOW_SEQUENCE = ORDER_FLOW_SEQUENCE;
 
     let flowState = {
       isPlaying: false,
@@ -4730,8 +5097,8 @@
       const hud = document.getElementById('flow-playback-hud');
       if (hud) hud.style.display = 'flex';
 
-      showToast('⚡ Live Order Flow Simulation Started', 'info');
-      logDevEvent('FLOW', 'PLAY_START', 'Order journey playback initiated (21 steps)');
+      showToast('⚡ Live Interconnected Flow Simulation Started (All 13 Tiers)', 'info');
+      logDevEvent('FLOW', 'PLAY_START', 'Order journey playback initiated (36 hops across API, DB, Realtime, Owner, KDS, Waiter, Inventory, Billing, Reports)');
       executeFlowStep();
     }
 
@@ -4739,8 +5106,8 @@
       if (!flowState.isPlaying || flowState.isPaused) return;
 
       if (flowState.currentIndex >= ORDER_FLOW_SEQUENCE.length) {
-        showToast('🎉 Order Lifecycle Complete: Table T-10 Settled & Available', 'success');
-        logDevEvent('FLOW', 'PLAY_COMPLETE', 'All 21 hops traced successfully');
+        showToast('🎉 Complete Distributed Journey Verified: API ➔ DB ➔ Owner ➔ KDS ➔ Inventory ➔ Billing ➔ Reports', 'success');
+        logDevEvent('FLOW', 'PLAY_COMPLETE', 'All 36 hops across all interconnected architecture tiers completed');
         stopOrderFlow();
         return;
       }
@@ -4755,20 +5122,40 @@
       if (descEl) descEl.innerText = step.title;
 
       // Clear previous active nodes & edges
-      document.querySelectorAll('.node-group').forEach(g => g.classList.remove('flow-active'));
-      document.querySelectorAll('.edge-path').forEach(ep => ep.classList.remove('flow-active'));
+      document.querySelectorAll('.node-group').forEach(g => {
+        g.classList.remove(...ALL_FLOW_CLASSES);
+      });
+      document.querySelectorAll('.edge-path').forEach(ep => {
+        ep.classList.remove(...ALL_FLOW_CLASSES);
+      });
 
-      // Center smoothly on current node
-      centerOnNode(step.nodeId, 1.35);
+      // Smooth camera behavior:
+      // If user is zoomed in (> 0.9), gently center on current node
+      // If user is in panoramic view (<= 0.9), KEEP panoramic view intact so whole interconnected NOC is visible!
+      if (currentZoom > 0.9) {
+        centerOnNode(step.nodeId, 1.15);
+      } else {
+        const nEl = document.getElementById('node-' + step.nodeId);
+        if (nEl && typeof selectNode === 'function') {
+          document.querySelectorAll('.node-group').forEach(el => el.classList.remove('focused'));
+          nEl.classList.add('focused');
+        }
+      }
 
-      // Highlight active node
+      // Highlight active node with tier-specific glow
       const nodeEl = document.getElementById('node-' + step.nodeId);
-      if (nodeEl) nodeEl.classList.add('flow-active');
+      if (nodeEl) {
+        nodeEl.classList.add('flow-active');
+        if (step.category) nodeEl.classList.add('flow-active-' + step.category);
+      }
 
       // Highlight active edge if present
       if (step.edgeId) {
         const edgeEl = document.getElementById(step.edgeId);
-        if (edgeEl) edgeEl.classList.add('flow-active');
+        if (edgeEl) {
+          edgeEl.classList.add('flow-active');
+          if (step.category) edgeEl.classList.add('flow-active-' + step.category);
+        }
       }
 
       logDevEvent('FLOW', `HOP_${flowState.currentIndex + 1}`, `${step.nodeId}: ${step.title}`);
