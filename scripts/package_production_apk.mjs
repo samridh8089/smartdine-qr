@@ -55,8 +55,13 @@ async function packageApk() {
     const entry = origZip.files[filePath];
     if (entry.dir) continue;
 
-    // Strip old META-INF signatures
-    if (filePath.startsWith('META-INF/')) continue;
+    // Strip ONLY signature files in META-INF (e.g. MANIFEST.MF, *.SF, *.RSA), NOT META-INF/services/
+    if (filePath.startsWith('META-INF/')) {
+      const relMeta = filePath.substring('META-INF/'.length);
+      if (!relMeta.includes('/') && (relMeta === 'MANIFEST.MF' || relMeta.endsWith('.SF') || relMeta.endsWith('.RSA') || relMeta.endsWith('.DSA') || relMeta.endsWith('.EC'))) {
+        continue;
+      }
+    }
 
     if (filePath === 'AndroidManifest.xml') {
       outZip.file(filePath, modifiedManifest, {
