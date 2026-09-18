@@ -8,18 +8,22 @@ async function packageApk() {
 
   const origApkPath = path.resolve('temp_orig.apk');
   if (!fs.existsSync(origApkPath)) {
-    throw new Error('temp_orig.apk not found! Run git show extraction first.');
+    console.log('Extracting original base APK from commit 7b922b1...');
+    const buf = execSync('git show 7b922b1:app-release.apk', { maxBuffer: 150 * 1024 * 1024 });
+    fs.writeFileSync(origApkPath, buf);
+    console.log(`Extracted temp_orig.apk (${(buf.length / 1024 / 1024).toFixed(2)} MB)`);
   }
 
   const origData = fs.readFileSync(origApkPath);
   const origZip = await JSZip.loadAsync(origData);
 
-  const bundlePath = path.resolve('smartdine-mobile/dist-android/index.android.bundle');
-  if (!fs.existsSync(bundlePath)) {
-    throw new Error('index.android.bundle not found! Run build_bundle.js first.');
+  // Ensure Hermes bytecode bundle exists
+  const hbcPath = path.resolve('smartdine-mobile/dist-android/index.android.bundle.hbc');
+  if (!fs.existsSync(hbcPath)) {
+    throw new Error('index.android.bundle.hbc not found! Compile with hermesc first.');
   }
-  const newBundle = fs.readFileSync(bundlePath);
-  console.log(`Loaded new Metro bundle: ${(newBundle.length / 1024 / 1024).toFixed(2)} MB`);
+  const newBundle = fs.readFileSync(hbcPath);
+  console.log(`Loaded Hermes bytecode bundle: ${(newBundle.length / 1024 / 1024).toFixed(2)} MB (Magic: ${newBundle.subarray(0, 8).toString('hex')})`);
 
   // Modify AndroidManifest.xml to set versionCode = 14
   const manifestBuf = await origZip.file('AndroidManifest.xml').async('nodebuffer');
