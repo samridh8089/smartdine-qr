@@ -75,16 +75,22 @@ export async function POST(req: Request) {
       }, { status: 403 });
     }
 
-    // Resolve target restaurant_id to enforce multi-tenant isolation
+    // Resolve target restaurant_id to enforce multi-tenant isolation and check current order status
     let orderRestId: string | null = null;
+    let resolvedOrderId: string | null = orderId || null;
+    let currentOrderStatus: string | null = null;
+
     if (orderId) {
-      const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id').eq('id', orderId).maybeSingle();
-      orderRestId = ord?.restaurant_id;
+      const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', orderId).maybeSingle();
+      orderRestId = ord?.restaurant_id || null;
+      currentOrderStatus = ord?.status || null;
     } else if (batchId) {
       const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
       if (bRec?.order_id) {
-        const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id').eq('id', bRec.order_id).maybeSingle();
-        orderRestId = ord?.restaurant_id;
+        resolvedOrderId = bRec.order_id;
+        const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', bRec.order_id).maybeSingle();
+        orderRestId = ord?.restaurant_id || null;
+        currentOrderStatus = ord?.status || null;
       }
     }
 
@@ -96,6 +102,26 @@ export async function POST(req: Request) {
         }, { status: 403 });
       }
     }
+
+    // Authoritative Server-Side Gate: Terminal Order Protection
+    // Stale clients can NEVER change a Cancelled or Completed order
+    if (currentOrderStatus && ['cancelled', 'completed'].includes(currentOrderStatus)) {
+      if (effectiveStatus === currentOrderStatus) {
+        // Idempotent return if already in requested terminal status
+        const { data: ordData } = await supabaseAdmin.from('orders').select('*').eq('id', resolvedOrderId).maybeSingle();
+        return NextResponse.json({
+          success: true,
+          order: ordData,
+          message: `Order #${resolvedOrderId} is already in terminal state "${currentOrderStatus}".`
+        });
+      }
+      return NextResponse.json({
+        error: `Cannot update order #${resolvedOrderId}. It is already in terminal state "${currentOrderStatus}".`,
+        code: 'ORDER_TERMINAL_STATE',
+        status: currentOrderStatus
+      }, { status: 409 });
+    }
+
     const t_start = performance.now();
     let updatedOrder: any = null;
     let updatedBatch: any = null;
@@ -112,7 +138,7 @@ export async function POST(req: Request) {
       try {
         updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason, userClient);
       } catch (dbErr: any) {
-        if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
+        if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT' || dbErr.code === 'ORDER_TERMINAL_STATE') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
         }
         throw dbErr;
@@ -121,7 +147,7 @@ export async function POST(req: Request) {
       try {
         updatedOrder = await db.updateBatchStatus(batchId, effectiveStatus, staffName, cancellationReason);
       } catch (dbErr: any) {
-        if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
+        if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT' || dbErr.code === 'ORDER_TERMINAL_STATE') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
         }
         throw dbErr;
@@ -137,7 +163,7 @@ export async function POST(req: Request) {
       try {
         updatedOrder = await db.updateOrderStatus(orderId, effectiveStatus, staffName, cancellationReason, userClient);
       } catch (dbErr: any) {
-        if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT') {
+        if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT' || dbErr.code === 'ORDER_TERMINAL_STATE') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
         }
         throw dbErr;

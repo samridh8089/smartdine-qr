@@ -328,7 +328,7 @@ export default function DashboardPage() {
         }
 
         channel = supabase
-          .channel(`overview_dashboard_${restId}_${Date.now()}`, {
+          .channel(`overview_dashboard_${restId}`, {
             config: {
               broadcast: { self: true }
             }
