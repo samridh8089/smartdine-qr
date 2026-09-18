@@ -255,7 +255,9 @@ function CheckoutContent() {
     <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
       <div className="max-w-md w-full bg-slate-800 rounded-2xl p-6 border border-slate-700 shadow-2xl text-center">
         <div className="flex justify-center mb-4">
-          <img src="/logo.png" alt="CleverOps Logo" className="h-12 w-auto object-contain" />
+          <div className="h-14 w-14 rounded-2xl bg-white shadow-md border border-slate-200/80 flex items-center justify-center p-2">
+            <img src="/logo.png" alt="CleverOps Logo" className="h-full w-full object-contain" />
+          </div>
         </div>
 
         {status === 'initiating' && (

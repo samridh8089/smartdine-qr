@@ -10,7 +10,9 @@ export default function Footer() {
           {/* Column 1: Brand Info */}
           <div className="space-y-4 md:col-span-1">
             <Link href="/" className="flex items-center gap-3">
-              <img src="/logo.png" alt="CleverOps Logo" className="h-9 w-auto object-contain" />
+              <div className="h-9 w-9 rounded-lg bg-white p-1 shrink-0 flex items-center justify-center shadow-xs">
+                <img src="/logo.png" alt="CleverOps Logo" className="h-full w-full object-contain" />
+              </div>
               <span className="font-black text-lg tracking-tight text-white">CleverOps</span>
             </Link>
             <p className="text-xs text-slate-400 leading-relaxed">
