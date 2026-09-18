@@ -37,8 +37,8 @@ async function packageApk() {
       const attr0NameIdx = modifiedManifest.readUInt32LE(attrsOffset + 4);
       if (attr0NameIdx === 26) { // Str 26 is versionCode
         const oldCode = modifiedManifest.readUInt32LE(attrsOffset + 16);
-        console.log(`Updating AndroidManifest.xml versionCode: ${oldCode} -> 14`);
-        modifiedManifest.writeUInt32LE(14, attrsOffset + 16);
+        console.log(`Updating AndroidManifest.xml versionCode: ${oldCode} -> 15`);
+        modifiedManifest.writeUInt32LE(15, attrsOffset + 16);
       }
       break;
     }
