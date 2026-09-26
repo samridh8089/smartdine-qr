@@ -619,7 +619,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   logoTapTimerRef.current = setTimeout(() => setLogoTapCount(0), 3000);
                 }
               }}>
-                <img src="/logo.png" alt="CleverOps Logo" className="h-8 w-8 object-contain select-none" />
+                <div className="h-8 w-8 rounded-lg bg-white p-1 shrink-0 flex items-center justify-center shadow-xs">
+                  <img src="/logo.png" alt="CleverOps Logo" className="h-full w-full object-contain select-none" />
+                </div>
                 <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent select-none">CleverOps</span>
                 {logoTapCount > 0 && logoTapCount < 5 && (
                   <span className="text-[8px] text-emerald-400 font-mono opacity-60">{5 - logoTapCount}</span>

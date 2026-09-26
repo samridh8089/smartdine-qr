@@ -37,8 +37,8 @@ async function packageApk() {
       const attr0NameIdx = modifiedManifest.readUInt32LE(attrsOffset + 4);
       if (attr0NameIdx === 26) { // Str 26 is versionCode
         const oldCode = modifiedManifest.readUInt32LE(attrsOffset + 16);
-        console.log(`Updating AndroidManifest.xml versionCode: ${oldCode} -> 14`);
-        modifiedManifest.writeUInt32LE(14, attrsOffset + 16);
+        console.log(`Updating AndroidManifest.xml versionCode: ${oldCode} -> 16`);
+        modifiedManifest.writeUInt32LE(16, attrsOffset + 16);
       }
       break;
     }
@@ -55,8 +55,13 @@ async function packageApk() {
     const entry = origZip.files[filePath];
     if (entry.dir) continue;
 
-    // Strip old META-INF signatures
-    if (filePath.startsWith('META-INF/')) continue;
+    // Strip ONLY signature files in META-INF (e.g. MANIFEST.MF, *.SF, *.RSA), NOT META-INF/services/
+    if (filePath.startsWith('META-INF/')) {
+      const relMeta = filePath.substring('META-INF/'.length);
+      if (!relMeta.includes('/') && (relMeta === 'MANIFEST.MF' || relMeta.endsWith('.SF') || relMeta.endsWith('.RSA') || relMeta.endsWith('.DSA') || relMeta.endsWith('.EC'))) {
+        continue;
+      }
+    }
 
     if (filePath === 'AndroidManifest.xml') {
       outZip.file(filePath, modifiedManifest, {
@@ -107,7 +112,7 @@ async function packageApk() {
   const keystore = path.resolve('smartdine-mobile/androide_backup/app/debug.keystore');
 
   console.log('Signing and zipaligning with uber-apk-signer...');
-  const signCmd = `"${javaExe}" -jar "${signerJar}" -a "${unsignedPath}" --ksDebug "${keystore}" --verbose`;
+  const signCmd = `"${javaExe}" -Xms64m -Xmx512m -jar "${signerJar}" -a "${unsignedPath}" --ksDebug "${keystore}" --verbose`;
   const signOutput = execSync(signCmd, { encoding: 'utf-8' });
   console.log(signOutput);
 
