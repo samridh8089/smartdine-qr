@@ -543,7 +543,9 @@ export default function OrderTrackingPage({ params }: PageProps) {
             >
               <ArrowLeft className="h-4 w-4" /> Back to Menu
             </Link>
-            <img src="/logo.png" alt="CleverOps Logo" className="h-6 w-auto object-contain hidden sm:block" />
+            <div className="h-7 w-7 rounded-lg bg-white p-0.5 shrink-0 hidden sm:flex items-center justify-center shadow-xs border border-slate-200/60">
+              <img src="/logo.png" alt="CleverOps Logo" className="h-full w-full object-contain" />
+            </div>
           </div>
 
           {/* Call Waiter button on Order Tracking Page */}

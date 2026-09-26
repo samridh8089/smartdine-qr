@@ -346,7 +346,9 @@ export default function SignupPage() {
       <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="sm:mx-auto w-full sm:max-w-md">
           <div className="flex justify-center">
-            <img src="/logo.png" alt="CleverOps Logo" className="h-14 w-auto object-contain drop-shadow-md" />
+            <div className="h-16 w-16 rounded-2xl bg-white shadow-md border border-slate-200/80 flex items-center justify-center p-2.5">
+              <img src="/logo.png" alt="CleverOps Logo" className="h-full w-full object-contain" />
+            </div>
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Register & Activate Restaurant

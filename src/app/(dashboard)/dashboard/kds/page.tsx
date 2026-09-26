@@ -837,7 +837,9 @@ export default function KitchenDisplayPage() {
       <div className="flex items-center justify-between shrink-0">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <img src="/logo.png" alt="CleverOps Logo" className="h-7 w-7 object-contain rounded-md" />
+            <div className="h-7 w-7 rounded-md bg-white p-0.5 shrink-0 flex items-center justify-center shadow-xs border border-slate-200/60">
+              <img src="/logo.png" alt="CleverOps Logo" className="h-full w-full object-contain" />
+            </div>
             Kitchen Display System (KDS)
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Live cooking tickets and real-time customer status tracking.</p>
