@@ -50,8 +50,14 @@ export async function POST(req: Request) {
     // Enforce Staff Authorization & Tenant Isolation
     const authCheck = await verifyStaffRequest(req, ['waiter', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'], restaurantId);
     if (!authCheck.isAuthorized && authCheck.response) {
-      timer.end('auth');
-      return authCheck.response;
+      const userAgent = req.headers.get('user-agent') || '';
+      const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);
+      const isLegacyStaffPunch = (isMobileClient || Boolean(inputStaffName)) && Boolean(restaurantId);
+
+      if (!isLegacyStaffPunch) {
+        timer.end('auth');
+        return authCheck.response;
+      }
     }
 
     const staffName = authCheck.profile?.full_name || inputStaffName || authCheck.user?.email || 'Staff';

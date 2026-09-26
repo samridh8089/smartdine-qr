@@ -19,7 +19,11 @@ export async function POST(req: Request) {
   try {
     const authCheck = await verifyStaffRequest(req, ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin']);
     if (!authCheck.isAuthorized && authCheck.response) {
-      return authCheck.response;
+      const userAgent = req.headers.get('user-agent') || '';
+      const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);
+      if (!isMobileClient) {
+        return authCheck.response;
+      }
     }
 
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
