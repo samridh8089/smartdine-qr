@@ -10,14 +10,8 @@ export async function POST(req: Request) {
       isDemo
     } = await req.json();
 
-    if (isDemo) {
-      return NextResponse.json({ success: true, verified: true, isDemo: true });
-    }
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
 
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
-    if (!keySecret) {
-      return NextResponse.json({ success: true, verified: true, isDemo: true });
-    }
 
     const body = razorpay_order_id + '|' + razorpay_payment_id;
     const expectedSignature = crypto

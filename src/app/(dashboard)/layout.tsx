@@ -512,7 +512,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <RestaurantContext.Provider value={{ restaurant, profile, activeRole, dbRole, planSpec, refresh: checkAuth, alarmMuted, setAlarmMuted }}>
       <PreviewModeProvider>
-        <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+        <div className="h-screen max-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 overflow-hidden">
         <MockBanner />
 
         {isImpersonating && (
@@ -585,7 +585,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         )}
 
-        <div className="flex flex-1 relative overflow-hidden">
+        <div className="flex flex-1 relative overflow-hidden h-full">
           {/* Mobile Sidebar Overlay */}
           {sidebarOpen && (
             <div 
@@ -594,11 +594,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             />
           )}
 
-          {/* Sidebar */}
+          {/* Sidebar - Sticky on desktop */}
           <aside className={`
-            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
+            fixed lg:sticky top-0 inset-y-0 left-0 z-40 w-64 h-full max-h-screen bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}>
+
             {/* Logo Section */}
             <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
@@ -711,7 +712,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </aside>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-full">
             {/* Dashboard Header */}
             <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 flex items-center justify-between px-6 shrink-0 sticky top-0 z-30 transition-colors">
               <div className="flex items-center gap-4">

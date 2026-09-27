@@ -262,23 +262,21 @@ export async function POST(req: Request) {
       .eq('id', restaurantId);
 
     // ─── 8. UPSERT OWNER PROFILE ──────────────────────────────────────────────
-    await supabaseAdmin.from('profiles').upsert({
-      id: userId,
-      user_id: userId,
-      restaurant_id: restaurantId,
-      email: cleanEmail,
-      full_name: cleanName,
-      phone: cleanPhone,
-      role: 'owner',
-      is_active: true,
-      plain_password: password || undefined,
-      last_login_at: new Date().toISOString(),
-      metadata: {
-        is_verified: true,
-        verification_status: 'active',
-        onboarded_at: new Date().toISOString()
-      }
-    });
+    try {
+      await supabaseAdmin.from('profiles').upsert({
+        id: userId,
+        user_id: userId,
+        restaurant_id: restaurantId,
+        email: cleanEmail,
+        full_name: cleanName,
+        role: 'owner',
+        plain_password: password || undefined,
+        updated_at: new Date().toISOString()
+      });
+    } catch (profErr) {
+      console.warn('[Onboarding Profile Upsert Warning]:', profErr);
+    }
+
 
     // ─── 9. RECORD BILLING TRANSACTION & PAYMENT LOG ──────────────────────────
     const invoiceNum = `INV-${Date.now().toString().slice(-8)}`;

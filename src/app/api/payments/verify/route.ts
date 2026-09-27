@@ -44,8 +44,9 @@ export async function POST(req: Request) {
     } = body;
 
     if (!isDemo) {
-      const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
+      const keySecret = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
       if (keySecret && razorpay_order_id && razorpay_payment_id && razorpay_signature) {
+
 
         const bodyStr = razorpay_order_id + '|' + razorpay_payment_id;
         const expectedSignature = crypto

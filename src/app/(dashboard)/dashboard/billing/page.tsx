@@ -192,15 +192,6 @@ export default function BillingPage() {
         return;
       }
 
-      // If keys are not configured in .env yet, activate in Test/Demo mode
-      if (orderData.isDemo) {
-        await db.updateRestaurantPlan(restaurant.id, planId, 'active', undefined, billingInterval);
-        await refresh();
-        alert(`Subscription Activated! Upgraded to ${planId.toUpperCase()} Plan.`);
-        setPaymentLoading(null);
-        return;
-      }
-
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
         alert('Failed to load Razorpay Checkout SDK. Please check your internet connection.');
@@ -209,14 +200,15 @@ export default function BillingPage() {
       }
 
       const options = {
-        key: orderData.keyId,
+        key: orderData.keyId || 'rzp_live_TK1Nbl3mJiENjR',
         amount: orderData.amount,
         currency: orderData.currency || 'INR',
         name: 'CleverOps',
         description: `Upgrade to ${selectedPlan?.name || planId} Plan (${billingInterval})`,
-        image: '/favicon.ico',
-        order_id: orderData.orderId,
+        image: '/logo.png',
+        order_id: orderData.orderId || orderData.order_id,
         handler: async function (response: any) {
+
           try {
             const verifyRes = await fetch('/api/razorpay/verify-payment', {
               method: 'POST',

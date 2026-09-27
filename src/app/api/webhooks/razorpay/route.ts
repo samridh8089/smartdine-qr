@@ -55,12 +55,69 @@ export async function POST(req: Request) {
       const durationDays = billingInterval === 'yearly' ? 365 : 30;
       const nextBillingDate = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 
-      if (restaurantId) {
+      let targetRestId = restaurantId;
+      const cleanEmail = (payment?.email || notes.email || '').trim().toLowerCase();
+      const cleanPhone = (payment?.contact || notes.phone || '').trim();
+      const cleanRestName = (notes.restaurant_name || notes.restaurantName || 'Restaurant').trim();
+
+      // Fallback: If restaurantId wasn't passed in order notes (initial new signup), resolve or create
+      if (!targetRestId && cleanEmail) {
+        const { data: prof } = await supabaseAdmin.from('profiles').select('restaurant_id, id').eq('email', cleanEmail).maybeSingle();
+        if (prof?.restaurant_id) {
+          targetRestId = prof.restaurant_id;
+        } else {
+          const { data: restByEmail } = await supabaseAdmin.from('restaurants').select('id').eq('settings->>owner_email', cleanEmail).maybeSingle();
+          if (restByEmail?.id) {
+            targetRestId = restByEmail.id;
+          } else {
+            // Provision new restaurant via RPC fallback
+            let userId = prof?.id;
+            if (!userId) {
+              const { data: authUser } = await supabaseAdmin.auth.admin.createUser({
+                email: cleanEmail,
+                password: 'ChangeMe@123456',
+                email_confirm: true,
+                user_metadata: { role: 'owner', restaurantName: cleanRestName }
+              });
+              userId = authUser?.user?.id;
+            }
+            if (userId) {
+              const cleanSlug = cleanRestName.toLowerCase().replace(/[^a-z0-9]/g, '') || `rest${Date.now().toString().slice(-4)}`;
+              const { data: rpcRes } = await supabaseAdmin.rpc('create_restaurant_and_link', {
+                p_owner_id: userId,
+                p_owner_email: cleanEmail,
+                p_owner_name: cleanRestName,
+                p_owner_phone: cleanPhone,
+                p_restaurant_name: cleanRestName,
+                p_slug: cleanSlug,
+                p_address: 'India',
+                p_subscription_plan: planName,
+                p_billing_interval: billingInterval,
+                p_settings: {
+                  currency: 'INR',
+                  timezone: 'Asia/Kolkata',
+                  last_payment_id: paymentId,
+                  last_order_id: orderId,
+                  last_amount: amount,
+                  owner_email: cleanEmail,
+                  owner_phone: cleanPhone
+                },
+                p_trial_ends_at: nextBillingDate
+              });
+              if (rpcRes?.restaurant_id) {
+                targetRestId = rpcRes.restaurant_id;
+              }
+            }
+          }
+        }
+      }
+
+      if (targetRestId) {
         // Fetch current settings
         const { data: rest } = await supabaseAdmin
           .from('restaurants')
           .select('settings')
-          .eq('id', restaurantId)
+          .eq('id', targetRestId)
           .maybeSingle();
 
         const currentSettings = (rest as any)?.settings || {};
@@ -87,6 +144,8 @@ export async function POST(req: Request) {
           next_billing_date: nextBillingDate,
           method: payment?.method || 'razorpay'
         };
+        currentSettings.last_payment_id = paymentId;
+        currentSettings.last_order_id = orderId;
         currentSettings.payment_history = paymentHistory;
 
         // Activate restaurant
@@ -100,11 +159,12 @@ export async function POST(req: Request) {
             settings: currentSettings,
             updated_at: new Date().toISOString()
           })
-          .eq('id', restaurantId);
+          .eq('id', targetRestId);
 
-        console.log(`[Razorpay Webhook] Successfully activated restaurant ${restaurantId} with ${planName} plan (Paid ₹${amount})`);
+        console.log(`[Razorpay Webhook] Successfully activated restaurant ${targetRestId} with ${planName} plan (Paid ₹${amount})`);
       }
     }
+
 
     // 3. Handle Payment Failed Events
     if (event.event === 'payment.failed') {
