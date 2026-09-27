@@ -95,24 +95,11 @@ export async function POST(req: Request) {
       }
     }
 
-    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
-
+    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '***REMOVED***';
+    const keySecret = process.env.RAZORPAY_KEY_SECRET || '***REMOVED***';
 
     const amountInPaise = Math.round(Number(amount) * 100);
 
-    if (!keyId || !keySecret) {
-      return NextResponse.json({
-        success: true,
-        order_id: `ord_${Date.now()}`,
-        orderId: `ord_${Date.now()}`,
-        amount: amountInPaise,
-        currency: currency || 'INR',
-        key: 'rzp_test_demo',
-        keyId: 'rzp_test_demo',
-        isDemo: true,
-      });
-    }
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
 
