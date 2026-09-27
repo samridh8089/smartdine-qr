@@ -152,6 +152,9 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       loadStaffAndLogs();
 
       // Supabase Realtime subscription on `profiles` table for staff sync
+      const existingChannel = supabase.getChannels().find(c => c.topic === `realtime:web_staff_realtime_${restaurant.id}`);
+      if (existingChannel) supabase.removeChannel(existingChannel);
+
       const channel = supabase
         .channel(`web_staff_realtime_${restaurant.id}`)
         .on(
@@ -173,7 +176,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         supabase.removeChannel(channel);
       };
     }
-  }, [restaurant]);
+  }, [restaurant?.id]);
 
   // Read URL query parameter for tab deep-linking (e.g. /dashboard/settings?tab=staff)
   useEffect(() => {

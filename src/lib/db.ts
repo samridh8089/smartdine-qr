@@ -3629,7 +3629,13 @@ export const db = {
     }
   },
 
-  async updateRestaurantPlan(id: string, plan: 'starter' | 'pro' | 'premium', status: Restaurant['subscription_status'], trialEndsAt?: string): Promise<Restaurant> {
+  async updateRestaurantPlan(
+    id: string, 
+    plan: 'starter' | 'pro' | 'premium', 
+    status: Restaurant['subscription_status'], 
+    trialEndsAt?: string,
+    interval?: 'monthly' | 'yearly'
+  ): Promise<Restaurant> {
     // Invalidate local in-memory cache immediately for real-time propagation
     restaurantMemoryCache.delete(id);
 
@@ -3640,23 +3646,25 @@ export const db = {
 
     const { data: oldRest } = await supabase.from('restaurants').select('*').eq('id', id).single();
 
+    const billingInterval = interval || oldRest?.billing_interval || 'monthly';
+    const addedDaysMs = (billingInterval === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000;
+
     let expiresAt = trialEndsAt;
     if (!expiresAt) {
       const now = new Date();
       const existingExpiry = oldRest?.trial_ends_at ? new Date(oldRest.trial_ends_at) : null;
-      const billingInterval = oldRest?.billing_interval || 'monthly';
-      const addedDaysMs = (billingInterval === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000;
+      const isSamePlan = oldRest?.subscription_plan === plan && (oldRest?.billing_interval || 'monthly') === billingInterval;
 
       if (status === 'active') {
-        if (existingExpiry && existingExpiry > now) {
-          // If existing subscription is still active, add renewal period to existing expiry
+        if (isSamePlan && existingExpiry && existingExpiry > now) {
+          // If renewing the exact same plan and interval before expiry, extend from existing expiry
           expiresAt = new Date(existingExpiry.getTime() + addedDaysMs).toISOString();
         } else {
-          // If existing subscription is already expired, set new expiry to now + renewal period
+          // If upgrading, downgrading, switching interval, or expired: start fresh validity from now
           expiresAt = new Date(now.getTime() + addedDaysMs).toISOString();
         }
       } else if (status === 'trial') {
-        expiresAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
+        expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
       } else {
         expiresAt = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
       }
@@ -3667,7 +3675,8 @@ export const db = {
       .update({
         subscription_plan: plan,
         subscription_status: status,
-        trial_ends_at: expiresAt
+        trial_ends_at: expiresAt,
+        billing_interval: billingInterval
       })
       .eq('id', id)
       .select();
