@@ -44,8 +44,6 @@ export default function TablesPage() {
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeGroupName, setMergeGroupName] = useState('');
   const [mergeErrorMsg, setMergeErrorMsg] = useState('');
-  const [unmergeTarget, setUnmergeTarget] = useState<{ groupId: string; groupName: string } | null>(null);
-  const [unmerging, setUnmerging] = useState(false);
 
   // QR URLs map, keyed by tableId, storing base64 QR code image data
   const [qrCodes, setQrCodes] = useState<Record<string, string>>(() => dashboardStore.getCachedTableQRs());
@@ -132,9 +130,6 @@ export default function TablesPage() {
 
       // Realtime subscription deferred slightly so it never blocks first interactive paint
       const realtimeTimer = setTimeout(() => {
-        const existing = supabase.getChannels().find(c => c.topic === `realtime:tables_${targetRestId}`);
-        if (existing) supabase.removeChannel(existing);
-
         channel = supabase
           .channel(`tables_${targetRestId}`)
           .on(
@@ -312,21 +307,14 @@ export default function TablesPage() {
     }
   };
 
-  const handleOpenUnmergeDialog = (groupId: string, groupName: string) => {
-    setUnmergeTarget({ groupId, groupName });
-  };
-
-  const handleConfirmUnmerge = async () => {
-    if (!unmergeTarget) return;
-    setUnmerging(true);
-    try {
-      await db.unmergeTableGroup(restaurantId, unmergeTarget.groupId);
-      await refreshTables();
-      setUnmergeTarget(null);
-    } catch (err: any) {
-      alert(err.message || 'Failed to unmerge group');
-    } finally {
-      setUnmerging(false);
+  const handleUnmergeGroup = async (groupId: string, groupName: string) => {
+    if (confirm(`Unmerge "${groupName}"?\n\nThis merged group has active unpaid orders. Unmerging will affect future orders only. Existing orders will remain under ${groupName}.`)) {
+      try {
+        await db.unmergeTableGroup(restaurantId, groupId);
+        await refreshTables();
+      } catch (err: any) {
+        alert(err.message || 'Failed to unmerge group');
+      }
     }
   };
 
@@ -684,7 +672,7 @@ export default function TablesPage() {
                   <Link href={`/dashboard/orders?merge_group_id=${g.id}`} className="text-xs text-emerald-600 hover:underline font-bold">
                     View Orders & Bill
                   </Link>
-                  <Button size="sm" variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={() => handleOpenUnmergeDialog(g.id, g.name)}>
+                  <Button size="sm" variant="ghost" className="text-rose-600 hover:bg-rose-50" onClick={() => handleUnmergeGroup(g.id, g.name)}>
                     Unmerge
                   </Button>
                 </div>
@@ -1212,40 +1200,6 @@ export default function TablesPage() {
             </Button>
           </div>
         </form>
-      </Dialog>
-
-      {/* --- Modern Unmerge Confirmation Dialog --- */}
-      <Dialog
-        isOpen={Boolean(unmergeTarget)}
-        onClose={() => setUnmergeTarget(null)}
-        title="Unmerge Table Group"
-      >
-        <div className="space-y-4 pt-1">
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            Are you sure you want to unmerge <strong className="text-slate-900 dark:text-white font-bold">{unmergeTarget?.groupName}</strong>?
-          </p>
-          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 p-3 rounded-xl text-xs text-amber-800 dark:text-amber-300 font-medium">
-            Existing active orders will remain under this group until settled. Future QR scans will open individual table sessions.
-          </div>
-          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setUnmergeTarget(null)}
-              disabled={unmerging}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleConfirmUnmerge}
-              isLoading={unmerging}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer"
-            >
-              Unmerge Tables
-            </Button>
-          </div>
-        </div>
       </Dialog>
     </div>
   );
