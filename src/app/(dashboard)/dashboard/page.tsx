@@ -327,6 +327,12 @@ export default function DashboardPage() {
           Notification.requestPermission();
         }
 
+        // Remove existing channel if present to prevent 'cannot add postgres_changes after subscribe'
+        const existingChannel = supabase.getChannels().find(c => c.topic === `realtime:overview_dashboard_${restId}`);
+        if (existingChannel) {
+          supabase.removeChannel(existingChannel);
+        }
+
         channel = supabase
           .channel(`overview_dashboard_${restId}`, {
             config: {
@@ -577,21 +583,21 @@ export default function DashboardPage() {
       </div>
 
       {/* Dedicated Live Table Occupancy Card */}
-      <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      <Card className="hover:shadow-md transition-all border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-900 dark:text-gray-100 font-bold text-base">
-                <Boxes className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+              <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-bold text-base">
+                <Boxes className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               </div>
               <div>
-                <h3 className="font-bold text-gray-950 dark:text-white text-base">Live Table Occupancy</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Real-time dining room seating and QR status</p>
+                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Live Table Occupancy</h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Real-time dining room seating and QR status</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white border border-gray-300 dark:border-gray-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-gray-900 dark:bg-gray-100"></span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/50">
+                <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
                 {tableOccupancy.occupancyRate}% Occupied
               </span>
               <Link href="/dashboard/tables">
@@ -603,19 +609,19 @@ export default function DashboardPage() {
           </div>
 
           {/* Occupancy Progress Bar */}
-          <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 mb-5 overflow-hidden flex">
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 mb-5 overflow-hidden flex">
             <div
-              className="bg-gray-900 dark:bg-gray-100 h-2 transition-all duration-500 ease-out"
+              className="bg-rose-500 h-2.5 transition-all duration-500 ease-out"
               style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.occupied / tableOccupancy.total) * 100 : 0}%` }}
               title={`Occupied: ${tableOccupancy.occupied}`}
             />
             <div
-              className="bg-gray-400 dark:bg-gray-600 h-2 transition-all duration-500 ease-out"
+              className="bg-emerald-500 h-2.5 transition-all duration-500 ease-out"
               style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.available / tableOccupancy.total) * 100 : 0}%` }}
               title={`Available: ${tableOccupancy.available}`}
             />
             <div
-              className="bg-gray-200 dark:bg-gray-700 h-2 transition-all duration-500 ease-out"
+              className="bg-slate-400 h-2.5 transition-all duration-500 ease-out"
               style={{ width: `${tableOccupancy.total > 0 ? (tableOccupancy.inactive / tableOccupancy.total) * 100 : 0}%` }}
               title={`Disabled: ${tableOccupancy.inactive}`}
             />
@@ -623,21 +629,21 @@ export default function DashboardPage() {
 
           {/* 4-Stat KPI Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.total}</p>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">Total Tables</p>
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
+              <p className="text-2xl font-black text-slate-900 dark:text-white leading-tight">{tableOccupancy.total}</p>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">Total Tables</p>
             </div>
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.available}</p>
-              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mt-1">Available</p>
+            <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 rounded-xl p-3">
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-tight">{tableOccupancy.available}</p>
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mt-1">🟢 Available</p>
             </div>
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.occupied}</p>
-              <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mt-1">Occupied</p>
+            <div className="bg-rose-50/70 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 rounded-xl p-3">
+              <p className="text-2xl font-black text-rose-600 dark:text-rose-400 leading-tight">{tableOccupancy.occupied}</p>
+              <p className="text-xs font-bold text-rose-700 dark:text-rose-300 mt-1">🔴 Occupied</p>
             </div>
-            <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3">
-              <p className="text-base sm:text-lg xl:text-xl 2xl:text-xl font-bold text-gray-950 dark:text-white leading-tight whitespace-nowrap">{tableOccupancy.inactive}</p>
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-1">QR Disabled</p>
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 rounded-xl p-3">
+              <p className="text-2xl font-black text-slate-600 dark:text-slate-400 leading-tight">{tableOccupancy.inactive}</p>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">⚪ QR Disabled</p>
             </div>
           </div>
         </CardContent>

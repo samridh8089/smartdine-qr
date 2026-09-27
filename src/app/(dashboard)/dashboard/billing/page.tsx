@@ -113,19 +113,27 @@ export default function BillingPage() {
     
     const targetPlans = (loadedPlans && loadedPlans.length > 0) ? loadedPlans : pricingPlans;
 
-    const targetPlanRow = (loadedPlans || []).find(p => p.id.toLowerCase() === planId.toLowerCase());
+    const targetPlanRow = targetPlans.find(p => p.id.toLowerCase() === planId.toLowerCase());
     const targetSpec = parsePlanSpec(targetPlanRow || { id: planId });
     const targetMaxTables = targetSpec.limits.tables;
     const targetMaxItems = targetSpec.limits.menu_items;
 
-    if (targetMaxTables !== null && tablesCount > targetMaxTables) {
-      if (!confirm(`Notice: You have ${tablesCount} tables, which exceeds ${targetSpec.name}'s limit of ${targetMaxTables}. If you downgrade, additional tables will be locked. Proceed with downgrade?`)) {
-        return;
+    // Check if this action is genuinely a downgrade relative to current plan
+    const PLAN_RANK: Record<string, number> = { starter: 1, pro: 2, premium: 3 };
+    const currentRank = PLAN_RANK[activePlan] || 1;
+    const targetRank = PLAN_RANK[planId] || 1;
+    const isDowngrade = targetRank < currentRank;
+
+    if (isDowngrade) {
+      if (targetMaxTables !== null && tablesCount > targetMaxTables) {
+        if (!confirm(`Notice: You currently have ${tablesCount} tables, which exceeds ${targetSpec.name}'s limit of ${targetMaxTables}. If you downgrade, extra tables will be locked. Proceed with downgrade?`)) {
+          return;
+        }
       }
-    }
-    if (targetMaxItems !== null && itemsCount > targetMaxItems) {
-      if (!confirm(`Notice: You have ${itemsCount} menu items, which exceeds ${targetSpec.name}'s limit of ${targetMaxItems}. If you downgrade, extra menu items will be disabled. Proceed with downgrade?`)) {
-        return;
+      if (targetMaxItems !== null && itemsCount > targetMaxItems) {
+        if (!confirm(`Notice: You currently have ${itemsCount} menu items, which exceeds ${targetSpec.name}'s limit of ${targetMaxItems}. If you downgrade, extra menu items will be disabled. Proceed with downgrade?`)) {
+          return;
+        }
       }
     }
 
@@ -154,8 +162,7 @@ export default function BillingPage() {
     if (amount <= 0) {
       try {
         db.clearRestaurantCache(restaurant.id);
-        await db.updateRestaurantPlan(restaurant.id, planId, 'active');
-        await db.updateRestaurant(restaurant.id, { billing_interval: billingInterval });
+        await db.updateRestaurantPlan(restaurant.id, planId, 'active', undefined, billingInterval);
         await refresh();
         alert(`Success! Your subscription has been updated to the ${planId.toUpperCase()} plan.`);
       } catch (err: any) {
@@ -187,8 +194,7 @@ export default function BillingPage() {
 
       // If keys are not configured in .env yet, activate in Test/Demo mode
       if (orderData.isDemo) {
-        await db.updateRestaurantPlan(restaurant.id, planId, 'active');
-        await db.updateRestaurant(restaurant.id, { billing_interval: billingInterval });
+        await db.updateRestaurantPlan(restaurant.id, planId, 'active', undefined, billingInterval);
         await refresh();
         alert(`Subscription Activated! Upgraded to ${planId.toUpperCase()} Plan.`);
         setPaymentLoading(null);
@@ -228,8 +234,7 @@ export default function BillingPage() {
             const verifyData = await verifyRes.json();
             if (verifyData.verified) {
               db.clearRestaurantCache(restaurant.id);
-              await db.updateRestaurantPlan(restaurant.id, planId, 'active');
-              await db.updateRestaurant(restaurant.id, { billing_interval: billingInterval });
+              await db.updateRestaurantPlan(restaurant.id, planId, 'active', undefined, billingInterval);
               await db.createAuditLog(
                 restaurant.id,
                 profile.id,
@@ -535,7 +540,7 @@ export default function BillingPage() {
                     <div className="pt-6 mt-6 border-t border-slate-100 dark:border-slate-800">
                       {isCurrentlyActive ? (
                         <Button className="w-full cursor-default" variant="outline" disabled>
-                          Current Subscription
+                          Current Active Plan
                         </Button>
                       ) : (
                         <Button 
@@ -544,7 +549,17 @@ export default function BillingPage() {
                           onClick={() => handleUpgradePlan(plan.id as any)}
                           disabled={paymentLoading === plan.id}
                         >
-                          {paymentLoading === plan.id ? 'Processing...' : isExpiredCurrentPlan ? `Renew ${plan.name} Plan` : `Choose ${plan.name}`}
+                          {(() => {
+                            if (paymentLoading === plan.id) return 'Processing...';
+                            if (isExpiredCurrentPlan) return `Renew ${plan.name} Plan`;
+                            if (activePlan === plan.id) {
+                              return `Switch to ${billingInterval === 'yearly' ? 'Annual (10% Off)' : 'Monthly'}`;
+                            }
+                            const PLAN_RANK: Record<string, number> = { starter: 1, pro: 2, premium: 3 };
+                            const curR = PLAN_RANK[activePlan] || 1;
+                            const targetR = PLAN_RANK[plan.id] || 1;
+                            return targetR > curR ? `Upgrade to ${plan.name}` : `Downgrade to ${plan.name}`;
+                          })()}
                         </Button>
                       )}
                     </div>

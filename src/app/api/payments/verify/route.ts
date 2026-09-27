@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       razorpay_payment_id: { rules: [Validators.string({ max: 100 })], required: false },
       razorpay_signature: { rules: [Validators.string({ max: 256 })], required: false },
       restaurant_id: { rules: [Validators.restaurantId()], required: false },
-      plan_name: { rules: [Validators.enum(['free', 'lite', 'pro', 'enterprise'] as const)], required: false },
+      plan_name: { rules: [Validators.enum(['starter', 'pro', 'premium', 'custom', 'free', 'lite', 'enterprise'] as const)], required: false },
       billing_interval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false },
       amount: { rules: [Validators.number({ min: 0 })], required: false },
       user_id: { rules: [Validators.string({ max: 100 })], required: false },

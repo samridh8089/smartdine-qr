@@ -47,10 +47,11 @@ function CheckoutContent() {
     setErrorMessage('');
 
     try {
-      // ─── PROTECT CHECKOUT: IF OWNER ALREADY HAS A RESTAURANT, SHOW ALREADY EXISTS SCREEN ───
+      // ─── PROTECT CHECKOUT: IF NEW SIGNUP AND OWNER ALREADY HAS A RESTAURANT, SHOW ALREADY EXISTS SCREEN ───
       try {
         const checkEmail = (email || '').trim().toLowerCase();
-        if (checkEmail) {
+        // ONLY perform this duplicate-restaurant check for NEW signups without an existing restaurantId!
+        if (isSignup && !restaurantId && checkEmail) {
           const checkRes = await fetch('/api/auth/check-email-availability', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

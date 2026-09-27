@@ -118,6 +118,17 @@ async function main() {
       }
     }
 
+    if (filePath === 'assets/index.android.bundle') {
+      const hbcPath = path.resolve('smartdine-mobile/dist-android/index.android.bundle.hbc');
+      if (fs.existsSync(hbcPath)) {
+        const hbcData = fs.readFileSync(hbcPath);
+        console.log(`Injecting fresh Hermes bytecode bundle: ${(hbcData.length / 1024 / 1024).toFixed(2)} MB`);
+        outZip.file(filePath, hbcData, { compression: 'DEFLATE', compressionOptions: { level: 9 } });
+        replacedCount++;
+        continue;
+      }
+    }
+
     if (replacements[filePath]) {
       outZip.file(filePath, replacements[filePath], { compression: 'DEFLATE', compressionOptions: { level: 9 } });
       replacedCount++;
