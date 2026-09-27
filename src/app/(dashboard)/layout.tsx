@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext, useRef, useMemo } from 'react';
+import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getActiveUser, supabase, clearActiveUserCache } from '@/lib/supabase';
@@ -16,8 +16,7 @@ import {
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
   LogOut, MenuSquare, X, ChevronRight, User, Settings,
-  ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users,
-  Sun, Moon, Monitor, Printer, Headphones
+  ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users
 } from 'lucide-react';
 
 // Central Route to Entitlement Feature Key Mapping
@@ -59,52 +58,20 @@ const ALLOWED_PATHS: Record<string, string[]> = {
   cashier: ['/dashboard/orders', '/dashboard/tables']
 };
 
-export interface NavMenuItem {
-  name: string;
-  href: string;
-  icon: any;
-  roles: string[];
-  badge?: string;
-  badgeStyle?: string;
-}
-
-export interface NavSection {
-  category: string;
-  items: NavMenuItem[];
-}
-
-export const MENU_SECTIONS: NavSection[] = [
-  {
-    category: 'RESTAURANT OPERATIONS',
-    items: [
-      { name: 'Executive Console', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
-      { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'], badge: 'Live', badgeStyle: 'bg-emerald-500 text-white' },
-      { name: 'Dining Tables & QRs', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
-      { name: 'Kitchen Display (KDS)', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'kitchen'] },
-    ]
-  },
-  {
-    category: 'MENU & INVENTORY',
-    items: [
-      { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
-      { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'], badge: 'AI', badgeStyle: 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950' },
-      { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
-      { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
-    ]
-  },
-  {
-    category: 'GOVERNANCE & REPORTS',
-    items: [
-      { name: 'Executive Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
-      { name: 'Staff Management', href: '/dashboard/staff', icon: Users, roles: ['owner', 'manager'] },
-      { name: 'Billing & SaaS License', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
-      { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] },
-      { name: '24x7 Help & Support', href: '/contact', icon: Headphones, roles: ['owner', 'manager', 'supervisor', 'waiter', 'kitchen', 'cashier'], badge: '24x7', badgeStyle: 'bg-emerald-500 text-white' }
-    ]
-  }
+const ALL_MENU_ITEMS = [
+  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
+  { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
+  { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'] },
+  { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
+  { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Tables & QRs', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
+  { name: 'Kitchen Display', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'kitchen'] },
+  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
+  { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
+  { name: 'Staff Management', href: '/dashboard/staff', icon: Users, roles: ['owner', 'manager'] },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
 ];
-
-export const ALL_MENU_ITEMS = MENU_SECTIONS.flatMap(s => s.items);
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -116,6 +83,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [alarmMuted, setAlarmMuted] = useState(false);
   // Phase-19: Founder Control Center easter egg (5-tap logo)
   const [logoTapCount, setLogoTapCount] = useState(0);
+  const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Separate Portals Role View
   const [dbRole, setDbRole] = useState<Profile['role']>('owner');
   const [activeRole, setActiveRole] = useState<Profile['role']>('owner');
@@ -124,30 +93,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec>(DEFAULT_PLAN_SPECS.starter);
 
   const [isImpersonating, setIsImpersonating] = useState(false);
-
-  // Phase-19: Founder Control Center easter egg (5-tap logo)
-  const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const localOrderIdsRef = useRef<Set<string>>(new Set());
-
-  // Navigation Filtered Memos (Strictly declared before useEffects)
-  const filteredSections = useMemo<NavSection[]>(() => {
-    return MENU_SECTIONS.map((sec: NavSection) => ({
-      ...sec,
-      items: sec.items.filter((item: NavMenuItem) => {
-        if (!item.roles.includes(activeRole)) return false;
-        if (activeRole === 'supervisor') {
-          const dept = (profile?.department || '').toLowerCase();
-          if (dept === 'kitchen' && (item.href === '/dashboard/orders' || item.href === '/dashboard/tables')) return false;
-          if (dept === 'waiter' && (item.href === '/dashboard/kds' || item.href === '/dashboard/inventory' || item.href === '/dashboard/menu')) return false;
-        }
-        return true;
-      })
-    })).filter((sec: NavSection) => sec.items.length > 0);
-  }, [activeRole, profile?.department]);
-
-  const filteredMenuItems = useMemo<NavMenuItem[]>(() => {
-    return filteredSections.flatMap((sec: NavSection) => sec.items);
-  }, [filteredSections]);
 
   const fetchPlanSpec = async (planId: string) => {
     try {
@@ -164,7 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const checkAuth = async () => {
     // Check if in Super Admin impersonation mode
     if (typeof window !== 'undefined') {
-      const impersonated = sessionStorage.getItem('smartdine_impersonated_profile') || localStorage.getItem('smartdine_impersonated_profile');
+      const impersonated = sessionStorage.getItem('smartdine_impersonated_profile');
       if (impersonated) {
         try {
           const impProf = JSON.parse(impersonated);
@@ -292,6 +237,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // ==========================================
   // GLOBAL NOTIFICATION & ALARM SYSTEM
   // ==========================================
+  const localOrderIdsRef = useRef<Set<string>>(new Set());
 
   const stopGlobalAlarm = () => {
     // Web app order bells removed per product specification
@@ -441,6 +387,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [loading, profile, dbRole, pathname, router]);
 
+  const filteredMenuItems = ALL_MENU_ITEMS.filter(item => {
+    if (!item.roles.includes(activeRole)) return false;
+    if (activeRole === 'supervisor') {
+      const dept = (profile?.department || '').toLowerCase();
+      if (dept === 'kitchen' && (item.href === '/dashboard/orders' || item.href === '/dashboard/tables')) return false;
+      if (dept === 'waiter' && (item.href === '/dashboard/kds' || item.href === '/dashboard/inventory' || item.href === '/dashboard/menu')) return false;
+    }
+    return true;
+  });
+
   // Eagerly prefetch core dashboard routes for instantaneous sub-100ms transitions
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -556,7 +512,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <RestaurantContext.Provider value={{ restaurant, profile, activeRole, dbRole, planSpec, refresh: checkAuth, alarmMuted, setAlarmMuted }}>
       <PreviewModeProvider>
-        <div className="min-h-screen flex flex-col bg-[#f4f7fb] dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+        <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
         <MockBanner />
 
         {isImpersonating && (
@@ -640,12 +596,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Sidebar */}
           <aside className={`
-            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200/90 dark:border-slate-800 text-slate-800 dark:text-slate-100 flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 shadow-sm
+            fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}>
             {/* Logo Section */}
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => {
+            <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
                 // Phase-19: 5-tap easter egg → Founder Control Center
                 if (logoTapTimerRef.current) clearTimeout(logoTapTimerRef.current);
                 const nextCount = logoTapCount + 1;
@@ -663,127 +619,92 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   logoTapTimerRef.current = setTimeout(() => setLogoTapCount(0), 3000);
                 }
               }}>
-                <div className="h-8 w-8 rounded-xl bg-blue-50 border border-blue-100 dark:bg-blue-950/40 dark:border-blue-900/40 p-1 shrink-0 flex items-center justify-center shadow-xs">
+                <div className="h-8 w-8 rounded-lg bg-white p-1 shrink-0 flex items-center justify-center shadow-xs">
                   <img src="/logo.png" alt="CleverOps Logo" className="h-full w-full object-contain select-none" />
                 </div>
-                <div className="flex flex-col">
-                  <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white select-none">CleverOps</span>
-                  <span className="text-[10px] text-slate-400 font-semibold leading-none">Restaurant OS</span>
-                </div>
+                <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent select-none">CleverOps</span>
                 {logoTapCount > 0 && logoTapCount < 5 && (
-                  <span className="text-[9px] text-blue-600 font-mono font-bold bg-blue-50 px-1.5 py-0.5 rounded-full">{5 - logoTapCount}</span>
+                  <span className="text-[8px] text-emerald-400 font-mono opacity-60">{5 - logoTapCount}</span>
                 )}
               </div>
               <button 
                 onClick={() => setSidebarOpen(false)} 
-                className="lg:hidden text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Top Primary CTA Button (matches prototype standee CTA) */}
-            <div className="px-4 pt-4 pb-2">
-              <Link 
-                href="/dashboard/tables"
-                onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer group"
-              >
-                <Printer className="h-4 w-4" />
-                <span>Print QR Standees</span>
-              </Link>
-            </div>
+            {/* Navigation Links */}
+            <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+              {filteredMenuItems.map((item) => {
+                const isActive = pathname === item.href;
+                const itemLockInfo = ROUTE_FEATURE_KEYS[item.href];
+                const isLocked = Boolean(itemLockInfo && planSpec.features[itemLockInfo.key] === false);
 
-            {/* Categorized Navigation Links */}
-            <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto">
-              {filteredSections.map((sec) => (
-                <div key={sec.category} className="space-y-1">
-                  <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    {sec.category}
-                  </p>
-                  <div className="space-y-0.5">
-                    {sec.items.map((item) => {
-                      const isActive = pathname === item.href;
-                      const itemLockInfo = ROUTE_FEATURE_KEYS[item.href];
-                      const isLocked = Boolean(itemLockInfo && planSpec.features[itemLockInfo.key] === false);
-                      const IconComponent = item.icon;
-
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          prefetch={true}
-                          onMouseEnter={() => {
-                            try {
-                              router.prefetch(item.href);
-                              const restId = restaurant?.id || profile?.restaurant_id;
-                              if (restId) dashboardStore.prewarmRoute(item.href, restId);
-                            } catch (e) {}
-                          }}
-                          onTouchStart={() => {
-                            try {
-                              router.prefetch(item.href);
-                              const restId = restaurant?.id || profile?.restaurant_id;
-                              if (restId) dashboardStore.prewarmRoute(item.href, restId);
-                            } catch (e) {}
-                          }}
-                          onClick={() => {
-                            if (sidebarOpen) setSidebarOpen(false);
-                          }}
-                          className={`
-                            flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition-all group
-                            ${isActive 
-                              ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20 font-bold' 
-                              : isLocked
-                              ? 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-                              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'}
-                          `}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <IconComponent className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-blue-600 dark:text-slate-400'}`} />
-                            <span className="truncate">{item.name}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 ml-1">
-                            {item.badge && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black tracking-wider uppercase ${item.badgeStyle}`}>
-                                {item.badge}
-                              </span>
-                            )}
-                            {isLocked && (
-                              <Lock className="h-3 w-3 text-amber-500 shrink-0" />
-                            )}
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    prefetch={true}
+                    onMouseEnter={() => {
+                      try {
+                        router.prefetch(item.href);
+                        const restId = restaurant?.id || profile?.restaurant_id;
+                        if (restId) dashboardStore.prewarmRoute(item.href, restId);
+                      } catch (e) {}
+                    }}
+                    onTouchStart={() => {
+                      try {
+                        router.prefetch(item.href);
+                        const restId = restaurant?.id || profile?.restaurant_id;
+                        if (restId) dashboardStore.prewarmRoute(item.href, restId);
+                      } catch (e) {}
+                    }}
+                    onClick={() => {
+                      if (sidebarOpen) setSidebarOpen(false);
+                    }}
+                    className={`
+                      flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all group
+                      ${isActive 
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10 font-bold' 
+                        : isLocked
+                        ? 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300'
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'}
+                    `}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    {isLocked && (
+                      <Lock className="h-3.5 w-3.5 text-amber-400/90 shrink-0 ml-1.5" />
+                    )}
+                  </Link>
+                );
+              })}
             </nav>
 
             {/* User Section / Logout */}
-            <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
-              <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 mb-2 shadow-2xs">
-                <div className="h-7 w-7 rounded-lg bg-blue-600 text-white font-extrabold text-[11px] flex items-center justify-center shrink-0">
-                  {profile?.full_name?.slice(0, 2).toUpperCase() || 'CO'}
-                </div>
+            <div className="p-4 border-t border-slate-800 bg-slate-950/40">
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 mb-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold truncate text-slate-800 dark:text-slate-200">{profile?.full_name || 'CleverOps User'}</p>
-                  <p className="text-[10px] text-slate-400 truncate capitalize font-medium">
-                    {dbRole} {activeRole !== dbRole && `(as ${activeRole})`}
+                  <p className="text-xs font-semibold truncate text-slate-200">{profile?.full_name}</p>
+                  <p className="text-[10px] text-slate-400 truncate capitalize">
+                    {dbRole} {activeRole !== dbRole && `(as ${activeRole})`} • {restaurant?.name}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-all cursor-pointer"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-all cursor-pointer"
               >
-                <LogOut className="h-3.5 w-3.5 shrink-0" />
+                <LogOut className="h-4 w-4 shrink-0" />
                 Sign Out
               </button>
-              <div className="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800 text-center">
-                <Link href="/debug/build-info" className="inline-flex flex-col items-center text-[9px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-mono">
+              <div className="mt-4 pt-2 border-t border-slate-800/60 text-center">
+                <Link href="/debug/build-info" className="inline-flex flex-col items-center text-[10px] text-slate-500 hover:text-slate-300 cursor-pointer font-mono gap-0.5">
                   <span>Build: {buildInfo.commit.slice(0, 7)}</span>
+                  <span>{new Date(buildInfo.buildTime).toLocaleDateString()} {new Date(buildInfo.buildTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 </Link>
               </div>
             </div>
@@ -792,8 +713,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
             {/* Dashboard Header */}
-            <header className="bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 h-16 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-30 transition-colors shadow-2xs">
-              <div className="flex items-center gap-3">
+            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 flex items-center justify-between px-6 shrink-0 sticky top-0 z-30 transition-colors">
+              <div className="flex items-center gap-4">
                 <button
                   onClick={() => setSidebarOpen(true)}
                   className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -801,90 +722,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 >
                   <MenuIcon className="h-6 w-6" />
                 </button>
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   {restaurant?.logo_url ? (
                     <img 
                       src={restaurant.logo_url} 
                       alt={restaurant.name} 
-                      className="h-8 w-8 rounded-xl object-cover border border-slate-200 dark:border-slate-800" 
+                      className="h-8 w-8 rounded-lg object-cover border border-slate-100 dark:border-slate-800" 
                     />
                   ) : (
-                    <div className="h-8 w-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/40 flex items-center justify-center text-blue-700 dark:text-blue-400 font-bold text-xs">
+                    <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-sm">
                       {restaurant?.name?.charAt(0) || 'R'}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <h1 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-tight truncate max-w-[140px] sm:max-w-[220px]" title={restaurant?.name}>
-                      {restaurant?.name || 'Restaurant'}
-                    </h1>
-                    <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <h1 className="text-sm font-semibold text-slate-950 dark:text-white leading-none truncate max-w-[180px] sm:max-w-[280px] md:max-w-[400px]" title={restaurant?.name}>{restaurant?.name}</h1>
+                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live QR Ordering
+                      Live QR Ordering Active
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Role Switcher Pills (Direct match to prototype role capsule) */}
-              <div className="hidden xl:flex items-center p-1 bg-slate-100 dark:bg-slate-800/90 rounded-full border border-slate-200/90 dark:border-slate-700 shadow-inner gap-1">
-                {[
-                  { role: 'owner', label: 'Super Admin', icon: '👑' },
-                  { role: 'manager', label: 'Manager', icon: '👨‍💼' },
-                  { role: 'kitchen', label: 'Kitchen KDS', icon: '👨‍🍳' },
-                  { role: 'waiter', label: 'Waiter Desk', icon: '🍽️' },
-                  { role: 'cashier', label: 'Cashier Desk', icon: '💳' },
-                ].map((r) => {
-                  const isCurrentActive = activeRole === r.role;
-                  return (
-                    <button
-                      key={r.role}
-                      onClick={() => handleSwitchPortal(r.role as any)}
-                      className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                        isCurrentActive
-                          ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs border border-slate-200 dark:border-slate-700'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      <span>{r.icon}</span>
-                      <span>{r.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Right Side Header Controls */}
-              <div className="flex items-center gap-2 sm:gap-3">
-                {/* Active Role Badge Pill */}
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-900/60">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                  <span>Role: {activeRole.charAt(0).toUpperCase() + activeRole.slice(1)}</span>
-                </div>
-
-                {/* Theme Switcher Icons (Prototype Match) */}
-                <div className="hidden sm:flex items-center border border-slate-200 dark:border-slate-700 rounded-xl p-1 bg-slate-50 dark:bg-slate-800 text-slate-500">
-                  <button className="p-1 hover:text-blue-600 rounded-lg cursor-pointer" title="Light Theme"><Sun className="w-3.5 h-3.5" /></button>
-                  <button className="p-1 hover:text-blue-600 rounded-lg cursor-pointer" title="Dark Theme"><Moon className="w-3.5 h-3.5" /></button>
-                  <button className="p-1 hover:text-blue-600 rounded-lg cursor-pointer" title="System Theme"><Monitor className="w-3.5 h-3.5" /></button>
-                </div>
-
-                {/* User Pill (Prototype Match) */}
-                <div className="flex items-center gap-2 pl-1 border-l border-slate-200 dark:border-slate-800">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 text-white font-extrabold text-xs flex items-center justify-center shadow-xs">
-                    {profile?.full_name?.slice(0, 2).toUpperCase() || 'CO'}
-                  </div>
-                  <div className="hidden md:block text-left leading-tight">
-                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">{profile?.full_name || 'CleverOps User'}</p>
-                    <p className="text-[10px] text-slate-400 capitalize">{activeRole}</p>
-                  </div>
-                </div>
-
+              <div className="flex items-center gap-3">
+                {restaurant?.subscription_plan && (
+                  <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">
+                    {planSpec.name} Plan
+                  </span>
+                )}
                 {restaurant && (
                   <Link 
                     href={`/menu/${restaurant.slug}`}
                     target="_blank"
-                    className="hidden lg:inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200 dark:border-blue-900/50 rounded-xl transition-all"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:border-slate-300 dark:hover:border-slate-600"
                   >
-                    View Menu ↗
+                    View Digital Menu
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Link>
                 )}
               </div>

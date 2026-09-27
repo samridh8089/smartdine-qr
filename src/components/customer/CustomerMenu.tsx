@@ -120,7 +120,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCatId, setSelectedCatId] = useState<string>('all');
   const [vegOnly, setVegOnly] = useState(false);
-  const [stockMap, setStockMap] = useState<Record<string, { status: string; maxServings: number; isAvailable: boolean; isLowStock: boolean; outOfStockReasons: string[]; lowStockReasons: string[]; hasRecipe?: boolean; limitingIngredient?: string }>>({});
+  const [stockMap, setStockMap] = useState<Record<string, { status: string; maxServings: number; isAvailable: boolean; isLowStock: boolean; outOfStockReasons: string[]; lowStockReasons: string[] }>>({});
 
   // Cart State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -739,8 +739,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     const finalPrice = price !== undefined && price !== null ? price : item.price;
 
     const sInfo = stockMap[item.id];
-    // Safeguard: Dishes without a recipe are always available unless explicitly toggled off by owner
-    if (item.is_available === false || (sInfo && sInfo.hasRecipe && (!sInfo.isAvailable || sInfo.maxServings <= 0))) {
+    if (sInfo && (!sInfo.isAvailable || sInfo.maxServings <= 0)) {
       showToast(`Item "${item.name}" is currently out of stock.`);
       return;
     }
@@ -754,7 +753,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       );
 
       const inCartQty = existingIndex > -1 ? currentCart[existingIndex].quantity : 0;
-      const maxAllowed = (sInfo && sInfo.hasRecipe) ? sInfo.maxServings : 9999;
+      const maxAllowed = sInfo ? sInfo.maxServings : 9999;
 
       if (inCartQty + qty > maxAllowed) {
         showToast(`Only ${maxAllowed} available in stock for "${item.name}".`);
@@ -791,7 +790,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       if (!currentCart[index]) return currentCart;
       const target = currentCart[index];
       const sInfo = stockMap[target.menuItem.id];
-      const maxAllowed = (sInfo && sInfo.hasRecipe) ? sInfo.maxServings : 9999;
+      const maxAllowed = sInfo ? sInfo.maxServings : 9999;
 
       if (delta > 0 && target.quantity + delta > maxAllowed) {
         showToast(`Only ${maxAllowed} available in stock for "${target.menuItem.name}".`);
@@ -970,13 +969,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     // Real-Time Stock Availability Re-validation before order submission
     for (const c of validCart) {
       const sInfo = stockMap[c.menuItem.id];
-      if (sInfo && sInfo.hasRecipe && (!sInfo.isAvailable || sInfo.maxServings <= 0)) {
+      if (sInfo && (!sInfo.isAvailable || sInfo.maxServings <= 0)) {
         isSubmittingRef.current = false;
         setOrderPlacing(false);
         showToast(`Item "${c.menuItem.name}" is out of stock. Please remove it from your cart.`);
         return;
       }
-      if (sInfo && sInfo.hasRecipe && c.quantity > sInfo.maxServings) {
+      if (sInfo && c.quantity > sInfo.maxServings) {
         isSubmittingRef.current = false;
         setOrderPlacing(false);
         showToast(`Only ${sInfo.maxServings} available for "${c.menuItem.name}". Please reduce quantity.`);
@@ -1480,7 +1479,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         {/* Action Bar (Call Waiter & Track Order) below restaurant header & above offer banner */}
         <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 px-3.5 rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-sm">
           <div className="flex items-center gap-2">
-            {table && !isTakeaway && planSpec?.features.call_waiter !== false && !activeRequest && (
+            {table && !isTakeaway && planSpec?.features.call_waiter !== false && (
               <button
                 onClick={() => handleCallStaff('call_waiter')}
                 disabled={callLoading}
@@ -1815,7 +1814,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                         </span>
                       </div>
                       <div className="p-3">
-                        <h4 className="font-extrabold text-slate-900 dark:text-white text-xs line-clamp-2 min-h-[2rem] leading-tight">{item.name}</h4>
+                        <h4 className="font-extrabold text-slate-900 dark:text-white text-xs line-clamp-1">{item.name}</h4>
                         <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-1">
                           {formatPrice(item.price, restaurant?.settings?.currency)}
                         </p>
@@ -1966,9 +1965,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           ) : (
             filteredItems.map(item => {
               const sInfo = stockMap[item.id];
-              // Safeguard: Dishes without a recipe are always available unless explicitly toggled off by owner
-              const isOutOfStock = item.is_available === false || Boolean(sInfo && sInfo.hasRecipe && (!sInfo.isAvailable || sInfo.maxServings <= 0));
-              const isLowStock = Boolean(sInfo && sInfo.hasRecipe && sInfo.isLowStock && !isOutOfStock);
+              const isOutOfStock = (sInfo && (!sInfo.isAvailable || sInfo.maxServings <= 0)) || item.is_available === false;
+              const isLowStock = sInfo && sInfo.isLowStock && !isOutOfStock;
 
               return (
               <Card 
@@ -2171,8 +2169,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         footer={
           table ? (() => {
             const modalStock = detailedItem ? stockMap[detailedItem.id] : null;
-            const modalOutOfStock = (modalStock && modalStock.hasRecipe && (!modalStock.isAvailable || modalStock.maxServings <= 0)) || detailedItem?.is_available === false;
-            const modalMax = (modalStock && modalStock.hasRecipe) ? modalStock.maxServings : 9999;
+            const modalOutOfStock = (modalStock && (!modalStock.isAvailable || modalStock.maxServings <= 0)) || detailedItem?.is_available === false;
+            const modalMax = modalStock ? modalStock.maxServings : 9999;
 
             if (modalOutOfStock) {
               return (
@@ -2363,7 +2361,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
               return (
                 <div key={`${item.menuItem.id}-${item.variantName || 'base'}-${idx}`} className="p-3.5 flex items-center justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-slate-800 dark:text-slate-200 text-xs md:text-sm line-clamp-2 leading-tight">
+                    <p className="font-bold text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
                       {item.menuItem.name}
                     </p>
                     {item.variantName && (
