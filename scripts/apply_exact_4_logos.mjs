@@ -176,6 +176,35 @@ async function main() {
     console.log('-> Patched [14] Notification channels (all variants registered)');
   }
 
+  // 15. FIX Order Status Update Pipeline: Attach x-staff-token and handle API responses cleanly
+  const authHeaderTarget = "p?h.Authorization=`Bearer ${p}`:console.warn('[apiClient] No Supabase access token found for request to:',u)";
+  const authHeaderReplacement = "p?(h.Authorization=`Bearer ${p}`,h['x-staff-token']=p):console.warn('[apiClient] No Supabase access token found for request to:',u)";
+  if (code.includes(authHeaderTarget)) {
+    code = code.replace(authHeaderTarget, authHeaderReplacement);
+    console.log('-> Patched [15a] apiClient attach x-staff-token');
+  }
+
+  const authRetryTarget = "p=_.session.access_token,h.Authorization=`Bearer ${p}`";
+  const authRetryReplacement = "p=_.session.access_token,h.Authorization=`Bearer ${p}`,h['x-staff-token']=p";
+  if (code.includes(authRetryTarget)) {
+    code = code.replace(authRetryTarget, authRetryReplacement);
+    console.log('-> Patched [15b] apiClient retry attach x-staff-token');
+  }
+
+  const ordersSuccessTarget = "n&&n.success&&(o=!0)";
+  const ordersSuccessReplacement = "n&&(n.success||n.order||n.batch)&&(o=!0)";
+  if (code.includes(ordersSuccessTarget)) {
+    code = code.replace(ordersSuccessTarget, ordersSuccessReplacement);
+    console.log('-> Patched [15c] OrdersScreen response validation');
+  }
+
+  const kitchenSuccessTarget = "y&&y.success&&(p=!0)";
+  const kitchenSuccessReplacement = "y&&(y.success||y.order||y.batch)&&(p=!0)";
+  if (code.includes(kitchenSuccessTarget)) {
+    code = code.replace(kitchenSuccessTarget, kitchenSuccessReplacement);
+    console.log('-> Patched [15d] KitchenScreen response validation');
+  }
+
   // Compile with Hermes Bytecode v96
   const tempJs = path.resolve('smartdine-mobile/dist-android/temp_exact_4.js');
   const tempHbc = path.resolve('smartdine-mobile/dist-android/temp_exact_4.hbc');

@@ -178,8 +178,37 @@ export async function verifyStaffRequest(
       .eq('id', user.id)
       .maybeSingle();
 
-    const userEmail = (user.email || profile?.email || '').toLowerCase().trim();
-    const isSuperAdmin = profile?.role === 'super_admin' || 
+    let resolvedProfile: any = profile;
+    if (resolvedProfile && !resolvedProfile.restaurant_id) {
+      const { data: ownedRest } = await supabaseAdmin
+        .from('restaurants')
+        .select('id')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (ownedRest?.id) {
+        resolvedProfile.restaurant_id = ownedRest.id;
+      }
+    } else if (!resolvedProfile && user?.id) {
+      const { data: ownedRest } = await supabaseAdmin
+        .from('restaurants')
+        .select('id')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      resolvedProfile = {
+        id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || 'Staff',
+        role: ownedRest ? 'owner' : 'staff',
+        restaurant_id: ownedRest?.id || targetRestaurantId || null
+      };
+    }
+
+    const userEmail = (user.email || resolvedProfile?.email || '').toLowerCase().trim();
+    const isSuperAdmin = resolvedProfile?.role === 'super_admin' || 
       userEmail === 'dsoni1281@gmail.com' || 
       userEmail === 'admin@cleverops.in' || 
       userEmail === 'founder@cleverops.in' || 
@@ -187,7 +216,7 @@ export async function verifyStaffRequest(
       userEmail === 'superadmin@cleverops.in' ||
       userEmail === 'superadmin@test.com';
 
-    const effectiveRole = isSuperAdmin ? 'super_admin' : (profile?.role || 'owner');
+    const effectiveRole = isSuperAdmin ? 'super_admin' : (resolvedProfile?.role || 'owner');
 
     // 3. Verify Allowed Roles
     if (allowedRoles && allowedRoles.length > 0 && !isSuperAdmin) {
@@ -196,7 +225,7 @@ export async function verifyStaffRequest(
           isAuthorized: false,
           isSuperAdmin: false,
           user,
-          profile: profile || { id: user.id, email: user.email, role: effectiveRole },
+          profile: resolvedProfile || { id: user.id, email: user.email, role: effectiveRole },
           response: NextResponse.json({
             error: 'FORBIDDEN',
             message: `Role "${effectiveRole}" is not authorized for this staff operation.`
@@ -207,13 +236,13 @@ export async function verifyStaffRequest(
 
     // 4. Verify Tenant Isolation (Multi-tenant restaurant check)
     if (targetRestaurantId && !isSuperAdmin) {
-      const staffRestId = profile?.restaurant_id;
+      const staffRestId = resolvedProfile?.restaurant_id;
       if (staffRestId && staffRestId !== targetRestaurantId) {
         return {
           isAuthorized: false,
           isSuperAdmin: false,
           user,
-          profile: profile || { id: user.id, email: user.email, role: effectiveRole },
+          profile: resolvedProfile || { id: user.id, email: user.email, role: effectiveRole },
           response: NextResponse.json({
             error: 'TENANT_MISMATCH',
             message: 'Forbidden: You cannot access or modify orders from another restaurant.'
@@ -226,7 +255,7 @@ export async function verifyStaffRequest(
       isAuthorized: true,
       isSuperAdmin,
       user,
-      profile: profile || { id: user.id, email: user.email, role: effectiveRole, restaurant_id: targetRestaurantId },
+      profile: resolvedProfile || { id: user.id, email: user.email, role: effectiveRole, restaurant_id: targetRestaurantId },
       response: null
     };
   } catch (err: any) {
