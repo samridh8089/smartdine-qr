@@ -115,18 +115,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid restaurant_id' }, { status: 400 });
     }
 
+    // Validate UUID format for PostgreSQL UUID column types to prevent 500 syntax error
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const safeTableUuid = (typeof table_uuid === 'string' && UUID_REGEX.test(table_uuid.trim())) ? table_uuid.trim() : null;
+    const safeOrderId = (typeof order_id === 'string' && UUID_REGEX.test(order_id.trim())) ? order_id.trim() : null;
+
+    const mergedMetadata = {
+      ...(typeof metadata === 'object' && metadata !== null ? metadata : {}),
+      ...(table_uuid && !safeTableUuid ? { table_identifier: table_uuid } : {}),
+      ...(order_id && !safeOrderId ? { order_identifier: order_id } : {})
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: insertErr } = await (supabaseAdmin.from('system_events') as any).insert({
       restaurant_id,
       correlation_id,
-      order_id: order_id || null,
-      table_uuid: table_uuid || null,
+      order_id: safeOrderId,
+      table_uuid: safeTableUuid,
       actor_type,
       event_type,
       source_node: source_node || null,
       target_node: target_node || null,
       duration_ms: duration_ms || null,
-      metadata: metadata || {},
+      metadata: mergedMetadata,
     });
 
     if (insertErr) {
