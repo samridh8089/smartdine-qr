@@ -26,12 +26,6 @@ export async function POST(req: Request) {
       }
     }
 
-    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
-    const userClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '', {
-      auth: { persistSession: false },
-      global: { headers: authHeader ? { Authorization: authHeader } : undefined }
-    });
-
     const body = await req.json();
 
     const normalizedBody = {
@@ -86,8 +80,19 @@ export async function POST(req: Request) {
 
     if (orderId) {
       const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', orderId).maybeSingle();
-      orderRestId = ord?.restaurant_id || null;
-      currentOrderStatus = ord?.status || null;
+      if (ord) {
+        orderRestId = ord.restaurant_id || null;
+        currentOrderStatus = ord.status || null;
+      } else {
+        // Universal ID fallback: orderId may actually be a batchId
+        const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', orderId).maybeSingle();
+        if (bRec?.order_id) {
+          resolvedOrderId = bRec.order_id;
+          const { data: bOrd } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', bRec.order_id).maybeSingle();
+          orderRestId = bOrd?.restaurant_id || null;
+          currentOrderStatus = bOrd?.status || null;
+        }
+      }
     } else if (batchId) {
       const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
       if (bRec?.order_id) {
@@ -95,6 +100,14 @@ export async function POST(req: Request) {
         const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', bRec.order_id).maybeSingle();
         orderRestId = ord?.restaurant_id || null;
         currentOrderStatus = ord?.status || null;
+      } else {
+        // Universal ID fallback: batchId may actually be a direct orderId
+        const { data: ord } = await supabaseAdmin.from('orders').select('id, restaurant_id, status').eq('id', batchId).maybeSingle();
+        if (ord?.id) {
+          resolvedOrderId = ord.id;
+          orderRestId = ord.restaurant_id || null;
+          currentOrderStatus = ord.status || null;
+        }
       }
     }
 
@@ -133,14 +146,14 @@ export async function POST(req: Request) {
     if (effectiveStatus === 'completed') {
       let targetOrderId = orderId;
       if (!targetOrderId && batchId) {
-        const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).single();
-        targetOrderId = bRec?.order_id;
+        const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
+        targetOrderId = bRec?.order_id || batchId;
       }
       if (!targetOrderId) {
         return NextResponse.json({ error: 'orderId could not be resolved for completed status' }, { status: 400 });
       }
       try {
-        updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason, userClient);
+        updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason, supabaseAdmin);
       } catch (dbErr: any) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT' || dbErr.code === 'ORDER_TERMINAL_STATE') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
@@ -154,23 +167,36 @@ export async function POST(req: Request) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT' || dbErr.code === 'ORDER_TERMINAL_STATE') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
         }
-        throw dbErr;
+        // Universal ID Fallback: If batchId was actually an orderId, update order directly
+        const { data: directOrder } = await supabaseAdmin.from('orders').select('id').eq('id', batchId).maybeSingle();
+        if (directOrder?.id) {
+          updatedOrder = await db.updateOrderStatus(directOrder.id, effectiveStatus, staffName, cancellationReason, supabaseAdmin);
+        } else {
+          throw dbErr;
+        }
       }
 
       const { data: bRes } = await supabaseAdmin
         .from('order_batches')
         .select('*')
         .eq('id', batchId)
-        .single();
+        .maybeSingle();
       updatedBatch = bRes;
     } else if (orderId) {
       try {
-        updatedOrder = await db.updateOrderStatus(orderId, effectiveStatus, staffName, cancellationReason, userClient);
+        updatedOrder = await db.updateOrderStatus(orderId, effectiveStatus, staffName, cancellationReason, supabaseAdmin);
       } catch (dbErr: any) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT' || dbErr.code === 'ORDER_TERMINAL_STATE') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
         }
-        throw dbErr;
+        // Universal ID Fallback: If orderId was actually a batchId, update batch directly
+        const { data: directBatch } = await supabaseAdmin.from('order_batches').select('id').eq('id', orderId).maybeSingle();
+        if (directBatch?.id) {
+          updatedOrder = await db.updateBatchStatus(directBatch.id, effectiveStatus, staffName, cancellationReason);
+          updatedBatch = directBatch;
+        } else {
+          throw dbErr;
+        }
       }
     }
     const t_db = performance.now();

@@ -3216,7 +3216,7 @@ export const db = {
   },
 
   async updateBatchStatus(batchId: string, status: OrderBatch['status'], userName?: string, cancellationReason?: string): Promise<Order> {
-    const { data: existingBatch } = await supabase.from('order_batches').select('*').eq('id', batchId).single();
+    const { data: existingBatch } = await supabase.from('order_batches').select('*').eq('id', batchId).maybeSingle();
     let orderId: string | null = existingBatch?.order_id || null;
     if (!orderId) {
       const { data: itemWithBatch } = await supabase.from('order_items').select('order_id').eq('batch_id', batchId).limit(1);
@@ -3224,7 +3224,14 @@ export const db = {
         orderId = itemWithBatch[0].order_id;
       }
     }
-    if (!orderId) throw new Error('Order batch not found');
+    if (!orderId) {
+      // Universal ID fallback: check if batchId was actually passed as an order ID
+      const { data: directOrder } = await supabase.from('orders').select('id').eq('id', batchId).maybeSingle();
+      if (directOrder?.id) {
+        return this.updateOrderStatus(directOrder.id, status as Order['status'], userName, cancellationReason);
+      }
+      throw new Error('Order batch not found');
+    }
 
     const currentOrder = await this.getOrderById(orderId);
     if (!currentOrder) throw new Error('Order not found');
