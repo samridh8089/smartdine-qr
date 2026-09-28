@@ -81,61 +81,60 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'restaurantId and items are required' }, { status: 400 });
     }
 
-    // Idempotency check: prevent duplicate submissions, retries, and double reservations
-    if (idempotencyKey && typeof idempotencyKey === 'string' && idempotencyKey.trim().length > 0) {
-      const cleanKey = idempotencyKey.trim();
+    const cleanKey = (idempotencyKey && typeof idempotencyKey === 'string' && idempotencyKey.trim().length > 0)
+      ? idempotencyKey.trim()
+      : null;
 
-      const { data: existingOrder } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .eq('idempotency_key', cleanKey)
-        .maybeSingle();
+    // Cart item IDs for scoped, high-speed indexed lookups (avoids full catalog scans)
+    const cartItemIds = Array.from(new Set(items.map((i: any) => i.menuItemId || i.id || i.menu_item_id).filter(Boolean)));
 
-      if (existingOrder) {
-        timer.end('auth');
-        const res = NextResponse.json({
-          success: true,
-          order: existingOrder,
-          isDuplicate: true
-        });
-        res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
-        return res;
-      }
-
-      const { data: existingBatch } = await supabase
-        .from('order_batches')
-        .select('*, order:orders(*)')
-        .eq('idempotency_key', cleanKey)
-        .maybeSingle();
-
-      if (existingBatch && existingBatch.order) {
-        timer.end('auth');
-        const res = NextResponse.json({
-          success: true,
-          order: existingBatch.order,
-          batch: existingBatch,
-          isDuplicate: true
-        });
-        res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
-        return res;
-      }
-    }
-    timer.end('auth');
-
-    // 2. INVENTORY & MENU ITEM PARALLEL VALIDATION PHASE
+    // 2. UNIFIED HIGH-SPEED PARALLEL PRE-FETCH (Idempotency + Restaurant + Table + Scoped Menu/Variants + Active Orders)
     timer.start('inventory');
-    const [rRes, tRes, mRes, vRes, activeOrdersRes] = await Promise.all([
+    const [existingOrderRes, existingBatchRes, rRes, tRes, mRes, vRes, activeOrdersRes] = await Promise.all([
+      cleanKey
+        ? supabase.from('orders').select('*').eq('restaurant_id', restaurantId).eq('idempotency_key', cleanKey).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+      cleanKey
+        ? supabase.from('order_batches').select('*, order:orders(*)').eq('idempotency_key', cleanKey).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
       supabase.from('restaurants').select('*').eq('id', restaurantId).maybeSingle(),
       (tableId && tableId !== 'takeaway' && tableId !== 'reservation') 
         ? supabase.from('tables').select('*').eq('id', tableId).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
-      supabase.from('menu_items').select('*').eq('restaurant_id', restaurantId),
-      supabase.from('menu_item_variants').select('id, menu_item_id, name, price, is_available'),
+      cartItemIds.length > 0
+        ? supabase.from('menu_items').select('id, name, price, is_available').in('id', cartItemIds).eq('restaurant_id', restaurantId)
+        : Promise.resolve({ data: [], error: null }),
+      cartItemIds.length > 0
+        ? supabase.from('menu_item_variants').select('id, menu_item_id, name, price, is_available').in('menu_item_id', cartItemIds)
+        : Promise.resolve({ data: [], error: null }),
       (orderType === 'dine_in' && tableId && tableId !== 'takeaway' && tableId !== 'reservation')
         ? supabase.from('orders').select('*').eq('table_id', tableId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).neq('payment_status', 'paid').order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [], error: null })
     ]);
+
+    // Fast return if idempotency key was already processed
+    if (existingOrderRes.data) {
+      timer.end('inventory');
+      const res = NextResponse.json({
+        success: true,
+        order: existingOrderRes.data,
+        isDuplicate: true
+      });
+      res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+      return res;
+    }
+
+    if (existingBatchRes.data && (existingBatchRes.data as any).order) {
+      timer.end('inventory');
+      const res = NextResponse.json({
+        success: true,
+        order: (existingBatchRes.data as any).order,
+        batch: existingBatchRes.data,
+        isDuplicate: true
+      });
+      res.headers.set('Server-Timing', timer.getHeaderString(totalStart));
+      return res;
+    }
 
     if (rRes.error) {
       console.error('[CustomerOrder] Restaurant query error:', rRes.error);
@@ -403,7 +402,7 @@ export async function POST(req: Request) {
         console.error('Batch append error:', batchErr);
       }
 
-      // Insert items into relational order_items table
+      // Insert items into relational order_items table and reserve inventory in parallel
       const addOnItemsPayload = itemsPayload.map((item: any) => ({
         order_id: activeOrder.id,
         batch_id: newBatchData?.id || null,
@@ -417,53 +416,52 @@ export async function POST(req: Request) {
         created_at: new Date().toISOString()
       }));
 
-      if (addOnItemsPayload.length > 0) {
-        const { error: itemsErr } = await supabase.from('order_items').insert(addOnItemsPayload);
-        if (itemsErr) {
-          console.error('Failed to insert add-on order items:', itemsErr);
-        }
-      }
-
-      if (newBatchData?.id && itemsPayload.length > 0) {
-        const reservationItems = itemsPayload.map((item: any) => ({
-          menuItemId: item.menu_item_id,
-          menuItemName: item.menu_item_name,
-          variantId: item.variant_id || undefined,
-          variantName: item.variant_name || undefined,
-          quantity: item.quantity
-        }));
-        try {
-          await reserveInventoryForOrderBatch(
-            restaurantId,
-            activeOrder.id,
-            newBatchData.id,
-            reservationItems,
-            undefined,
-            'Customer QR Add-On'
-          );
-        } catch (err) {
-          console.error('[CustomerOrder] Failed to reserve inventory for add-on batch:', err);
-        }
-      }
-
       const newSubtotal = parseFloat(((activeOrder.subtotal || 0) + subtotal).toFixed(2));
       const newGst = parseFloat(((activeOrder.gst || 0) + taxCalc.taxTotal).toFixed(2));
       const newTotal = parseFloat(((activeOrder.total || activeOrder.grand_total || 0) + grandTotal).toFixed(2));
       const newCgst = parseFloat((newGst / 2).toFixed(2));
       const newSgst = parseFloat((newGst - newCgst).toFixed(2));
 
-      const { data: updatedOrderData } = await supabase.from('orders').update({
-        subtotal: newSubtotal,
-        gst: newGst,
-        tax_total: newGst,
-        cgst_amount: newCgst,
-        sgst_amount: newSgst,
-        total: newTotal,
-        grand_total: newTotal,
-        updated_at: new Date().toISOString()
-      }).eq('id', activeOrder.id).select().single();
+      const reservationItems = itemsPayload.map((item: any) => ({
+        menuItemId: item.menu_item_id,
+        menuItemName: item.menu_item_name,
+        variantId: item.variant_id || undefined,
+        variantName: item.variant_name || undefined,
+        quantity: item.quantity
+      }));
 
-      createdOrder = updatedOrderData || activeOrder;
+      const [itemsRes, _, updatedOrderRes] = await Promise.all([
+        addOnItemsPayload.length > 0
+          ? supabase.from('order_items').insert(addOnItemsPayload).then(r => {
+              if (r.error) console.error('Failed to insert add-on order items:', r.error);
+              return r;
+            })
+          : Promise.resolve({ data: null, error: null }),
+        (newBatchData?.id && itemsPayload.length > 0)
+          ? reserveInventoryForOrderBatch(
+              restaurantId,
+              activeOrder.id,
+              newBatchData.id,
+              reservationItems,
+              undefined,
+              'Customer QR Add-On'
+            ).catch(err => {
+              console.error('[CustomerOrder] Failed to reserve inventory for add-on batch:', err);
+            })
+          : Promise.resolve(),
+        supabase.from('orders').update({
+          subtotal: newSubtotal,
+          gst: newGst,
+          tax_total: newGst,
+          cgst_amount: newCgst,
+          sgst_amount: newSgst,
+          total: newTotal,
+          grand_total: newTotal,
+          updated_at: new Date().toISOString()
+        }).eq('id', activeOrder.id).select().single()
+      ]);
+
+      createdOrder = updatedOrderRes?.data || activeOrder;
     } else {
       const cleanKey = idempotencyKey ? String(idempotencyKey).trim() : null;
 
@@ -538,7 +536,7 @@ export async function POST(req: Request) {
         idempotency_key: cleanKey
       }]).select().single();
 
-      // Insert items into relational order_items table
+      // Insert items into relational order_items table and reserve inventory in parallel
       const orderItemsPayload = itemsPayload.map((item: any) => ({
         order_id: createdOrder.id,
         batch_id: initialBatchData?.id || null,
@@ -552,34 +550,34 @@ export async function POST(req: Request) {
         created_at: new Date().toISOString()
       }));
 
-      if (orderItemsPayload.length > 0) {
-        const { error: itemsErr } = await supabase.from('order_items').insert(orderItemsPayload);
-        if (itemsErr) {
-          console.error('Failed to insert order items:', itemsErr);
-        }
-      }
+      const reservationItems = itemsPayload.map((item: any) => ({
+        menuItemId: item.menu_item_id,
+        menuItemName: item.menu_item_name,
+        variantId: item.variant_id || undefined,
+        variantName: item.variant_name || undefined,
+        quantity: item.quantity
+      }));
 
-      if (initialBatchData?.id && itemsPayload.length > 0) {
-        const reservationItems = itemsPayload.map((item: any) => ({
-          menuItemId: item.menu_item_id,
-          menuItemName: item.menu_item_name,
-          variantId: item.variant_id || undefined,
-          variantName: item.variant_name || undefined,
-          quantity: item.quantity
-        }));
-        try {
-          await reserveInventoryForOrderBatch(
-            restaurantId,
-            createdOrder.id,
-            initialBatchData.id,
-            reservationItems,
-            undefined,
-            'Customer QR Order'
-          );
-        } catch (err) {
-          console.error('[CustomerOrder] Failed to reserve inventory for initial batch:', err);
-        }
-      }
+      await Promise.all([
+        orderItemsPayload.length > 0
+          ? supabase.from('order_items').insert(orderItemsPayload).then(r => {
+              if (r.error) console.error('Failed to insert order items:', r.error);
+              return r;
+            })
+          : Promise.resolve({ data: null, error: null }),
+        (initialBatchData?.id && itemsPayload.length > 0)
+          ? reserveInventoryForOrderBatch(
+              restaurantId,
+              createdOrder.id,
+              initialBatchData.id,
+              reservationItems,
+              undefined,
+              'Customer QR Order'
+            ).catch(err => {
+              console.error('[CustomerOrder] Failed to reserve inventory for initial batch:', err);
+            })
+          : Promise.resolve()
+      ]);
     }
     timer.end('order_insert');
 
