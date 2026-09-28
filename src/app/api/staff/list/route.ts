@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     // 1. Fetch restaurant settings for staff_metadata fallback
     const { data: rest } = await supabaseAdmin
       .from('restaurants')
-      .select('settings')
+      .select('owner_id, settings')
       .eq('id', restaurantId)
       .maybeSingle();
 
@@ -74,6 +74,7 @@ export async function GET(req: Request) {
 
       return {
         ...p,
+        plain_password: p.plain_password || staffSetting.plain_password || '',
         department: p.department || staffSetting.department || (p.role === 'waiter' ? 'waiter' : p.role === 'kitchen' ? 'kitchen' : 'general'),
         phone: p.phone || staffSetting.phone || '',
         is_active: p.is_active !== undefined ? p.is_active : (staffSetting.is_active !== false),
@@ -96,6 +97,7 @@ export async function GET(req: Request) {
               id,
               email: item.email,
               full_name: item.full_name || item.name || 'Staff Member',
+              plain_password: item.plain_password || '',
               role: item.role || 'waiter',
               department: item.department || 'waiter',
               phone: item.phone || '',
@@ -109,12 +111,24 @@ export async function GET(req: Request) {
       }
     });
 
-    // Sanitize output to prevent plain_password leakage
-    const sanitizedProfiles = mergedProfiles.map(({ plain_password, ...rest }: any) => rest);
+    // Authorize plain_password visibility: Only Owner, Manager, or Super Admin can view staff passwords
+    const isPrivileged = authCheck.isSuperAdmin ||
+      authCheck.profile?.role === 'owner' ||
+      authCheck.profile?.role === 'manager' ||
+      authCheck.profile?.role === 'super_admin' ||
+      rest?.owner_id === authCheck.user?.id;
+
+    const finalProfiles = mergedProfiles.map((p: any) => {
+      if (isPrivileged) {
+        return p;
+      }
+      const { plain_password, ...safe } = p;
+      return safe;
+    });
 
     return NextResponse.json({
       success: true,
-      staff: sanitizedProfiles
+      staff: finalProfiles
     });
   } catch (err: any) {
     console.error('[API Staff List] Server Exception:', err);

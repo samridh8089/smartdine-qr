@@ -153,6 +153,21 @@ async function main() {
   code = code.replace(tableStaffTarget, tableStaffReplacement);
   console.log('-> Patched [11] Table Assignment staff retrieval');
 
+  // 12. FIX Staff Management: Never fallback to 123456 for staff passwords
+  const staffPwdTarget = "D[n.id]?n.plain_password||'123456':n.plain_password?'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022':'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022 (Encrypted)'";
+  const staffPwdReplacement = "D[n.id]?(n.plain_password||'Protected'):(n.plain_password?'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022':'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022 (Encrypted)')";
+  if (code.includes(staffPwdTarget)) {
+    code = code.replace(staffPwdTarget, staffPwdReplacement);
+    console.log('-> Patched [12] Staff Management password display (removed 123456 fallback)');
+  }
+
+  // 13. FIX Recipe Assistant: Support Maggi, Noodles, Pasta, Cheese Maggi and authentic culinary defaults
+  const recipeCoreTarget = "{name:`Fresh ${t} Primary Core`,suggestedQuantity:200,suggestedUnit:'gram'},{name:'Pure Dairy Butter / Ghee',suggestedQuantity:30,suggestedUnit:'ml'},{name:'Full Cream Milk / Flavor Base',suggestedQuantity:80,suggestedUnit:'ml'},{name:'Sweetener / Seasoning Blend',suggestedQuantity:15,suggestedUnit:'gram'},{name:'Fresh Herb / Nut Garnish',suggestedQuantity:10,suggestedUnit:'gram'}";
+  const recipeCoreReplacement = "(function(){if(/maggi|maggie|noodle|pasta/.test((t||'').toLowerCase())){var __ch=/cheese/.test((t||'').toLowerCase());return[{name:'Maggi Instant Noodles Cake',suggestedQuantity:70,suggestedUnit:'gram'}].concat(__ch?[{name:'Processed / Mozzarella Cheese (Grated)',suggestedQuantity:40,suggestedUnit:'gram'}]:[],[{name:'Maggi Tastemaker Masala Blend',suggestedQuantity:6,suggestedUnit:'gram'},{name:'Pure Dairy Butter',suggestedQuantity:15,suggestedUnit:'gram'},{name:'Filtered Boiling Water',suggestedQuantity:250,suggestedUnit:'ml'},{name:'Fresh Green Chilli & Coriander',suggestedQuantity:10,suggestedUnit:'gram'}])}return[{name:`Fresh ${t} Main Cut / Protein`,suggestedQuantity:180,suggestedUnit:'gram'},{name:'Pure Dairy Butter / Cooking Oil',suggestedQuantity:25,suggestedUnit:'ml'},{name:'Chef Signature Gravy / Sauce Base',suggestedQuantity:80,suggestedUnit:'ml'},{name:'Aromatic Herb & Seasoning Blend',suggestedQuantity:15,suggestedUnit:'gram'},{name:'Fresh Herb & Cream Garnish',suggestedQuantity:10,suggestedUnit:'gram'}]})()";
+  if (code.includes(recipeCoreTarget)) {
+    code = code.replace(recipeCoreTarget, recipeCoreReplacement);
+    console.log('-> Patched [13] Smart Recipe AI Assistant (Maggi, Cheese Maggi, Noodles & authentic defaults)');
+  }
 
   // Compile with Hermes Bytecode v96
   const tempJs = path.resolve('smartdine-mobile/dist-android/temp_exact_4.js');
@@ -212,6 +227,24 @@ async function main() {
   const bg144 = await makeBg(144);
   const bg192 = await makeBg(192);
 
+  // Official Android Status Bar Notification Silhouette Icons (Pure White with Alpha Transparency)
+  console.log('Generating Android Status Bar Notification Icons (white silhouette on transparent)...');
+  const monoBuf = fs.readFileSync(path.resolve('smartdine-mobile/assets/android-icon-monochrome.png'));
+  const notif24 = await sharp(monoBuf).resize(24, 24, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  const notif36 = await sharp(monoBuf).resize(36, 36, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  const notif48 = await sharp(monoBuf).resize(48, 48, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  const notif72 = await sharp(monoBuf).resize(72, 72, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  const notif96 = await sharp(monoBuf).resize(96, 96, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+
+  try {
+    fs.writeFileSync('smartdine-mobile/assets/notification-icon.png', notif48);
+    fs.writeFileSync('smartdine-mobile/androide_backup/app/src/main/res/drawable-mdpi/notification_icon.png', notif24);
+    fs.writeFileSync('smartdine-mobile/androide_backup/app/src/main/res/drawable-hdpi/notification_icon.png', notif36);
+    fs.writeFileSync('smartdine-mobile/androide_backup/app/src/main/res/drawable-xhdpi/notification_icon.png', notif48);
+    fs.writeFileSync('smartdine-mobile/androide_backup/app/src/main/res/drawable-xxhdpi/notification_icon.png', notif72);
+    fs.writeFileSync('smartdine-mobile/androide_backup/app/src/main/res/drawable-xxxhdpi/notification_icon.png', notif96);
+  } catch (_) {}
+
   const replacements = {
     'res/yw.webp': launch48,
     'res/fq.webp': launch72,
@@ -233,6 +266,12 @@ async function main() {
     'res/By.webp': bg96,
     'res/BZ.webp': bg144,
     'res/gS.webp': bg192,
+    // Status Bar Notification Icons (Monochrome White Silhouette)
+    'res/U4.png': notif24,
+    'res/qJ.png': notif36,
+    'res/RQ.png': notif48,
+    'res/ZO.png': notif72,
+    'res/eY.png': notif96,
   };
 
   // Package into APK

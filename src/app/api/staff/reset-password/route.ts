@@ -115,9 +115,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: updateErr.message || 'Failed to update staff password' }, { status: 500 });
     }
 
-    // Update plain_password on profile if row exists
+    // Update plain_password on profile and staff_metadata if row exists
     try {
       await supabaseAdmin.from('profiles').update({ plain_password: newPassword }).eq('id', targetUserId);
+      if (restIdForCheck) {
+        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restIdForCheck).maybeSingle();
+        if (rest) {
+          const staffMeta = rest.settings?.staff_metadata || {};
+          if (staffMeta[targetUserId]) {
+            staffMeta[targetUserId].plain_password = newPassword;
+            await supabaseAdmin.from('restaurants').update({
+              settings: { ...rest.settings, staff_metadata: staffMeta }
+            }).eq('id', restIdForCheck);
+          }
+        }
+      }
     } catch (e) {}
 
     return NextResponse.json({

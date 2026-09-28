@@ -425,37 +425,69 @@ export default function KitchenDisplayPage() {
 
     // 2. Online: dispatch through authoritative lifecycle route /api/staff/update-order-status
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      let token = sessionData?.session?.access_token || '';
-      if (!token && typeof window !== 'undefined') {
+      const getKdsToken = async (forceRefresh = false): Promise<string> => {
         try {
-          const raw = localStorage.getItem('smartdine_auth_token_v2');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            token = parsed.access_token || parsed[0] || '';
+          if (forceRefresh) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            if (refreshed?.session?.access_token) return refreshed.session.access_token;
           }
+          const { data: sessionData } = await supabase.auth.getSession();
+          const session = sessionData?.session;
+          if (session?.expires_at) {
+            const nowSec = Math.floor(Date.now() / 1000);
+            if (nowSec >= session.expires_at - 60) {
+              const { data: refreshed } = await supabase.auth.refreshSession();
+              if (refreshed?.session?.access_token) return refreshed.session.access_token;
+            }
+          }
+          if (session?.access_token) return session.access_token;
         } catch (_) {}
-      }
+
+        if (typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem('smartdine_auth_token_v2');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              return parsed.access_token || parsed[0] || '';
+            }
+          } catch (_) {}
+        }
+        return '';
+      };
+
+      let token = await getKdsToken(false);
       const impersonated = typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_impersonated_profile') : null;
 
-      const res = await fetch('/api/staff/update-order-status', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-          ...(token ? { 'x-staff-token': token } : {}),
-          ...(impersonated ? { 'x-impersonated-profile': impersonated } : {}),
-          ...(restaurantId ? { 'x-restaurant-id': restaurantId } : {}),
-          'x-staff-role': profile?.role || 'kitchen'
-        },
-        body: JSON.stringify({
-          batchId,
-          newStatus: nextStatus,
-          staffName,
-          cancellationReason: cancellationReasonText
-        })
-      });
+      const doKdsFetch = async (authToken: string) => {
+        return fetch('/api/staff/update-order-status', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}`, 'x-staff-token': authToken } : {}),
+            ...(impersonated ? { 'x-impersonated-profile': impersonated } : {}),
+            ...(restaurantId ? { 'x-restaurant-id': restaurantId } : {}),
+            'x-staff-role': profile?.role || 'kitchen'
+          },
+          body: JSON.stringify({
+            batchId,
+            newStatus: nextStatus,
+            staffName,
+            cancellationReason: cancellationReasonText
+          })
+        });
+      };
+
+      let res = await doKdsFetch(token);
+
+      // If 401 Unauthorized or INVALID_TOKEN, force refresh session and retry once
+      if (res.status === 401) {
+        const refreshedToken = await getKdsToken(true);
+        if (refreshedToken) {
+          token = refreshedToken;
+          res = await doKdsFetch(refreshedToken);
+        }
+      }
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
