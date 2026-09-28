@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { createClient } from '@supabase/supabase-js';
-import { healUnconsumedActiveReservations } from '@/lib/inventoryEngine';
+import { healUnconsumedActiveReservations, cleanupOrphanReservations } from '@/lib/inventoryEngine';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
@@ -306,8 +306,17 @@ export async function POST(req: Request) {
         }).catch(err => console.warn('[update-order-status] Realtime table broadcast error:', err));
       }
 
-      // Background reservation healing (non-blocking)
+      // Background reservation healing & orphan cleanup (non-blocking)
       healUnconsumedActiveReservations(restId).catch(() => {});
+      cleanupOrphanReservations(restId).catch(() => {});
+
+      if (effectiveStatus === 'cancelled') {
+        try {
+          await cleanupOrphanReservations(restId);
+        } catch (cleanErr: any) {
+          console.warn('[update-order-status] cleanupOrphanReservations warning:', cleanErr?.message);
+        }
+      }
 
       // ─── Phase-19: Event Bus & Audit Trail ───────────────────────────
       const statusToEvent: Record<string, SystemEventType> = {

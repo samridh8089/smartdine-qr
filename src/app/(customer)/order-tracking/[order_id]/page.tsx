@@ -45,24 +45,10 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'reconnecting' | 'offline'>('connected');
   const [etaRemainingSeconds, setEtaRemainingSeconds] = useState<number | null>(null);
-
-  const handleCallWaiter = async () => {
-    if (!order || !restaurant || !order.table_id) return;
-    setCallLoading(true);
-    try {
-      await db.createCustomerRequest(restaurant.id, order.table_id, 'call_waiter');
-      setCallSent(true);
-      setTimeout(() => setCallSent(false), 4000);
-    } catch (err: any) {
-      alert('Failed to notify waiter: ' + err.message);
-    } finally {
-      setCallLoading(false);
-    }
-  };
-
   const [mergedGroupDetails, setMergedGroupDetails] = useState<any | null>(null);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [showTimeline, setShowTimeline] = useState<boolean>(true);
+  const [activeWaiterRequest, setActiveWaiterRequest] = useState<any | null>(null);
 
   const loadOrderData = async () => {
     try {
@@ -290,6 +276,70 @@ export default function OrderTrackingPage({ params }: PageProps) {
       supabase.removeChannel(channel);
     };
   }, [orderId]);
+
+  // Realtime subscription for customer waiter calls on this table
+  useEffect(() => {
+    if (!order?.table_id || !order?.restaurant_id) return;
+
+    // 1. Initial check for existing active waiter call on this table
+    supabase
+      .from('customer_requests')
+      .select('*')
+      .eq('restaurant_id', order.restaurant_id)
+      .eq('table_id', order.table_id)
+      .eq('type', 'call_waiter')
+      .in('status', ['pending', 'accepted'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setActiveWaiterRequest(data[0]);
+        } else {
+          setActiveWaiterRequest(null);
+        }
+      });
+
+    // 2. Realtime listener on customer_requests for this table
+    const reqChannel = supabase
+      .channel(`customer_requests_table_${order.table_id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'customer_requests',
+          filter: `table_id=eq.${order.table_id}`
+        },
+        (payload) => {
+          const req = payload.new as any;
+          if (!req || req.status === 'completed' || req.status === 'cancelled') {
+            setActiveWaiterRequest(null);
+            setCallSent(false);
+          } else if (req.type === 'call_waiter' && ['pending', 'accepted'].includes(req.status)) {
+            setActiveWaiterRequest(req);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(reqChannel);
+    };
+  }, [order?.table_id, order?.restaurant_id]);
+
+  const handleCallWaiter = async () => {
+    if (!order || !restaurant || !order.table_id || callLoading || activeWaiterRequest) return;
+    setCallLoading(true);
+    try {
+      const req = await db.createCustomerRequest(restaurant.id, order.table_id, 'call_waiter');
+      setActiveWaiterRequest(req);
+      setCallSent(true);
+    } catch (err: any) {
+      alert('Failed to notify waiter: ' + err.message);
+    } finally {
+      setCallLoading(false);
+    }
+  };
 
   const handleConfirmMergedPayment = async () => {
     if (!mergedGroupDetails || submittingPayment) return;
@@ -534,7 +584,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-900/40 pb-12 transition-colors">
       {/* Mini Header */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm sticky top-0 z-30 shrink-0">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm sticky top-0 z-30 shrink-0 print:hidden">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link 
@@ -550,21 +600,28 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
           {/* Call Waiter button on Order Tracking Page */}
           {order.table_id && order.order_type !== 'takeaway' && (
-            <button
-              onClick={handleCallWaiter}
-              disabled={callLoading}
-              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
-            >
-              <Bell className="h-4 w-4 text-white animate-bounce" />
-              <span>Call Waiter</span>
-            </button>
+            activeWaiterRequest ? (
+              <span className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-black border border-amber-300 dark:border-amber-800 flex items-center gap-1.5 shadow-xs animate-pulse">
+                <Bell className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span>Waiter Called</span>
+              </span>
+            ) : (
+              <button
+                onClick={handleCallWaiter}
+                disabled={callLoading}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+              >
+                <Bell className="h-4 w-4 text-white animate-bounce" />
+                <span>Call Waiter</span>
+              </button>
+            )
           )}
         </div>
       </header>
 
       {/* Call Waiter Success Confirmation Banner */}
-      {callSent && (
-        <div className="max-w-xl mx-auto px-4 pt-3">
+      {(callSent || activeWaiterRequest) && (
+        <div className="max-w-xl mx-auto px-4 pt-3 print:hidden">
           <div className="bg-emerald-500 text-white p-3.5 rounded-2xl text-center text-xs font-bold shadow-lg animate-pop flex items-center justify-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             <span>Waiter has been notified! A staff member will come to your table shortly.</span>
@@ -591,7 +648,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
             )}
             <span>• Receipt #{getCustomerFacingOrderId(order, restaurant.name).replace(/^Order\s*#/i, '')}</span>
           </p>
-          <div className="pt-2 flex flex-col items-center gap-1.5">
+          <div className="pt-2 flex flex-col items-center gap-1.5 print:hidden">
             <span
               id="live-order-status-badge"
               data-status={order.status}
@@ -615,29 +672,29 @@ export default function OrderTrackingPage({ params }: PageProps) {
               <span>Status: {order.status}</span>
             </span>
 
-            {/* Live Sync Status Indicator */}
-            <span
-              id="live-sync-indicator"
-              data-sync-status={syncStatus}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
-                syncStatus === 'connected'
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
-                  : syncStatus === 'reconnecting'
-                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 animate-pulse'
-                  : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 animate-bounce'
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${
-                syncStatus === 'connected' ? 'bg-emerald-500' : syncStatus === 'reconnecting' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
-              }`} />
-              <span>{syncStatus === 'connected' ? 'Live Sync Active' : syncStatus === 'reconnecting' ? 'Reconnecting...' : 'Offline (Check Internet)'}</span>
-            </span>
+            {/* Live Sync Status Indicator - only shown if network issue occurs */}
+            {syncStatus !== 'connected' && (
+              <span
+                id="live-sync-indicator"
+                data-sync-status={syncStatus}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all ${
+                  syncStatus === 'reconnecting'
+                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 animate-pulse'
+                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60 animate-bounce'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${
+                  syncStatus === 'reconnecting' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
+                }`} />
+                <span>{syncStatus === 'reconnecting' ? 'Reconnecting...' : 'Offline (Check Internet)'}</span>
+              </span>
+            )}
           </div>
         </div>
 
         {/* Dynamic Kitchen Preparation ETA Card */}
         {etaRemainingSeconds !== null && !['ready', 'served', 'completed', 'cancelled'].includes(order.status) && (
-          <Card id="customer-eta-card" className="shadow-md border-2 border-amber-500/30 bg-linear-to-br from-amber-50/80 to-white dark:from-amber-950/20 dark:to-slate-900 overflow-hidden animate-pop">
+          <Card id="customer-eta-card" className="shadow-md border-2 border-amber-500/30 bg-linear-to-br from-amber-50/80 to-white dark:from-amber-950/20 dark:to-slate-900 overflow-hidden animate-pop print:hidden">
             <CardContent className="p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
@@ -674,7 +731,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
         {/* MERGED GROUP SESSION BANNER — Shown when this order belongs to a merged session */}
         {mergedGroupDetails && (
-          <Card className="shadow-lg border-t-4 border-t-indigo-500 dark:border-slate-800 overflow-hidden">
+          <Card className="shadow-lg border-t-4 border-t-indigo-500 dark:border-slate-800 overflow-hidden print:hidden">
             <CardContent className="p-5 space-y-5">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-indigo-100 dark:border-indigo-950/50 pb-3">
@@ -1095,7 +1152,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
             </Card>
           ) : order.batches && order.batches.length > 0 ? (
             /* Collapsible Order & Batch Lifecycle Timeline */
-            <div className="space-y-4">
+            <div className="space-y-4 print:hidden">
               <button
                 type="button"
                 onClick={() => setShowTimeline(!showTimeline)}
@@ -1291,7 +1348,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
             </div>
           ) : (
             /* Single Order fallback (when no batches exist) */
-            <Card className="shadow-md dark:border-slate-800 animate-pop">
+            <Card className="shadow-md dark:border-slate-800 animate-pop print:hidden">
               <CardContent className="p-6 space-y-6">
                 <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-8 py-2">
                   {steps.map((step, idx) => {
@@ -1481,7 +1538,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
             </div>
 
             {/* Action buttons */}
-            <div className="pt-2 flex flex-col gap-2">
+            <div className="pt-2 flex flex-col gap-2 print:hidden">
               {order.status !== 'completed' && order.status !== 'cancelled' && (
                 <Button 
                   className={`w-full gap-1.5 cursor-pointer flex items-center justify-center ${
@@ -1505,13 +1562,15 @@ export default function OrderTrackingPage({ params }: PageProps) {
                 >
                   <RotateCcw className="h-4 w-4 text-slate-500" /> Reorder Items
                 </Button>
-                <Button 
-                  variant="outline"
-                  className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
-                  onClick={() => window.print()}
-                >
-                  <Printer className="h-4 w-4 text-slate-500" /> Print Receipt
-                </Button>
+                {order.status === 'completed' && (
+                  <Button 
+                    variant="outline"
+                    className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
+                    onClick={() => window.print()}
+                  >
+                    <Printer className="h-4 w-4 text-slate-500" /> Print Receipt
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -1519,6 +1578,30 @@ export default function OrderTrackingPage({ params }: PageProps) {
         </Card>
 
       </main>
+
+      {/* Global CSS for clean 1-sheet receipt printing */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            margin: 8mm;
+            size: auto;
+          }
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .print\\:hidden, header, nav {
+            display: none !important;
+          }
+          main {
+            padding: 0 !important;
+            margin: 0 auto !important;
+            max-width: 100% !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

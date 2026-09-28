@@ -334,6 +334,9 @@ export default function InventoryDashboardPage() {
 
       // 4. Sync Menu Availability with Inventory
       await syncInventoryMenuAvailability(restaurantId);
+
+      // 5. Clean up any orphan reservations for cancelled/completed orders (non-blocking)
+      fetch(`/api/staff/cleanup-reservations?restaurantId=${restaurantId}`, { method: 'POST' }).catch(() => {});
     } catch (err) {
       console.error('Error loading inventory data:', err);
     } finally {

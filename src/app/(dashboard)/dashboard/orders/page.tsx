@@ -136,10 +136,24 @@ async function callUpdateOrderStatusApi(params: {
           }
         }
       }
-      return session?.access_token || '';
-    } catch (_) {
-      return '';
+      if (session?.access_token) {
+        return session.access_token;
+      }
+    } catch (_) {}
+
+    // Fallback: Check localStorage directly for stored session
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('smartdine_auth_token_v2');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const t = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+          if (t && typeof t === 'string') return t;
+        }
+      } catch (_) {}
     }
+
+    return '';
   };
 
   let token = await getValidToken(false);
@@ -1083,7 +1097,8 @@ export default function OrdersPage() {
         orderId: orderIdToCancel,
         newStatus: 'cancelled',
         staffName: profile?.full_name || activeRole || 'Staff Member',
-        cancellationReason: fullReason
+        cancellationReason: fullReason,
+        restaurantId: restaurant?.id || selectedOrder.restaurant_id
       });
       const updated = statusRes?.order;
 
