@@ -118,9 +118,10 @@ export function getFormattedOrderId(
     }
 
     const existingCode = order.display_order_id || order.order_number;
-    const match = existingCode && String(existingCode).match(/^([A-Z0-9]{3,4})-(\d{2}[DTRP]\d{4,})$/);
+    const match = existingCode && String(existingCode).match(/^(?:[A-Z0-9]{3,4}-)?([#0-9]{2,3}[DTRP]\d{4,})$/);
     if (match) {
-      return isCustomerFacing ? `Order #${match[2]}` : `${match[1]}-${match[2]}`;
+      const cleanMatch = match[1].replace(/^#/, '');
+      return isCustomerFacing ? `Order #${cleanMatch}` : `#${cleanMatch}`;
     }
 
     // 1. Restaurant Code
@@ -154,18 +155,23 @@ export function getFormattedOrderId(
       typeChar = 'D';
     }
 
-    // 4. Sequence (4 digits)
+    // 4. Sequence (4 digits) - strictly deterministic and permanent from order.id / sequence
     let sequence = 1;
     if (order.daily_sequence || order.order_sequence || order.order_number) {
       sequence = Number(order.daily_sequence || order.order_sequence || order.order_number);
-    } else if (Array.isArray(allOrders) && allOrders.length > 0) {
-      const index = allOrders.findIndex(o => o?.id === order.id || o?.order_id === order.id);
-      if (index >= 0) {
-        sequence = index + 1;
-      }
     } else if (order.id) {
       const numOnly = String(order.id).replace(/\D/g, '');
-      sequence = numOnly ? (parseInt(numOnly.slice(-4), 10) || 1) : 1;
+      if (numOnly.length >= 4) {
+        sequence = parseInt(numOnly.slice(-4), 10) || 1;
+      } else {
+        let hash = 0;
+        const idStr = String(order.id);
+        for (let i = 0; i < idStr.length; i++) {
+          hash = ((hash << 5) - hash) + idStr.charCodeAt(i);
+          hash |= 0;
+        }
+        sequence = (Math.abs(hash) % 9000) + 1000;
+      }
     }
     const seqStr = String(sequence).padStart(4, '0');
     const suffix = `${yy}${typeChar}${seqStr}`;
@@ -174,9 +180,9 @@ export function getFormattedOrderId(
       return `Order #${suffix}`;
     }
 
-    return `${restCode}-${suffix}`;
+    return `#${suffix}`;
   } catch (err) {
-    return isCustomerFacing ? 'Order #26D0001' : 'A7K-26D0001';
+    return isCustomerFacing ? 'Order #26D0001' : '#26D0001';
   }
 }
 
@@ -236,17 +242,21 @@ export function matchesOrderSearchQuery(
 ): boolean {
   if (!query || !query.trim()) return true;
   const q = query.trim().toLowerCase();
-  const qClean = q.replace(/^#/, '');
+  const qClean = q.replace(/^[#\-]/, '').trim();
 
-  const fullId = getFormattedOrderId(order, restaurantName, allOrders, false).toLowerCase();
-  const shortId = fullId.split('-')[1] || fullId;
-  const seqOnly = shortId.replace(/^[0-9]{2}[A-Z]/i, '');
+  const formattedId = getFormattedOrderId(order, restaurantName, allOrders, false).toLowerCase();
+  const cleanId = formattedId.replace(/^#/, '');
+  const seqOnly = cleanId.replace(/^[0-9]{2}[A-Z]/i, '');
 
-  if (fullId.includes(q) || fullId.includes(qClean)) return true;
-  if (shortId.includes(q) || shortId.includes(qClean)) return true;
+  if (formattedId.includes(q) || cleanId.includes(qClean)) return true;
   if (seqOnly && (seqOnly.includes(qClean) || parseInt(seqOnly, 10) === parseInt(qClean, 10))) return true;
 
-  if (order.id && String(order.id).toLowerCase().includes(q)) return true;
+  // Also support matching legacy or explicit restaurant code prefix (e.g. A7K-26D3519)
+  const restCode = getDeterministicRestaurantCode(order.restaurant_id || restaurantName || '').toLowerCase();
+  const fullWithRest = `${restCode}-${cleanId}`.toLowerCase();
+  if (fullWithRest.includes(qClean) || fullWithRest.includes(q)) return true;
+
+  if (order.id && String(order.id).toLowerCase().includes(qClean)) return true;
 
   const cust = parseCustomerDetailsFromOrder(order);
   if (cust.name && cust.name.toLowerCase().includes(q)) return true;

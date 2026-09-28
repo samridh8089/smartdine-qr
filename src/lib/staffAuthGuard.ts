@@ -32,16 +32,35 @@ export async function verifyStaffRequest(
     }
 
     if (!token) {
-      // Try extracting from Cookie header
+      // Try extracting from Cookie header (supports standard and chunked sb-*-auth-token cookies)
       const cookieHeader = req.headers.get('cookie') || '';
-      const match = cookieHeader.match(/smartdine_auth_token_v2=([^;]+)/) || cookieHeader.match(/sb-[^=]+-auth-token=([^;]+)/);
-      if (match) {
+      const cookieMatches = cookieHeader.match(/(?:smartdine_auth_token_v2|sb-[^=]+-auth-token(?:\.\d+)?)=([^;]+)/g) || [];
+      for (const m of cookieMatches) {
+        const val = m.split('=')[1];
+        if (!val) continue;
         try {
-          const rawVal = decodeURIComponent(match[1]);
-          const parsed = JSON.parse(rawVal);
-          token = Array.isArray(parsed) ? parsed[0] : (parsed.access_token || parsed);
+          const rawVal = decodeURIComponent(val);
+          if (rawVal.startsWith('base64-')) {
+            const decoded = Buffer.from(rawVal.substring(7), 'base64').toString('utf8');
+            const parsed = JSON.parse(decoded);
+            const candidate = Array.isArray(parsed) ? (parsed[0]?.access_token || parsed[0]) : (parsed?.access_token || parsed);
+            if (candidate && typeof candidate === 'string' && candidate.length > 20) {
+              token = candidate;
+              break;
+            }
+          } else {
+            const parsed = JSON.parse(rawVal);
+            const candidate = Array.isArray(parsed) ? (parsed[0]?.access_token || parsed[0]) : (parsed?.access_token || parsed);
+            if (candidate && typeof candidate === 'string' && candidate.length > 20) {
+              token = candidate;
+              break;
+            }
+          }
         } catch (e) {
-          token = decodeURIComponent(match[1]);
+          if (val.length > 20) {
+            token = decodeURIComponent(val);
+            break;
+          }
         }
       }
     }

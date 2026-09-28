@@ -7,6 +7,7 @@ import {
   reserveInventoryForOrderBatch,
   consumeReservedInventoryForOrderBatch,
   releaseInventoryReservationForOrderBatch,
+  cleanupOrphanReservations,
   transitionOrderBatchLifecycle
 } from './inventoryEngine';
 import { logSystemEvent, getOrderCorrelationId } from './systemEventLogger';
@@ -722,6 +723,13 @@ async function executeAutomaticCancellationRollback(
 
     if (batchId) {
       query = query.eq('batch_id', batchId);
+    }
+
+    // Always clean up orphan reservations for this restaurant upon cancellation
+    try {
+      await cleanupOrphanReservations(restaurantId);
+    } catch (cleanErr: any) {
+      console.warn('[AutomaticCancellationRollback] Error cleaning orphan reservations:', cleanErr?.message);
     }
 
     const { data: consumptions } = await query;
