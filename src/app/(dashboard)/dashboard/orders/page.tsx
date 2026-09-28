@@ -2360,6 +2360,36 @@ export default function OrdersPage() {
                               {isTakeaway ? 'Hand Over Order' : 'Serve'}
                             </Button>
                           )}
+
+                          {order.status === 'served' && order.payment_status === 'paid' && (
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center flex items-center gap-1"
+                              isLoading={processingOrderIds.includes(`${order.id}:completed`)}
+                              disabled={processingOrderIds.includes(`${order.id}:completed`)}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await handleCardQuickUpdate(order, 'completed');
+                              }}
+                            >
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              <span>Complete Order</span>
+                            </Button>
+                          )}
+
+                          {order.status === 'served' && order.payment_status !== 'paid' && (
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center flex items-center gap-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedOrderId(order.id);
+                                setPaymentModalOpen(true);
+                              }}
+                            >
+                              <span>Collect & Pay</span>
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3072,6 +3102,18 @@ export default function OrdersPage() {
                           }}
                         >
                           {selectedOrder.order_type === 'takeaway' ? 'Settle & Complete Takeaway' : 'Complete Bill & Pay'}
+                        </Button>
+                      )}
+                      {effectiveStatus === 'served' && selectedOrder.payment_status === 'paid' && (
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer font-bold shadow-md w-full sm:w-auto flex items-center justify-center gap-1.5"
+                          isLoading={processingOrderIds.includes(`${selectedOrder.id}:completed`)}
+                          disabled={processingOrderIds.includes(`${selectedOrder.id}:completed`)}
+                          onClick={() => updateOrderStatus('completed')}
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          <span>Complete Order</span>
                         </Button>
                       )}
                       {(selectedOrder.payment_status === 'paid' || effectiveStatus === 'completed') && (
