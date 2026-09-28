@@ -2342,11 +2342,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 >
                   {isQRDisabled
                     ? 'Table Temporarily Unavailable'
+                    : orderPlacing
+                    ? 'Sending Order to Kitchen...'
                     : isReservation
                     ? `Confirm Table Reservation • ${formatPrice(cartTotal, restaurant.settings.currency)}`
                     : isTakeaway
                     ? `Pay ${formatPrice(cartTotal, restaurant.settings.currency)} & Place Order`
-                    : `Place Order ticket • ${formatPrice(cartTotal, restaurant.settings.currency)}`}
+                    : `Place Order • ${formatPrice(cartTotal, restaurant.settings.currency)}`}
                 </Button>
               </div>
             );

@@ -168,6 +168,13 @@ async function main() {
     code = code.replace(recipeCoreTarget, recipeCoreReplacement);
     console.log('-> Patched [13] Smart Recipe AI Assistant (Maggi, Cheese Maggi, Noodles & authentic defaults)');
   }
+  // 14. FIX Notification Channels: Register all channels (kitchen, waiter, owner, v2, and urgent)
+  const channelArrayTarget = "t=[{id:'smartdine_kitchen',name:'CleverOps Kitchen Orders'},{id:'smartdine_waiter',name:'CleverOps Waiter Calls'},{id:'smartdine_owner',name:'CleverOps Owner Alerts'},{id:o.CONFIG.NOTIFICATION_CHANNEL_ID||'smartdine-urgent-v3',name:o.CONFIG.NOTIFICATION_CHANNEL_NAME||'CleverOps Staff Alerts'}];";
+  const channelArrayReplacement = "t=[{id:'smartdine_kitchen',name:'CleverOps Kitchen Orders'},{id:'smartdine_kitchen_v2',name:'CleverOps Kitchen Orders v2'},{id:'smartdine_waiter',name:'CleverOps Waiter Calls'},{id:'smartdine_waiter_v2',name:'CleverOps Waiter Calls v2'},{id:'smartdine_owner',name:'CleverOps Owner Alerts'},{id:'smartdine_owner_v2',name:'CleverOps Owner Alerts v2'},{id:o.CONFIG.NOTIFICATION_CHANNEL_ID||'smartdine-urgent-v3',name:o.CONFIG.NOTIFICATION_CHANNEL_NAME||'CleverOps Staff Alerts'},{id:'smartdine-urgent-channel',name:'CleverOps Urgent Channel'}];";
+  if (code.includes(channelArrayTarget)) {
+    code = code.replace(channelArrayTarget, channelArrayReplacement);
+    console.log('-> Patched [14] Notification channels (all variants registered)');
+  }
 
   // Compile with Hermes Bytecode v96
   const tempJs = path.resolve('smartdine-mobile/dist-android/temp_exact_4.js');

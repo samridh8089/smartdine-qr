@@ -121,18 +121,19 @@ async function dispatchFCMNotification(
 
       const normRole = (p.role || '').toLowerCase().trim();
       const roleChannel = normRole === 'kitchen' || normRole === 'kds' || normRole === 'kitchen_staff'
-        ? 'smartdine_kitchen_v2'
+        ? 'smartdine_kitchen'
         : normRole === 'waiter'
-        ? 'smartdine_waiter_v2'
+        ? 'smartdine_waiter'
         : normRole === 'owner' || normRole === 'manager'
-        ? 'smartdine_owner_v2'
-        : 'smartdine_waiter_v2';
+        ? 'smartdine_owner'
+        : 'smartdine_waiter';
 
       return {
         to: p.push_token,
         sound: 'order_tune',
         priority: 'high',
         channelId: roleChannel,
+        color: '#059669',
         title,
         body,
         data: {
