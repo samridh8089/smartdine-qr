@@ -262,6 +262,7 @@ export async function POST(req: Request) {
           role: role || 'staff',
           department: resolvedDept,
           phone: phone || '',
+          plain_password: password || undefined,
           is_active: true,
           is_verified: false,
           verification_status: 'pending_verification'

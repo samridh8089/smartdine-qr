@@ -115,17 +115,57 @@ async function callUpdateOrderStatusApi(params: {
   newStatus: Order['status'];
   staffName?: string;
   cancellationReason?: string;
+  restaurantId?: string;
 }) {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData?.session?.access_token || '';
-  const res = await fetch('/api/staff/update-order-status', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify(params)
-  });
+  const getValidToken = async (forceRefresh = false): Promise<string> => {
+    try {
+      if (forceRefresh) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (refreshed?.session?.access_token) {
+          return refreshed.session.access_token;
+        }
+      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (session?.expires_at) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        if (nowSec >= session.expires_at - 60) {
+          const { data: refreshed } = await supabase.auth.refreshSession();
+          if (refreshed?.session?.access_token) {
+            return refreshed.session.access_token;
+          }
+        }
+      }
+      return session?.access_token || '';
+    } catch (_) {
+      return '';
+    }
+  };
+
+  let token = await getValidToken(false);
+  const doFetch = async (authToken: string) => {
+    return fetch('/api/staff/update-order-status', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { 'Authorization': `Bearer ${authToken}`, 'x-staff-token': authToken } : {}),
+        ...(params.restaurantId ? { 'x-restaurant-id': params.restaurantId } : {})
+      },
+      body: JSON.stringify(params)
+    });
+  };
+
+  let res = await doFetch(token);
+
+  // If 401 Unauthorized or INVALID_TOKEN, force refresh session and retry once
+  if (res.status === 401) {
+    const refreshedToken = await getValidToken(true);
+    if (refreshedToken) {
+      token = refreshedToken;
+      res = await doFetch(refreshedToken);
+    }
+  }
 
   if (!res.ok) {
     const errJson = await res.json().catch(() => ({}));
