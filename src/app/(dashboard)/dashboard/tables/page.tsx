@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { db, Table, checkTableHasActiveUnpaidOrders, RestaurantZone } from '@/lib/db';
+import { db, Table, checkTableHasActiveUnpaidOrders, RestaurantZone, Profile } from '@/lib/db';
 import { useRestaurant } from '../../layout';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { generateQRDataURL, getCanonicalTableQRUrl } from '@/lib/qr';
@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { 
   Plus, QrCode, Download, ExternalLink, Trash2, 
   AlertTriangle, Printer, HelpCircle, Calendar, ShoppingBag,
-  Sparkles, FileText, Archive
+  Sparkles, FileText, Archive, UserCheck, UserPlus, Users, Check, X
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -70,10 +70,22 @@ export default function TablesPage() {
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
 
+  // Table Assign Modal & Staff State
+  const [staffList, setStaffList] = useState<Profile[]>([]);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [targetAssignTableIds, setTargetAssignTableIds] = useState<string[]>([]);
+  const [selectedWaiterId, setSelectedWaiterId] = useState<string>('');
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignSuccessToast, setAssignSuccessToast] = useState<string | null>(null);
+
   // Global QR Design Studio configuration sync
   const { designConfig: qrDesign } = useQRDesign(restaurant);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const assignableStaff = useMemo(() => {
+    return (staffList || []).filter(s => s.is_active !== false);
+  }, [staffList]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -84,7 +96,10 @@ export default function TablesPage() {
 
   const fetchTablesData = async (targetRestId: string, force: boolean = false) => {
     try {
-      const data = await dashboardStore.fetchTablesDeduplicated(targetRestId, force);
+      const [data, staff] = await Promise.all([
+        dashboardStore.fetchTablesDeduplicated(targetRestId, force),
+        db.getStaffProfiles(targetRestId)
+      ]);
       if (data) {
         setTables(data.tables);
         setTableStats(data.stats);
@@ -93,6 +108,9 @@ export default function TablesPage() {
         if (data.zones && data.zones.length > 0) {
           setZones(data.zones);
         }
+      }
+      if (staff) {
+        setStaffList(staff);
       }
     } catch (e) {
       console.error('Error fetching tables data:', e);
@@ -318,6 +336,121 @@ export default function TablesPage() {
     }
   };
 
+  const handleOpenAssignModal = (tableIds?: string[]) => {
+    const ids = tableIds && tableIds.length > 0 
+      ? tableIds 
+      : (selectedTableIds.length > 0 ? selectedTableIds : []);
+    setTargetAssignTableIds(ids);
+
+    // If single table, prefill currently assigned waiter
+    if (ids.length === 1) {
+      const current = tableAssignments.find(a => a.table_id === ids[0]);
+      const tbl = tables.find(t => t.id === ids[0]);
+      const existingWaiterId = current?.waiter_id || tbl?.assigned_waiter_id;
+      setSelectedWaiterId(existingWaiterId || '');
+    } else {
+      setSelectedWaiterId('');
+    }
+
+    setAssignModalOpen(true);
+  };
+
+  const handleToggleTableInAssignModal = (tableId: string) => {
+    setTargetAssignTableIds(prev =>
+      prev.includes(tableId) ? prev.filter(id => id !== tableId) : [...prev, tableId]
+    );
+  };
+
+  const handleSelectAllTablesInAssignModal = () => {
+    if (targetAssignTableIds.length === tables.length) {
+      setTargetAssignTableIds([]);
+    } else {
+      setTargetAssignTableIds(tables.map(t => t.id));
+    }
+  };
+
+  const handleSaveAssignment = async () => {
+    if (!restaurantId || targetAssignTableIds.length === 0) return;
+    setIsAssigning(true);
+    try {
+      const assignedBy = profile?.full_name || profile?.email || 'Owner/Manager';
+      const chosenStaff = staffList.find(s => s.id === selectedWaiterId);
+
+      for (const tableId of targetAssignTableIds) {
+        if (selectedWaiterId === '__unassign__') {
+          // Unassign table
+          const currentAssignment = tableAssignments.find(a => a.table_id === tableId);
+          if (currentAssignment?.waiter_id) {
+            await db.unassignTable(restaurantId, tableId, currentAssignment.waiter_id);
+          }
+          // Also clear from table_states for immediate sync
+          const rest = await db.getRestaurantById(restaurantId);
+          if (rest) {
+            const tableStates = rest.settings?.table_states || {};
+            await db.updateRestaurant(restaurantId, {
+              settings: {
+                ...rest.settings,
+                table_states: {
+                  ...tableStates,
+                  [tableId]: {
+                    ...(tableStates[tableId] || {}),
+                    assigned_waiter_id: null,
+                    assigned_waiter_name: null
+                  }
+                }
+              }
+            });
+          }
+        } else if (selectedWaiterId) {
+          // Assign to selected waiter
+          await db.assignTableToWaiter(restaurantId, tableId, selectedWaiterId, assignedBy);
+          // Also update table_states for immediate sync
+          const rest = await db.getRestaurantById(restaurantId);
+          if (rest) {
+            const tableStates = rest.settings?.table_states || {};
+            await db.updateRestaurant(restaurantId, {
+              settings: {
+                ...rest.settings,
+                table_states: {
+                  ...tableStates,
+                  [tableId]: {
+                    ...(tableStates[tableId] || {}),
+                    assigned_waiter_id: selectedWaiterId,
+                    assigned_waiter_name: chosenStaff?.full_name || 'Waiter'
+                  }
+                }
+              }
+            });
+          }
+        }
+      }
+
+      db.clearRestaurantCache(restaurantId);
+      await fetchTablesData(restaurantId, true);
+
+      const waiterName = selectedWaiterId === '__unassign__' 
+        ? 'Unassigned' 
+        : (chosenStaff?.full_name || 'Waiter');
+      
+      setAssignSuccessToast(
+        targetAssignTableIds.length === 1
+          ? `Table assigned to ${waiterName} successfully!`
+          : `${targetAssignTableIds.length} tables assigned to ${waiterName} successfully!`
+      );
+      setTimeout(() => setAssignSuccessToast(null), 4000);
+
+      setAssignModalOpen(false);
+      setTargetAssignTableIds([]);
+      setSelectedWaiterId('');
+      setSelectedTableIds([]);
+    } catch (err: any) {
+      console.error('Failed to assign table:', err);
+      alert(err?.message || 'Failed to update table assignment');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   const handleOpenModal = () => {
     setErrorMsg('');
     // Auto-suggest next table name (e.g. "Table 4" if we have 3 tables)
@@ -530,6 +663,22 @@ export default function TablesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Table Assignment Success Notification Toast */}
+      {assignSuccessToast && (
+        <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-200 text-xs sm:text-sm font-bold flex items-center justify-between shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>{assignSuccessToast}</span>
+          </div>
+          <button
+            onClick={() => setAssignSuccessToast(null)}
+            className="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-200 p-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Title Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -537,7 +686,7 @@ export default function TablesPage() {
             Tables & QR Codes
           </h2>
           <p className="text-xs text-slate-500 font-normal mt-0.5">
-            Generate QR codes for tables, merge dining groups, and monitor order flows by location.
+            Generate QR codes for tables, assign waiters, merge dining groups, and monitor order flows by location.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -573,6 +722,17 @@ export default function TablesPage() {
               >
                 <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
                 <span>Print All QR (A4)</span>
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleOpenAssignModal(selectedTableIds.length > 0 ? selectedTableIds : [])}
+                className="border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                title="Assign tables to waiters"
+              >
+                <Users className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
+                <span>{selectedTableIds.length > 0 ? `Assign Waiter (${selectedTableIds.length})` : 'Assign Tables'}</span>
               </Button>
             </>
           )}
@@ -1000,10 +1160,26 @@ export default function TablesPage() {
                           {activeGroupForTable.name}
                         </span>
                       )}
-                      {assignedWaiters.length > 0 && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
-                          {assignedWaiters.map(w => w.waiter_name).join(', ')}
-                        </span>
+                      {assignedWaiters.length > 0 || table.assigned_waiter_name ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignModal([table.id])}
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-all cursor-pointer shadow-2xs"
+                          title="Click to reassign or unassign waiter"
+                        >
+                          <UserCheck className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                          <span>{assignedWaiters[0]?.waiter_name || table.assigned_waiter_name}</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssignModal([table.id])}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-dashed border-slate-300 dark:border-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition-colors cursor-pointer"
+                          title="Assign a waiter to this table"
+                        >
+                          <UserPlus className="h-2.5 w-2.5 text-slate-400" />
+                          <span>Assign</span>
+                        </button>
                       )}
                     </div>
                     <button
@@ -1200,6 +1376,161 @@ export default function TablesPage() {
             </Button>
           </div>
         </form>
+      </Dialog>
+
+      {/* --- Assign Table to Waiter Modal --- */}
+      <Dialog
+        isOpen={assignModalOpen}
+        onClose={() => setAssignModalOpen(false)}
+        title="Assign Waiter to Table"
+      >
+        <div className="space-y-4">
+          {/* Table selection indicator / picker */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                Select Table(s) to Assign ({targetAssignTableIds.length} selected)
+              </label>
+              <button
+                type="button"
+                onClick={handleSelectAllTablesInAssignModal}
+                className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold cursor-pointer"
+              >
+                {targetAssignTableIds.length === tables.length ? 'Deselect All' : 'Select All Tables'}
+              </button>
+            </div>
+            
+            <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
+              {tables.map(t => {
+                const isSelected = targetAssignTableIds.includes(t.id);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => handleToggleTableInAssignModal(t.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                      isSelected
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                    }`}
+                  >
+                    {t.name}
+                  </button>
+                );
+              })}
+            </div>
+            {targetAssignTableIds.length === 0 && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                * Please select at least one table above.
+              </p>
+            )}
+          </div>
+
+          {/* Waiter / Staff Selection */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase tracking-wider">
+              Select Waiter / Staff Member
+            </label>
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {/* Option 1: Unassign */}
+              <label
+                className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                  selectedWaiterId === '__unassign__'
+                    ? 'border-rose-400 bg-rose-50/70 dark:bg-rose-950/40 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="waiter_choice"
+                    value="__unassign__"
+                    checked={selectedWaiterId === '__unassign__'}
+                    onChange={() => setSelectedWaiterId('__unassign__')}
+                    className="h-4 w-4 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">
+                      Unassigned (Remove Waiter)
+                    </span>
+                    <p className="text-[11px] text-slate-400">Clear any currently assigned waiter from selected table(s)</p>
+                  </div>
+                </div>
+              </label>
+
+              {/* Staff members list */}
+              {assignableStaff.length === 0 ? (
+                <div className="p-4 text-center text-xs text-slate-400 border border-dashed rounded-xl">
+                  No active staff found. Add waiters in Staff Management.
+                </div>
+              ) : (
+                assignableStaff.map((staff) => {
+                  const isChecked = selectedWaiterId === staff.id;
+                  const isWaiterRole = staff.role === 'waiter' || staff.department === 'waiter';
+                  return (
+                    <label
+                      key={staff.id}
+                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                        isChecked
+                          ? 'border-blue-500 bg-blue-50/80 dark:bg-blue-950/50 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="waiter_choice"
+                          value={staff.id}
+                          checked={isChecked}
+                          onChange={() => setSelectedWaiterId(staff.id)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm text-slate-900 dark:text-white">
+                              {staff.full_name || staff.email}
+                            </span>
+                            {isWaiterRole ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                Waiter
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                {staff.role || 'Staff'}
+                              </span>
+                            )}
+                          </div>
+                          {staff.phone && (
+                            <p className="text-xs text-slate-400 font-mono mt-0.5">{staff.phone}</p>
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setAssignModalOpen(false)}
+              disabled={isAssigning}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveAssignment}
+              disabled={!selectedWaiterId || targetAssignTableIds.length === 0 || isAssigning}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer"
+            >
+              {isAssigning ? 'Saving Assignment...' : 'Confirm Assignment'}
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   );
