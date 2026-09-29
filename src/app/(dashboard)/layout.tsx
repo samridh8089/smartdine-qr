@@ -59,17 +59,17 @@ const ALLOWED_PATHS: Record<string, string[]> = {
 };
 
 const ALL_MENU_ITEMS = [
-  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
-  { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
-  { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'] },
-  { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
-  { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
   { name: 'Tables & QRs', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
   { name: 'Kitchen Display', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'kitchen'] },
-  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
-  { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
-  { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
+  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
+  { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
+  { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
   { name: 'Staff Management', href: '/dashboard/staff', icon: Users, roles: ['owner', 'manager'] },
+  { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
+  { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'] },
+  { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
 ];
 
