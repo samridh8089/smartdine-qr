@@ -14,12 +14,14 @@ import { formatPrice } from '@/lib/utils';
 import { 
   Settings, Users, History, Download, Upload, 
   Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard, Volume2, Copy, RefreshCw,
-  Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil, QrCode
+  Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil, QrCode,
+  Bell, BellOff
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { getActiveDevices, removeTrustedDevice, logoutAllDevices } from '@/lib/sessionManager';
 import { QRDesignStudio } from '@/components/qr-studio/QRDesignStudio';
+import { setGlobalMute } from '@/lib/soundAlert';
 
 export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' } = {}) {
   const { restaurant, profile, planSpec, refresh } = useRestaurant();
@@ -51,6 +53,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [devicesLoading, setDevicesLoading] = useState(false);
 
   // Bell/Notification Sound settings state
+  const [ownerBellEnabled, setOwnerBellEnabled] = useState<boolean>(restaurant?.settings?.owner_bell_enabled !== false);
   const [kitchenBellType, setKitchenBellType] = useState<string>(restaurant?.settings?.kitchen_bell_type || 'alarm');
   const [waiterBellType, setWaiterBellType] = useState<string>(restaurant?.settings?.waiter_bell_type || 'alarm');
   const [kitchenBellUrl, setKitchenBellUrl] = useState<string>(restaurant?.settings?.kitchen_bell_url || '');
@@ -145,6 +148,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       setUpiName(restaurant.settings?.upi_name || '');
       setPaymentQr(restaurant.settings?.payment_qr || '');
       setTakeawayEnabled(restaurant.settings?.takeaway_enabled === true);
+      setOwnerBellEnabled(restaurant.settings?.owner_bell_enabled !== false);
       setKitchenBellType(restaurant.settings?.kitchen_bell_type || 'alarm');
       setWaiterBellType(restaurant.settings?.waiter_bell_type || 'alarm');
       setKitchenBellUrl(restaurant.settings?.kitchen_bell_url || '');
@@ -362,12 +366,18 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       await db.updateRestaurant(restaurant.id, {
         settings: {
           ...restaurant.settings,
+          owner_bell_enabled: ownerBellEnabled,
           kitchen_bell_type: kitchenBellType,
           waiter_bell_type: waiterBellType,
           kitchen_bell_url: kitchenBellUrl,
           waiter_bell_url: waiterBellUrl
         }
       });
+
+      setGlobalMute(!ownerBellEnabled);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cleverops_bell_muted', ownerBellEnabled ? 'false' : 'true');
+      }
 
       await db.createAuditLog(
         restaurant.id,
@@ -2023,6 +2033,35 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                         // trigger a re-render by updating an arbitrary state or just let the dom handle checkbox
                         setUploadingKitchen(prev => !prev);
                         setTimeout(() => setUploadingKitchen(prev => !prev), 10);
+                      }}
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-500/20 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-500"></div>
+                  </label>
+                </div>
+
+                {/* Owner Bell Notification Toggle */}
+                <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${ownerBellEnabled ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400' : 'bg-rose-100 text-rose-600 dark:bg-rose-900/50 dark:text-rose-400'}`}>
+                      {ownerBellEnabled ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Owner Bell Alerts (Sound & Push)</span>
+                      <span className="text-xs text-slate-400 mt-1 block">Toggle on/off live audio chimes and mobile push rings for owner login.</span>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={ownerBellEnabled}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setOwnerBellEnabled(checked);
+                        setGlobalMute(!checked);
+                        if (typeof window !== 'undefined') {
+                          localStorage.setItem('cleverops_bell_muted', checked ? 'false' : 'true');
+                        }
                       }}
                     />
                     <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-500/20 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-500"></div>
