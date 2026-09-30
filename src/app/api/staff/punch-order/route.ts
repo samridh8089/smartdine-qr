@@ -381,19 +381,23 @@ export async function POST(req: Request) {
       : 'Dine-in';
     const tableName = createdOrder.table_name || (tableId ? `Table` : 'Takeaway Counter');
 
-    void dispatchFCMNotification(
-      restaurantId,
-      pushTitle,
-      `${tableName} • ${orderTypeLabel} • Total: ₹${createdOrder.total}`,
-      ['kitchen', 'waiter', 'owner', 'manager'],
-      {
-        orderId: createdOrder.id,
-        tableId: tableId || null,
-        orderType,
-        notificationType: 'NEW_ORDER'
-      },
-      tableId || undefined
-    ).catch(pushErr => console.warn('[PunchOrder] Push dispatch error:', pushErr));
+    try {
+      await dispatchFCMNotification(
+        restaurantId,
+        pushTitle,
+        `${tableName} • ${orderTypeLabel} • Total: ₹${createdOrder.total}`,
+        ['kitchen', 'waiter', 'owner', 'manager'],
+        {
+          orderId: createdOrder.id,
+          tableId: tableId || null,
+          orderType,
+          notificationType: 'NEW_ORDER'
+        },
+        tableId || undefined
+      );
+    } catch (pushErr) {
+      console.warn('[PunchOrder] Push dispatch error:', pushErr);
+    }
 
     // P1-07: Table Status Sync — automatically occupy table on dine-in punch order
     const isDiningPunchOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';

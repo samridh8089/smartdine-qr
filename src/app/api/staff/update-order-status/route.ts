@@ -426,19 +426,23 @@ export async function POST(req: Request) {
           // Dispatch Cloud Push Notification to Waiters and Managers
           const readyTableName = updatedOrder?.table_name || 'N/A';
           const orderShortCode = (targetOrderId || '').slice(-4).toUpperCase();
-          void dispatchFCMNotification(
-            restId,
-            'FOOD READY TO SERVE!',
-            `Table ${readyTableName} - Order #${orderShortCode} is ready!`,
-            ['waiter', 'owner', 'manager'],
-            {
-              orderId: targetOrderId,
-              tableId: updatedOrder?.table_id || null,
-              batchId,
-              notificationType: 'FOOD_READY'
-            },
-            updatedOrder?.table_id || undefined
-          ).catch(pushErr => console.warn('[UpdateOrderStatus] Push dispatch error:', pushErr));
+          try {
+            await dispatchFCMNotification(
+              restId,
+              'FOOD READY TO SERVE!',
+              `Table ${readyTableName} - Order #${orderShortCode} is ready!`,
+              ['waiter', 'owner', 'manager'],
+              {
+                orderId: targetOrderId,
+                tableId: updatedOrder?.table_id || null,
+                batchId,
+                notificationType: 'FOOD_READY'
+              },
+              updatedOrder?.table_id || undefined
+            );
+          } catch (pushErr) {
+            console.warn('[UpdateOrderStatus] Push dispatch error:', pushErr);
+          }
         }
 
         // After served → billing initiated

@@ -10,17 +10,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'restaurantId and title are required' }, { status: 400 });
     }
 
-    // Server-side async dispatch to Expo and FCM
-    void dispatchFCMNotification(
+    // Await dispatch so Vercel Serverless does not freeze before HTTP request completes
+    await dispatchFCMNotification(
       restaurantId,
       title,
       body || '',
       roles,
       extraData,
       tableId
-    ).catch(err => console.error('[send-native route] Dispatch error:', err));
+    );
 
-    return NextResponse.json({ success: true, queued: true });
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('[send-native route] Error:', err);
     return NextResponse.json({ error: err?.message || 'Server error' }, { status: 500 });
