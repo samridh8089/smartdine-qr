@@ -3963,6 +3963,20 @@ export const db = {
       .limit(1);
 
     if (existingReqs && existingReqs.length > 0) {
+      // Re-dispatch notification so staff phone rings even if request is already pending
+      const reqTitle = type === 'call_waiter' ? 'WAITER CALL ALERT!' : 'BILL REQUEST ALERT!';
+      try {
+        await dispatchFCMNotification(
+          restaurantId,
+          reqTitle,
+          `Table ${table.name} requested ${type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
+          ['waiter', 'kitchen', 'owner', 'manager'],
+          { requestId: existingReqs[0].id, tableId, type, notificationType: 'CUSTOMER_CALL' },
+          tableId
+        );
+      } catch (e) {
+        console.warn('[db.createCustomerRequest] Repeat push warning:', e);
+      }
       return existingReqs[0] as CustomerRequest;
     }
 
@@ -4019,14 +4033,18 @@ export const db = {
 
     // Dispatch FCM Push Notification to Waiters, Kitchen, Managers & Owners
     const reqTitle = type === 'call_waiter' ? 'WAITER CALL ALERT!' : 'BILL REQUEST ALERT!';
-    dispatchFCMNotification(
-      restaurantId,
-      reqTitle,
-      `Table ${table.name} requested ${type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
-      ['waiter', 'kitchen', 'owner', 'manager'],
-      { requestId: createdReq.id, tableId, type, notificationType: 'CUSTOMER_CALL' },
-      tableId
-    );
+    try {
+      await dispatchFCMNotification(
+        restaurantId,
+        reqTitle,
+        `Table ${table.name} requested ${type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
+        ['waiter', 'kitchen', 'owner', 'manager'],
+        { requestId: createdReq.id, tableId, type, notificationType: 'CUSTOMER_CALL' },
+        tableId
+      );
+    } catch (pushErr) {
+      console.warn('[db.createCustomerRequest] Push error:', pushErr);
+    }
 
     return createdReq;
   },
