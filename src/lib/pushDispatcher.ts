@@ -92,33 +92,39 @@ export async function dispatchFCMNotification(
       return;
     }
 
-    // 5. Scoped filtering for table assignments (waiters only)
+    // 5. Scoped filtering for table assignments & Owner bell mute preference
     let targetProfiles = staffProfiles;
-    if (tableId) {
-      try {
-        const { data: restData } = await supabase
-          .from('restaurants')
-          .select('settings')
-          .eq('id', restaurantId)
-          .maybeSingle();
+    try {
+      const { data: restData } = await supabase
+        .from('restaurants')
+        .select('settings')
+        .eq('id', restaurantId)
+        .maybeSingle();
 
+      const ownerBellEnabled = restData?.settings?.owner_bell_enabled !== false;
+      if (!ownerBellEnabled) {
+        // Owner has muted bells / order alerts, exclude owner from push notifications
+        targetProfiles = targetProfiles.filter(p => (p.role || '').toLowerCase().trim() !== 'owner');
+      }
+
+      if (tableId) {
         const assignments: any[] = restData?.settings?.table_assignments || [];
         const activeAssignedWaiters = assignments
           .filter(a => a.active !== false && a.table_id === tableId)
           .map(a => a.waiter_id);
 
         if (activeAssignedWaiters.length > 0) {
-          targetProfiles = staffProfiles.filter(p => {
+          targetProfiles = targetProfiles.filter(p => {
             const normRole = (p.role || '').toLowerCase().trim();
             if (normRole === 'waiter') {
               return activeAssignedWaiters.includes(p.id);
             }
-            return true; // kitchen, owners, managers always receive notification
+            return true; // kitchen, managers always receive notification
           });
         }
-      } catch (scopeErr) {
-        console.warn('[PushDispatcher] Table scoping warning:', scopeErr);
       }
+    } catch (scopeErr) {
+      console.warn('[PushDispatcher] Scoping warning:', scopeErr);
     }
 
     const expoMessages: any[] = [];

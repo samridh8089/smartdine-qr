@@ -14,7 +14,7 @@ import {
   ChefHat, Clock, Check, ArrowRight, Play, CheckCircle2, 
   X, AlertCircle, Volume2, Sparkles, Bell, ShoppingBag, Search, FileText
 } from 'lucide-react';
-import { playLoudBell, unlockAudio, stopLoudBell } from '@/lib/soundAlert';
+import { playLoudBell, unlockAudio, stopLoudBell, isGloballyMuted, setGlobalMute } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { dashboardStore } from '@/lib/dashboardStore';
 
@@ -174,6 +174,7 @@ export default function KitchenDisplayPage() {
   const pendingReloadRef = useRef(false);
   const alertedOrderIds = useRef<Set<string>>(new Set());
   const alertedBatchIds = useRef<Set<string>>(new Set());
+  const soundEnabledRef = useRef<boolean>(!alarmMuted && !isGloballyMuted());
   const reloadFnRef = useRef<(restId: string) => Promise<void>>(async () => {});
 
   // ─── 3. useMemo Declarations ──────────────────────────────────────────
@@ -243,9 +244,17 @@ export default function KitchenDisplayPage() {
   );
 
   // sound toggle mapped to global layout alarm state
-  const soundEnabled = !alarmMuted;
+  const soundEnabled = !alarmMuted && !isGloballyMuted();
   const setSoundEnabled = (enabled: boolean) => {
     setAlarmMuted(!enabled);
+    setGlobalMute(!enabled);
+    soundEnabledRef.current = enabled;
+    if (!enabled) {
+      stopLoudBell();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('stop-kitchen-sound'));
+      }
+    }
   };
 
   const showDesktopNotification = (title: string, body: string, url = '/dashboard/kds') => {
@@ -581,6 +590,9 @@ export default function KitchenDisplayPage() {
   };
 
   // ─── 4. useEffect Declarations ─────────────────────────────────────────
+  useEffect(() => {
+    soundEnabledRef.current = !alarmMuted && !isGloballyMuted();
+  }, [alarmMuted]);
 
   // Update timer every second for real-time kitchen SLA countdown/stopwatch
   useEffect(() => {
@@ -712,7 +724,7 @@ export default function KitchenDisplayPage() {
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
                 setNewOrderAlert(fullOrder);
-                if (soundEnabled) {
+                if (soundEnabledRef.current && !isGloballyMuted()) {
                   playLoudBell('kitchen');
                 }
                 showDesktopNotification('NEW ORDER RECEIVED!', `New order on ${fullOrder.table_name || 'Table X'}`);
@@ -765,7 +777,7 @@ export default function KitchenDisplayPage() {
               console.log(`New batch detected! Playing alarm for batch ID: ${newBatch.id}`);
 
               setNewOrderAlert(fullOrder);
-              if (soundEnabled) {
+              if (soundEnabledRef.current && !isGloballyMuted()) {
                 playLoudBell('kitchen');
               }
               showDesktopNotification('NEW ITEMS ADDED!', `New items added for ${fullOrder.table_name || 'Table X'}`);

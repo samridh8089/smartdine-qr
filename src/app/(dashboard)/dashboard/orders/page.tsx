@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Search, Printer, Check, X, AlertCircle, ShoppingBag, Bell, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus, User, Smartphone, Split, Share2, Download, Scissors } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
-import { playLoudBell, unlockAudio } from '@/lib/soundAlert';
+import { playLoudBell, unlockAudio, stopLoudBell, isGloballyMuted } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { dashboardStore } from '@/lib/dashboardStore';
@@ -198,7 +198,7 @@ export default function OrdersPage() {
   const searchParams = useSearchParams();
   const orderIdParam = searchParams.get('id');
 
-  const { restaurant, profile, activeRole } = useRestaurant();
+  const { restaurant, profile, activeRole, alarmMuted } = useRestaurant();
   const restId = restaurant?.id || profile?.restaurant_id;
   const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
   const [orders, setOrders] = useState<Order[]>(() => initialCachedOrders || []);
@@ -388,6 +388,10 @@ export default function OrdersPage() {
 
 
   const alertedReqIds = useRef<Set<string>>(new Set());
+  const alarmMutedRef = useRef(alarmMuted);
+  useEffect(() => {
+    alarmMutedRef.current = alarmMuted;
+  }, [alarmMuted]);
 
   // Unlock audio on user click/tap & Register Web Push for Waiter
   useEffect(() => {
@@ -508,7 +512,9 @@ export default function OrdersPage() {
       // 30 min reminder
       if (diffMins <= 30 && diffMins > 15 && !stages.has('30m')) {
         stages.add('30m');
-        playLoudBell('waiter');
+        if (!alarmMutedRef.current && !isGloballyMuted()) {
+          playLoudBell('waiter');
+        }
         showToast(
           `Reservation Reminder: ${parsed.name || 'Guest'} party of ${parsed.guests} arrives in ~${diffMins} mins (${parsed.time})`,
           '30m Reminder',
@@ -519,7 +525,9 @@ export default function OrdersPage() {
       // 15 min reserve table alert
       if (diffMins <= 15 && diffMins >= -15 && !stages.has('15m')) {
         stages.add('15m');
-        playLoudBell('waiter');
+        if (!alarmMutedRef.current && !isGloballyMuted()) {
+          playLoudBell('waiter');
+        }
         showToast(
           `Table Reserved: ${parsed.name || 'Guest'} due in 15 mins (${parsed.time}). Table ready for seating.`,
           '15m Reserve Table Alert',
@@ -682,7 +690,9 @@ export default function OrdersPage() {
           const newOrderPayload = payload.payload?.new || payload.payload?.updatedOrder;
           if (newOrderPayload && !alertedOrderIds.current.has(newOrderPayload.id)) {
             alertedOrderIds.current.add(newOrderPayload.id);
-            playLoudBell('waiter');
+            if (!alarmMutedRef.current && !isGloballyMuted()) {
+              playLoudBell('waiter');
+            }
             setToast({ message: `New Order Received - ${newOrderPayload.table_name || 'Table'}`, visible: true });
             setTimeout(() => {
               setToast(prev => prev && prev.message.includes(newOrderPayload.table_name || 'Table') ? { ...prev, visible: false } : prev);
@@ -762,7 +772,9 @@ export default function OrdersPage() {
               // Fetch full order with items and display toast banner
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
-                playLoudBell('waiter');
+                if (!alarmMutedRef.current && !isGloballyMuted()) {
+                  playLoudBell('waiter');
+                }
                 showDesktopNotification(fullOrder);
                 setToast({ message: `New Order Received - ${fullOrder.table_name || 'Table X'}`, visible: true });
                 
@@ -790,7 +802,9 @@ export default function OrdersPage() {
             const req = payload.new as CustomerRequest;
             if (req && !alertedReqIds.current.has(req.id)) {
               alertedReqIds.current.add(req.id);
-              playLoudBell('waiter');
+              if (!alarmMutedRef.current && !isGloballyMuted()) {
+                playLoudBell('waiter');
+              }
               setToast({
                 message: `${req.table_name || 'Table'} requested ${req.type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
                 visible: true

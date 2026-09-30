@@ -16,8 +16,10 @@ import {
   UtensilsCrossed, LayoutDashboard, Menu as MenuIcon, 
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
   LogOut, MenuSquare, X, ChevronRight, User, Settings,
-  ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users
+  ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users,
+  Bell, BellOff
 } from 'lucide-react';
+import { setGlobalMute, stopLoudBell, isGloballyMuted } from '@/lib/soundAlert';
 
 // Central Route to Entitlement Feature Key Mapping
 const ROUTE_FEATURE_KEYS: Record<string, { key: string; name: string; desc: string }> = {
@@ -80,7 +82,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [alarmMuted, setAlarmMuted] = useState(false);
+  const [alarmMuted, setAlarmMuted] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('cleverops_bell_muted');
+        if (stored !== null) return stored === 'true';
+      } catch (_) {}
+    }
+    return false;
+  });
   // Phase-19: Founder Control Center easter egg (5-tap logo)
   const [logoTapCount, setLogoTapCount] = useState(0);
   const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -183,6 +193,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [router]);
+
+  useEffect(() => {
+    setGlobalMute(alarmMuted);
+  }, [alarmMuted]);
 
   // Realtime Supabase Subscription for Restaurant License/Plan updates
   useEffect(() => {
@@ -469,6 +483,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push('/super-admin');
   };
 
+  const handleToggleBellMute = async () => {
+    const nextMuted = !alarmMuted;
+    setAlarmMuted(nextMuted);
+    setGlobalMute(nextMuted);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cleverops_bell_muted', nextMuted ? 'true' : 'false');
+      } catch (_) {}
+    }
+    if (nextMuted) {
+      stopLoudBell();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('stop-kitchen-sound'));
+        window.dispatchEvent(new Event('stop-waiter-sound'));
+      }
+    }
+
+    // If current user is Owner, persist in restaurant.settings.owner_bell_enabled
+    if (restaurant?.id && (dbRole === 'owner' || activeRole === 'owner')) {
+      try {
+        const newSettings = {
+          ...(restaurant.settings || {}),
+          owner_bell_enabled: !nextMuted
+        };
+        await supabase.from('restaurants').update({ settings: newSettings }).eq('id', restaurant.id);
+        setRestaurant(prev => prev ? { ...prev, settings: newSettings } : prev);
+      } catch (err) {
+        console.warn('[Layout] Failed to persist owner_bell_enabled:', err);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -745,7 +791,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* 🔔 Owner & Staff Bell Alert Toggle Button */}
+                <button
+                  type="button"
+                  onClick={handleToggleBellMute}
+                  className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-sm ${
+                    alarmMuted
+                      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100 hover:border-rose-400'
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 hover:border-emerald-400'
+                  }`}
+                  title={alarmMuted ? 'Sound alerts are MUTED. Click to turn ON.' : 'Sound alerts are ACTIVE. Click to MUTE.'}
+                  aria-label="Toggle bell sound alerts"
+                >
+                  {alarmMuted ? (
+                    <>
+                      <BellOff className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                      <span className="hidden sm:inline">Bell: OFF</span>
+                      <span className="sm:hidden">Muted</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 animate-bounce" />
+                      <span className="hidden sm:inline">Bell: ON</span>
+                      <span className="sm:hidden">ON</span>
+                    </>
+                  )}
+                </button>
+
                 {restaurant?.subscription_plan && (
                   <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">
                     {planSpec.name} Plan
