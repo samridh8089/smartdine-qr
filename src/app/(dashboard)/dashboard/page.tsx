@@ -13,13 +13,13 @@ import {
   DollarSign, ClipboardList, Users, TrendingUp, 
   ArrowRight, Clock, CheckCircle2, AlertCircle, ShoppingBag,
   ChefHat, MenuSquare, Boxes, QrCode, BarChart3, CreditCard, Settings,
-  Megaphone, X
+  Megaphone, X, Bell, BellOff
 } from 'lucide-react';
-
 
 import { calculateBillingTotals, isRevenueOrder, getOrderRevenueAmount, calculateOrdersRevenue } from '@/lib/billingEngine';
 import { useRestaurant } from '../layout';
 import { dashboardStore } from '@/lib/dashboardStore';
+import { setGlobalMute, stopLoudBell } from '@/lib/soundAlert';
 
 interface OverviewStats {
   totalOrders: number;
@@ -30,7 +30,7 @@ interface OverviewStats {
 }
 
 export default function DashboardPage() {
-  const { restaurant: contextRestaurant, profile: contextProfile } = useRestaurant();
+  const { restaurant: contextRestaurant, profile: contextProfile, alarmMuted, setAlarmMuted } = useRestaurant();
   const restId = contextRestaurant?.id || contextProfile?.restaurant_id;
   const initialCachedOverview = restId ? dashboardStore.getCachedOverview(restId) : null;
   const cachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
@@ -450,6 +450,37 @@ export default function DashboardPage() {
     }
   };
 
+  const handleToggleBell = async () => {
+    const nextMuted = !alarmMuted;
+    setAlarmMuted(nextMuted);
+    setGlobalMute(nextMuted);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('cleverops_bell_muted', nextMuted ? 'true' : 'false');
+      } catch (_) {}
+    }
+    if (nextMuted) {
+      stopLoudBell();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('stop-kitchen-sound'));
+        window.dispatchEvent(new Event('stop-waiter-sound'));
+      }
+    }
+
+    if (restId) {
+      try {
+        const newSettings = {
+          ...(contextRestaurant?.settings || {}),
+          owner_bell_enabled: !nextMuted
+        };
+        await supabase.from('restaurants').update({ settings: newSettings }).eq('id', restId);
+        setRestaurant((prev: any) => prev ? { ...prev, settings: newSettings } : prev);
+      } catch (err) {
+        console.warn('[DashboardPage] Failed to persist owner_bell_enabled:', err);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -475,8 +506,34 @@ export default function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Overview Dashboard</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Here is a snapshot of your restaurant today.</p>
         </div>
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs md:text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm shrink-0">
-          {new Date().toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
+          {/* 🔔 Owner Bell Mute/Unmute Toggle Button */}
+          <button
+            type="button"
+            onClick={handleToggleBell}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold border transition-all cursor-pointer shadow-sm ${
+              alarmMuted
+                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100 hover:border-rose-400'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 hover:border-emerald-400'
+            }`}
+            title={alarmMuted ? 'Owner Bell alerts are MUTED. Click to turn ON.' : 'Owner Bell alerts are ACTIVE. Click to MUTE.'}
+          >
+            {alarmMuted ? (
+              <>
+                <BellOff className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                <span>Bell: OFF (Muted)</span>
+              </>
+            ) : (
+              <>
+                <Bell className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 animate-bounce" />
+                <span>Bell: ON (Active)</span>
+              </>
+            )}
+          </button>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs md:text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm shrink-0">
+            {new Date().toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+          </div>
         </div>
       </div>
 
