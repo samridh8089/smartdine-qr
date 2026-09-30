@@ -64,17 +64,21 @@ export async function dispatchFCMNotification(
       metadata: { title, roles: targetRoles, requestId: extraData?.requestId || null },
     }).catch(() => {});
 
-    // 4. Query Staff Profiles with push tokens (CRITICAL: DO NOT select 'department', column does not exist)
     const expandedRoles = new Set<string>();
     targetRoles.forEach(r => {
       const norm = (r || '').toLowerCase().trim();
       expandedRoles.add(norm);
+      expandedRoles.add(norm.charAt(0).toUpperCase() + norm.slice(1));
+      expandedRoles.add(norm.toUpperCase());
       if (norm === 'kitchen') {
         expandedRoles.add('kds');
+        expandedRoles.add('KDS');
         expandedRoles.add('kitchen_staff');
+        expandedRoles.add('Kitchen_Staff');
       }
     });
     expandedRoles.add('supervisor');
+    expandedRoles.add('Supervisor');
 
     const { data: staffProfiles, error: profileErr } = await supabase
       .from('profiles')
