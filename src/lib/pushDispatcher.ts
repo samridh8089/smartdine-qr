@@ -185,7 +185,7 @@ export async function dispatchFCMNotification(
 
     // 6. Dispatch Expo Push
     if (expoMessages.length > 0) {
-      await fetch('https://exp.host/--/api/v2/push/send', {
+      const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -193,8 +193,14 @@ export async function dispatchFCMNotification(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(expoMessages),
-      }).catch(e => console.warn('[PushDispatcher] Expo push dispatch notice:', e));
-      console.log(`[PushDispatcher] Dispatched "${title}" to ${expoMessages.length} Expo staff device(s).`);
+      }).catch(e => {
+        console.warn('[PushDispatcher] Expo push dispatch notice:', e);
+        return null;
+      });
+      if (expoRes) {
+        const expoJson = await expoRes.json().catch(() => null);
+        console.log(`[PushDispatcher] Dispatched "${title}" to ${expoMessages.length} Expo staff device(s). Status: ${expoRes.status}`, JSON.stringify(expoJson));
+      }
     }
 
     // 7. Dispatch Native FCM
