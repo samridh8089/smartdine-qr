@@ -7,6 +7,7 @@ import { handleApiError } from '@/lib/errors';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { logSystemEvent, getOrderCorrelationId, type SystemEventType } from '@/lib/systemEventLogger';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
+import { dispatchFCMNotification } from '@/lib/pushDispatcher';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -421,6 +422,23 @@ export async function POST(req: Request) {
             targetNode: 'waiter_assigned',
             metadata: { staffName, autoAssigned: true },
           }).catch(() => {});
+
+          // Dispatch Cloud Push Notification to Waiters and Managers
+          const readyTableName = updatedOrder?.table_name || 'N/A';
+          const orderShortCode = (targetOrderId || '').slice(-4).toUpperCase();
+          void dispatchFCMNotification(
+            restId,
+            'FOOD READY TO SERVE!',
+            `Table ${readyTableName} - Order #${orderShortCode} is ready!`,
+            ['waiter', 'owner', 'manager'],
+            {
+              orderId: targetOrderId,
+              tableId: updatedOrder?.table_id || null,
+              batchId,
+              notificationType: 'FOOD_READY'
+            },
+            updatedOrder?.table_id || undefined
+          ).catch(pushErr => console.warn('[UpdateOrderStatus] Push dispatch error:', pushErr));
         }
 
         // After served → billing initiated

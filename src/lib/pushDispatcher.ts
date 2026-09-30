@@ -1,0 +1,239 @@
+import { supabase } from './supabase';
+import { logSystemEvent, getOrderCorrelationId } from './systemEventLogger';
+
+export async function dispatchFCMNotification(
+  restaurantId: string,
+  title: string,
+  body: string,
+  roles?: string[],
+  extraData?: Record<string, any>,
+  tableId?: string
+) {
+  try {
+    const targetRoles = roles || ['kitchen', 'waiter', 'owner', 'manager'];
+
+    // 1. Client-Side Browser Fallback: proxy to Next.js API endpoint to bypass CORS
+    if (typeof window !== 'undefined') {
+      try {
+        await fetch('/api/push/send-native', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            restaurantId,
+            title,
+            body,
+            roles: targetRoles,
+            extraData,
+            tableId
+          })
+        });
+      } catch (clientErr) {
+        console.warn('[pushDispatcher] Client proxy notice:', clientErr);
+      }
+      return;
+    }
+
+    // 2. Dispatch Web Push for backgrounded Web Browser tabs
+    try {
+      const { sendWebPushToRestaurant } = await import('./webPush');
+      sendWebPushToRestaurant(restaurantId, targetRoles, {
+        title,
+        body,
+        url: targetRoles.includes('kitchen') ? '/dashboard/kds' : '/dashboard/orders',
+        eventId: extraData?.orderId || extraData?.requestId || extraData?.batchId || `evt-${Date.now()}`,
+        restaurantId,
+        tableId,
+        timestamp: Date.now(),
+        ...(extraData || {})
+      }).catch(() => {});
+    } catch (_) {}
+
+    // 3. Emit system audit log
+    const pushOrderId = extraData?.orderId || null;
+    const pushCorrId = pushOrderId
+      ? getOrderCorrelationId(pushOrderId)
+      : `corr_PUSH_${Date.now()}`;
+    logSystemEvent({
+      restaurantId,
+      correlationId: pushCorrId,
+      orderId: pushOrderId,
+      actorType: 'system',
+      eventType: 'push_sent',
+      sourceNode: 'kitchen_queue',
+      targetNode: 'push_notifications',
+      metadata: { title, roles: targetRoles, requestId: extraData?.requestId || null },
+    }).catch(() => {});
+
+    // 4. Query Staff Profiles with push tokens (CRITICAL: DO NOT select 'department', column does not exist)
+    const expandedRoles = new Set<string>();
+    targetRoles.forEach(r => {
+      const norm = (r || '').toLowerCase().trim();
+      expandedRoles.add(norm);
+      if (norm === 'kitchen') {
+        expandedRoles.add('kds');
+        expandedRoles.add('kitchen_staff');
+      }
+    });
+    expandedRoles.add('supervisor');
+
+    const { data: staffProfiles, error: profileErr } = await supabase
+      .from('profiles')
+      .select('id, push_token, role')
+      .eq('restaurant_id', restaurantId)
+      .not('push_token', 'is', null)
+      .in('role', Array.from(expandedRoles));
+
+    if (profileErr || !staffProfiles || staffProfiles.length === 0) {
+      console.log(`[PushDispatcher] Backend token lookup: 0 matching profiles for restaurant ${restaurantId}`);
+      return;
+    }
+
+    // 5. Scoped filtering for table assignments (waiters only)
+    let targetProfiles = staffProfiles;
+    if (tableId) {
+      try {
+        const { data: restData } = await supabase
+          .from('restaurants')
+          .select('settings')
+          .eq('id', restaurantId)
+          .maybeSingle();
+
+        const assignments: any[] = restData?.settings?.table_assignments || [];
+        const activeAssignedWaiters = assignments
+          .filter(a => a.active !== false && a.table_id === tableId)
+          .map(a => a.waiter_id);
+
+        if (activeAssignedWaiters.length > 0) {
+          targetProfiles = staffProfiles.filter(p => {
+            const normRole = (p.role || '').toLowerCase().trim();
+            if (normRole === 'waiter') {
+              return activeAssignedWaiters.includes(p.id);
+            }
+            return true; // kitchen, owners, managers always receive notification
+          });
+        }
+      } catch (scopeErr) {
+        console.warn('[PushDispatcher] Table scoping warning:', scopeErr);
+      }
+    }
+
+    const expoMessages: any[] = [];
+    const nativeFcmMessages: any[] = [];
+
+    targetProfiles.forEach(p => {
+      if (!p.push_token || p.push_token.startsWith('{')) return;
+
+      const normRole = (p.role || '').toLowerCase().trim();
+      const roleChannel = (normRole === 'kitchen' || normRole === 'kds' || normRole === 'kitchen_staff')
+        ? 'smartdine_kitchen'
+        : normRole === 'waiter'
+        ? 'smartdine_waiter'
+        : normRole === 'owner' || normRole === 'manager'
+        ? 'smartdine_owner'
+        : 'smartdine_kitchen';
+
+      let notifType = 'NEW_ORDER';
+      if (extraData?.notificationType) {
+        notifType = extraData.notificationType;
+      } else if (
+        extraData?.type === 'call_waiter' ||
+        extraData?.type === 'request_bill' ||
+        title.toLowerCase().includes('waiter') ||
+        title.toLowerCase().includes('bill')
+      ) {
+        notifType = 'CUSTOMER_CALL';
+      } else if (title.toLowerCase().includes('ready')) {
+        notifType = 'FOOD_READY';
+      } else if (title.toLowerCase().includes('renewal') || title.toLowerCase().includes('subscription')) {
+        notifType = 'SUBSCRIPTION_RENEWAL';
+      }
+
+      const payloadData = {
+        notificationType: notifType,
+        restaurantId,
+        role: p.role,
+        tableId: tableId || null,
+        timestamp: Date.now(),
+        channelId: roleChannel,
+        sound: 'order_tune',
+        ...(extraData || {})
+      };
+
+      if (p.push_token.startsWith('ExponentPushToken[')) {
+        expoMessages.push({
+          to: p.push_token,
+          sound: 'order_tune',
+          priority: 'high',
+          channelId: roleChannel,
+          color: '#059669',
+          title,
+          body,
+          data: payloadData,
+          badge: 1,
+          _displayInForeground: true,
+        });
+      } else {
+        nativeFcmMessages.push({
+          token: p.push_token,
+          channelId: roleChannel,
+          title,
+          body,
+          data: payloadData
+        });
+      }
+    });
+
+    // 6. Dispatch Expo Push
+    if (expoMessages.length > 0) {
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expoMessages),
+      }).catch(e => console.warn('[PushDispatcher] Expo push dispatch notice:', e));
+      console.log(`[PushDispatcher] Dispatched "${title}" to ${expoMessages.length} Expo staff device(s).`);
+    }
+
+    // 7. Dispatch Native FCM
+    if (nativeFcmMessages.length > 0) {
+      try {
+        const { getFirebaseMessaging } = await import('./firebase-admin');
+        const messaging = getFirebaseMessaging();
+        for (const msg of nativeFcmMessages) {
+          try {
+            await messaging.send({
+              token: msg.token,
+              notification: {
+                title: msg.title,
+                body: msg.body
+              },
+              android: {
+                priority: 'high',
+                notification: {
+                  channelId: msg.channelId,
+                  sound: 'order_tune',
+                  priority: 'high',
+                  defaultSound: false,
+                  visibility: 'public'
+                }
+              },
+              data: Object.fromEntries(
+                Object.entries(msg.data).map(([k, v]) => [k, String(v ?? '')])
+              )
+            });
+            console.log(`[PushDispatcher] Delivered native FCM to ${msg.token.slice(0, 15)}...`);
+          } catch (sendErr: any) {
+            console.warn(`[PushDispatcher] Native FCM error for ${msg.token.slice(0, 15)}...:`, sendErr?.message);
+          }
+        }
+      } catch (adminErr: any) {
+        console.log('[PushDispatcher] Firebase admin notice:', adminErr?.message);
+      }
+    }
+  } catch (err) {
+    console.error('[PushDispatcher] Error dispatching push notification:', err);
+  }
+}

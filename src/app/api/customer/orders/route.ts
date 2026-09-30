@@ -8,6 +8,7 @@ import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { isSubscriptionExpired } from '@/lib/db';
 import { logSystemEvent, getOrderCorrelationId } from '@/lib/systemEventLogger';
 import { checkBookingOverlap } from '@/lib/utils';
+import { dispatchFCMNotification } from '@/lib/pushDispatcher';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -597,6 +598,31 @@ export async function POST(req: Request) {
       payload: realtimePayload,
       client: supabase
     }).catch(err => console.warn('[CustomerOrder] Realtime broadcast error:', err));
+
+    // Dispatch Cloud Push Notification to Kitchen, Waiter, and Owner mobile devices (works when app is killed/swiped away)
+    const pushTitle = orderType === 'reservation' 
+      ? '🔔 NEW TABLE RESERVATION!' 
+      : '🔔 NEW KITCHEN ORDER!';
+    const orderTypeLabel = orderType === 'takeaway' 
+      ? 'Takeaway' 
+      : orderType === 'reservation' 
+      ? 'Reservation' 
+      : 'Dine-in';
+    const tableName = createdOrder.table_name || (tableId ? `Table` : 'Takeaway Counter');
+
+    void dispatchFCMNotification(
+      restaurantId,
+      pushTitle,
+      `${tableName} • ${orderTypeLabel} • Total: ₹${createdOrder.total}`,
+      ['kitchen', 'waiter', 'owner', 'manager'],
+      {
+        orderId: createdOrder.id,
+        tableId: tableId || null,
+        orderType,
+        notificationType: 'NEW_ORDER'
+      },
+      tableId || undefined
+    ).catch(pushErr => console.warn('[CustomerOrder] Push dispatch error:', pushErr));
 
     // P1-07: Table Status Sync — automatically occupy table on dine-in order creation
     const isDiningOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';

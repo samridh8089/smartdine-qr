@@ -6,6 +6,7 @@ import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
+import { dispatchFCMNotification } from '@/lib/pushDispatcher';
 
 export async function POST(req: Request) {
   const totalStart = performance.now();
@@ -368,6 +369,31 @@ export async function POST(req: Request) {
       payload: realtimePayload,
       client: supabase
     });
+
+    // Dispatch Cloud Push Notification to Kitchen, Waiter, and Owner mobile devices (works when app is killed/swiped away)
+    const pushTitle = orderType === 'reservation' 
+      ? '🔔 NEW TABLE RESERVATION!' 
+      : '🔔 NEW KITCHEN ORDER!';
+    const orderTypeLabel = orderType === 'takeaway' 
+      ? 'Takeaway' 
+      : orderType === 'reservation' 
+      ? 'Reservation' 
+      : 'Dine-in';
+    const tableName = createdOrder.table_name || (tableId ? `Table` : 'Takeaway Counter');
+
+    void dispatchFCMNotification(
+      restaurantId,
+      pushTitle,
+      `${tableName} • ${orderTypeLabel} • Total: ₹${createdOrder.total}`,
+      ['kitchen', 'waiter', 'owner', 'manager'],
+      {
+        orderId: createdOrder.id,
+        tableId: tableId || null,
+        orderType,
+        notificationType: 'NEW_ORDER'
+      },
+      tableId || undefined
+    ).catch(pushErr => console.warn('[PunchOrder] Push dispatch error:', pushErr));
 
     // P1-07: Table Status Sync — automatically occupy table on dine-in punch order
     const isDiningPunchOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';
