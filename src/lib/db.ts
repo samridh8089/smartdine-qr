@@ -14,159 +14,9 @@ import { logSystemEvent, getOrderCorrelationId } from './systemEventLogger';
 import { checkBookingOverlap } from './utils';
 
 
-async function dispatchFCMNotification(
-  restaurantId: string,
-  title: string,
-  body: string,
-  roles?: string[],
-  extraData?: Record<string, any>,
-  tableId?: string
-) {
-  try {
-    const targetRoles = roles || ['kitchen', 'waiter', 'owner', 'manager'];
+import { dispatchFCMNotification } from './pushDispatcher';
+export { dispatchFCMNotification };
 
-    // 1. Dispatch Web Push for backgrounded Web Browser tabs via API endpoint
-    try {
-      fetch('/api/push/dispatch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          restaurantId,
-          roles: targetRoles,
-          title,
-          body,
-          url: targetRoles.includes('kitchen') ? '/dashboard/kds' : '/dashboard/orders',
-          eventId: extraData?.orderId || extraData?.requestId || extraData?.batchId || `evt-${Date.now()}`,
-          extraData,
-          tableId
-        })
-      }).catch(() => {});
-    } catch (e) {}
-
-    // ── Phase-21: emit push_sent event ──────────────────────────────────────
-    const pushOrderId = extraData?.orderId || null;
-    const pushCorrId = pushOrderId
-      ? getOrderCorrelationId(pushOrderId)
-      : `corr_PUSH_${Date.now()}`;
-    logSystemEvent({
-      restaurantId,
-      correlationId: pushCorrId,
-      orderId: pushOrderId,
-      actorType: 'system',
-      eventType: 'push_sent',
-      sourceNode: 'kitchen_queue',
-      targetNode: 'push_notifications',
-      metadata: { title, roles: targetRoles, requestId: extraData?.requestId || null },
-    }).catch(() => {});
-    // ────────────────────────────────────────────────────────────────────────
-
-
-
-    // 2. Dispatch Expo FCM Push for Android Native Devices
-    let query = supabase
-      .from('profiles')
-      .select('id, push_token, role, department')
-      .eq('restaurant_id', restaurantId)
-      .not('push_token', 'is', null);
-
-    if (roles && roles.length > 0) {
-      const expandedRoles = new Set<string>();
-      roles.forEach(r => {
-        const norm = (r || '').toLowerCase().trim();
-        expandedRoles.add(norm);
-        if (norm === 'kitchen') {
-          expandedRoles.add('kds');
-          expandedRoles.add('kitchen_staff');
-        }
-      });
-      // Always include supervisor if department matches
-      expandedRoles.add('supervisor');
-      query = query.in('role', Array.from(expandedRoles));
-    }
-
-    const { data: staffProfiles } = await query;
-    if (!staffProfiles || staffProfiles.length === 0) {
-      console.log('[NotificationDiagnostics] Backend token lookup: NOT FOUND (0 matching staff profiles)');
-      return;
-    }
-
-    // Scoped filtering: if tableId is provided, filter waiters to assigned waiters only
-    let targetProfiles = staffProfiles;
-    if (tableId) {
-      try {
-        const rest = await db.getRestaurantById(restaurantId);
-        const assignments: any[] = rest?.settings?.table_assignments || [];
-        const activeAssignedWaiters = assignments
-          .filter(a => a.active !== false && a.table_id === tableId)
-          .map(a => a.waiter_id);
-
-        if (activeAssignedWaiters.length > 0) {
-          targetProfiles = staffProfiles.filter(p => {
-            const normRole = (p.role || '').toLowerCase().trim();
-            if (normRole === 'waiter') {
-              return activeAssignedWaiters.includes(p.id);
-            }
-            if (normRole === 'supervisor') {
-              return (p.department || '').toLowerCase() === 'waiter';
-            }
-            return true; // owners/managers/kitchen get their respective notifications
-          });
-        }
-      } catch (scopeErr) {
-        console.warn('Table scoping token filter warning:', scopeErr);
-      }
-    }
-
-    const messages = targetProfiles.map(p => {
-      if (!p.push_token || p.push_token.startsWith('{')) return null;
-
-      const normRole = (p.role || '').toLowerCase().trim();
-      const roleChannel = normRole === 'kitchen' || normRole === 'kds' || normRole === 'kitchen_staff'
-        ? 'smartdine_kitchen'
-        : normRole === 'waiter'
-        ? 'smartdine_waiter'
-        : normRole === 'owner' || normRole === 'manager'
-        ? 'smartdine_owner'
-        : 'smartdine_waiter';
-
-      return {
-        to: p.push_token,
-        sound: 'order_tune',
-        priority: 'high',
-        channelId: roleChannel,
-        color: '#059669',
-        title,
-        body,
-        data: {
-          notificationType: 'NEW_ORDER',
-          restaurantId,
-          role: p.role,
-          tableId: tableId || null,
-          timestamp: Date.now(),
-          ...(extraData || {})
-        },
-        badge: 1,
-        _displayInForeground: true,
-        ttl: 0,
-      };
-    }).filter(m => Boolean(m && m.to));
-
-    if (messages.length > 0) {
-      await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(messages),
-      }).catch(e => console.warn('Expo push dispatch notice:', e));
-      console.log(`[FCM PUSH] Dispatched "${title}" to ${messages.length} staff device(s).`);
-    }
-  } catch (err) {
-    console.error('Error dispatching FCM push notification:', err);
-  }
-}
 
 
 export interface Restaurant {
@@ -4167,14 +4017,14 @@ export const db = {
     }).catch(() => {});
     // ────────────────────────────────────────────────────────────────────────
 
-    // Dispatch FCM Push Notification to Waiters, Managers & Owners
+    // Dispatch FCM Push Notification to Waiters, Kitchen, Managers & Owners
     const reqTitle = type === 'call_waiter' ? 'WAITER CALL ALERT!' : 'BILL REQUEST ALERT!';
     dispatchFCMNotification(
       restaurantId,
       reqTitle,
       `Table ${table.name} requested ${type === 'call_waiter' ? 'Waiter Assistance' : 'The Bill'}`,
-      ['waiter', 'owner', 'manager'],
-      { requestId: createdReq.id, tableId, type },
+      ['waiter', 'kitchen', 'owner', 'manager'],
+      { requestId: createdReq.id, tableId, type, notificationType: 'CUSTOMER_CALL' },
       tableId
     );
 
