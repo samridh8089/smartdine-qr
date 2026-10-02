@@ -26,6 +26,7 @@ tsconfig.tsbuildinfo
 .vercel/
 *.png
 *.idsig
+*.jks
 /tools/
 
 # Environment files
