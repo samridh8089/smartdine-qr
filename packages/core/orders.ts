@@ -8,7 +8,7 @@
 import { Order, OrderStatus, OrderType } from './types';
 
 export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  new: ['accepted', 'cancelled'],
+  new: ['accepted', 'preparing', 'cancelled'],
   accepted: ['preparing', 'cancelled'],
   preparing: ['ready', 'cancelled'],
   ready: ['served', 'completed', 'cancelled'],
@@ -20,9 +20,9 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export const ALLOWED_PRIOR_STATUSES: Record<OrderStatus, OrderStatus[]> = {
   new: [],
   accepted: ['new'],
-  preparing: ['accepted'],
+  preparing: ['accepted', 'new'],
   ready: ['preparing'],
-  served: ['ready'],
+  served: ['ready', 'preparing'],
   completed: ['served', 'ready'],
   cancelled: ['new', 'accepted', 'preparing', 'ready']
 };

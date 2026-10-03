@@ -26,6 +26,10 @@ function CheckoutContent() {
   const password = searchParams.get('password') || '';
   const restaurantId = searchParams.get('restaurantId') || '';
   const billingInterval = searchParams.get('billingInterval') || 'monthly';
+  const isExplicitUpgrade = searchParams.get('isUpgrade') === 'true' || searchParams.get('upgrade') === 'true';
+  const isUpgrade = isExplicitUpgrade || !isSignup || Boolean(restaurantId);
+
+  const [targetRestaurantId, setTargetRestaurantId] = useState(restaurantId);
 
   const loadRazorpayScript = () => {
     return new Promise<boolean>((resolve) => {
@@ -47,27 +51,28 @@ function CheckoutContent() {
     setErrorMessage('');
 
     try {
-      // ─── PROTECT CHECKOUT: IF NEW SIGNUP AND OWNER ALREADY HAS A RESTAURANT, SHOW ALREADY EXISTS SCREEN ───
-      try {
-        const checkEmail = (email || '').trim().toLowerCase();
-        // ONLY perform this duplicate-restaurant check for NEW signups without an existing restaurantId!
-        if (isSignup && !restaurantId && checkEmail) {
-          const checkRes = await fetch('/api/auth/check-email-availability', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: checkEmail })
-          }).then(r => r.json()).catch(() => null);
+      // ─── PROTECT CHECKOUT: ONLY BLOCK NEW SIGNUPS IF OWNER ALREADY HAS A RESTAURANT ───
+      if (isSignup && !isUpgrade && !restaurantId) {
+        try {
+          const checkEmail = (email || '').trim().toLowerCase();
+          if (checkEmail) {
+            const checkRes = await fetch('/api/auth/check-email-availability', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: checkEmail })
+            }).then(r => r.json()).catch(() => null);
 
-          if (checkRes && checkRes.exists) {
-            console.log('[Checkout Protected] Restaurant already exists for email:', checkEmail);
-            setExistingRestName(checkRes.restaurantName || restaurantName);
-            setStatus('already_exists');
-            setLoading(false);
-            return; // STOP! NEVER REDIRECT, NEVER RENDER RAZORPAY!
+            if (checkRes && checkRes.exists) {
+              console.log('[Checkout Protected] Restaurant already exists for email:', checkEmail);
+              setExistingRestName(checkRes.restaurantName || restaurantName);
+              setStatus('already_exists');
+              setLoading(false);
+              return; // STOP! Only block brand-new registrations
+            }
           }
+        } catch (guardErr) {
+          console.warn('[Checkout Protection Check Warning]:', guardErr);
         }
-      } catch (guardErr) {
-        console.warn('[Checkout Protection Check Warning]:', guardErr);
       }
 
       const scriptReady = await loadRazorpayScript();
@@ -77,6 +82,8 @@ function CheckoutContent() {
 
       // If no orderId provided, create one dynamically
       let activeOrderId = orderId;
+      let activeRestId = targetRestaurantId || restaurantId;
+
       if (!activeOrderId) {
         const orderRes = await fetch('/api/payments/create-order', {
           method: 'POST',
@@ -85,24 +92,34 @@ function CheckoutContent() {
             amount,
             plan,
             restaurantName,
-            restaurantId,
+            restaurantId: activeRestId,
             email,
-            billingInterval
+            billingInterval,
+            isUpgrade
           })
         });
         const orderData = await orderRes.json();
 
         if (orderData?.code === 'RESTAURANT_ALREADY_EXISTS' || (orderData?.error && orderData.error.includes('already owns'))) {
-          setExistingRestName(orderData.existingRestaurant?.name || restaurantName);
-          setStatus('already_exists');
-          setLoading(false);
-          return; // STOP! NEVER LOAD RAZORPAY!
-        }
-
-        if (!orderRes.ok || !orderData.order_id) {
+          if (!isUpgrade) {
+            setExistingRestName(orderData.existingRestaurant?.name || restaurantName);
+            setStatus('already_exists');
+            setLoading(false);
+            return; // STOP! NEVER LOAD RAZORPAY!
+          }
+          if (orderData.existingRestaurant?.id) {
+            activeRestId = orderData.existingRestaurant.id;
+            setTargetRestaurantId(activeRestId);
+          }
+        } else if (!orderRes.ok || !orderData.order_id) {
           throw new Error(orderData.error || 'Failed to generate Razorpay order ID.');
+        } else {
+          activeOrderId = orderData.order_id;
+          if (orderData.restaurantId) {
+            activeRestId = orderData.restaurantId;
+            setTargetRestaurantId(activeRestId);
+          }
         }
-        activeOrderId = orderData.order_id;
       }
 
       const amountInPaise = Math.round(amount * 100);
@@ -118,7 +135,7 @@ function CheckoutContent() {
         handler: async function (response: any) {
           setLoading(true);
           try {
-            if (isSignup) {
+            if (isSignup && !isUpgrade) {
               // Call Onboarding Provision API
               const provRes = await fetch('/api/auth/onboarding-provision', {
                 method: 'POST',
@@ -182,7 +199,8 @@ function CheckoutContent() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  restaurant_id: restaurantId,
+                  restaurant_id: activeRestId || targetRestaurantId || restaurantId,
+                  email,
                   plan_name: plan,
                   billing_interval: billingInterval,
                   amount,
@@ -199,7 +217,8 @@ function CheckoutContent() {
 
               setSuccessDetails({
                 paymentId: response.razorpay_payment_id,
-                orderId: response.razorpay_order_id
+                orderId: response.razorpay_order_id,
+                restaurant: { name: restaurantName }
               });
               setStatus('success');
             }
@@ -355,14 +374,20 @@ function CheckoutContent() {
 
             <div className="space-y-2.5 mt-6">
               <button
-                onClick={() => router.push('/dashboard')}
+                onClick={() => router.push(`/dashboard/billing?plan=${plan}&interval=${billingInterval}&checkout=true`)}
                 className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2"
+              >
+                Upgrade to {plan.toUpperCase()} Plan ({billingInterval})
+              </button>
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="w-full bg-slate-700/60 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 Open Dashboard
               </button>
               <button
                 onClick={() => router.back()}
-                className="w-full bg-slate-700/60 hover:bg-slate-700 text-slate-300 font-semibold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                className="w-full bg-transparent hover:bg-slate-800 text-slate-400 font-medium py-2 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-xs"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back
