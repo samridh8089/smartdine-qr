@@ -135,12 +135,12 @@ export async function dispatchFCMNotification(
 
       const normRole = (p.role || '').toLowerCase().trim();
       const roleChannel = (normRole === 'kitchen' || normRole === 'kds' || normRole === 'kitchen_staff')
-        ? 'smartdine_kitchen_v3'
+        ? 'smartdine_kitchen'
         : normRole === 'waiter'
-        ? 'smartdine_waiter_v3'
+        ? 'smartdine_waiter'
         : normRole === 'owner' || normRole === 'manager'
-        ? 'smartdine_owner_v3'
-        : 'smartdine_owner_v3';
+        ? 'smartdine_owner'
+        : 'smartdine_kitchen';
 
       let notifType = 'NEW_ORDER';
       if (extraData?.notificationType) {
