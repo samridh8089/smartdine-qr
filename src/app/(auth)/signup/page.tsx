@@ -41,7 +41,25 @@ function SignupForm() {
     if (interval && ['monthly', 'yearly'].includes(interval)) {
       setBillingInterval(interval as any);
     }
-  }, [searchParams]);
+
+    // Redirect logged-in restaurant owners to billing upgrade
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        supabase
+          .from('profiles')
+          .select('restaurant_id')
+          .eq('id', user.id)
+          .maybeSingle()
+          .then(({ data: prof }) => {
+            if (prof?.restaurant_id) {
+              const targetPlanName = plan || 'pro';
+              const targetInterval = interval || 'yearly';
+              router.replace(`/dashboard/billing?plan=${targetPlanName}&interval=${targetInterval}&checkout=true`);
+            }
+          });
+      }
+    });
+  }, [searchParams, router]);
 
   const handleRestaurantNameChange = (val: string) => {
     setRestaurantName(val);
@@ -144,12 +162,26 @@ function SignupForm() {
           amount,
           plan: targetPlan,
           restaurantName,
+          email,
           billingInterval
         })
       });
 
       const orderData = await orderRes.json();
       if (!orderRes.ok || orderData.error) {
+        if (orderData?.code === 'RESTAURANT_ALREADY_EXISTS' || (orderData?.error && orderData.error.includes('already owns'))) {
+          // If password was entered, try signing in and redirecting to upgrade on dashboard
+          if (email && password) {
+            const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+            if (!signInErr) {
+              router.push(`/dashboard/billing?plan=${targetPlan}&interval=${billingInterval}&checkout=true`);
+              return;
+            }
+          }
+          setError(`You already own restaurant "${orderData.existingRestaurant?.name || 'an existing workspace'}". Please log in to upgrade your subscription to ${targetPlan.toUpperCase()} (${billingInterval}).`);
+          setLoading(false);
+          return;
+        }
         throw new Error(orderData.error || 'Could not initialize payment order');
       }
 

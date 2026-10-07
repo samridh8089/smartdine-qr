@@ -15,10 +15,12 @@ export async function POST(req: Request) {
       amount: { rules: [Validators.number({ min: 1 })], required: true },
       currency: { rules: [Validators.enum(['INR', 'USD'] as const)], required: false },
       plan: { rules: [Validators.string({ max: 50 })], required: false },
-      restaurantId: { rules: [Validators.restaurantId()], required: false },
+      restaurantId: { rules: [Validators.string({ max: 100 })], required: false },
+      restaurantName: { rules: [Validators.string({ max: 200 })], required: false },
       email: { rules: [Validators.email()], required: false },
       userId: { rules: [Validators.string({ max: 100 })], required: false },
-      billingInterval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false }
+      billingInterval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false },
+      isUpgrade: { rules: [Validators.boolean()], required: false }
     });
     timer.end('auth');
 
@@ -26,17 +28,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: validation.errors.join(', ') }, { status: 400 });
     }
 
-    const { amount, currency = 'INR', plan, restaurantId, email, userId, billingInterval = 'monthly' } = body;
+    const { 
+      amount, 
+      currency = 'INR', 
+      plan, 
+      restaurantId, 
+      email, 
+      userId, 
+      billingInterval = 'monthly',
+      isUpgrade = false 
+    } = body;
 
+    let targetRestaurantId = restaurantId || '';
+    let existingRestaurantMatched: any = null;
 
-    // Task 4: Payment Safety — Verify no existing duplicate restaurant BEFORE creating Razorpay order
+    // Task 4: Payment Safety — Verify duplicate restaurant or resolve existing for upgrade
     if (userId || email) {
       const { createClient } = require('@supabase/supabase-js');
       const supabaseAdmin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL || '',
         process.env.SUPABASE_SERVICE_ROLE_KEY || ''
       );
-
 
       const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -51,47 +63,65 @@ export async function POST(req: Request) {
         if (prof?.restaurant_id) {
           const { data: activeRest } = await supabaseAdmin
             .from('restaurants')
-            .select('id, name')
+            .select('id, name, owner_id, slug, subscription_plan, billing_interval')
             .eq('id', prof.restaurant_id)
             .maybeSingle();
 
-          if (activeRest && (!restaurantId || activeRest.id !== restaurantId)) {
-            console.warn(`[Payment Blocked 409]: Profile ${cleanEmail} linked to restaurant "${activeRest.name}" (${activeRest.id})`);
-            return NextResponse.json({
-              success: false,
-              code: 'RESTAURANT_ALREADY_EXISTS',
-              error: 'This account already owns a restaurant.',
-              message: `This account already owns a restaurant (${activeRest.name}).`,
-              existingRestaurant: activeRest
-            }, { status: 409 });
+          if (activeRest) {
+            existingRestaurantMatched = activeRest;
           }
         }
       }
 
-      let query = supabaseAdmin.from('restaurants').select('id, name, owner_id, settings');
-      
-      if (userId && cleanEmail) {
-        query = query.or(`owner_id.eq.${userId},settings->>owner_email.eq.${cleanEmail}`);
-      } else if (userId) {
-        query = query.eq('owner_id', userId);
-      } else if (cleanEmail) {
-        query = query.eq('settings->>owner_email', cleanEmail);
+      if (!existingRestaurantMatched) {
+        let query = supabaseAdmin.from('restaurants').select('id, name, owner_id, slug, subscription_plan, billing_interval, settings');
+        
+        if (userId && cleanEmail) {
+          query = query.or(`owner_id.eq.${userId},settings->>owner_email.eq.${cleanEmail}`);
+        } else if (userId) {
+          query = query.eq('owner_id', userId);
+        } else if (cleanEmail) {
+          query = query.eq('settings->>owner_email', cleanEmail);
+        }
+
+        const { data: existingRest } = await query.maybeSingle();
+        if (existingRest) {
+          existingRestaurantMatched = existingRest;
+        }
       }
 
-      const { data: existingRest } = await query.maybeSingle();
-
-      if (existingRest && (!restaurantId || existingRest.id !== restaurantId)) {
-        console.warn(`[Payment Blocked 409]: Account ${userId || cleanEmail} already owns restaurant "${existingRest.name}" (${existingRest.id})`);
-        return NextResponse.json({
-          success: false,
-          code: 'RESTAURANT_ALREADY_EXISTS',
-          error: 'This account already owns a restaurant.',
-          message: `This account already owns a restaurant (${existingRest.name}).`,
-          existingRestaurant: {
-            id: existingRest.id,
-            name: existingRest.name
-          }
-        }, { status: 409 });
+      // If account already owns a restaurant:
+      if (existingRestaurantMatched) {
+        if (isUpgrade || (restaurantId && restaurantId === existingRestaurantMatched.id)) {
+          // UPGRADE FLOW: Reuse existing restaurant! Never create duplicate record
+          targetRestaurantId = existingRestaurantMatched.id;
+          console.log(`[Payment Upgrade Permitted]: Reusing existing restaurant "${existingRestaurantMatched.name}" (${targetRestaurantId}) for ${userId || cleanEmail}`);
+        } else if (!restaurantId && !isUpgrade) {
+          // New signup attempt with an existing owner account
+          console.warn(`[Payment Blocked 409]: Account ${userId || cleanEmail} already owns restaurant "${existingRestaurantMatched.name}" (${existingRestaurantMatched.id})`);
+          return NextResponse.json({
+            success: false,
+            code: 'RESTAURANT_ALREADY_EXISTS',
+            error: 'This account already owns a restaurant.',
+            message: `This account already owns a restaurant (${existingRestaurantMatched.name}).`,
+            existingRestaurant: {
+              id: existingRestaurantMatched.id,
+              name: existingRestaurantMatched.name
+            }
+          }, { status: 409 });
+        } else if (restaurantId && restaurantId !== existingRestaurantMatched.id && !isUpgrade) {
+          console.warn(`[Payment Blocked 409]: Account ${userId || cleanEmail} owns "${existingRestaurantMatched.name}", cannot create new restaurant.`);
+          return NextResponse.json({
+            success: false,
+            code: 'RESTAURANT_ALREADY_EXISTS',
+            error: 'This account already owns a restaurant.',
+            message: `This account already owns a restaurant (${existingRestaurantMatched.name}).`,
+            existingRestaurant: {
+              id: existingRestaurantMatched.id,
+              name: existingRestaurantMatched.name
+            }
+          }, { status: 409 });
+        }
       }
     }
 
@@ -112,11 +142,12 @@ export async function POST(req: Request) {
       body: JSON.stringify({
         amount: amountInPaise,
         currency: currency || 'INR',
-        receipt: `rcpt_${restaurantId ? restaurantId.slice(0, 8) + '_' : ''}${Date.now()}`,
+        receipt: `rcpt_${targetRestaurantId ? targetRestaurantId.slice(0, 8) + '_' : ''}${Date.now()}`,
         notes: {
-          restaurant_id: restaurantId || '',
+          restaurant_id: targetRestaurantId || '',
           plan_name: plan || '',
           billing_interval: billingInterval || 'monthly',
+          is_upgrade: isUpgrade ? 'true' : 'false'
         },
       }),
     });
@@ -139,6 +170,11 @@ export async function POST(req: Request) {
       currency: data.currency,
       key: keyId,
       keyId,
+      restaurantId: targetRestaurantId || null,
+      existingRestaurant: existingRestaurantMatched ? {
+        id: existingRestaurantMatched.id,
+        name: existingRestaurantMatched.name
+      } : null
     });
   } catch (err: any) {
     return handleApiError('Payments-Create-Order', err, 'Failed to create payment order. Please try again later.', 500);

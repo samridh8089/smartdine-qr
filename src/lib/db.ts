@@ -419,6 +419,16 @@ import {
   getOrderStatusLabel
 } from '../../packages/core';
 
+export const STATUS_RANK: Record<string, number> = {
+  new: 0,
+  accepted: 1,
+  preparing: 2,
+  ready: 3,
+  served: 4,
+  completed: 5,
+  cancelled: 6
+};
+
 export {
   VALID_ORDER_TRANSITIONS,
   ALLOWED_PRIOR_STATUSES,
@@ -2797,8 +2807,8 @@ export const db = {
     const currentOrder = await this.getOrderById(id);
     if (!currentOrder) throw new Error('Order not found');
 
-    // BUG-ORD-003: Idempotent return if already in requested status
-    if (currentOrder.status === status) {
+    // BUG-ORD-003: Idempotent return if already in requested status or already advanced beyond it
+    if (currentOrder.status === status || (status !== 'cancelled' && (STATUS_RANK[currentOrder.status] ?? -1) >= (STATUS_RANK[status] ?? 99))) {
       return currentOrder;
     }
 
@@ -2849,8 +2859,8 @@ export const db = {
     if (!lockResult || lockResult.length === 0) {
       // Zero rows affected indicates another tab/staff member won the race
       const freshOrder = await this.getOrderById(id);
-      if (freshOrder?.status === status) {
-        return freshOrder; // Concurrent winner already transitioned to target
+      if (freshOrder?.status === status || (status !== 'cancelled' && (STATUS_RANK[freshOrder?.status || ''] ?? -1) >= (STATUS_RANK[status] ?? 99))) {
+        return freshOrder || currentOrder; // Concurrent winner already transitioned to target or beyond
       }
       const conflictErr: any = new Error(
         `Order status was modified concurrently (current: "${freshOrder?.status || 'unknown'}"). Cannot transition to "${status}".`
@@ -3095,8 +3105,8 @@ export const db = {
     const currentOrder = await this.getOrderById(orderId);
     if (!currentOrder) throw new Error('Order not found');
 
-    // BUG-ORD-003: Idempotent return if batch is already in requested status
-    if (existingBatch && existingBatch.status === status) {
+    // BUG-ORD-003: Idempotent return if batch is already in requested status or already advanced beyond it
+    if (existingBatch && (existingBatch.status === status || (status !== 'cancelled' && (STATUS_RANK[existingBatch.status] ?? -1) >= (STATUS_RANK[status] ?? 99)))) {
       return currentOrder;
     }
 
@@ -3162,7 +3172,7 @@ export const db = {
     if (!lockResult || lockResult.length === 0) {
       // Zero rows affected indicates another staff member or tab updated this batch concurrently
       const { data: freshBatch } = await supabase.from('order_batches').select('status').eq('id', batchId).single();
-      if (freshBatch?.status === status) {
+      if (freshBatch?.status === status || (status !== 'cancelled' && (STATUS_RANK[freshBatch?.status || ''] ?? -1) >= (STATUS_RANK[status] ?? 99))) {
         return (await this.getOrderById(orderId)) || currentOrder;
       }
       const conflictErr: any = new Error(

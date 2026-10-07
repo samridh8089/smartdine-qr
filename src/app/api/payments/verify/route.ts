@@ -20,6 +20,7 @@ export async function POST(req: Request) {
       razorpay_payment_id: { rules: [Validators.string({ max: 100 })], required: false },
       razorpay_signature: { rules: [Validators.string({ max: 256 })], required: false },
       restaurant_id: { rules: [Validators.restaurantId()], required: false },
+      email: { rules: [Validators.email()], required: false },
       plan_name: { rules: [Validators.enum(['starter', 'pro', 'premium', 'custom', 'free', 'lite', 'enterprise'] as const)], required: false },
       billing_interval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false },
       amount: { rules: [Validators.number({ min: 0 })], required: false },
@@ -36,12 +37,55 @@ export async function POST(req: Request) {
       razorpay_payment_id, 
       razorpay_signature,
       restaurant_id,
+      email,
       plan_name = 'pro',
       billing_interval = 'monthly',
       amount = 0,
       user_id,
       isDemo
     } = body;
+
+    let targetRestaurantId = restaurant_id || '';
+
+    // Fallback 1: Resolve restaurant_id from Razorpay order notes if not provided directly
+    if (!targetRestaurantId && razorpay_order_id) {
+      const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+      const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
+      if (keyId && keySecret) {
+        try {
+          const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+          const rzpOrderRes = await fetch(`https://api.razorpay.com/v1/orders/${razorpay_order_id}`, {
+            headers: { Authorization: `Basic ${auth}` }
+          });
+          if (rzpOrderRes.ok) {
+            const rzpOrderData = await rzpOrderRes.json();
+            if (rzpOrderData?.notes?.restaurant_id) {
+              targetRestaurantId = rzpOrderData.notes.restaurant_id;
+              console.log('[Verify Payment] Resolved restaurant_id from Razorpay order notes:', targetRestaurantId);
+            }
+          }
+        } catch (rzpErr) {
+          console.warn('[Verify Payment] Could not fetch Razorpay order notes:', rzpErr);
+        }
+      }
+    }
+
+    // Fallback 2: Resolve from Supabase profiles if email or user_id is provided
+    if (!targetRestaurantId && (user_id || email)) {
+      try {
+        const cleanEmail = (email || '').trim().toLowerCase();
+        let query = supabaseAdmin.from('profiles').select('restaurant_id');
+        if (user_id) query = query.eq('id', user_id);
+        else if (cleanEmail) query = query.ilike('email', cleanEmail);
+        const { data: prof } = await query.maybeSingle();
+        if (prof?.restaurant_id) {
+          targetRestaurantId = prof.restaurant_id;
+          console.log('[Verify Payment] Resolved restaurant_id from profile:', targetRestaurantId);
+        }
+      } catch (profErr) {
+        console.warn('[Verify Payment] Could not resolve restaurant from profile:', profErr);
+      }
+    }
 
     if (!isDemo) {
       const keySecret = process.env.RAZORPAY_KEY_SECRET || 'q4cHg1f0yDQwwLbaUsgKhIBJ';
@@ -75,11 +119,11 @@ export async function POST(req: Request) {
     const normalizedPlan = (plan_name || 'pro').toLowerCase().trim();
 
     // Activate restaurant plan in database
-    if (restaurant_id) {
+    if (targetRestaurantId) {
       const { data: currentRest } = await supabaseAdmin
         .from('restaurants')
         .select('settings, subscription_plan')
-        .eq('id', restaurant_id)
+        .eq('id', targetRestaurantId)
         .maybeSingle();
 
       const currentSettings = currentRest?.settings || {};
@@ -114,7 +158,7 @@ export async function POST(req: Request) {
           updated_at: now.toISOString(),
           settings: updatedSettings
         })
-        .eq('id', restaurant_id);
+        .eq('id', targetRestaurantId);
 
       if (updateErr) {
         console.error('[Verify Payment] Restaurant update error:', updateErr);
@@ -124,7 +168,7 @@ export async function POST(req: Request) {
       // Record in payments table if table exists
       try {
         await supabaseAdmin.from('payments').insert({
-          restaurant_id,
+          restaurant_id: targetRestaurantId,
           order_id: razorpay_order_id || `ord_${Date.now()}`,
           payment_id: razorpay_payment_id || `pay_${Date.now()}`,
           amount: Number(amount),
@@ -137,9 +181,9 @@ export async function POST(req: Request) {
     }
 
     // ─── Phase-19: Event Bus — fire-and-forget ───────────────────────────────
-    if (restaurant_id && restaurant_id !== 'demo-rest') {
+    if (targetRestaurantId && targetRestaurantId !== 'demo-rest') {
       logSystemEvent({
-        restaurantId: restaurant_id,
+        restaurantId: targetRestaurantId,
         correlationId: generateCorrelationId(),
         actorType: 'system',
         eventType: 'payment_success',
@@ -156,7 +200,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       verified: true,
-      restaurant_id,
+      restaurant_id: targetRestaurantId || restaurant_id,
       plan_name: normalizedPlan,
       subscription_status: 'active',
       billing_interval,
