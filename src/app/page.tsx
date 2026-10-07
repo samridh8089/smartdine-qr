@@ -858,7 +858,7 @@ export default function LandingPage() {
       {/* Header / Navbar - Light Premium Sticky Bar (64px mobile height) */}
       <header className="bg-white/95 backdrop-blur-md border-b border-slate-200/80 h-16 px-3.5 sm:px-8 md:px-12 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs">
         <Link href={`/?lang=${language}`} className="flex items-center gap-2 sm:gap-3 shrink-0" aria-label="CleverOps Home">
-          <img src="/logo.png" alt="CleverOps Restaurant Operating System Logo" className="h-8 sm:h-9 w-auto object-contain" />
+          <img src="/logo.png" alt="CleverOps Restaurant Operating System Logo" width={36} height={36} style={{ height: '36px', width: 'auto' }} className="h-8 sm:h-9 w-auto object-contain" />
           <span className="font-black text-sm sm:text-lg tracking-tight text-slate-900">CleverOps</span>
         </Link>
 

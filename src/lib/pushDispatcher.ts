@@ -194,23 +194,32 @@ export async function dispatchFCMNotification(
     });
 
     // 6. Dispatch Expo Push
+    // NOTE: Dispatch per-token using Promise.allSettled to eliminate PUSH_TOO_MANY_EXPERIENCE_IDS errors
+    // when different staff members have tokens from different app versions or Expo project IDs.
     if (expoMessages.length > 0) {
-      const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(expoMessages),
-      }).catch(e => {
-        console.warn('[PushDispatcher] Expo push dispatch notice:', e);
-        return null;
-      });
-      if (expoRes) {
-        const expoJson = await expoRes.json().catch(() => null);
-        console.log(`[PushDispatcher] Dispatched "${title}" to ${expoMessages.length} Expo staff device(s). Status: ${expoRes.status}`, JSON.stringify(expoJson));
-      }
+      await Promise.allSettled(
+        expoMessages.map(async (msg) => {
+          try {
+            const expoRes = await fetch('https://exp.host/--/api/v2/push/send', {
+              method: 'POST',
+              headers: {
+                'Accept': 'application/json',
+                'Accept-encoding': 'gzip, deflate',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify([msg]),
+            });
+            const expoJson = await expoRes.json().catch(() => null);
+            if (expoRes.status !== 200 || expoJson?.errors) {
+              console.warn(`[PushDispatcher] Push notice for token ${msg.to?.slice(0, 25)}:`, expoJson);
+            } else {
+              console.log(`[PushDispatcher] Dispatched "${title}" to ${msg.to?.slice(0, 25)}:`, JSON.stringify(expoJson?.data));
+            }
+          } catch (err) {
+            console.warn('[PushDispatcher] Push send error:', err);
+          }
+        })
+      );
     }
 
     // 7. Dispatch Native FCM
