@@ -1,6 +1,5 @@
-const CACHE_NAME = 'smartdine-cache-v2';
+const CACHE_NAME = 'smartdine-cache-v3';
 const ASSETS_TO_CACHE = [
-  '/',
   '/favicon.ico',
   '/icon-192.png',
   '/icon-512.png',
@@ -33,20 +32,46 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (event.request.url.includes('/api/')) return; // Do not cache dynamic API routes
 
+  // For HTML page navigation requests: ALWAYS use Network-First strategy
+  // This ensures browsers always fetch the latest HTML with current CSS/JS bundle hashes,
+  // completely eliminating unstyled flash / broken CSS on new deployments.
+  const isHtmlNavigation = 
+    event.request.mode === 'navigate' || 
+    (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html'));
+
+  if (isHtmlNavigation) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match(event.request).then((cachedResponse) => {
+            return cachedResponse || caches.match('/') || Response.error();
+          });
+        })
+    );
+    return;
+  }
+
+  // For static assets (images, sounds, icons): Cache-first fallback
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
-          }
-        }).catch(() => {});
         return cachedResponse;
       }
-      return fetch(event.request).catch(() => {
-        if (event.request.headers.get('accept')?.includes('text/html')) {
-          return caches.match('/') || Response.error();
+      return fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && event.request.url.startsWith(self.location.origin)) {
+          if (!event.request.url.includes('/_next/')) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          }
         }
+        return networkResponse;
       });
     })
   );
