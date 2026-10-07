@@ -34,8 +34,9 @@ tsconfig.tsbuildinfo
 !.env.example
 !.env.test.example
 
-# Service account & secrets
 firebase-service-account*.json
+*.keystore
+*.jks
 
 # Logs, Dumps & Temporary diagnostics
 *.log
@@ -47,9 +48,14 @@ dumpsys_*.txt
 logcat_*.txt
 noti_dumpsys.txt
 diagnostic_report.json
+eas_*log*.txt
+all_log_messages.txt
+raw_log.gz
+META-INF/
 
 # Generated Apps & Media proofs
 *.apk
+*.aab
 *.zip
 *.mp4
 *.exe

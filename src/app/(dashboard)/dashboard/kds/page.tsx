@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { db, Order, OrderBatch } from '@/lib/db';
+import { db, Order, OrderBatch, STATUS_RANK } from '@/lib/db';
 import { formatExactTimestamp } from '@/lib/timestamp';
 import { supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
@@ -59,21 +59,19 @@ export function enqueueKdsBatchUpdate(
   const current = getKdsOfflineQueue(restaurantId);
   // Deduplicate by batchId: always reflect latest state, preventing duplicate inflight transitions
   const filtered = current.filter(item => item.batchId !== batchId);
-  filtered.push({
+  const newItem: KdsOfflineQueueItem = {
     id: `kds_batch_${batchId}_${nextStatus}_${Date.now()}`,
     batchId,
     nextStatus,
     staffName,
     cancellationReason,
     timestamp: new Date().toISOString()
-  });
+  };
+  filtered.push(newItem);
   saveKdsOfflineQueue(restaurantId, filtered);
 }
 
-export async function syncKdsOfflineBatchQueue(
-  restaurantId: string
-): Promise<{ synced: number; failed: number }> {
-  if (typeof window === 'undefined' || !restaurantId) return { synced: 0, failed: 0 };
+export async function processKdsOfflineQueue(restaurantId: string): Promise<{ synced: number; failed: number }> {
   const queue = getKdsOfflineQueue(restaurantId);
   if (queue.length === 0) return { synced: 0, failed: 0 };
 
@@ -138,6 +136,8 @@ export async function syncKdsOfflineBatchQueue(
   return { synced, failed };
 }
 
+export const syncKdsOfflineBatchQueue = processKdsOfflineQueue;
+
 export default function KitchenDisplayPage() {
   const { restaurant, profile, alarmMuted, setAlarmMuted } = useRestaurant();
   const restId = restaurant?.id || profile?.restaurant_id;
@@ -170,6 +170,7 @@ export default function KitchenDisplayPage() {
 
   // ─── 2. useRef Declarations ───────────────────────────────────────────
   const processingBatchIdsRef = useRef<Set<string>>(new Set());
+  const optimisticBatchStatusesRef = useRef<Map<string, OrderBatch['status']>>(new Map());
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
   const alertedOrderIds = useRef<Set<string>>(new Set());
@@ -346,9 +347,37 @@ export default function KitchenDisplayPage() {
         supabase.from('inventory_transactions').select('*').eq('restaurant_id', restId).eq('transaction_type', 'ORDER_CONSUMPTION').order('created_at', { ascending: false }).limit(100)
       ]);
 
+      // Protect in-flight optimistic batch states from being overwritten by stale DB reloads
+      const reconciledOrders = (allOrders || []).map(order => {
+        if (!order.batches) return order;
+        let batchChanged = false;
+        const reconciledBatches = order.batches.map(batch => {
+          if (optimisticBatchStatusesRef.current.has(batch.id)) {
+            const optStatus = optimisticBatchStatusesRef.current.get(batch.id)!;
+            const dbRank = STATUS_RANK[batch.status] ?? -1;
+            const optRank = STATUS_RANK[optStatus] ?? 99;
+            if (dbRank >= optRank) {
+              // DB has caught up or surpassed optimistic state
+              optimisticBatchStatusesRef.current.delete(batch.id);
+            } else {
+              // DB is still behind; preserve optimistic status
+              batchChanged = true;
+              return { ...batch, status: optStatus };
+            }
+          }
+          return batch;
+        });
+
+        if (batchChanged) {
+          const canonicalStatus = db.calculateAggregateOrderStatus(order.status, reconciledBatches);
+          return { ...order, batches: reconciledBatches, status: canonicalStatus };
+        }
+        return order;
+      });
+
       // BUG-RES-001: Reservations must NOT enter KDS until actual dining session / food order placed
-      const activeOrders = (allOrders || []).filter(o => 
-        !['completed', 'cancelled', 'served'].includes(o.status) &&
+      const activeOrders = reconciledOrders.filter(o => 
+        !['cancelled'].includes(o.status) &&
         o.order_type !== 'reservation'
       );
       setOrders(activeOrders);
@@ -392,27 +421,32 @@ export default function KitchenDisplayPage() {
     nextStatus: OrderBatch['status'], 
     cancellationReasonText?: string
   ) => {
-    if (processingBatchIds.includes(batchId) || processingBatchIdsRef.current.has(batchId)) return;
+    // 1. Synchronous atomic lock check on first click: prevent double-tap race condition
+    if (processingBatchIdsRef.current.has(batchId)) return;
     processingBatchIdsRef.current.add(batchId);
-    setProcessingBatchIds(prev => [...prev, batchId]);
+    optimisticBatchStatusesRef.current.set(batchId, nextStatus);
+    setProcessingBatchIds(prev => prev.includes(batchId) ? prev : [...prev, batchId]);
 
     // Find original status for ID-based patch rollback
-    const origStatus = orders
-      .flatMap(o => o.batches || [])
-      .find((b: any) => b.id === batchId)?.status || 'new';
+    const origOrder = orders.find(o => o.batches?.some(b => b.id === batchId));
+    const origBatch = origOrder?.batches?.find(b => b.id === batchId);
+    const origStatus = origBatch?.status || 'new';
 
-    // Optimistic UI state update: kitchen screen updates instantly
+    // 2. Optimistic UI state update: kitchen screen updates instantly (< 10ms visible DOM response)
     setOrders(prev => prev.map(order => {
       if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
+      const updatedBatches = order.batches.map((b: any) => 
+        b.id === batchId ? { 
+          ...b, 
+          status: nextStatus,
+          ...(cancellationReasonText ? { special_instructions: `[CANCELLED] ${cancellationReasonText}` } : {})
+        } : b
+      );
+      const canonicalStatus = db.calculateAggregateOrderStatus(order.status, updatedBatches);
       return {
         ...order,
-        batches: order.batches.map((b: any) => 
-          b.id === batchId ? { 
-            ...b, 
-            status: nextStatus,
-            ...(cancellationReasonText ? { special_instructions: `[CANCELLED] ${cancellationReasonText}` } : {})
-          } : b
-        )
+        batches: updatedBatches,
+        status: canonicalStatus
       };
     }));
 
@@ -422,17 +456,18 @@ export default function KitchenDisplayPage() {
 
     const staffName = profile?.full_name || 'Kitchen Staff';
 
-    // 1. If currently offline: queue locally and keep optimistic state without rollback
+    // 3. If currently offline: queue locally and keep optimistic state without rollback
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       enqueueKdsBatchUpdate(restaurantId, batchId, nextStatus, staffName, cancellationReasonText);
       setToast({ message: 'Kitchen update saved offline. Will sync when back online.', visible: true });
       setTimeout(() => setToast(null), 3500);
       processingBatchIdsRef.current.delete(batchId);
+      optimisticBatchStatusesRef.current.delete(batchId);
       setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
       return;
     }
 
-    // 2. Online: dispatch through authoritative lifecycle route /api/staff/update-order-status
+    // 4. Online: dispatch through authoritative lifecycle route /api/staff/update-order-status
     try {
       const getKdsToken = async (forceRefresh = false): Promise<string> => {
         try {
@@ -501,17 +536,15 @@ export default function KitchenDisplayPage() {
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         if (res.status === 409) {
-          console.warn('API status conflict:', errJson);
-          setErrorMessage(errJson.error || 'Ticket was already updated by another staff member.');
-          setTimeout(() => setErrorMessage(''), 5000);
-          if (restaurantId) await safeReloadKdsData(restaurantId);
+          // Idempotent or concurrent advance: keep optimistic state
+          console.warn('API status conflict (batch already transitioned):', errJson);
           return;
         }
         throw new Error(errJson.error || `Failed with HTTP ${res.status}`);
       }
       window.dispatchEvent(new Event('storage'));
     } catch (err: any) {
-      // 3. Fallback: on network error, queue instead of rolling back the kitchen ticket
+      // 5. Fallback: on network error, queue instead of rolling back the kitchen ticket
       const isNetworkErr = (typeof navigator !== 'undefined' && !navigator.onLine) || 
         err.message?.includes('fetch') || 
         err.message?.includes('Network');
@@ -522,13 +555,17 @@ export default function KitchenDisplayPage() {
         setTimeout(() => setToast(null), 3500);
       } else {
         // Rollback only on actual business rule rejection
+        optimisticBatchStatusesRef.current.delete(batchId);
         setOrders(prev => prev.map(order => {
           if (!order.batches || !order.batches.some((b: any) => b.id === batchId)) return order;
+          const revertedBatches = order.batches.map((b: any) => 
+            b.id === batchId ? { ...b, status: origStatus } : b
+          );
+          const canonicalStatus = db.calculateAggregateOrderStatus(order.status, revertedBatches);
           return {
             ...order,
-            batches: order.batches.map((b: any) => 
-              b.id === batchId ? { ...b, status: origStatus } : b
-            )
+            batches: revertedBatches,
+            status: canonicalStatus
           };
         }));
         setErrorMessage(`Failed to update status: ${err.message || 'Network error'}`);
@@ -536,6 +573,10 @@ export default function KitchenDisplayPage() {
         if (restaurantId) await safeReloadKdsData(restaurantId);
       }
     } finally {
+      // Hold optimistic state briefly (600ms) to ensure in-flight Postgres events don't snap back
+      setTimeout(() => {
+        optimisticBatchStatusesRef.current.delete(batchId);
+      }, 600);
       processingBatchIdsRef.current.delete(batchId);
       setProcessingBatchIds(prev => prev.filter(id => id !== batchId));
     }
@@ -849,7 +890,7 @@ export default function KitchenDisplayPage() {
 
     // Also drain any pending queue on component mount if online
     if (typeof navigator !== 'undefined' && navigator.onLine && restaurantId) {
-      syncKdsOfflineBatchQueue(restaurantId).then(({ synced }) => {
+      syncKdsOfflineBatchQueue(restaurantId).then(({ synced }: { synced: number }) => {
         if (synced > 0) {
           safeReloadKdsData(restaurantId);
         }

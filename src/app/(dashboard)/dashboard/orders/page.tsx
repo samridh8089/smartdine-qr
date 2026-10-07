@@ -214,10 +214,36 @@ export default function OrdersPage() {
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
   const [orderQueue, setOrderQueue] = useState<'dine_in' | 'takeaway' | 'reservations'>('dine_in');
   const [seatGuestModalOpen, setSeatGuestModalOpen] = useState(false);
+  const [reservationToSeat, setReservationToSeat] = useState<Order | null>(null);
+  const [selectedTableForSeat, setSelectedTableForSeat] = useState<string>('');
+  const [isSeatingGuest, setIsSeatingGuest] = useState(false);
+  const [allTables, setAllTables] = useState<any[]>([]);
+  const [currentTime, setCurrentTime] = useState<number>(() => Date.now());
+  const [toast, setToast] = useState<{ message: string; visible: boolean; title?: string; variant?: 'success' | 'info' | 'warning' | 'error' } | null>(null);
+  const [processingRequestIds, setProcessingRequestIds] = useState<string[]>([]);
+  const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
+  const [punchModalOpen, setPunchModalOpen] = useState(false);
+  const [customerLookupOpen, setCustomerLookupOpen] = useState(false);
+  const [customerLookupQuery, setCustomerLookupQuery] = useState('');
+  const [lookupPrefillCustomer, setLookupPrefillCustomer] = useState<{ name: string; phone: string } | null>(null);
+  const [printModalOpen, setPrintModalOpen] = useState(false);
+  const [printOrderData, setPrintOrderData] = useState<any | null>(null);
+  const [mergedGroupDetails, setMergedGroupDetails] = useState<any | null>(null);
+  const [viewMode, setViewMode] = useState<'merged' | 'single'>('merged');
+  const [selectedOwnerTableId, setSelectedOwnerTableId] = useState<string | null>(null);
+  const [showOwnerTimeline, setShowOwnerTimeline] = useState<boolean>(false);
+  const [payMergedModalOpen, setPayMergedModalOpen] = useState(false);
+  const [paymentMethodChoice, setPaymentMethodChoice] = useState<'cash' | 'online_upi'>('cash');
+  const [submittingPayMerged, setSubmittingPayMerged] = useState(false);
 
+  // ─── 2. useRef Declarations ───────────────────────────────────────────
   const orderListContainerRef = useRef<HTMLDivElement>(null);
   const optimisticStatusMapRef = useRef<Record<string, Order['status']>>({});
+  const notifiedReservationStagesRef = useRef<Map<string, Set<string>>>(new Map());
+  const processingOrderIdsRef = useRef<Set<string>>(new Set());
+  const submittingPayMergedRef = useRef(false);
 
+  // ─── 3. useMemo Declarations ──────────────────────────────────────────
   const effectiveOrders = useMemo<Order[]>(() => {
     return orders || [];
   }, [orders]);
@@ -239,18 +265,6 @@ export default function OrdersPage() {
 
   const effectiveStatus = (selectedOrder ? optimisticStatusMap[selectedOrder.id] : null) || selectedOrder?.status;
 
-  useEffect(() => {
-    optimisticStatusMapRef.current = optimisticStatusMap;
-  }, [optimisticStatusMap]);
-  const [reservationToSeat, setReservationToSeat] = useState<Order | null>(null);
-  const [selectedTableForSeat, setSelectedTableForSeat] = useState<string>('');
-  const [isSeatingGuest, setIsSeatingGuest] = useState(false);
-  const [allTables, setAllTables] = useState<any[]>([]);
-  const [currentTime, setCurrentTime] = useState<number>(() => Date.now());
-  const notifiedReservationStagesRef = useRef<Map<string, Set<string>>>(new Map());
-
-  // Real-time toast state
-  const [toast, setToast] = useState<{ message: string; visible: boolean; title?: string; variant?: 'success' | 'info' | 'warning' | 'error' } | null>(null);
   const showToast = (message: string, title?: string, variant?: 'success' | 'info' | 'warning' | 'error') => {
     setToast({ message, title: title || (variant === 'info' ? 'Order Notice' : variant === 'error' ? 'Error' : 'New Order'), visible: true, variant: variant || 'success' });
     setTimeout(() => {
@@ -258,59 +272,7 @@ export default function OrdersPage() {
     }, 5000);
   };
 
-  const [processingRequestIds, setProcessingRequestIds] = useState<string[]>([]);
-  const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
-  const processingOrderIdsRef = useRef<Set<string>>(new Set());
-  const [punchModalOpen, setPunchModalOpen] = useState(false);
-  const [customerLookupOpen, setCustomerLookupOpen] = useState(false);
-  const [customerLookupQuery, setCustomerLookupQuery] = useState('');
-  const [lookupPrefillCustomer, setLookupPrefillCustomer] = useState<{ name: string; phone: string } | null>(null);
-  const [printModalOpen, setPrintModalOpen] = useState(false);
-  const [printOrderData, setPrintOrderData] = useState<any | null>(null);
-
   const mergeGroupIdParam = searchParams.get('merge_group_id');
-  const [mergedGroupDetails, setMergedGroupDetails] = useState<any | null>(null);
-  const [viewMode, setViewMode] = useState<'merged' | 'single'>('merged');
-  const [selectedOwnerTableId, setSelectedOwnerTableId] = useState<string | null>(null);
-  const [showOwnerTimeline, setShowOwnerTimeline] = useState<boolean>(false);
-
-  useEffect(() => {
-    async function loadMergedGroup() {
-      if (!restaurant?.id) return;
-
-      let targetGroupId = mergeGroupIdParam;
-      let targetSessionId: string | undefined = undefined;
-
-      if (selectedOrder?.merge_group_id) {
-        targetGroupId = selectedOrder.merge_group_id;
-        targetSessionId = (selectedOrder as any).merge_session_id;
-      }
-
-      if (!targetGroupId && selectedOrder?.table_id) {
-        const activeMerge = await db.getActiveMergeGroupForTable(restaurant.id, selectedOrder.table_id);
-        if (activeMerge) {
-          targetGroupId = activeMerge.group.id;
-          targetSessionId = activeMerge.session?.id;
-        }
-      }
-
-      if (targetGroupId) {
-        const details = await db.getMergedGroupDetails(restaurant.id, targetGroupId, targetSessionId);
-        if (details) {
-          setMergedGroupDetails(details);
-          setViewMode('merged');
-          return;
-        }
-      }
-      setMergedGroupDetails(null);
-    }
-    loadMergedGroup();
-  }, [selectedOrder?.id, selectedOrder?.table_id, selectedOrder?.merge_group_id, mergeGroupIdParam, restaurant?.id]);
-
-  const [payMergedModalOpen, setPayMergedModalOpen] = useState(false);
-  const [paymentMethodChoice, setPaymentMethodChoice] = useState<'cash' | 'online_upi'>('cash');
-  const [submittingPayMerged, setSubmittingPayMerged] = useState(false);
-  const submittingPayMergedRef = useRef(false);
 
   const handlePayMergedGroup = () => {
     if (!mergedGroupDetails) return;
@@ -367,6 +329,44 @@ export default function OrdersPage() {
       alert('Failed to unmerge group: ' + err.message);
     }
   };
+
+  // ─── 4. useEffect Declarations ─────────────────────────────────────────
+  useEffect(() => {
+    optimisticStatusMapRef.current = optimisticStatusMap;
+  }, [optimisticStatusMap]);
+
+  useEffect(() => {
+    async function loadMergedGroup() {
+      if (!restaurant?.id) return;
+
+      let targetGroupId = mergeGroupIdParam;
+      let targetSessionId: string | undefined = undefined;
+
+      if (selectedOrder?.merge_group_id) {
+        targetGroupId = selectedOrder.merge_group_id;
+        targetSessionId = (selectedOrder as any).merge_session_id;
+      }
+
+      if (!targetGroupId && selectedOrder?.table_id) {
+        const activeMerge = await db.getActiveMergeGroupForTable(restaurant.id, selectedOrder.table_id);
+        if (activeMerge) {
+          targetGroupId = activeMerge.group.id;
+          targetSessionId = activeMerge.session?.id;
+        }
+      }
+
+      if (targetGroupId) {
+        const details = await db.getMergedGroupDetails(restaurant.id, targetGroupId, targetSessionId);
+        if (details) {
+          setMergedGroupDetails(details);
+          setViewMode('merged');
+          return;
+        }
+      }
+      setMergedGroupDetails(null);
+    }
+    loadMergedGroup();
+  }, [selectedOrder?.id, selectedOrder?.table_id, selectedOrder?.merge_group_id, mergeGroupIdParam, restaurant?.id]);
 
   const alertedOrderIds = useRef<Set<string>>(new Set());
   const alertedBatchIds = useRef<Set<string>>(new Set());
@@ -996,6 +996,7 @@ export default function OrdersPage() {
   const handleCardQuickUpdate = async (order: Order, newStatus: Order['status']) => {
     if (!order || !restaurant) return;
     const actionKey = `${order.id}:${newStatus}`;
+    // 1. Synchronous atomic lock: prevent rapid double-clicks
     if (processingOrderIdsRef.current.has(actionKey)) return;
     processingOrderIdsRef.current.add(actionKey);
 
@@ -1003,9 +1004,21 @@ export default function OrdersPage() {
     const origStatus = origOrder?.status || order.status;
     const origBatches = origOrder?.batches || order.batches;
 
+    // 2. Immediate optimistic UI update (< 10ms visible DOM response)
     optimisticStatusMapRef.current[order.id] = newStatus;
     setOptimisticStatusMap(prev => ({ ...prev, [order.id]: newStatus }));
-    setProcessingOrderIds(prev => [...prev, actionKey]);
+    setProcessingOrderIds(prev => prev.includes(actionKey) ? prev : [...prev, actionKey]);
+
+    setOrders(prev => prev.map(o => {
+      if (o.id === order.id) {
+        return {
+          ...o,
+          status: newStatus,
+          batches: (o.batches || []).map((b: any) => ({ ...b, status: newStatus }))
+        };
+      }
+      return o;
+    }));
 
     if (newStatus === 'served') {
       window.dispatchEvent(new Event('stop-waiter-sound'));
@@ -1033,6 +1046,10 @@ export default function OrdersPage() {
         'success'
       );
     } catch (err: any) {
+      if (err.status === 409 || err.code === 'STALE_STATUS_CONFLICT') {
+        console.warn('[OrdersPage] Status conflict (concurrent update):', err);
+        return;
+      }
       delete optimisticStatusMapRef.current[order.id];
       setOptimisticStatusMap(prev => {
         const next = { ...prev };
@@ -2330,80 +2347,102 @@ export default function OrdersPage() {
                             </div>
                           )}
 
-                          {!isReservation && activeRole !== 'waiter' && order.status === 'new' && (
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
-                              isLoading={processingOrderIds.includes(`${order.id}:accepted`)}
-                              disabled={processingOrderIds.includes(`${order.id}:accepted`)}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await handleCardQuickUpdate(order, 'accepted');
-                              }}
-                            >
-                              Accept Order
-                            </Button>
-                          )}
+                          {(() => {
+                            const effectiveCardStatus = optimisticStatusMap[order.id] || order.status;
+                            return (
+                              <>
+                                {!isReservation && activeRole !== 'waiter' && effectiveCardStatus === 'new' && (
+                                  <Button
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
+                                    isLoading={processingOrderIds.includes(`${order.id}:accepted`)}
+                                    disabled={processingOrderIds.includes(`${order.id}:accepted`)}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await handleCardQuickUpdate(order, 'accepted');
+                                    }}
+                                  >
+                                    Accept Order
+                                  </Button>
+                                )}
 
-                          {!isReservation && activeRole !== 'waiter' && order.status === 'accepted' && (
-                            <Button
-                              size="sm"
-                              className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
-                              isLoading={processingOrderIds.includes(`${order.id}:preparing`)}
-                              disabled={processingOrderIds.includes(`${order.id}:preparing`)}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await handleCardQuickUpdate(order, 'preparing');
-                              }}
-                            >
-                              Start Preparing
-                            </Button>
-                          )}
+                                {!isReservation && activeRole !== 'waiter' && effectiveCardStatus === 'accepted' && (
+                                  <Button
+                                    size="sm"
+                                    className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
+                                    isLoading={processingOrderIds.includes(`${order.id}:preparing`)}
+                                    disabled={processingOrderIds.includes(`${order.id}:preparing`)}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await handleCardQuickUpdate(order, 'preparing');
+                                    }}
+                                  >
+                                    Start Preparing
+                                  </Button>
+                                )}
 
-                          {order.status === 'ready' && (
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
-                              isLoading={processingOrderIds.includes(`${order.id}:served`)}
-                              disabled={processingOrderIds.includes(`${order.id}:served`)}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await handleCardQuickUpdate(order, 'served');
-                              }}
-                            >
-                              {isTakeaway ? 'Hand Over Order' : 'Serve'}
-                            </Button>
-                          )}
+                                {!isReservation && activeRole !== 'waiter' && effectiveCardStatus === 'preparing' && (
+                                  <Button
+                                    size="sm"
+                                    className="bg-stone-900 hover:bg-black text-white dark:bg-stone-100 dark:hover:bg-white dark:text-stone-900 font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
+                                    isLoading={processingOrderIds.includes(`${order.id}:ready`)}
+                                    disabled={processingOrderIds.includes(`${order.id}:ready`)}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await handleCardQuickUpdate(order, 'ready');
+                                    }}
+                                  >
+                                    Mark Ready
+                                  </Button>
+                                )}
 
-                          {order.status === 'served' && order.payment_status === 'paid' && (
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center flex items-center gap-1"
-                              isLoading={processingOrderIds.includes(`${order.id}:completed`)}
-                              disabled={processingOrderIds.includes(`${order.id}:completed`)}
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await handleCardQuickUpdate(order, 'completed');
-                              }}
-                            >
-                              <CheckCircle className="h-3.5 w-3.5" />
-                              <span>Complete Order</span>
-                            </Button>
-                          )}
+                                {effectiveCardStatus === 'ready' && (
+                                  <Button
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center"
+                                    isLoading={processingOrderIds.includes(`${order.id}:served`)}
+                                    disabled={processingOrderIds.includes(`${order.id}:served`)}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await handleCardQuickUpdate(order, 'served');
+                                    }}
+                                  >
+                                    {isTakeaway ? 'Hand Over Order' : 'Serve'}
+                                  </Button>
+                                )}
 
-                          {order.status === 'served' && order.payment_status !== 'paid' && (
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center flex items-center gap-1"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedOrderId(order.id);
-                                setPaymentModalOpen(true);
-                              }}
-                            >
-                              <span>Collect & Pay</span>
-                            </Button>
-                          )}
+                                {effectiveCardStatus === 'served' && order.payment_status === 'paid' && (
+                                  <Button
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center flex items-center gap-1"
+                                    isLoading={processingOrderIds.includes(`${order.id}:completed`)}
+                                    disabled={processingOrderIds.includes(`${order.id}:completed`)}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await handleCardQuickUpdate(order, 'completed');
+                                    }}
+                                  >
+                                    <CheckCircle className="h-3.5 w-3.5" />
+                                    <span>Complete Order</span>
+                                  </Button>
+                                )}
+
+                                {effectiveCardStatus === 'served' && order.payment_status !== 'paid' && (
+                                  <Button
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 text-xs rounded-lg cursor-pointer shadow-xs w-full sm:w-auto justify-center flex items-center gap-1"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedOrderId(order.id);
+                                      setPaymentModalOpen(true);
+                                    }}
+                                  >
+                                    <span>Collect & Pay</span>
+                                  </Button>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

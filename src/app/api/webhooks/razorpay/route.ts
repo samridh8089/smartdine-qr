@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabaseAdmin = createClient(supabaseUrl, serviceKey);
 
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
@@ -37,23 +37,51 @@ export async function POST(req: Request) {
     const event = JSON.parse(rawBody);
     console.log(`[Razorpay Webhook] Verified event: ${event.event}`);
 
-    const payload = event.payload;
+    const payload = event.payload || {};
     const payment = payload.payment?.entity;
     const order = payload.order?.entity;
+    const subscription = payload.subscription?.entity;
 
-    const notes = payment?.notes || order?.notes || {};
-    const restaurantId = notes.restaurant_id || notes.restaurantId;
-    const planName = notes.plan || notes.plan_name || notes.subscription_plan || 'pro';
+    const notes = payment?.notes || order?.notes || subscription?.notes || {};
+    let restaurantId = notes.restaurant_id || notes.restaurantId;
+    const planName = (notes.plan || notes.plan_name || notes.subscription_plan || 'pro').toLowerCase().trim();
     const billingInterval = notes.interval || notes.billing_interval || 'monthly';
+    const customerEmail = (payment?.email || notes.email || '')?.trim()?.toLowerCase();
 
-    // 2. Handle Payment / Order Success Events
+    // Fallback: If restaurantId not in notes, resolve via customerEmail
+    if (!restaurantId && customerEmail) {
+      try {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('restaurant_id')
+          .ilike('email', customerEmail)
+          .maybeSingle();
+        if (prof?.restaurant_id) {
+          restaurantId = prof.restaurant_id;
+        } else {
+          const { data: restByEmail } = await supabaseAdmin
+            .from('restaurants')
+            .select('id')
+            .eq('settings->>owner_email', customerEmail)
+            .maybeSingle();
+          if (restByEmail?.id) {
+            restaurantId = restByEmail.id;
+          }
+        }
+      } catch (lookupErr) {
+        console.warn('[Razorpay Webhook] Error resolving restaurant by email:', lookupErr);
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const durationDays = billingInterval === 'yearly' ? 365 : 30;
+    const nextBillingDate = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
+    // 2. Handle Payment Success Events (payment.captured, order.paid)
     if (event.event === 'payment.captured' || event.event === 'order.paid') {
       const paymentId = payment?.id;
       const orderId = order?.id || payment?.order_id;
       const amount = (payment?.amount || order?.amount || 0) / 100;
-      const paidAt = new Date().toISOString();
-      const durationDays = billingInterval === 'yearly' ? 365 : 30;
-      const nextBillingDate = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 
       let targetRestId = restaurantId;
       const cleanEmail = (payment?.email || notes.email || '').trim().toLowerCase();
@@ -130,17 +158,17 @@ export async function POST(req: Request) {
           currency: 'INR',
           plan: planName,
           status: 'paid',
-          paid_at: paidAt,
+          paid_at: nowIso,
           method: payment?.method || 'razorpay'
         });
 
         currentSettings.payment_details = {
           payment_id: paymentId,
           order_id: orderId,
-          subscription_id: payment?.subscription_id || null,
+          subscription_id: payment?.subscription_id || subscription?.id || null,
           payment_status: 'paid',
           paid_amount: amount,
-          paid_at: paidAt,
+          paid_at: nowIso,
           next_billing_date: nextBillingDate,
           method: payment?.method || 'razorpay'
         };
@@ -148,7 +176,6 @@ export async function POST(req: Request) {
         currentSettings.last_order_id = orderId;
         currentSettings.payment_history = paymentHistory;
 
-        // Activate restaurant
         await supabaseAdmin
           .from('restaurants')
           .update({
@@ -157,14 +184,13 @@ export async function POST(req: Request) {
             trial_ends_at: nextBillingDate,
             billing_interval: billingInterval,
             settings: currentSettings,
-            updated_at: new Date().toISOString()
+            updated_at: nowIso
           })
           .eq('id', targetRestId);
 
         console.log(`[Razorpay Webhook] Successfully activated restaurant ${targetRestId} with ${planName} plan (Paid ₹${amount})`);
       }
     }
-
 
     // 3. Handle Payment Failed Events
     if (event.event === 'payment.failed') {
@@ -176,15 +202,81 @@ export async function POST(req: Request) {
           payment_id: payment?.id,
           error_code: payment?.error_code,
           error_description: payment?.error_description,
-          failed_at: new Date().toISOString()
+          failed_at: nowIso
         };
         await supabaseAdmin.from('restaurants').update({
           subscription_status: 'pending_payment',
-          settings: currentSettings
+          settings: currentSettings,
+          updated_at: nowIso
         }).eq('id', restaurantId);
       }
     }
 
+    // 4. Handle Subscription Activated & Updated Events (subscription.activated, subscription.updated)
+    else if (event.event === 'subscription.activated' || event.event === 'subscription.updated') {
+      const subId = subscription?.id;
+      const subPlan = (subscription?.notes?.plan || planName || 'pro').toLowerCase().trim();
+      const subInterval = subscription?.notes?.interval || billingInterval || 'monthly';
+      const subEndIso = subscription?.current_end
+        ? new Date(subscription.current_end * 1000).toISOString()
+        : nextBillingDate;
+
+      if (restaurantId) {
+        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
+        const currentSettings = (rest as any)?.settings || {};
+        currentSettings.subscription_details = {
+          subscription_id: subId,
+          plan: subPlan,
+          interval: subInterval,
+          status: 'active',
+          current_start: subscription?.current_start ? new Date(subscription.current_start * 1000).toISOString() : nowIso,
+          current_end: subEndIso,
+          updated_at: nowIso
+        };
+
+        await supabaseAdmin
+          .from('restaurants')
+          .update({
+            subscription_plan: subPlan,
+            subscription_status: 'active',
+            trial_ends_at: subEndIso,
+            billing_interval: subInterval,
+            settings: currentSettings,
+            updated_at: nowIso
+          })
+          .eq('id', restaurantId);
+
+        console.log(`[Razorpay Webhook] Subscription ${subId} (${event.event}) activated for restaurant ${restaurantId}`);
+      }
+    }
+
+    // 5. Handle Subscription Cancelled Event (subscription.cancelled)
+    else if (event.event === 'subscription.cancelled') {
+      const subId = subscription?.id;
+      if (restaurantId) {
+        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
+        const currentSettings = (rest as any)?.settings || {};
+        currentSettings.subscription_details = {
+          ...(currentSettings.subscription_details || {}),
+          subscription_id: subId,
+          status: 'cancelled',
+          cancelled_at: nowIso
+        };
+
+        await supabaseAdmin
+          .from('restaurants')
+          .update({
+            subscription_status: 'cancelled',
+            settings: currentSettings,
+            updated_at: nowIso
+          })
+          .eq('id', restaurantId);
+
+        console.log(`[Razorpay Webhook] Subscription ${subId} cancelled for restaurant ${restaurantId}`);
+      }
+    }
+
+    // Fast sub-second response to Razorpay
     return NextResponse.json({ status: 'ok', received: true });
   } catch (err: any) {
     console.error('[Razorpay Webhook Exception]:', err);
