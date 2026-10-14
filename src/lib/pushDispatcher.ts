@@ -1,5 +1,16 @@
-import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+import { supabase as defaultSupabase } from './supabase';
 import { logSystemEvent, getOrderCorrelationId } from './systemEventLogger';
+
+function getServerAdminClient() {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const rawKey = serviceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.supabase.co';
+  return createClient(supabaseUrl, rawKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
 
 export async function dispatchFCMNotification(
   restaurantId: string,
@@ -80,7 +91,9 @@ export async function dispatchFCMNotification(
     expandedRoles.add('supervisor');
     expandedRoles.add('Supervisor');
 
-    const { data: staffProfiles, error: profileErr } = await supabase
+    const dbClient = typeof window === 'undefined' ? getServerAdminClient() : defaultSupabase;
+
+    const { data: staffProfiles, error: profileErr } = await dbClient
       .from('profiles')
       .select('id, push_token, role')
       .eq('restaurant_id', restaurantId)
@@ -95,7 +108,7 @@ export async function dispatchFCMNotification(
     // 5. Scoped filtering for table assignments & Owner bell mute preference
     let targetProfiles = staffProfiles;
     try {
-      const { data: restData } = await supabase
+      const { data: restData } = await dbClient
         .from('restaurants')
         .select('settings')
         .eq('id', restaurantId)
