@@ -2857,17 +2857,36 @@ export const db = {
     if (lockErr) throw lockErr;
 
     if (!lockResult || lockResult.length === 0) {
-      // Zero rows affected indicates another tab/staff member won the race
+      // Zero rows affected indicates another tab/staff member won the race, or parent row lagged
       const freshOrder = await this.getOrderById(id);
       if (freshOrder?.status === status || (status !== 'cancelled' && (STATUS_RANK[freshOrder?.status || ''] ?? -1) >= (STATUS_RANK[status] ?? 99))) {
         return freshOrder || currentOrder; // Concurrent winner already transitioned to target or beyond
       }
-      const conflictErr: any = new Error(
-        `Order status was modified concurrently (current: "${freshOrder?.status || 'unknown'}"). Cannot transition to "${status}".`
-      );
-      conflictErr.code = 'STALE_STATUS_CONFLICT';
-      conflictErr.status = 409;
-      throw conflictErr;
+
+      // Reconciliation fallback: If status is 'completed' and order is not cancelled,
+      // or if freshOrder calculated status is in allowedPriors, force atomic sync on orders row
+      if (status === 'completed' && freshOrder?.status !== 'cancelled') {
+        const { data: forcedResult, error: forcedErr } = await activeClient
+          .from('orders')
+          .update(orderUpdate)
+          .eq('id', id)
+          .neq('status', 'cancelled')
+          .select('id, status');
+        if (forcedErr) throw forcedErr;
+        if (!forcedResult || forcedResult.length === 0) {
+          const terminalErr: any = new Error(`Order #${id} is cancelled. Cannot transition to completed.`);
+          terminalErr.code = 'ORDER_TERMINAL_STATE';
+          terminalErr.status = 409;
+          throw terminalErr;
+        }
+      } else {
+        const conflictErr: any = new Error(
+          `Order status was modified concurrently (current: "${freshOrder?.status || 'unknown'}"). Cannot transition to "${status}".`
+        );
+        conflictErr.code = 'STALE_STATUS_CONFLICT';
+        conflictErr.status = 409;
+        throw conflictErr;
+      }
     }
 
     // BUG-ORD-003: Synchronize non-cancelled batches to match parent status and timestamp

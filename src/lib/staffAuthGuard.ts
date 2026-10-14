@@ -10,6 +10,8 @@ const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.su
 const supabaseServiceKey = rawKey || 'placeholder-service-key';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+const STAFF_AUTH_CACHE = new Map<string, { result: StaffAuthResult; expiresAt: number }>();
+
 export interface StaffAuthResult {
   isAuthorized: boolean;
   isSuperAdmin: boolean;
@@ -29,6 +31,28 @@ export async function verifyStaffRequest(
 
     if (!token) {
       token = req.headers.get('x-staff-token') || req.headers.get('x-admin-token') || '';
+    }
+
+    // Fast-path: Check in-memory cache
+    if (token && STAFF_AUTH_CACHE.has(token)) {
+      const cached = STAFF_AUTH_CACHE.get(token)!;
+      if (cached.expiresAt > Date.now()) {
+        const { isSuperAdmin, user, profile } = cached.result;
+        const effectiveRole = isSuperAdmin ? 'super_admin' : (profile?.role || 'owner');
+        if (!allowedRoles || isSuperAdmin || allowedRoles.includes(effectiveRole)) {
+          if (!targetRestaurantId || isSuperAdmin || !profile?.restaurant_id || profile.restaurant_id === targetRestaurantId) {
+            return {
+              isAuthorized: true,
+              isSuperAdmin,
+              user,
+              profile,
+              response: null
+            };
+          }
+        }
+      } else {
+        STAFF_AUTH_CACHE.delete(token);
+      }
     }
 
     if (!token) {
@@ -270,13 +294,22 @@ export async function verifyStaffRequest(
       }
     }
 
-    return {
+    const authSuccess: StaffAuthResult = {
       isAuthorized: true,
       isSuperAdmin,
       user,
       profile: resolvedProfile || { id: user.id, email: user.email, role: effectiveRole, restaurant_id: targetRestaurantId },
       response: null
     };
+
+    if (token) {
+      STAFF_AUTH_CACHE.set(token, {
+        result: authSuccess,
+        expiresAt: Date.now() + 60000 // 60s fast-path cache
+      });
+    }
+
+    return authSuccess;
   } catch (err: any) {
     return {
       isAuthorized: false,
