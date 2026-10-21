@@ -342,6 +342,13 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const urlDate = sp.get('date');
+      if (urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate)) {
+        return urlDate;
+      }
+    }
     return getTodayDateString('Asia/Kolkata');
   });
   const [loading, setLoading] = useState(() => !initialCachedOrders);
@@ -799,7 +806,62 @@ export default function OrdersPage() {
     setCustomerRequests(activeReqs);
 
     if (orderIdParam) {
-      setSelectedOrderId(orderIdParam);
+      const cleanParam = orderIdParam.trim();
+      let matched = filteredForRole.find(o => 
+        o.id === cleanParam || 
+        (cleanParam.length >= 6 && o.id.startsWith(cleanParam)) ||
+        getFormattedOrderId(o, restaurant?.name || '', filteredForRole) === cleanParam ||
+        getFormattedOrderId(o, restaurant?.name || '', filteredForRole) === `#${cleanParam.replace(/^#/, '')}`
+      );
+
+      // If not in current day's list, fetch order directly from DB to find its exact date and queue
+      if (!matched && restId) {
+        try {
+          const { data: dbOrder } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('restaurant_id', restId)
+            .or(`id.eq.${cleanParam},id.ilike.${cleanParam}%`)
+            .maybeSingle();
+
+          if (dbOrder) {
+            matched = dbOrder;
+            const orderDateStr = new Intl.DateTimeFormat('en-CA', { 
+              timeZone: tz, 
+              year: 'numeric', 
+              month: '2-digit', 
+              day: '2-digit' 
+            }).format(new Date(dbOrder.created_at));
+
+            if (orderDateStr !== targetDate) {
+              setSelectedDate(orderDateStr);
+              selectedDateRef.current = orderDateStr;
+              const { startIso: orderStart, endIso: orderEnd } = getDayRangeInTimezone(orderDateStr, tz);
+              const dateOrders = await db.getOrders(restId, orderStart, orderEnd);
+              if (dateOrders && dateOrders.length > 0) {
+                setOrders(dateOrders);
+                dashboardStore.setCachedOrders(restId, dateOrders);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Direct order lookup error in loadInitialData:', e);
+        }
+      }
+
+      if (matched) {
+        setSelectedOrderId(matched.id);
+        const isRes = isOrderReservation(matched);
+        if (isRes) {
+          setOrderQueue('reservations');
+        } else if (matched.order_type === 'takeaway') {
+          setOrderQueue('takeaway');
+        } else {
+          setOrderQueue('dine_in');
+        }
+      } else {
+        setSelectedOrderId(cleanParam);
+      }
     } else if (filteredForRole.length > 0 && !selectedOrderIdRef.current) {
       setSelectedOrderId(filteredForRole[0].id);
     }
