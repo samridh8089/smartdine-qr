@@ -2756,9 +2756,13 @@ export default function ReportsPage() {
                               ? getFormattedOrderId(matchedOrder, restaurant?.name || '', orders) 
                               : `#${orderId.slice(0, 8)}`;
 
+                            const orderDateStr = matchedOrder?.created_at 
+                              ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(matchedOrder.created_at))
+                              : (entry.created_at ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(entry.created_at)) : '');
+
                             return (
                               <a
-                                href={`/dashboard/orders?id=${matchedOrder ? matchedOrder.id : orderId}`}
+                                href={`/dashboard/orders?id=${matchedOrder ? matchedOrder.id : orderId}${orderDateStr ? `&date=${orderDateStr}` : ''}`}
                                 className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline transition-colors group cursor-pointer"
                                 title="Click to open this order in Live Orders"
                               >
