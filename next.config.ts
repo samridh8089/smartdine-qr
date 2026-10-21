@@ -34,37 +34,6 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion']
   },
-  outputFileTracingExcludes: {
-    '*': [
-      './assets/**',
-      './base/**',
-      './dist/**',
-      './dist-desktop/**',
-      './dist-electron/**',
-      './out-electron-build/**',
-      './smartdine-mobile/**',
-      './docs/**',
-      './e2e/**',
-      './electron/**',
-      './orders_audit_proof/**',
-      './proofs/**',
-      './qa-screenshots/**',
-      './release-rc1/**',
-      './release-rc2/**',
-      './resources/**',
-      './scratch/**',
-      './scripts/**',
-      './tools/**',
-      './test-results/**',
-      './playwright-report/**',
-      './*.apk',
-      './*.png',
-      './*.mp4',
-      './*.idsig',
-      './*.xml',
-      './public/*.apk',
-    ],
-  },
   async redirects() {
     return [
       {
