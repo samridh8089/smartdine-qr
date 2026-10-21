@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { db, Restaurant, Category, MenuItem, Table, CustomerRequest, Offer, isSubscriptionExpired } from '@/lib/db';
 import { parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, validateIndianMobileNumber, cleanIndianMobileNumber } from '@/lib/utils';
 import { calculateOrderTax } from '@/lib/tax';
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { supabase } from '@/lib/supabase';
@@ -863,11 +863,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         showToast('Please enter your full name for takeaway pickup.');
         return;
       }
-      const cleanPhone = takeawayPhone.replace(/\D/g, '');
-      if (!cleanPhone || cleanPhone.length < 10) {
+      const phoneCheck = validateIndianMobileNumber(takeawayPhone);
+      if (!phoneCheck.valid) {
         isSubmittingRef.current = false;
         setOrderPlacing(false);
-        showToast('Please enter a valid 10-digit mobile number for order status updates.');
+        showToast(phoneCheck.error || 'Please enter a valid 10-digit Indian mobile number.');
         return;
       }
       if (!takeawayPaymentCompleted) {
@@ -884,11 +884,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         showToast('Please enter your full name for the table reservation.');
         return;
       }
-      const cleanPhone = reservationPhone.replace(/\D/g, '');
-      if (!cleanPhone || cleanPhone.length < 10) {
+      const phoneCheck = validateIndianMobileNumber(reservationPhone);
+      if (!phoneCheck.valid) {
         isSubmittingRef.current = false;
         setOrderPlacing(false);
-        showToast('Please enter a valid 10-digit mobile number for reservation confirmation.');
+        showToast(phoneCheck.error || 'Please enter a valid 10-digit Indian mobile number.');
         return;
       }
       if (!reservationTime) {
@@ -1760,10 +1760,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 <label className="block text-[10px] font-extrabold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider mb-1">Mobile Phone</label>
                 <input
                   type="tel"
-                  placeholder="e.g. +91 9876543210"
+                  placeholder="e.g. 9876543210"
+                  maxLength={10}
                   value={reservationPhone}
-                  onChange={(e) => setReservationPhone(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none"
+                  onChange={(e) => setReservationPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none font-mono"
                 />
               </div>
             </div>
@@ -2480,8 +2481,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                   <input
                     type="tel"
                     placeholder="e.g. 9876543210"
+                    maxLength={10}
                     value={takeawayPhone}
-                    onChange={(e) => setTakeawayPhone(e.target.value)}
+                    onChange={(e) => setTakeawayPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-stone-500/20 font-mono"
                     required
                   />

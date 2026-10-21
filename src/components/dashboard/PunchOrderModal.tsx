@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, MenuItem, Table, Restaurant, Category, Order } from '@/lib/db';
 import { calculateBillingTotals } from '@/lib/billingEngine';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, validateIndianMobileNumber, cleanIndianMobileNumber } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { Dialog } from '@/components/ui/Dialog';
@@ -181,9 +181,15 @@ export default function PunchOrderModal({
         setErrorMsg('Customer name is mandatory for takeaway orders.');
         return;
       }
-      const cleanPhone = customerPhone.replace(/\D/g, '');
-      if (cleanPhone.length !== 10) {
-        setErrorMsg('A valid 10-digit customer mobile number is mandatory for takeaway orders.');
+      const phoneCheck = validateIndianMobileNumber(customerPhone);
+      if (!phoneCheck.valid) {
+        setErrorMsg(phoneCheck.error || 'A valid 10-digit customer mobile number is mandatory for takeaway orders.');
+        return;
+      }
+    } else if (customerPhone.trim()) {
+      const phoneCheck = validateIndianMobileNumber(customerPhone);
+      if (!phoneCheck.valid) {
+        setErrorMsg(phoneCheck.error || 'Invalid 10-digit customer mobile number.');
         return;
       }
     }
@@ -215,8 +221,9 @@ export default function PunchOrderModal({
 
       // Format customer name & mobile into special_instructions for universal system parsing
       let fullInstructions = specialInstructions.trim();
-      if (customerName.trim() || customerPhone.trim()) {
-        const custHeader = `CUSTOMER: ${customerName.trim()} | PHONE: ${customerPhone.trim()}`;
+      const cleanPhone = customerPhone.trim() ? cleanIndianMobileNumber(customerPhone) : '';
+      if (customerName.trim() || cleanPhone) {
+        const custHeader = `CUSTOMER: ${customerName.trim() || 'Guest'} | PHONE: ${cleanPhone}`;
         fullInstructions = fullInstructions ? `${custHeader} | NOTES: ${fullInstructions}` : custHeader;
       }
 

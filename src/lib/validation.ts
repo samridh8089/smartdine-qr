@@ -3,6 +3,10 @@
  * Provides strict schemas, types, length, format, UUID, email, phone, restaurant ID, and enum validators.
  */
 
+import { cleanIndianMobileNumber, validateIndianMobileNumber } from '../../packages/core';
+
+export { cleanIndianMobileNumber, validateIndianMobileNumber };
+
 export interface ValidationRule<T = any> {
   (value: T, fieldName: string): string | null;
 }
@@ -40,12 +44,22 @@ export const Validators = {
   },
 
   phone: (): ValidationRule => {
-    const phoneRegex = /^\+?[0-9]{10,15}$/;
     return (value: any, fieldName: string) => {
       if (typeof value !== 'string') return `${fieldName} must be a valid phone number string`;
-      const cleaned = value.replace(/[\s\-\(\)]/g, '');
-      if (!phoneRegex.test(cleaned)) {
-        return `${fieldName} must be a valid phone number (10 to 15 digits)`;
+      const res = validateIndianMobileNumber(value);
+      if (!res.valid) {
+        return `${fieldName}: ${res.error}`;
+      }
+      return null;
+    };
+  },
+
+  indianMobile: (): ValidationRule => {
+    return (value: any, fieldName: string) => {
+      if (typeof value !== 'string') return `${fieldName} must be a valid mobile number string`;
+      const res = validateIndianMobileNumber(value);
+      if (!res.valid) {
+        return `${fieldName}: ${res.error}`;
       }
       return null;
     };

@@ -9,6 +9,7 @@ import { isSubscriptionExpired } from '@/lib/db';
 import { logSystemEvent, getOrderCorrelationId } from '@/lib/systemEventLogger';
 import { checkBookingOverlap } from '@/lib/utils';
 import { dispatchFCMNotification } from '@/lib/pushDispatcher';
+import { validateIndianMobileNumber } from '@/lib/validation';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -54,27 +55,36 @@ export async function POST(req: Request) {
       } catch (_) {}
     }
 
-    // P0-8: Mandatory Customer Details Enforcement
+    // P0-8: Strict Customer Details & Mobile Number Enforcement
     if (orderType === 'takeaway') {
       if (!finalCustomerName) {
         timer.end('auth');
         return NextResponse.json({ error: 'Customer Name is required for Takeaway orders.' }, { status: 400 });
       }
-      if (!finalCustomerPhone || finalCustomerPhone.replace(/\D/g, '').length < 10) {
+      const phoneCheck = validateIndianMobileNumber(finalCustomerPhone);
+      if (!phoneCheck.valid) {
         timer.end('auth');
-        return NextResponse.json({ error: 'Valid 10-digit mobile number is required for Takeaway orders.' }, { status: 400 });
+        return NextResponse.json({ error: phoneCheck.error || 'A valid 10-digit Indian mobile number is required for Takeaway orders.' }, { status: 400 });
       }
-    }
-
-    if (orderType === 'reservation') {
+      finalCustomerPhone = phoneCheck.cleaned;
+    } else if (orderType === 'reservation') {
       if (!finalCustomerName) {
         timer.end('auth');
         return NextResponse.json({ error: 'Customer Name is required for Table Reservations.' }, { status: 400 });
       }
-      if (!finalCustomerPhone || finalCustomerPhone.replace(/\D/g, '').length < 10) {
+      const phoneCheck = validateIndianMobileNumber(finalCustomerPhone);
+      if (!phoneCheck.valid) {
         timer.end('auth');
-        return NextResponse.json({ error: 'Valid 10-digit mobile number is required for Table Reservations.' }, { status: 400 });
+        return NextResponse.json({ error: phoneCheck.error || 'A valid 10-digit Indian mobile number is required for Table Reservations.' }, { status: 400 });
       }
+      finalCustomerPhone = phoneCheck.cleaned;
+    } else if (finalCustomerPhone) {
+      const phoneCheck = validateIndianMobileNumber(finalCustomerPhone);
+      if (!phoneCheck.valid) {
+        timer.end('auth');
+        return NextResponse.json({ error: phoneCheck.error || 'Invalid 10-digit Indian mobile number.' }, { status: 400 });
+      }
+      finalCustomerPhone = phoneCheck.cleaned;
     }
 
     if (!restaurantId || !Array.isArray(items) || (items.length === 0 && orderType !== 'reservation')) {
@@ -473,7 +483,10 @@ export async function POST(req: Request) {
         status: 'new',
         order_type: (orderType === 'reservation') ? 'dine_in' : orderType,
         payment_status: paymentStatus,
-        special_instructions: [specialInstructions, finalCustomerName ? `Customer: ${finalCustomerName}${finalCustomerPhone ? ` (${finalCustomerPhone})` : ''}` : null].filter(Boolean).join(' | ') || null,
+        special_instructions: [
+          specialInstructions,
+          (finalCustomerName || finalCustomerPhone) ? `CUSTOMER: ${finalCustomerName || 'Guest'} | PHONE: ${finalCustomerPhone}` : null
+        ].filter(Boolean).join(' | ') || null,
         idempotency_key: cleanKey,
         subtotal: parseFloat(subtotal.toFixed(2)),
         discount_total: taxCalc.discountTotal,
