@@ -2664,16 +2664,10 @@ export default function OrdersPage() {
                         </span>
                       </div>
 
-                      <div className={`flex items-center justify-between gap-2 mt-2 pt-2 border-t ${isSelected ? 'border-emerald-200/60 dark:border-emerald-900/40' : 'border-slate-100 dark:border-slate-800'}`}>
+                      <div className="flex items-center justify-between gap-2 mt-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {getStatusBadge(orderCardStatus, order.order_type)}
-                          {cardRefund.isRefunded ? (
-                            cardRefund.isPartial ? (
-                              <Badge variant="warning">Ref: {formatPrice(cardRefund.refundAmount, restaurant?.settings?.currency)}</Badge>
-                            ) : (
-                              <Badge variant="error">Refunded</Badge>
-                            )
-                          ) : order.payment_status === 'paid' && Number(order.total || 0) > 0 ? (
+                          {order.payment_status === 'paid' && Number(order.total || 0) > 0 ? (
                             <Badge variant="success">Paid</Badge>
                           ) : order.payment_status === 'customer_marked_paid' ? (
                             <Badge variant="warning">Marked Paid</Badge>
