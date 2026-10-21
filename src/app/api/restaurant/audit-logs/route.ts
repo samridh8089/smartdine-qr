@@ -11,7 +11,10 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const restaurantId = url.searchParams.get('restaurantId');
     const search = url.searchParams.get('search') || '';
-    const limit = Number(url.searchParams.get('limit') || 50);
+    const action = url.searchParams.get('action') || 'all';
+    const page = Math.max(1, Number(url.searchParams.get('page') || 1));
+    const limit = Math.max(1, Number(url.searchParams.get('limit') || 10));
+    const offset = (page - 1) * limit;
 
     if (!restaurantId) {
       return NextResponse.json({ success: false, error: 'restaurantId is required' }, { status: 400 });
@@ -19,21 +22,25 @@ export async function GET(req: Request) {
 
     let query = supabaseAdmin
       .from('audit_logs')
-      .select('id, restaurant_id, user_email, action, details, created_at')
+      .select('id, restaurant_id, user_email, action, details, created_at', { count: 'exact' })
       .eq('restaurant_id', restaurantId)
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .range(offset, offset + limit - 1);
 
     if (search.trim()) {
       query = query.or(`action.ilike.%${search}%,details.ilike.%${search}%,user_email.ilike.%${search}%`);
     }
 
-    const { data, error } = await query;
+    if (action && action !== 'all') {
+      query = query.ilike('action', `%${action}%`);
+    }
+
+    const { data, count, error } = await query;
     if (error) throw error;
 
     // Parse details JSON if needed
     const parsedLogs = (data || []).map(log => {
-      let parsedDetails = log.details;
+      let parsedDetails: any = log.details;
       if (typeof log.details === 'string') {
         try {
           parsedDetails = JSON.parse(log.details);
@@ -43,13 +50,21 @@ export async function GET(req: Request) {
       }
       return {
         ...log,
+        user_role: parsedDetails?.role || null,
+        entity_type: parsedDetails?.entity || null,
+        entity_id: parsedDetails?.entityId || null,
+        details: typeof parsedDetails?.message === 'string' 
+          ? parsedDetails.message 
+          : (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)),
         parsedDetails
       };
     });
 
     return NextResponse.json({
       success: true,
-      logs: parsedLogs
+      logs: parsedLogs,
+      auditLogs: parsedLogs,
+      total: count || 0
     });
   } catch (err: any) {
     return handleApiError('Restaurant-AuditLogs-GET', err, 'Failed to fetch restaurant audit logs', 500);
