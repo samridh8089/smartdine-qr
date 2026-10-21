@@ -23,6 +23,11 @@ interface PageProps {
   }>;
 }
 
+function cleanCustomerTableName(rawName?: string | null): string | null {
+  if (!rawName || rawName === 'Reservation') return null;
+  return rawName.split('•')[0].replace(/\(Reservation\)/gi, '').trim();
+}
+
 export default function OrderTrackingPage({ params }: PageProps) {
   const router = useRouter();
   const resolvedParams = use(params);
@@ -599,7 +604,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
           </div>
 
           {/* Call Waiter button on Order Tracking Page */}
-          {order.table_id && order.order_type !== 'takeaway' && (
+          {order.table_id && order.order_type !== 'takeaway' && order.order_type !== 'reservation' && (
             activeWaiterRequest ? (
               <span className="px-3.5 py-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-black border border-amber-300 dark:border-amber-800 flex items-center gap-1.5 shadow-xs animate-pulse">
                 <Bell className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -620,7 +625,7 @@ export default function OrderTrackingPage({ params }: PageProps) {
       </header>
 
       {/* Call Waiter Success Confirmation Banner */}
-      {(callSent || activeWaiterRequest) && (
+      {(callSent || activeWaiterRequest) && order.order_type !== 'reservation' && (
         <div className="max-w-xl mx-auto px-4 pt-3 print:hidden">
           <div className="bg-emerald-500 text-white p-3.5 rounded-2xl text-center text-xs font-bold shadow-lg animate-pop flex items-center justify-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
@@ -643,8 +648,12 @@ export default function OrderTrackingPage({ params }: PageProps) {
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-stone-200 dark:bg-stone-800 text-stone-800 dark:text-stone-200 uppercase">
                 Takeaway
               </span>
+            ) : order.order_type === 'reservation' ? (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-200 uppercase">
+                Reservation
+              </span>
             ) : (
-              <span>{order.table_name || 'Table'}</span>
+              <span>{cleanCustomerTableName(order.table_name) || order.table_name || 'Table'}</span>
             )}
             <span>• Receipt #{getCustomerFacingOrderId(order, restaurant.name).replace(/^Order\s*#/i, '')}</span>
           </p>
@@ -655,6 +664,12 @@ export default function OrderTrackingPage({ params }: PageProps) {
               className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-xs ${
                 order.status === 'completed'
                   ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                  : order.order_type === 'reservation'
+                  ? order.status === 'new'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-800 animate-pulse'
+                    : ['accepted', 'preparing', 'ready', 'served'].includes(order.status)
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-800'
                   : order.status === 'served'
                   ? 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
                   : order.status === 'ready'
@@ -668,8 +683,18 @@ export default function OrderTrackingPage({ params }: PageProps) {
                   : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
               }`}
             >
-              <span className={`h-2 w-2 rounded-full ${['preparing', 'ready'].includes(order.status) ? 'bg-amber-500 animate-ping' : 'bg-current'}`} />
-              <span>Status: {order.status}</span>
+              <span className={`h-2 w-2 rounded-full ${(['preparing', 'ready'].includes(order.status) || (order.order_type === 'reservation' && order.status === 'new')) ? 'bg-amber-500 animate-ping' : 'bg-current'}`} />
+              <span>
+                {order.order_type === 'reservation'
+                  ? order.status === 'new'
+                    ? 'Reservation Pending'
+                    : ['accepted', 'preparing', 'ready', 'served'].includes(order.status)
+                    ? 'Reservation Confirmed'
+                    : order.status === 'completed'
+                    ? 'Reservation Fulfilled'
+                    : 'Reservation Cancelled'
+                  : `Status: ${order.status}`}
+              </span>
             </span>
 
             {/* Live Sync Status Indicator - only shown if network issue occurs */}
@@ -692,8 +717,8 @@ export default function OrderTrackingPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Dynamic Kitchen Preparation ETA Card */}
-        {etaRemainingSeconds !== null && !['ready', 'served', 'completed', 'cancelled'].includes(order.status) && (
+        {/* Dynamic Kitchen Preparation ETA Card (Dine-in and Takeaway only, NOT for future reservations) */}
+        {order.order_type !== 'reservation' && etaRemainingSeconds !== null && !['ready', 'served', 'completed', 'cancelled'].includes(order.status) && (
           <Card id="customer-eta-card" className="shadow-md border-2 border-amber-500/30 bg-linear-to-br from-amber-50/80 to-white dark:from-amber-950/20 dark:to-slate-900 overflow-hidden animate-pop print:hidden">
             <CardContent className="p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -1053,328 +1078,183 @@ export default function OrderTrackingPage({ params }: PageProps) {
         )}
 
         {/* RESERVATION CONFIRMATION CARD */}
-        {order.order_type === 'reservation' ? (
-          <Card className="shadow-lg border-2 border-emerald-500/30 bg-white dark:bg-slate-900 overflow-hidden animate-pop">
-            <CardContent className="p-6 md:p-8 text-center space-y-6">
-              <div className="h-16 w-16 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 rounded-full flex items-center justify-center mx-auto border-4 border-emerald-500/20 shadow-lg">
-                <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40 uppercase tracking-wider">
-                  Table Reservation Confirmed
-                </span>
-                <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white pt-1">
-                  Reservation Ticket #{order.id.slice(-6).toUpperCase()}
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto leading-relaxed">
-                  Your table reservation has been confirmed. Our host will welcome you and hold your table for 15 minutes past your booking time.
-                </p>
-              </div>
-
-              {/* Reservation Details Box */}
-              <div className="bg-slate-50 dark:bg-slate-950/50 p-4 md:p-5 rounded-2xl border border-slate-100 dark:border-slate-800 text-left space-y-2.5 font-semibold text-xs md:text-sm">
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 pb-2">
-                  Booking Details
-                </h4>
-                {order.special_instructions && (
-                  <div className="text-slate-700 dark:text-slate-300 space-y-1.5 leading-relaxed font-bold">
-                    {order.special_instructions.split('|').map((part, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5">
-                        <span className="text-emerald-600">•</span>
-                        <span>{part.trim()}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Action */}
-              <div className="pt-2">
-                <Button 
-                  onClick={() => router.push(`/menu/${restaurant.slug}/reservation`)}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md"
-                >
-                  <ArrowLeft className="h-4 w-4" /> Back to Reservation Menu
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          /* Live Batch-wise Timeline State Cards for Dine-in & Takeaway */
-          order.status === 'cancelled' ? (
-            <Card id="customer-cancelled-card" className="shadow-md border-2 border-rose-500/30 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 animate-pop overflow-hidden">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-start gap-3.5">
-                  <div className="h-12 w-12 rounded-2xl bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-800">
-                    <AlertTriangle className="h-6 w-6 text-rose-500" />
-                  </div>
-                  <div className="space-y-1 flex-1">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300">
-                      Order Cancelled
-                    </span>
-                    <h3 className="text-base font-black text-rose-950 dark:text-rose-100 pt-0.5">
-                      This order was cancelled
-                    </h3>
-                    <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">
-                      This order ticket has been cancelled by restaurant staff and will not be prepared.
-                    </p>
-                  </div>
+        {order.order_type === 'reservation' && (
+          order.status === 'new' ? (
+            <Card className="shadow-lg border-2 border-amber-500/30 bg-white dark:bg-slate-900 overflow-hidden animate-pop">
+              <CardContent className="p-6 md:p-8 text-center space-y-6">
+                <div className="h-16 w-16 bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto border-4 border-amber-500/20 shadow-lg">
+                  <Clock className="h-8 w-8 text-amber-600 dark:text-amber-400 animate-spin" style={{ animationDuration: '10s' }} />
                 </div>
 
-                {order.cancellation_reason && (
-                  <div className="bg-white/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/40 text-xs space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
-                      Reason for Cancellation:
-                    </span>
-                    <p className="italic font-semibold text-slate-800 dark:text-slate-200">
-                      "{order.cancellation_reason}"
-                    </p>
-                    {order.cancelled_by && (
-                      <span className="text-[10px] text-slate-400 block pt-0.5 font-medium">
-                        Declined by: {order.cancelled_by}
-                      </span>
-                    )}
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 uppercase tracking-wider animate-pulse">
+                    <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                    Reservation Received — Awaiting Confirmation
+                  </span>
+                  <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white pt-1">
+                    Booking Request #{order.id.slice(-6).toUpperCase()}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto leading-relaxed">
+                    We have received your table booking request. The restaurant manager will review and allot your table shortly. This page will update live once confirmed!
+                  </p>
+                </div>
 
+                {/* Reservation Details Box */}
+                <div className="bg-slate-50 dark:bg-slate-950/50 p-4 md:p-5 rounded-2xl border border-slate-100 dark:border-slate-800 text-left space-y-2.5 font-semibold text-xs md:text-sm">
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 pb-2">
+                    Booking Details
+                  </h4>
+                  {order.special_instructions && (
+                    <div className="text-slate-700 dark:text-slate-300 space-y-1.5 leading-relaxed font-bold">
+                      {order.special_instructions.split('|').map((part, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          <span className="text-amber-600 dark:text-amber-400">•</span>
+                          <span>{part.trim()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action */}
                 <div className="pt-2">
-                  <Link
-                    href={order.order_type === 'takeaway' ? `/menu/${restaurant.slug}/takeaway` : `/menu/${restaurant.slug}/table/${order.table_id}`}
-                    className="w-full"
+                  <Button 
+                    onClick={() => router.push(`/menu/${restaurant.slug}/reservation`)}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md"
                   >
-                    <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md">
-                      <RotateCcw className="h-4 w-4" /> Place a New Order
-                    </Button>
-                  </Link>
+                    <ArrowLeft className="h-4 w-4" /> Back to Reservation Menu
+                  </Button>
                 </div>
               </CardContent>
             </Card>
-          ) : order.batches && order.batches.length > 0 ? (
-            /* Collapsible Order & Batch Lifecycle Timeline */
-            <div className="space-y-4 print:hidden">
-              <button
-                type="button"
-                onClick={() => setShowTimeline(!showTimeline)}
-                className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all text-left cursor-pointer shadow-xs"
-              >
-                <span className="flex items-center gap-2 font-extrabold text-xs text-slate-800 dark:text-slate-200">
-                  <span className="text-indigo-600 dark:text-indigo-400 font-black">{showTimeline ? '▼' : '▶'}</span>
-                  <span>{showTimeline ? 'Hide Order & Batch Lifecycle Timeline' : 'View Order & Batch Lifecycle Timeline'}</span>
-                </span>
-                <Badge variant="neutral" className="text-[10px] font-mono border-indigo-200 text-indigo-700 dark:text-indigo-300">
-                  {order.batches.length} Batch{order.batches.length > 1 ? 'es' : ''}
-                </Badge>
-              </button>
-
-              {showTimeline && (
-                <div className="space-y-4 animate-fade-in">
-                  {[...order.batches].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((batch, bIdx) => {
-                const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
-                const bItems = (validItems || []).filter(i => i.batch_id === batch.id || (bIdx === 0 && !i.batch_id));
-                const statusOrder = ['new', 'accepted', 'preparing', 'ready', 'served', 'completed'];
-                const bStatusIdx = statusOrder.indexOf(batch.status);
-
-                const isAccepted = !isCancelled && (!!batch.accepted_at || !!batch.accepted_by);
-                const isPreparing = !isCancelled && (!!batch.preparing_at || !!batch.preparing_by);
-                const isReady = !isCancelled && (!!batch.ready_at || !!batch.ready_by);
-                const isServed = !isCancelled && (!!batch.served_at || !!batch.served_by || bStatusIdx >= 4);
-
-                return (
-                  <Card key={batch.id || bIdx} className="shadow-md dark:border-slate-800 animate-pop overflow-hidden">
-                    <CardContent className="p-5 space-y-4">
-                      {/* Batch Header */}
-                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-black text-slate-900 dark:text-white text-sm">Batch #{bIdx + 1}</h3>
-                            {isCancelled ? (
-                              <Badge variant="error">Cancelled</Badge>
-                            ) : batch.status === 'served' || (batch.status as string) === 'completed' ? (
-                              <Badge variant="success">{order.order_type === 'takeaway' ? 'Handed Over' : 'Served'}</Badge>
-                            ) : batch.status === 'ready' ? (
-                              <Badge variant="info">{order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Ready to Serve'}</Badge>
-                            ) : batch.status === 'preparing' ? (
-                              <Badge variant="warning">Cooking</Badge>
-                            ) : (
-                              <Badge variant="info">Order Sent</Badge>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-slate-400 font-semibold block mt-0.5">
-                            Placed: {formatExactTimestamp(batch.created_at)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Items in this Batch */}
-                      {bItems.length > 0 && (
-                        <div className="bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {bItems.map(i => `${i.quantity}x ${i.menu_item_name}`).join(', ')}
-                        </div>
-                      )}
-
-                      {/* Batch Timeline */}
-                      {isCancelled ? (
-                        <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-400 rounded-xl p-3.5 space-y-2 text-xs">
-                          <div className="flex justify-between items-center font-extrabold">
-                            <span className="flex items-center gap-1.5">
-                              <AlertTriangle className="h-4 w-4 text-rose-500" />
-                              Batch Cancelled
-                            </span>
-                            <span className="font-mono text-[10px]">{formatExactTimestamp(batch.cancelled_at || batch.updated_at)}</span>
-                          </div>
-                          {(batch.special_instructions?.includes('[CANCELLED]') || order.cancellation_reason) && (
-                            <p className="italic text-[11px] bg-white/60 dark:bg-slate-900/40 p-2 rounded-lg border border-rose-100 dark:border-rose-900/20">
-                              "{batch.special_instructions?.replace('[CANCELLED]', '').trim() || order.cancellation_reason}"
-                            </p>
-                          )}
-                          {batch.cancelled_by && (
-                            <span className="text-[10px] text-slate-400 block font-semibold">Declined by: {batch.cancelled_by}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-3 space-y-5 py-1 text-xs">
-                          {/* Order Sent */}
-                          <div className="relative pl-6">
-                            <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
-                              <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
-                            </span>
-                            <div className="flex justify-between items-baseline">
-                              <span className="font-bold text-slate-900 dark:text-white">Order Sent</span>
-                              <span className="font-mono font-bold text-slate-500 text-[11px]">{formatExactTimestamp(batch.created_at)}</span>
-                            </div>
-                            <span className="text-[10px] text-slate-400 block font-semibold">Sent to kitchen</span>
-                          </div>
-
-                          {/* Accepted */}
-                          {isAccepted && (
-                            <div className="relative pl-6">
-                              <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
-                              </span>
-                              <div className="flex justify-between items-baseline">
-                                <span className="font-bold text-emerald-700 dark:text-emerald-400">Accepted</span>
-                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
-                                  {batch.accepted_at ? formatExactTimestamp(batch.accepted_at) : 'Timestamp unavailable'}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">Confirmed{batch.accepted_by ? ` by ${batch.accepted_by}` : ''}</span>
-                            </div>
-                          )}
-
-                          {/* Preparing */}
-                          {isPreparing && (
-                            <div className="relative pl-6">
-                              <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-amber-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
-                              </span>
-                              <div className="flex justify-between items-baseline">
-                                <span className="font-bold text-amber-700 dark:text-amber-400">Preparing</span>
-                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
-                                  {batch.preparing_at ? formatExactTimestamp(batch.preparing_at) : 'Timestamp unavailable'}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">Cooking{batch.preparing_by ? ` by ${batch.preparing_by}` : ''}</span>
-                            </div>
-                          )}
-
-                          {/* Ready */}
-                          {isReady && (
-                            <div className="relative pl-6">
-                              <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-purple-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
-                              </span>
-                              <div className="flex justify-between items-baseline">
-                                <span className="font-bold text-purple-700 dark:text-purple-400">
-                                  {order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Ready'}
-                                </span>
-                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
-                                  {batch.ready_at ? formatExactTimestamp(batch.ready_at) : 'Timestamp unavailable'}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">
-                                {order.order_type === 'takeaway' 
-                                  ? `Food packed and ready at counter${batch.ready_by ? ` • Packed by ${batch.ready_by}` : ''}`
-                                  : `Food ready${batch.ready_by ? ` by ${batch.ready_by}` : ''}`}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Served / Handed Over */}
-                          {isServed && (
-                            <div className="relative pl-6">
-                              <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
-                              </span>
-                              <div className="flex justify-between items-baseline">
-                                <span className="font-bold text-blue-700 dark:text-blue-400">
-                                  {order.order_type === 'takeaway' ? 'Handed Over' : 'Served'}
-                                </span>
-                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
-                                  {batch.served_at ? formatExactTimestamp(batch.served_at) : 'Timestamp unavailable'}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">
-                                {order.order_type === 'takeaway' 
-                                  ? `Collected at pickup counter${batch.served_by ? ` • Handed over by ${batch.served_by}` : ''}`
-                                  : `Brought to table${batch.served_by ? ` by ${batch.served_by}` : ''}`}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Completed */}
-                          {(order.status === 'completed' || (batch.status as string) === 'completed') && (
-                            <div className="relative pl-6">
-                              <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-emerald-600 border-2 border-white dark:border-slate-900 flex items-center justify-center">
-                                <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
-                              </span>
-                              <div className="flex justify-between items-baseline">
-                                <span className="font-bold text-emerald-800 dark:text-emerald-300">Completed</span>
-                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
-                                  {formatExactTimestamp(order.completed_at || order.paid_at || order.updated_at || batch.updated_at)}
-                                </span>
-                              </div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">Order finalized & bill settled</span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-                </div>
-              )}
-            </div>
           ) : (
-            /* Single Order fallback (when no batches exist) */
+            <Card className="shadow-lg border-2 border-emerald-500/30 bg-white dark:bg-slate-900 overflow-hidden animate-pop">
+              <CardContent className="p-6 md:p-8 text-center space-y-6">
+                <div className="h-16 w-16 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 rounded-full flex items-center justify-center mx-auto border-4 border-emerald-500/20 shadow-lg">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40 uppercase tracking-wider">
+                    Table Reservation Confirmed
+                  </span>
+                  <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white pt-1">
+                    {cleanCustomerTableName(order.table_name) ? `Allotted: ${cleanCustomerTableName(order.table_name)}` : `Reservation Ticket #${order.id.slice(-6).toUpperCase()}`}
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium max-w-sm mx-auto leading-relaxed">
+                    Your table reservation has been confirmed. Our host will welcome you and hold your table for 15 minutes past your booking time.
+                  </p>
+                </div>
+
+                {/* Reservation Details Box */}
+                <div className="bg-slate-50 dark:bg-slate-950/50 p-4 md:p-5 rounded-2xl border border-slate-100 dark:border-slate-800 text-left space-y-2.5 font-semibold text-xs md:text-sm">
+                  <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800 pb-2">
+                    Booking Details
+                  </h4>
+                  {order.special_instructions && (
+                    <div className="text-slate-700 dark:text-slate-300 space-y-1.5 leading-relaxed font-bold">
+                      {order.special_instructions.split('|').map((part, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          <span className="text-emerald-600">•</span>
+                          <span>{part.trim()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action */}
+                <div className="pt-2">
+                  <Button 
+                    onClick={() => router.push(`/menu/${restaurant.slug}/reservation`)}
+                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                  >
+                    <ArrowLeft className="h-4 w-4" /> Back to Reservation Menu
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        )}
+
+        {/* RESERVATION LIFECYCLE TIMELINE */}
+        {order.order_type === 'reservation' && (() => {
+          const cleanTbl = cleanCustomerTableName(order.table_name);
+          const isSeated = Boolean(order.table_id || (cleanTbl && cleanTbl !== 'Reservation'));
+          
+          const resSteps = [
+            { 
+              key: 'booking_received', 
+              label: 'Booking Request Received', 
+              desc: 'Table booking received by restaurant host',
+              timestamp: order.created_at,
+              isDone: true,
+              isCurrent: order.status === 'new'
+            },
+            { 
+              key: 'table_allotted', 
+              label: cleanTbl ? `Table Confirmed (${cleanTbl})` : 'Confirmed & Table Allotted', 
+              desc: cleanTbl ? `${cleanTbl} is reserved for your party` : 'Restaurant host reviewing & assigning physical table',
+              timestamp: order.status !== 'new' ? (order.updated_at || order.created_at) : null,
+              isDone: order.status !== 'new',
+              isCurrent: order.status === 'accepted' && !isSeated
+            },
+            { 
+              key: 'guest_seated', 
+              label: isSeated ? `Guest Seated at ${cleanTbl || 'Table'}` : 'Guest Check-in & Seating', 
+              desc: isSeated ? 'Checked in & dining session active' : 'Host welcomes you upon arrival',
+              timestamp: isSeated ? (order.updated_at || null) : null,
+              isDone: isSeated && ['preparing', 'ready', 'served', 'completed'].includes(order.status),
+              isCurrent: isSeated && order.status === 'accepted'
+            },
+            { 
+              key: 'completed', 
+              label: 'Dining Session Completed', 
+              desc: 'Meal enjoyed & bill settled',
+              timestamp: order.completed_at || order.paid_at || (order.status === 'completed' ? order.updated_at : null),
+              isDone: order.status === 'completed',
+              isCurrent: order.status === 'served'
+            }
+          ];
+
+          return (
             <Card className="shadow-md dark:border-slate-800 animate-pop print:hidden">
               <CardContent className="p-6 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Reservation &amp; Dining Timeline
+                    </h3>
+                  </div>
+                  <Badge variant="neutral" className="text-[10px] font-mono">
+                    {order.status === 'completed' ? 'Fulfilled' : order.status === 'served' ? 'Dining' : order.status !== 'new' ? 'Confirmed' : 'Awaiting'}
+                  </Badge>
+                </div>
+
                 <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-8 py-2">
-                  {steps.map((step, idx) => {
-                    const isDone = idx < currentStepIndex;
-                    const isCurrent = idx === currentStepIndex;
+                  {resSteps.map((step) => {
                     return (
                       <div key={step.key} className="relative pl-8">
                         <span className={`
                           absolute -left-[11px] top-1 h-5 w-5 rounded-full flex items-center justify-center border-2 transition-all duration-300
-                          ${isDone ? 'bg-emerald-500 border-emerald-500 text-white' : ''}
-                          ${isCurrent ? 'bg-white dark:bg-slate-900 border-emerald-500 ring-4 ring-emerald-100 dark:ring-emerald-950/50' : ''}
-                          ${!isDone && !isCurrent ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-300' : ''}
+                          ${step.isDone ? 'bg-emerald-500 border-emerald-500 text-white' : ''}
+                          ${step.isCurrent ? 'bg-white dark:bg-slate-900 border-emerald-500 ring-4 ring-emerald-100 dark:ring-emerald-950/50' : ''}
+                          ${!step.isDone && !step.isCurrent ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-300' : ''}
                         `}>
-                          {isDone && <CheckCircle2 className="h-3 w-3 text-white fill-current" />}
-                          {isCurrent && <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-ping" />}
+                          {step.isDone && <CheckCircle2 className="h-3 w-3 text-white fill-current" />}
+                          {step.isCurrent && <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-ping" />}
                         </span>
                         <div className="space-y-0.5 flex-1">
                           <div className="flex items-baseline justify-between gap-2">
                             <h4 className={`text-sm font-extrabold transition-colors duration-300 ${
-                              isCurrent ? 'text-emerald-600 dark:text-emerald-400' : isDone ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
+                              step.isCurrent ? 'text-emerald-600 dark:text-emerald-400' : step.isDone ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
                             }`}>
                               {step.label}
                             </h4>
-                            {(isDone || isCurrent) && (
+                            {step.timestamp && (
                               <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-bold shrink-0">
-                                {formatTimelineTime(getStepTimestamp(step.key), step.key, isDone || isCurrent)}
+                                {formatExactTimestamp(step.timestamp)}
                               </span>
                             )}
                           </div>
@@ -1386,7 +1266,299 @@ export default function OrderTrackingPage({ params }: PageProps) {
                 </div>
               </CardContent>
             </Card>
-          )
+          );
+        })()}
+
+        {/* Cancelled Order Notice (for all order types) */}
+        {order.status === 'cancelled' ? (
+          <Card id="customer-cancelled-card" className="shadow-md border-2 border-rose-500/30 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 animate-pop overflow-hidden">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-start gap-3.5">
+                <div className="h-12 w-12 rounded-2xl bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-800">
+                  <AlertTriangle className="h-6 w-6 text-rose-500" />
+                </div>
+                <div className="space-y-1 flex-1">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200 border border-rose-300">
+                    Order Cancelled
+                  </span>
+                  <h3 className="text-base font-black text-rose-950 dark:text-rose-100 pt-0.5">
+                    This order was cancelled
+                  </h3>
+                  <p className="text-xs text-rose-700 dark:text-rose-300 leading-relaxed">
+                    This order ticket has been cancelled by restaurant staff and will not be prepared.
+                  </p>
+                </div>
+              </div>
+
+              {order.cancellation_reason && (
+                <div className="bg-white/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/40 text-xs space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400 block">
+                    Reason for Cancellation:
+                  </span>
+                  <p className="italic font-semibold text-slate-800 dark:text-slate-200">
+                    "{order.cancellation_reason}"
+                  </p>
+                  {order.cancelled_by && (
+                    <span className="text-[10px] text-slate-400 block pt-0.5 font-medium">
+                      Declined by: {order.cancelled_by}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="pt-2">
+                <Link
+                  href={order.order_type === 'takeaway' ? `/menu/${restaurant.slug}/takeaway` : order.order_type === 'reservation' ? `/menu/${restaurant.slug}/reservation` : `/menu/${restaurant.slug}/table/${order.table_id}`}
+                  className="w-full"
+                >
+                  <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-3 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md">
+                    <RotateCcw className="h-4 w-4" /> Place a New Order
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Live Batch-wise Timeline State Cards (When food batches exist) */}
+            {order.batches && order.batches.length > 0 ? (
+              /* Collapsible Order & Batch Lifecycle Timeline */
+              <div className="space-y-4 print:hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowTimeline(!showTimeline)}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all text-left cursor-pointer shadow-xs"
+                >
+                  <span className="flex items-center gap-2 font-extrabold text-xs text-slate-800 dark:text-slate-200">
+                    <span className="text-indigo-600 dark:text-indigo-400 font-black">{showTimeline ? '▼' : '▶'}</span>
+                    <span>{showTimeline ? 'Hide Order & Batch Lifecycle Timeline' : 'View Order & Batch Lifecycle Timeline'}</span>
+                  </span>
+                  <Badge variant="neutral" className="text-[10px] font-mono border-indigo-200 text-indigo-700 dark:text-indigo-300">
+                    {order.batches.length} Batch{order.batches.length > 1 ? 'es' : ''}
+                  </Badge>
+                </button>
+
+                {showTimeline && (
+                  <div className="space-y-4 animate-fade-in">
+                    {[...order.batches].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()).map((batch, bIdx) => {
+                  const isCancelled = batch.status === 'cancelled' || batch.special_instructions?.includes('[CANCELLED]');
+                  const bItems = (validItems || []).filter(i => i.batch_id === batch.id || (bIdx === 0 && !i.batch_id));
+                  const statusOrder = ['new', 'accepted', 'preparing', 'ready', 'served', 'completed'];
+                  const bStatusIdx = statusOrder.indexOf(batch.status);
+
+                  const isAccepted = !isCancelled && (!!batch.accepted_at || !!batch.accepted_by);
+                  const isPreparing = !isCancelled && (!!batch.preparing_at || !!batch.preparing_by);
+                  const isReady = !isCancelled && (!!batch.ready_at || !!batch.ready_by);
+                  const isServed = !isCancelled && (!!batch.served_at || !!batch.served_by || bStatusIdx >= 4);
+
+                  return (
+                    <Card key={batch.id || bIdx} className="shadow-md dark:border-slate-800 animate-pop overflow-hidden">
+                      <CardContent className="p-5 space-y-4">
+                        {/* Batch Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-black text-slate-900 dark:text-white text-sm">Batch #{bIdx + 1}</h3>
+                              {isCancelled ? (
+                                <Badge variant="error">Cancelled</Badge>
+                              ) : batch.status === 'served' || (batch.status as string) === 'completed' ? (
+                                <Badge variant="success">{order.order_type === 'takeaway' ? 'Handed Over' : 'Served'}</Badge>
+                              ) : batch.status === 'ready' ? (
+                                <Badge variant="info">{order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Ready to Serve'}</Badge>
+                              ) : batch.status === 'preparing' ? (
+                                <Badge variant="warning">Cooking</Badge>
+                              ) : (
+                                <Badge variant="info">Order Sent</Badge>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-semibold block mt-0.5">
+                              Placed: {formatExactTimestamp(batch.created_at)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Items in this Batch */}
+                        {bItems.length > 0 && (
+                          <div className="bg-slate-50 dark:bg-slate-950/40 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-300">
+                            {bItems.map(i => `${i.quantity}x ${i.menu_item_name}`).join(', ')}
+                          </div>
+                        )}
+
+                        {/* Batch Timeline */}
+                        {isCancelled ? (
+                          <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-800 dark:text-rose-400 rounded-xl p-3.5 space-y-2 text-xs">
+                            <div className="flex justify-between items-center font-extrabold">
+                              <span className="flex items-center gap-1.5">
+                                <AlertTriangle className="h-4 w-4 text-rose-500" />
+                                Batch Cancelled
+                              </span>
+                              <span className="font-mono text-[10px]">{formatExactTimestamp(batch.cancelled_at || batch.updated_at)}</span>
+                            </div>
+                            {(batch.special_instructions?.includes('[CANCELLED]') || order.cancellation_reason) && (
+                              <p className="italic text-[11px] bg-white/60 dark:bg-slate-900/40 p-2 rounded-lg border border-rose-100 dark:border-rose-900/20">
+                                "{batch.special_instructions?.replace('[CANCELLED]', '').trim() || order.cancellation_reason}"
+                              </p>
+                            )}
+                            {batch.cancelled_by && (
+                              <span className="text-[10px] text-slate-400 block font-semibold">Declined by: {batch.cancelled_by}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-3 space-y-5 py-1 text-xs">
+                            {/* Order Sent */}
+                            <div className="relative pl-6">
+                              <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                                <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
+                              </span>
+                              <div className="flex justify-between items-baseline">
+                                <span className="font-bold text-slate-900 dark:text-white">Order Sent</span>
+                                <span className="font-mono font-bold text-slate-500 text-[11px]">{formatExactTimestamp(batch.created_at)}</span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 block font-semibold">Sent to kitchen</span>
+                            </div>
+
+                            {/* Accepted */}
+                            {isAccepted && (
+                              <div className="relative pl-6">
+                                <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
+                                </span>
+                                <div className="flex justify-between items-baseline">
+                                  <span className="font-bold text-emerald-700 dark:text-emerald-400">Accepted</span>
+                                  <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
+                                    {batch.accepted_at ? formatExactTimestamp(batch.accepted_at) : 'Timestamp unavailable'}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 block font-semibold">Confirmed{batch.accepted_by ? ` by ${batch.accepted_by}` : ''}</span>
+                              </div>
+                            )}
+
+                            {/* Preparing */}
+                            {isPreparing && (
+                              <div className="relative pl-6">
+                                <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-amber-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
+                                </span>
+                                <div className="flex justify-between items-baseline">
+                                  <span className="font-bold text-amber-700 dark:text-amber-400">Preparing</span>
+                                  <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
+                                    {batch.preparing_at ? formatExactTimestamp(batch.preparing_at) : 'Timestamp unavailable'}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 block font-semibold">Cooking{batch.preparing_by ? ` by ${batch.preparing_by}` : ''}</span>
+                              </div>
+                            )}
+
+                            {/* Ready */}
+                            {isReady && (
+                              <div className="relative pl-6">
+                                <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-purple-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
+                                </span>
+                                <div className="flex justify-between items-baseline">
+                                  <span className="font-bold text-purple-700 dark:text-purple-400">
+                                    {order.order_type === 'takeaway' ? 'Ready for Pickup' : 'Ready'}
+                                  </span>
+                                  <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
+                                    {batch.ready_at ? formatExactTimestamp(batch.ready_at) : 'Timestamp unavailable'}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 block font-semibold">
+                                  {order.order_type === 'takeaway' 
+                                    ? `Food packed and ready at counter${batch.ready_by ? ` • Packed by ${batch.ready_by}` : ''}`
+                                    : `Food ready${batch.ready_by ? ` by ${batch.ready_by}` : ''}`}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Served / Handed Over */}
+                            {isServed && (
+                              <div className="relative pl-6">
+                                <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
+                                </span>
+                                <div className="flex justify-between items-baseline">
+                                  <span className="font-bold text-blue-700 dark:text-blue-400">
+                                    {order.order_type === 'takeaway' ? 'Handed Over' : 'Served'}
+                                  </span>
+                                  <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
+                                    {batch.served_at ? formatExactTimestamp(batch.served_at) : 'Timestamp unavailable'}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 block font-semibold">
+                                  {order.order_type === 'takeaway' 
+                                    ? `Collected at pickup counter${batch.served_by ? ` • Handed over by ${batch.served_by}` : ''}`
+                                    : `Brought to table${batch.served_by ? ` by ${batch.served_by}` : ''}`}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Completed */}
+                            {(order.status === 'completed' || (batch.status as string) === 'completed') && (
+                              <div className="relative pl-6">
+                                <span className="absolute -left-[9px] top-0.5 h-4 w-4 rounded-full bg-emerald-600 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                                  <CheckCircle2 className="h-2.5 w-2.5 text-white fill-current" />
+                                </span>
+                                <div className="flex justify-between items-baseline">
+                                  <span className="font-bold text-emerald-800 dark:text-emerald-300">Completed</span>
+                                  <span className="font-mono font-bold text-slate-600 dark:text-slate-300 text-[11px]">
+                                    {formatExactTimestamp(order.completed_at || order.paid_at || order.updated_at || batch.updated_at)}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-slate-400 block font-semibold">Order finalized & bill settled</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                  </div>
+                )}
+              </div>
+            ) : order.order_type !== 'reservation' ? (
+              /* Single Order fallback (when no batches exist and not a reservation) */
+              <Card className="shadow-md dark:border-slate-800 animate-pop print:hidden">
+                <CardContent className="p-6 space-y-6">
+                  <div className="relative border-l-2 border-slate-200 dark:border-slate-800 ml-4 space-y-8 py-2">
+                    {steps.map((step, idx) => {
+                      const isDone = idx < currentStepIndex;
+                      const isCurrent = idx === currentStepIndex;
+                      return (
+                        <div key={step.key} className="relative pl-8">
+                          <span className={`
+                            absolute -left-[11px] top-1 h-5 w-5 rounded-full flex items-center justify-center border-2 transition-all duration-300
+                            ${isDone ? 'bg-emerald-500 border-emerald-500 text-white' : ''}
+                            ${isCurrent ? 'bg-white dark:bg-slate-900 border-emerald-500 ring-4 ring-emerald-100 dark:ring-emerald-950/50' : ''}
+                            ${!isDone && !isCurrent ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-300' : ''}
+                          `}>
+                            {isDone && <CheckCircle2 className="h-3 w-3 text-white fill-current" />}
+                            {isCurrent && <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-ping" />}
+                          </span>
+                          <div className="space-y-0.5 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <h4 className={`text-sm font-extrabold transition-colors duration-300 ${
+                                isCurrent ? 'text-emerald-600 dark:text-emerald-400' : isDone ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
+                              }`}>
+                                {step.label}
+                              </h4>
+                              {(isDone || isCurrent) && (
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-mono font-bold shrink-0">
+                                  {formatTimelineTime(getStepTimestamp(step.key), step.key, isDone || isCurrent)}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-semibold">{step.desc}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+          </>
         )}
 
         {/* Takeaway Info Details */}
@@ -1421,161 +1593,188 @@ export default function OrderTrackingPage({ params }: PageProps) {
           </Card>
         )}
 
-        {/* Order Details & Summary */}
-        <Card className="dark:border-slate-800">
-          <CardContent className="p-6 space-y-6">
-            <h3 className="text-sm font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider">Order Summary</h3>
+        {/* Order Details & Summary - Only shown if dishes/items were ordered */}
+        {(validItems.length > 0 || cancelledItems.length > 0) ? (
+          <Card className="dark:border-slate-800">
+            <CardContent className="p-6 space-y-6">
+              <h3 className="text-sm font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider">Order Summary</h3>
 
-            {/* List */}
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {/* 1. SERVED & ACTIVE ITEMS */}
-              {validItems.map((item, idx) => (
-                <div key={item.id || idx} className="py-3 flex justify-between gap-4 text-xs md:text-sm font-semibold">
-                  <div className="flex flex-col">
-                    <span className="text-slate-700 dark:text-slate-300">{item.quantity}x {item.menu_item_name}</span>
-                    {item.notes && <span className="text-[10px] text-rose-500 font-medium">({item.notes})</span>}
+              {/* List */}
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {/* 1. SERVED & ACTIVE ITEMS */}
+                {validItems.map((item, idx) => (
+                  <div key={item.id || idx} className="py-3 flex justify-between gap-4 text-xs md:text-sm font-semibold">
+                    <div className="flex flex-col">
+                      <span className="text-slate-700 dark:text-slate-300">{item.quantity}x {item.menu_item_name}</span>
+                      {item.notes && <span className="text-[10px] text-rose-500 font-medium">({item.notes})</span>}
+                    </div>
+                    <span className="text-slate-950 dark:text-white">{formatPrice(item.price * item.quantity, restaurant.settings.currency)}</span>
                   </div>
-                  <span className="text-slate-950 dark:text-white">{formatPrice(item.price * item.quantity, restaurant.settings.currency)}</span>
-                </div>
-              ))}
+                ))}
 
-              {/* 2. CANCELLED ITEMS BY KITCHEN */}
-              {cancelledItems.map((item, idx) => (
-                <div key={`can_${item.id || idx}`} className="py-3 flex justify-between gap-4 text-xs md:text-sm font-semibold bg-rose-50/50 dark:bg-rose-950/10 px-2 rounded-lg my-1">
-                  <div className="flex flex-col">
-                    <span className="text-rose-600 dark:text-rose-400 line-through">{item.quantity}x {item.menu_item_name}</span>
-                    <span className="text-[10px] text-rose-500 font-bold">[Cancelled by Kitchen]</span>
+                {/* 2. CANCELLED ITEMS BY KITCHEN */}
+                {cancelledItems.map((item, idx) => (
+                  <div key={`can_${item.id || idx}`} className="py-3 flex justify-between gap-4 text-xs md:text-sm font-semibold bg-rose-50/50 dark:bg-rose-950/10 px-2 rounded-lg my-1">
+                    <div className="flex flex-col">
+                      <span className="text-rose-600 dark:text-rose-400 line-through">{item.quantity}x {item.menu_item_name}</span>
+                      <span className="text-[10px] text-rose-500 font-bold">[Cancelled by Kitchen]</span>
+                    </div>
+                    <span className="text-rose-500 font-bold line-through">{formatPrice(0, restaurant.settings.currency)}</span>
                   </div>
-                  <span className="text-rose-500 font-bold line-through">{formatPrice(0, restaurant.settings.currency)}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Billing breakdown */}
-            <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2 pt-4">
-              <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                <span>Subtotal</span>
-                <span>{formatPrice(displaySubtotal, restaurant.settings.currency)}</span>
+                ))}
               </div>
 
-              {/* Promo Discount Row */}
-              {discAmt > 0 && (() => {
-                const code = order.offer_code || (order.special_instructions?.match(/PROMO OFFER (?:APPLIED: )?([A-Z0-9]+)/)?.[1]);
-                return (
-                  <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400 font-bold">
-                    <span>Promo Discount {code ? `(${code})` : ''}</span>
-                    <span>-{formatPrice(discAmt, restaurant.settings.currency)}</span>
-                  </div>
-                );
-              })()}
+              {/* Billing breakdown */}
+              <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2 pt-4">
+                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                  <span>Subtotal</span>
+                  <span>{formatPrice(displaySubtotal, restaurant.settings.currency)}</span>
+                </div>
 
-              {/* Tax Breakdown */}
-              {order.tax_type_snapshot === 'cgst_sgst' && (order.tax_total || 0) > 0 ? (
-                <>
-                  <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                    <span>CGST ({(order.tax_rate_snapshot || 0) / 2}%)</span>
-                    <span>{formatPrice(order.cgst_amount || 0, restaurant.settings.currency)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                    <span>SGST ({(order.tax_rate_snapshot || 0) / 2}%)</span>
-                    <span>{formatPrice(order.sgst_amount || 0, restaurant.settings.currency)}</span>
-                  </div>
-                </>
-              ) : order.tax_type_snapshot === 'igst' && (order.tax_total || 0) > 0 ? (
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                  <span>IGST ({order.tax_rate_snapshot || 0}%)</span>
-                  <span>{formatPrice(order.igst_amount || 0, restaurant.settings.currency)}</span>
-                </div>
-              ) : order.tax_type_snapshot === 'none' || order.tax_rate_snapshot === 0 ? (
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                  <span>GST (0%)</span>
-                  <span>{formatPrice(0, restaurant.settings.currency)}</span>
-                </div>
-              ) : calcResult.gstAmount > 0 ? (
-                calcResult.taxType === 'cgst_sgst' && calcResult.cgstPercentage > 0 ? (
+                {/* Promo Discount Row */}
+                {discAmt > 0 && (() => {
+                  const code = order.offer_code || (order.special_instructions?.match(/PROMO OFFER (?:APPLIED: )?([A-Z0-9]+)/)?.[1]);
+                  return (
+                    <div className="flex justify-between text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                      <span>Promo Discount {code ? `(${code})` : ''}</span>
+                      <span>-{formatPrice(discAmt, restaurant.settings.currency)}</span>
+                    </div>
+                  );
+                })()}
+
+                {/* Tax Breakdown */}
+                {order.tax_type_snapshot === 'cgst_sgst' && (order.tax_total || 0) > 0 ? (
                   <>
                     <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                      <span>CGST ({calcResult.cgstPercentage}%)</span>
-                      <span>{formatPrice(calcResult.cgstAmount, restaurant.settings.currency)}</span>
+                      <span>CGST ({(order.tax_rate_snapshot || 0) / 2}%)</span>
+                      <span>{formatPrice(order.cgst_amount || 0, restaurant.settings.currency)}</span>
                     </div>
                     <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                      <span>SGST ({calcResult.sgstPercentage}%)</span>
-                      <span>{formatPrice(calcResult.sgstAmount, restaurant.settings.currency)}</span>
+                      <span>SGST ({(order.tax_rate_snapshot || 0) / 2}%)</span>
+                      <span>{formatPrice(order.sgst_amount || 0, restaurant.settings.currency)}</span>
                     </div>
                   </>
-                ) : (
+                ) : order.tax_type_snapshot === 'igst' && (order.tax_total || 0) > 0 ? (
                   <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                    <span>GST ({calcResult.taxRateSnapshot || 0}%)</span>
-                    <span>{formatPrice(calcResult.gstAmount, restaurant.settings.currency)}</span>
+                    <span>IGST ({order.tax_rate_snapshot || 0}%)</span>
+                    <span>{formatPrice(order.igst_amount || 0, restaurant.settings.currency)}</span>
                   </div>
-                )
-              ) : null}
+                ) : order.tax_type_snapshot === 'none' || order.tax_rate_snapshot === 0 ? (
+                  <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    <span>GST (0%)</span>
+                    <span>{formatPrice(0, restaurant.settings.currency)}</span>
+                  </div>
+                ) : calcResult.gstAmount > 0 ? (
+                  calcResult.taxType === 'cgst_sgst' && calcResult.cgstPercentage > 0 ? (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                        <span>CGST ({calcResult.cgstPercentage}%)</span>
+                        <span>{formatPrice(calcResult.cgstAmount, restaurant.settings.currency)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                        <span>SGST ({calcResult.sgstPercentage}%)</span>
+                        <span>{formatPrice(calcResult.sgstAmount, restaurant.settings.currency)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                      <span>GST ({calcResult.taxRateSnapshot || 0}%)</span>
+                      <span>{formatPrice(calcResult.gstAmount, restaurant.settings.currency)}</span>
+                    </div>
+                  )
+                ) : null}
 
-              {serviceChargeEnabled && calculatedServiceCharge > 0 && (
-                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                  <span>Service Charge ({serviceChargePercentage}%)</span>
-                  <span>{formatPrice(calculatedServiceCharge, restaurant.settings.currency)}</span>
+                {serviceChargeEnabled && calculatedServiceCharge > 0 && (
+                  <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    <span>Service Charge ({serviceChargePercentage}%)</span>
+                    <span>{formatPrice(calculatedServiceCharge, restaurant.settings.currency)}</span>
+                  </div>
+                )}
+                {order.custom_charges && order.custom_charges.map((charge: any) => {
+                  const disc = order.discount_amount || 0;
+                  const base = Math.max(0, displaySubtotal - disc);
+                  const val = charge.type === 'percentage' 
+                    ? base * (charge.value / 100) 
+                    : charge.value;
+                  return (
+                    <div key={charge.id} className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                      <span>{charge.name}</span>
+                      <span>{formatPrice(val, restaurant.settings.currency)}</span>
+                    </div>
+                  );
+                })}
+                <div className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
+                <div className="flex justify-between text-slate-900 dark:text-white font-black text-sm md:text-base">
+                  <span>Grand Total</span>
+                  <span>{formatPrice(displayTotal, restaurant.settings.currency)}</span>
                 </div>
-              )}
-              {order.custom_charges && order.custom_charges.map((charge: any) => {
-                const disc = order.discount_amount || 0;
-                const base = Math.max(0, displaySubtotal - disc);
-                const val = charge.type === 'percentage' 
-                  ? base * (charge.value / 100) 
-                  : charge.value;
-                return (
-                  <div key={charge.id} className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                    <span>{charge.name}</span>
-                    <span>{formatPrice(val, restaurant.settings.currency)}</span>
-                  </div>
-                );
-              })}
-              <div className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
-              <div className="flex justify-between text-slate-900 dark:text-white font-black text-sm md:text-base">
-                <span>Grand Total</span>
-                <span>{formatPrice(displayTotal, restaurant.settings.currency)}</span>
               </div>
-            </div>
 
-            {/* Action buttons */}
-            <div className="pt-2 flex flex-col gap-2 print:hidden">
-              {order.status !== 'completed' && order.status !== 'cancelled' && (
-                <Button 
-                  className={`w-full gap-1.5 cursor-pointer flex items-center justify-center ${
-                    order.status === 'served' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
-                  }`}
-                  onClick={() => {
-                    if (restaurant) {
-                      sessionStorage.removeItem(`smartdine_cart_${restaurant.id}`);
-                    }
-                    router.push(order.order_type === 'takeaway' ? `/menu/${restaurant.slug}/takeaway` : `/menu/${restaurant.slug}/table/${order.table_id}`);
-                  }}
-                >
-                  <Plus className="h-4 w-4" /> Add More Items
-                </Button>
-              )}
-              <div className="flex flex-col sm:flex-row gap-2 w-full">
-                <Button 
-                  variant="outline" 
-                  className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
-                  onClick={handleReorder}
-                >
-                  <RotateCcw className="h-4 w-4 text-slate-500" /> Reorder Items
-                </Button>
-                {order.status === 'completed' && (
+              {/* Action buttons */}
+              <div className="pt-2 flex flex-col gap-2 print:hidden">
+                {order.status !== 'completed' && order.status !== 'cancelled' && (
                   <Button 
-                    variant="outline"
-                    className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
-                    onClick={() => window.print()}
+                    className={`w-full gap-1.5 cursor-pointer flex items-center justify-center ${
+                      order.status === 'served' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    }`}
+                    onClick={() => {
+                      if (restaurant) {
+                        sessionStorage.removeItem(`smartdine_cart_${restaurant.id}`);
+                      }
+                      router.push(order.order_type === 'takeaway' ? `/menu/${restaurant.slug}/takeaway` : `/menu/${restaurant.slug}/table/${order.table_id}`);
+                    }}
                   >
-                    <Printer className="h-4 w-4 text-slate-500" /> Print Receipt
+                    <Plus className="h-4 w-4" /> Add More Items
                   </Button>
                 )}
+                <div className="flex flex-col sm:flex-row gap-2 w-full">
+                  <Button 
+                    variant="outline" 
+                    className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
+                    onClick={handleReorder}
+                  >
+                    <RotateCcw className="h-4 w-4 text-slate-500" /> Reorder Items
+                  </Button>
+                  {order.status === 'completed' && (
+                    <Button 
+                      variant="outline"
+                      className="w-full gap-1.5 cursor-pointer flex items-center justify-center"
+                      onClick={() => window.print()}
+                    >
+                      <Printer className="h-4 w-4 text-slate-500" /> Print Receipt
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
 
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ) : order.order_type === 'reservation' && order.status !== 'cancelled' && order.status !== 'completed' ? (
+          <Card className="dark:border-slate-800 text-center p-6 bg-slate-50/50 dark:bg-slate-900/30 border-dashed print:hidden">
+            <CardContent className="space-y-3 p-0">
+              <div className="h-10 w-10 mx-auto rounded-full bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                <ChefHat className="h-5 w-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">Table Reservation Confirmed</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  No food dishes have been pre-ordered. You can browse our menu or order directly from the table upon arrival.
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  const targetUrl = order.table_id 
+                    ? `/menu/${restaurant.slug}/table/${order.table_id}`
+                    : `/menu/${restaurant.slug}/reservation`;
+                  router.push(targetUrl);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-sm"
+              >
+                Explore Restaurant Menu
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
       </main>
 

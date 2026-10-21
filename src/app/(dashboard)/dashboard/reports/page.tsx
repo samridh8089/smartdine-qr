@@ -15,7 +15,7 @@ import {
   Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight,
   Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers, Search
 } from 'lucide-react';
-import { isRevenueOrder } from '@/lib/billingEngine';
+import { isRevenueOrder, parseOrderRefundDetails, getOrderRevenueAmount } from '@/lib/billingEngine';
 
 interface ItemPerformanceRow {
   key: string;
@@ -166,6 +166,7 @@ export default function ReportsPage() {
     totalOrders: 0,
     grossSales: 0,
     totalDiscount: 0,
+    totalRefunds: 0,
     taxableSales: 0,
     cgstCollected: 0,
     sgstCollected: 0,
@@ -329,7 +330,7 @@ export default function ReportsPage() {
 
     if (selectedStatus !== 'all') {
       if (selectedStatus === 'paid') {
-        rangeOrders = rangeOrders.filter(o => o.payment_status === 'paid');
+        rangeOrders = rangeOrders.filter(o => o.payment_status === 'paid' || parseOrderRefundDetails(o).isPartial);
       } else {
         rangeOrders = rangeOrders.filter(o => o.status === selectedStatus);
       }
@@ -340,6 +341,7 @@ export default function ReportsPage() {
 
     let grossSales = 0;
     let totalDiscount = 0;
+    let totalRefunds = 0;
     let taxableSales = 0;
     let cgstCollected = 0;
     let sgstCollected = 0;
@@ -398,21 +400,26 @@ export default function ReportsPage() {
         ? Number(o.grand_total) 
         : (Number(o.total) > 0 ? Number(o.total) : Math.round((oTaxable + oTaxTotal) * 100) / 100);
 
+      const refundInfo = parseOrderRefundDetails(o);
+      const oNetTotal = Math.max(0, oGrandTotal - refundInfo.refundAmount);
+
       grossSales += oSubtotal;
       totalDiscount += oDisc;
+      totalRefunds += refundInfo.refundAmount;
       taxableSales += oTaxable;
 
       cgstCollected += oCgst;
       sgstCollected += oSgst;
       igstCollected += oIgst;
       totalGstCollected += oTaxTotal;
-      netRevenue += oGrandTotal;
+      netRevenue += oNetTotal;
     });
 
     setSalesSummary({
       totalOrders: validOrders.length,
       grossSales: Math.round((grossSales + Number.EPSILON) * 100) / 100,
       totalDiscount: Math.round((totalDiscount + Number.EPSILON) * 100) / 100,
+      totalRefunds: Math.round((totalRefunds + Number.EPSILON) * 100) / 100,
       taxableSales: Math.round((taxableSales + Number.EPSILON) * 100) / 100,
       cgstCollected: Math.round((cgstCollected + Number.EPSILON) * 100) / 100,
       sgstCollected: Math.round((sgstCollected + Number.EPSILON) * 100) / 100,
@@ -797,7 +804,7 @@ export default function ReportsPage() {
       if (hoursArr[h]) {
         if (isRevenueOrder(o)) {
           hoursArr[h].ordersCount += 1;
-          hoursArr[h].revenue += Number(o.grand_total || o.total || 0);
+          hoursArr[h].revenue += getOrderRevenueAmount(o);
         }
       }
     });
@@ -1502,7 +1509,7 @@ export default function ReportsPage() {
       id: 'net-revenue',
       label: 'NET REVENUE',
       value: formatPrice(salesSummary.netRevenue, restaurant?.settings?.currency || 'INR'),
-      desc: 'Grand total collected',
+      desc: salesSummary.totalRefunds > 0 ? `Net after ${formatPrice(salesSummary.totalRefunds, restaurant?.settings?.currency || 'INR')} refund` : 'Grand total collected',
       icon: Wallet,
       iconColor: 'text-gray-700 dark:text-gray-300',
       valueColor: 'text-gray-950 dark:text-white',
@@ -1525,9 +1532,6 @@ export default function ReportsPage() {
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4 print:hidden">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Analytics & Reports</h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-            Real-time sales performance, GST tax snapshots, portion analytics & accounting reports.
-          </p>
         </div>
 
         {/* Compact Action Controls: Time Filter & Export Group */}
@@ -1589,22 +1593,6 @@ export default function ReportsPage() {
             >
               Custom Range
             </button>
-          </div>
-
-          {/* Waiter Filter Selector (R7) */}
-          <div className="bg-slate-100 dark:bg-slate-800/80 p-1 px-2.5 rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700/60 shadow-2xs">
-            <Filter className="h-3 w-3 text-slate-500" />
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Waiter:</span>
-            <select
-              value={selectedWaiter}
-              onChange={(e) => setSelectedWaiter(e.target.value)}
-              className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer py-0.5"
-            >
-              <option value="all">All Waiters</option>
-              {availableWaiters.map((wName) => (
-                <option key={wName} value={wName}>{wName}</option>
-              ))}
-            </select>
           </div>
 
           {/* Status Filter Selector (R7) */}
@@ -1683,7 +1671,7 @@ export default function ReportsPage() {
       </div>
 
       {/* 1. SALES OVERVIEW METRIC CARDS (CLEAN COMMERCIAL POS/ACCOUNTING SAAS KPI COMPONENT) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 lg:gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3 lg:gap-3.5">
         {kpiCards.map((kpi) => {
           return (
             <div 
@@ -1967,82 +1955,16 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
 
-        {/* Zone Performance & Revenue Distribution Card */}
-        <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
-          <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
-                <Layers className="h-4 w-4" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Zone Performance & Distribution</h3>
-                <p className="text-xs text-slate-400 font-medium">Order volume, revenue share, and table stay duration by dining zone.</p>
-              </div>
-            </div>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700">
-              {zoneAnalyticsList.length} Active Zones
-            </span>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider font-bold">
-                  <tr>
-                    <th className="py-3 px-4">Zone</th>
-                    <th className="py-3 px-4 text-center">Orders</th>
-                    <th className="py-3 px-4 text-center">Avg Stay</th>
-                    <th className="py-3 px-4 text-center">Avg Spend (AOV)</th>
-                    <th className="py-3 px-4 text-center">Revenue Share</th>
-                    <th className="py-3 px-4 text-right">Total Revenue</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-slate-300">
-                  {zoneAnalyticsList.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-6 text-center text-slate-400 font-normal">
-                        No zone orders recorded in selected period.
-                      </td>
-                    </tr>
-                  ) : (
-                    zoneAnalyticsList.map((z) => (
-                      <tr key={z.zoneName} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td className="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-                          <span className="w-2 h-2 rounded-full bg-stone-900 dark:bg-white" />
-                          <span>{z.zoneName}</span>
-                        </td>
-                        <td className="py-3 px-4 text-center font-bold text-slate-900 dark:text-white">{z.orderCount}</td>
-                        <td className="py-3 px-4 text-center font-semibold">{z.avgStayDurationMin}m</td>
-                        <td className="py-3 px-4 text-center font-semibold">{formatPrice(z.avgAOV, restaurant?.settings?.currency || 'INR')}</td>
-                        <td className="py-3 px-4 text-center">
-                          <div className="flex items-center justify-center space-x-1.5">
-                            <div className="w-14 bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
-                              <div className="bg-stone-900 dark:bg-white h-full rounded-full" style={{ width: `${z.revSharePct}%` }} />
-                            </div>
-                            <span className="text-[10px] font-bold">{z.revSharePct}%</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-right font-black text-slate-900 dark:text-white">
-                          {formatPrice(z.revenue, restaurant?.settings?.currency || 'INR')}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Peak Hour Heatmap */}
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
-          <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+          <CardHeader className="py-3 px-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
                 <Flame className="h-4 w-4" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Peak Hour Heatmap</h3>
-                <p className="text-xs text-slate-400 font-medium">Hourly order rush and revenue distribution matrix.</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Peak Hour Heatmap</h3>
+                <p className="text-[11px] text-slate-400 font-medium">Hourly order rush and revenue distribution matrix.</p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-[11px] font-bold">
@@ -2054,38 +1976,38 @@ export default function ReportsPage() {
               </span>
             </div>
           </CardHeader>
-          <CardContent className="p-4">
+          <CardContent className="p-3.5 sm:p-4 space-y-3">
             {/* Priority 5: Live Occupancy & Hourly Rush Merged Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-4 text-center">
-              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-center">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Occupied Tables</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.occupied}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.occupied}</p>
               </div>
-              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Free Tables</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.free}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.free}</p>
               </div>
-              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Avg Wait Time</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.avgWaitTime}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.avgWaitTime}</p>
               </div>
-              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Queue Length</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.queueLength}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{liveOccupancyMerge.queueLength}</p>
               </div>
-              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Peak Orders/hr</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">{peakHourSummary.peakOrders}</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{peakHourSummary.peakOrders}</p>
               </div>
-              <div className="p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="p-2 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
                 <p className="text-[10px] font-bold text-slate-500 uppercase">Peak Rev/hr</p>
-                <p className="text-base font-bold text-slate-900 dark:text-white mt-0.5">
+                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
                   {formatPrice(hourlyHeatmap.find(h => h.label === peakHourSummary.peakHour)?.revenue || 0)}
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-1.5">
               {hourlyHeatmap.map((slot) => {
                 const intensity = slot.ordersCount > 0 ? (slot.ordersCount / Math.max(1, peakHourSummary.peakOrders)) : 0;
                 const bgClass = slot.ordersCount === 0
@@ -2098,7 +2020,7 @@ export default function ReportsPage() {
                 return (
                   <div
                     key={slot.hour}
-                    className={`p-2 rounded-lg border text-center transition-transform hover:scale-105 ${bgClass}`}
+                    className={`p-1.5 rounded-lg border text-center transition-transform hover:scale-105 ${bgClass}`}
                     title={`${slot.label}: ${slot.ordersCount} orders, ${formatPrice(slot.revenue)}`}
                   >
                     <p className="text-[10px] font-bold uppercase">{slot.label}</p>

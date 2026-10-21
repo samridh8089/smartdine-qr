@@ -177,7 +177,7 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/api/razorpay/') ||
       pathname.startsWith('/api/webhooks/');
 
-    const isAuthApi = isStrictAuthApi || pathname.startsWith('/api/auth/') || pathname.startsWith('/api/staff/');
+    const isAuthApi = isStrictAuthApi || pathname.startsWith('/api/auth/');
 
     const isAuthUser = 
       request.headers.has('authorization') ||
@@ -188,16 +188,17 @@ export async function middleware(request: NextRequest) {
     let accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 5);
 
     if (isStrictAuthApi) {
-      ipThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_IP', 5);
-      accountThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_ACCOUNT', 3);
+      ipThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_IP', 10);
+      accountThreshold = getEnvNumber('RATE_LIMIT_LOGIN_PER_ACCOUNT', 5);
     } else if (isPaymentApi) {
-      ipThreshold = getEnvNumber('RATE_LIMIT_PAYMENT_PER_IP', 10);
-      accountThreshold = getEnvNumber('RATE_LIMIT_PAYMENT_PER_ACCOUNT', 5);
+      ipThreshold = getEnvNumber('RATE_LIMIT_PAYMENT_PER_IP', 30);
+      accountThreshold = getEnvNumber('RATE_LIMIT_PAYMENT_PER_ACCOUNT', 15);
+    } else if (isAuthUser || isLocalDev) {
+      ipThreshold = isLocalDev ? 1000 : getEnvNumber('RATE_LIMIT_AUTHENTICATED_PER_IP', 300);
+      accountThreshold = isLocalDev ? 1000 : 300;
     } else if (isAuthApi) {
-      ipThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_IP', 10);
-      accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 5);
-    } else if (isAuthUser) {
-      ipThreshold = getEnvNumber('RATE_LIMIT_AUTHENTICATED_PER_IP', 120);
+      ipThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_IP', 20);
+      accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 10);
     }
 
     // Rate check by IP
@@ -273,7 +274,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'SAMEORIGIN');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self "https://checkout.razorpay.com")');
+  response.headers.set('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(self), payment=(self "https://checkout.razorpay.com")');
   response.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');

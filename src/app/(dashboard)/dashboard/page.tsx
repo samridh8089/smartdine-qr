@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { db, Order, MenuItem } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
-import { formatPrice, formatDate, getFormattedOrderId } from '@/lib/utils';
+import { formatPrice, formatDate, getFormattedOrderId, parseCustomerDetailsFromOrder } from '@/lib/utils';
 import { formatExactTimestamp } from '@/lib/timestamp';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
 import { 
   DollarSign, ClipboardList, Users, TrendingUp, 
-  ArrowRight, Clock, CheckCircle2, AlertCircle, ShoppingBag,
+  ArrowRight, Clock, CheckCircle2, Check, AlertCircle, ShoppingBag,
   ChefHat, MenuSquare, Boxes, QrCode, BarChart3, CreditCard, Settings,
-  Megaphone, X, Bell, BellOff
+  Megaphone, X, Bell, BellOff, Sparkles, Receipt
 } from 'lucide-react';
 
 import { calculateBillingTotals, isRevenueOrder, getOrderRevenueAmount, calculateOrdersRevenue } from '@/lib/billingEngine';
@@ -28,6 +29,14 @@ interface OverviewStats {
   activeTableNames: string[];
   topItems: { name: string; count: number; revenue: number }[];
 }
+
+const STATUS_SETTLE_RANK: Record<string, number> = {
+  served: 1,
+  ready: 2,
+  preparing: 3,
+  accepted: 4,
+  new: 5
+};
 
 export default function DashboardPage() {
   const { restaurant: contextRestaurant, profile: contextProfile, alarmMuted, setAlarmMuted } = useRestaurant();
@@ -45,13 +54,14 @@ export default function DashboardPage() {
       const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
       const todayOrders = cachedOrders.filter(o => {
         const t = new Date(o.created_at).getTime();
-        return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled';
+        return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled' && Number(o.total || 0) > 0;
       });
       const revenue = calculateOrdersRevenue(todayOrders);
       const activeOrders = cachedOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
       const activeTableMap = new Map<string, string>();
       activeOrders.forEach(o => {
-        if (o.table_name && o.order_type !== 'takeaway' && o.order_type !== 'reservation') {
+        const isDining = o.table_name && o.order_type !== 'takeaway' && !(o.order_type === 'reservation' && !o.table_id && ['new', 'accepted'].includes(o.status));
+        if (isDining && o.table_name) {
           activeTableMap.set(o.table_id || o.table_name, o.table_name);
         }
       });
@@ -98,12 +108,214 @@ export default function DashboardPage() {
     outOfStock: Array<{ menuItemId: string; name: string; reasons: string[] }>;
     lowStock: Array<{ menuItemId: string; name: string; reasons: string[]; maxServings: number }>;
   }>({ outOfStock: [], lowStock: [] });
-
+  const [topSellingFilter, setTopSellingFilter] = useState<'today' | 'week' | 'all'>('today');
+  const [quickSettleOrder, setQuickSettleOrder] = useState<Order | null>(null);
+  const [isQuickSettleOpen, setIsQuickSettleOpen] = useState(false);
+  const [quickSettlePaymentMethod, setQuickSettlePaymentMethod] = useState<'cash' | 'upi' | 'card' | 'split'>('cash');
+  const [isSubmittingSettle, setIsSubmittingSettle] = useState(false);
+  const [completingOrderIds, setCompletingOrderIds] = useState<string[]>([]);
+  const [floorTables, setFloorTables] = useState<any[]>([]);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const backgroundTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isReloadingRef = useRef(false);
   const pendingReloadRef = useRef(false);
+  const submittingSettleRef = useRef(false);
+  const completingOrderIdsRef = useRef<Set<string>>(new Set());
+
+  // Strictly Today's Orders for Recent Orders list (excluding ₹0 non-billable / empty bookings)
+  const todayRecentOrders = useMemo(() => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+    return orders.filter(o => {
+      const t = new Date(o.created_at).getTime();
+      const isToday = t >= startOfDay && t <= endOfDay;
+      if (!isToday) return false;
+      // Filter out all ₹0 payment orders completely (e.g. empty table bookings, non-billable reservations)
+      if (Number(o.total || 0) <= 0) return false;
+      return true;
+    });
+  }, [orders]);
+
+  // Top Selling Items filtered dynamically by time period
+  const filteredTopItems = useMemo(() => {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay(), 0, 0, 0, 0).getTime();
+
+    let targetOrders = orders.filter(isRevenueOrder);
+    if (topSellingFilter === 'today') {
+      targetOrders = targetOrders.filter(o => {
+        const t = new Date(o.created_at).getTime();
+        return t >= startOfDay && t <= endOfDay;
+      });
+    } else if (topSellingFilter === 'week') {
+      targetOrders = targetOrders.filter(o => {
+        const t = new Date(o.created_at).getTime();
+        return t >= startOfWeek && t <= endOfDay;
+      });
+    }
+
+    const itemCounts: Record<string, { name: string; count: number; revenue: number }> = {};
+    targetOrders.forEach(o => {
+      (o.items || []).forEach(item => {
+        if (item.is_cancelled || item.status === 'cancelled' || item.notes?.includes('[CANCELLED]')) return;
+        if (item.batch_id && (o.batches || []).length > 0) {
+          const b = (o.batches || []).find(batch => batch.id === item.batch_id);
+          if (b && (b.status === 'cancelled' || b.special_instructions?.includes('[CANCELLED]'))) return;
+        }
+        if (!itemCounts[item.menu_item_id]) {
+          itemCounts[item.menu_item_id] = { name: item.menu_item_name, count: 0, revenue: 0 };
+        }
+        itemCounts[item.menu_item_id].count += item.quantity;
+        itemCounts[item.menu_item_id].revenue += item.price * item.quantity;
+      });
+    });
+
+    return Object.values(itemCounts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [orders, topSellingFilter]);
+
+  // Active dining tables (including unpaid awaiting billing and paid awaiting table release)
+  // Sorted by status priority: Bill Requested -> Unpaid (served -> ready -> preparing -> accepted -> new) -> Paid (ready to free)
+  const activeDiningOrders = useMemo(() => {
+    return orders
+      .filter(o => {
+        const isNotTerminal = !['completed', 'cancelled'].includes(o.status);
+        const isDining = o.table_name && o.order_type !== 'takeaway' && !(o.order_type === 'reservation' && !o.table_id && ['new', 'accepted'].includes(o.status));
+        return isNotTerminal && isDining;
+      })
+      .sort((a, b) => {
+        const aReq = a.special_instructions?.includes('[BILL_REQUESTED]') || (a as any).notes?.includes('[BILL_REQUESTED]') || (a as any).customer_request?.type === 'bill';
+        const bReq = b.special_instructions?.includes('[BILL_REQUESTED]') || (b as any).notes?.includes('[BILL_REQUESTED]') || (b as any).customer_request?.type === 'bill';
+        if (aReq && !bReq) return -1;
+        if (!aReq && bReq) return 1;
+
+        // Priority 1: Unpaid orders come first so bill collection is immediately accessible
+        const aUnpaid = a.payment_status !== 'paid';
+        const bUnpaid = b.payment_status !== 'paid';
+        if (aUnpaid && !bUnpaid) return -1;
+        if (!aUnpaid && bUnpaid) return 1;
+
+        // User explicit status priority: served (1) -> ready (2) -> preparing (3) -> accepted (4) -> new (5)
+        const rankA = STATUS_SETTLE_RANK[a.status] ?? 99;
+        const rankB = STATUS_SETTLE_RANK[b.status] ?? 99;
+        if (rankA !== rankB) return rankA - rankB;
+
+        const tableA = (a.table_name || '').replace(/^Table\s*/i, '');
+        const tableB = (b.table_name || '').replace(/^Table\s*/i, '');
+        const numA = parseInt(tableA, 10);
+        const numB = parseInt(tableB, 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        if (a.table_name && b.table_name) return a.table_name.localeCompare(b.table_name);
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
+  }, [orders]);
+
+  // Unified active dining cards: merges active order tables + any physically occupied/seated tables from floor layout
+  const activeDiningCards = useMemo(() => {
+    const cards: Array<{
+      key: string;
+      order?: Order;
+      tableId?: string;
+      tableName: string;
+      status: string;
+      isManualHold?: boolean;
+      paymentStatus?: string;
+      total: number;
+      created_at: string;
+      dishSummary: string;
+      itemCount: number;
+      isBillReq?: boolean;
+      isReservation?: boolean;
+      guestName?: string;
+    }> = [];
+
+    const tablesWithOrders = new Set<string>();
+
+    activeDiningOrders.forEach(order => {
+      if (order.table_id) tablesWithOrders.add(order.table_id);
+      if (order.table_name) {
+        tablesWithOrders.add(order.table_name.toLowerCase());
+        tablesWithOrders.add(order.table_name.toLowerCase().replace(/^table\s*/i, ''));
+      }
+
+      const calc = calculateBillingTotals({
+        items: order.items || [],
+        batches: order.batches || [],
+        discountAmount: Number(order.discount_amount || 0),
+        offerCode: order.offer_code,
+        specialInstructions: order.special_instructions,
+        offers: restaurant?.settings?.offers || [],
+        settings: restaurant?.settings || {},
+        gstNumber: restaurant?.gst_number,
+        gstEnabled: restaurant?.settings?.gst_enabled,
+        gstPercentage: restaurant?.settings?.gst_percentage || 0,
+        serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
+        serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
+        customCharges: restaurant?.settings?.custom_charges || []
+      });
+
+      const isBillReq = order.special_instructions?.includes('[BILL_REQUESTED]') || (order as any).notes?.includes('[BILL_REQUESTED]') || (order as any).customer_request?.type === 'bill';
+      const itemCount = order.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+      const dishSummary = (order.items || [])
+        .filter(i => !i.is_cancelled && i.status !== 'cancelled')
+        .slice(0, 2)
+        .map(i => `${i.menu_item_name} x${i.quantity}`)
+        .join(', ');
+
+      const cust = parseCustomerDetailsFromOrder(order);
+      const isReservation = order.order_type === 'reservation' || 
+        order.table_name?.toLowerCase().includes('reservation') || 
+        order.special_instructions?.includes('TABLE RESERVATION');
+
+      cards.push({
+        key: order.id,
+        order,
+        tableId: order.table_id,
+        tableName: order.table_name || 'Table',
+        status: order.status,
+        isManualHold: false,
+        paymentStatus: order.payment_status,
+        total: calc.grandTotal,
+        created_at: order.created_at,
+        dishSummary: dishSummary ? `${dishSummary}${order.items && order.items.length > 2 ? ` +${order.items.length - 2} more` : ''}` : `${itemCount} items`,
+        itemCount,
+        isBillReq,
+        isReservation,
+        guestName: cust.name || undefined
+      });
+    });
+
+    // Also include any tables that are marked occupied in tableOccupancy / floor layout but have no active order
+    (floorTables || []).forEach(t => {
+      if (t.occupancy_status === 'occupied' && !t.is_archived) {
+        const idMatches = tablesWithOrders.has(t.id);
+        const nameMatches = tablesWithOrders.has(t.name.toLowerCase()) || tablesWithOrders.has(t.name.toLowerCase().replace(/^table\s*/i, ''));
+        const dispMatches = t.display_number ? (tablesWithOrders.has(t.display_number.toLowerCase()) || tablesWithOrders.has(t.display_number.toLowerCase().replace(/^table\s*/i, ''))) : false;
+        if (!idMatches && !nameMatches && !dispMatches) {
+          cards.push({
+            key: `table_hold_${t.id}`,
+            tableId: t.id,
+            tableName: t.display_number || t.name,
+            status: 'occupied',
+            isManualHold: true,
+            paymentStatus: 'paid', // Can be freed directly in 1-tap
+            total: 0,
+            created_at: t.occupied_at || new Date().toISOString(),
+            dishSummary: 'Seated / Walk-in (No active order placed)',
+            itemCount: 0,
+            isBillReq: false
+          });
+        }
+      }
+    });
+
+    return cards;
+  }, [activeDiningOrders, floorTables, restaurant]);
 
   const debouncedReload = (restId: string) => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -133,6 +345,9 @@ export default function DashboardPage() {
       if (liveTableData?.stats) {
         setTableOccupancy(liveTableData.stats);
       }
+      if (liveTableData?.tables) {
+        setFloorTables(liveTableData.tables);
+      }
 
       const getValidOrderTotal = (o: Order) => {
         return getOrderRevenueAmount(o);
@@ -145,18 +360,26 @@ export default function DashboardPage() {
 
       const todayOrders = allOrders.filter(o => {
         const t = new Date(o.created_at).getTime();
-        return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled';
+        return t >= startOfDay && t <= endOfDay && o.status !== 'cancelled' && Number(o.total || 0) > 0;
       });
       
       const revenue = calculateOrdersRevenue(todayOrders);
 
-      // Compute Active Tables (orders with status !== 'completed' && status !== 'cancelled')
+      // Compute Active Tables (orders with status !== 'completed' && status !== 'cancelled' PLUS floor occupied tables)
       const activeOrders = allOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
 
       const activeTableMap = new Map<string, string>();
       activeOrders.forEach(o => {
-        if (o.table_name && o.order_type !== 'takeaway' && o.order_type !== 'reservation') {
+        const isDining = o.table_name && o.order_type !== 'takeaway' && !(o.order_type === 'reservation' && !o.table_id && ['new', 'accepted'].includes(o.status));
+        if (isDining && o.table_name) {
           activeTableMap.set(o.table_id || o.table_name, o.table_name);
+        }
+      });
+
+      // Synchronize with physically occupied tables on floor layout (e.g. manual hold or seated guests)
+      (liveTableData?.tables || []).forEach((t: any) => {
+        if (t.occupancy_status === 'occupied' && !t.is_archived) {
+          activeTableMap.set(t.id, t.display_number || t.name);
         }
       });
 
@@ -438,6 +661,259 @@ export default function DashboardPage() {
     };
   }, []);
 
+  const handleQuickSettleConfirm = async () => {
+    if (!quickSettleOrder || !restaurant) return;
+    if (submittingSettleRef.current || isSubmittingSettle) return;
+    if (quickSettleOrder.payment_status === 'paid') {
+      setIsQuickSettleOpen(false);
+      return;
+    }
+
+    submittingSettleRef.current = true;
+    setIsSubmittingSettle(true);
+
+    const targetOrderId = quickSettleOrder.id;
+    const calcResult = calculateBillingTotals({
+      items: quickSettleOrder.items || [],
+      batches: quickSettleOrder.batches || [],
+      discountAmount: Number(quickSettleOrder.discount_amount || 0),
+      offerCode: quickSettleOrder.offer_code,
+      specialInstructions: quickSettleOrder.special_instructions,
+      offers: restaurant.settings?.offers || [],
+      settings: restaurant.settings || {},
+      gstNumber: restaurant.gst_number,
+      gstEnabled: restaurant.settings?.gst_enabled,
+      gstPercentage: restaurant.settings?.gst_percentage || 0,
+      serviceChargeEnabled: restaurant.settings?.service_charge_enabled !== false,
+      serviceChargePercentage: restaurant.settings?.service_charge_percentage || 0,
+      customCharges: restaurant.settings?.custom_charges || []
+    });
+
+    const chosenMethod = quickSettlePaymentMethod;
+
+    // 1. Instant Optimistic UI Update (<10ms)
+    setIsQuickSettleOpen(false);
+    setOrders(prev => prev.map(o => o.id === targetOrderId ? {
+      ...o,
+      payment_status: 'paid',
+      payment_method: chosenMethod,
+      paid_at: new Date().toISOString(),
+      status: 'completed'
+    } : o));
+
+    const targetTableId = quickSettleOrder.table_id;
+    if (targetTableId) {
+      setFloorTables((prev: any[]) => prev.map(t => (t.id === targetTableId || t.name === quickSettleOrder.table_name) ? {
+        ...t,
+        occupancy_status: 'available',
+        is_occupied: false,
+        manual_occupied: false
+      } : t));
+    }
+
+    setTableOccupancy((prev: any) => ({
+      ...prev,
+      occupied: Math.max(0, (prev?.occupied || 0) - 1),
+      available: (prev?.available || 0) + 1,
+      occupancyRate: (prev?.total || 0) > 0 ? Math.round((Math.max(0, (prev?.occupied || 0) - 1) / (prev?.total || 1)) * 100) : 0
+    }));
+
+    setStats(prev => ({
+      ...prev,
+      revenue: prev.revenue + calcResult.grandTotal,
+      totalOrders: prev.totalOrders + 1,
+      activeTablesCount: Math.max(0, prev.activeTablesCount - 1),
+      activeTableNames: (prev.activeTableNames || []).filter(name => {
+        const cleanT = (quickSettleOrder.table_name || '').replace(/^Table\s*/i, '');
+        return name !== cleanT && name !== quickSettleOrder.table_name;
+      })
+    }));
+
+    window.dispatchEvent(new Event('storage'));
+
+    try {
+      // 2. Fast retrieval of staff token
+      let token = '';
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('smartdine_auth_token_v2');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const t = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+            if (t && typeof t === 'string') token = t;
+          }
+        } catch (_) {}
+      }
+
+      // 3. Parallel non-blocking execution: API update + Table release
+      await Promise.allSettled([
+        fetch('/api/staff/update-order-status', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}`, 'x-staff-token': token } : {}),
+            ...(restaurant?.id ? { 'x-restaurant-id': restaurant.id } : {}),
+            'x-staff-role': contextProfile?.role || 'owner',
+            ...(contextProfile ? { 'x-impersonated-profile': JSON.stringify(contextProfile) } : {})
+          },
+          body: JSON.stringify({
+            orderId: targetOrderId,
+            restaurantId: restaurant.id,
+            newStatus: 'completed',
+            staffName: contextProfile?.full_name || 'Owner',
+            paymentStatus: 'paid',
+            paymentMethod: chosenMethod,
+            subtotal: calcResult.validSubtotal,
+            gst: calcResult.gstAmount,
+            serviceCharge: calcResult.serviceChargeAmount,
+            customCharges: calcResult.customChargesSnapshot,
+            total: calcResult.grandTotal
+          })
+        }),
+        targetTableId ? db.checkAndReleaseTableOccupancy(restaurant.id, targetTableId) : Promise.resolve()
+      ]);
+
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error('[QuickSettle] Background execution error:', err);
+    } finally {
+      submittingSettleRef.current = false;
+      setIsSubmittingSettle(false);
+      setQuickSettleOrder(null);
+    }
+  };
+
+  const handleCompleteAndFreeTable = async (order: Order) => {
+    if (!order || !restaurant) return;
+    const targetOrderId = order.id;
+    const targetTableId = order.table_id;
+    if (completingOrderIdsRef.current.has(targetOrderId)) return;
+    completingOrderIdsRef.current.add(targetOrderId);
+    setCompletingOrderIds(prev => [...prev, targetOrderId]);
+
+    // 1. Instant Optimistic UI Update (<10ms)
+    setOrders(prev => prev.map(o => o.id === targetOrderId ? {
+      ...o,
+      status: 'completed',
+      completed_at: new Date().toISOString()
+    } : o));
+
+    if (targetTableId) {
+      setFloorTables((prev: any[]) => prev.map(t => (t.id === targetTableId || t.name === order.table_name) ? {
+        ...t,
+        occupancy_status: 'available',
+        is_occupied: false,
+        manual_occupied: false
+      } : t));
+    }
+
+    setTableOccupancy((prev: any) => ({
+      ...prev,
+      occupied: Math.max(0, (prev?.occupied || 0) - 1),
+      available: (prev?.available || 0) + 1,
+      occupancyRate: (prev?.total || 0) > 0 ? Math.round((Math.max(0, (prev?.occupied || 0) - 1) / (prev?.total || 1)) * 100) : 0
+    }));
+
+    setStats(prev => {
+      const remainingActive = orders
+        .filter(o => o.id !== targetOrderId && !['completed', 'cancelled'].includes(o.status) && o.table_name && o.order_type !== 'takeaway' && !(o.order_type === 'reservation' && !o.table_id && ['new', 'accepted'].includes(o.status)));
+      const tableMap = new Map<string, string>();
+      remainingActive.forEach(o => tableMap.set(o.table_id || o.table_name || '', o.table_name || ''));
+      return {
+        ...prev,
+        activeTablesCount: tableMap.size
+      };
+    });
+
+    window.dispatchEvent(new Event('storage'));
+
+    try {
+      let token = '';
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('smartdine_auth_token_v2');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const t = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+            if (t && typeof t === 'string') token = t;
+          }
+        } catch (_) {}
+      }
+
+      await Promise.allSettled([
+        fetch('/api/staff/update-order-status', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}`, 'x-staff-token': token } : {}),
+            ...(restaurant?.id ? { 'x-restaurant-id': restaurant.id } : {}),
+            'x-staff-role': contextProfile?.role || 'owner',
+            ...(contextProfile ? { 'x-impersonated-profile': JSON.stringify(contextProfile) } : {})
+          },
+          body: JSON.stringify({
+            orderId: targetOrderId,
+            restaurantId: restaurant.id,
+            newStatus: 'completed',
+            staffName: contextProfile?.full_name || 'Owner',
+            paymentStatus: 'paid'
+          })
+        }),
+        targetTableId ? db.checkAndReleaseTableOccupancy(restaurant.id, targetTableId) : Promise.resolve()
+      ]);
+
+      window.dispatchEvent(new Event('storage'));
+    } catch (err: any) {
+      console.error('[Dashboard] Error completing and freeing table:', err);
+    } finally {
+      completingOrderIdsRef.current.delete(targetOrderId);
+      setCompletingOrderIds(prev => prev.filter(id => id !== targetOrderId));
+    }
+  };
+
+  const handleFreeManualTable = async (tableId: string) => {
+    if (!tableId || !restaurant) return;
+    if (completingOrderIdsRef.current.has(tableId)) return;
+    completingOrderIdsRef.current.add(tableId);
+    setCompletingOrderIds(prev => [...prev, tableId]);
+
+    // 1. Optimistic update
+    setTableOccupancy((prev: any) => ({
+      ...prev,
+      occupied: Math.max(0, (prev?.occupied || 0) - 1),
+      available: (prev?.available || 0) + 1,
+      occupancyRate: (prev?.total || 0) > 0 ? Math.round((Math.max(0, (prev?.occupied || 0) - 1) / (prev?.total || 1)) * 100) : 0
+    }));
+
+    setStats((prev: any) => ({
+      ...prev,
+      activeTablesCount: Math.max(0, (prev?.activeTablesCount || 0) - 1),
+      activeTableNames: (prev?.activeTableNames || []).filter((name: string) => {
+        const t = floorTables.find(ft => ft.id === tableId);
+        return t ? name !== (t.display_number || t.name).replace(/^Table\s*/i, '') : true;
+      })
+    }));
+
+    setFloorTables((prev: any[]) => prev.map(t => t.id === tableId ? { ...t, occupancy_status: 'available', manual_occupied: false } : t));
+    window.dispatchEvent(new Event('storage'));
+
+    try {
+      await db.toggleTableOccupancy(restaurant.id, tableId, false);
+      await db.checkAndReleaseTableOccupancy(restaurant.id, tableId);
+      if (restaurant?.id) {
+        debouncedReload(restaurant.id);
+      }
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('force-resync'));
+    } catch (e) {
+      console.error('[Dashboard] Error freeing manual table:', e);
+    } finally {
+      completingOrderIdsRef.current.delete(tableId);
+      setCompletingOrderIds(prev => prev.filter(id => id !== tableId));
+    }
+  };
+
   const getStatusBadge = (status: Order['status']) => {
     switch (status) {
       case 'new': return <Badge variant="info">New</Badge>;
@@ -447,37 +923,6 @@ export default function DashboardPage() {
       case 'served': return <Badge variant="success">Served</Badge>;
       case 'completed': return <Badge variant="success">Completed</Badge>;
       case 'cancelled': return <Badge variant="error">Cancelled</Badge>;
-    }
-  };
-
-  const handleToggleBell = async () => {
-    const nextMuted = !alarmMuted;
-    setAlarmMuted(nextMuted);
-    setGlobalMute(nextMuted);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('cleverops_bell_muted', nextMuted ? 'true' : 'false');
-      } catch (_) {}
-    }
-    if (nextMuted) {
-      stopLoudBell();
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('stop-kitchen-sound'));
-        window.dispatchEvent(new Event('stop-waiter-sound'));
-      }
-    }
-
-    if (restId) {
-      try {
-        const newSettings = {
-          ...(contextRestaurant?.settings || {}),
-          owner_bell_enabled: !nextMuted
-        };
-        await supabase.from('restaurants').update({ settings: newSettings }).eq('id', restId);
-        setRestaurant((prev: any) => prev ? { ...prev, settings: newSettings } : prev);
-      } catch (err) {
-        console.warn('[DashboardPage] Failed to persist owner_bell_enabled:', err);
-      }
     }
   };
 
@@ -499,7 +944,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-full">
+    <div className="space-y-5 max-w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -507,30 +952,6 @@ export default function DashboardPage() {
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Here is a snapshot of your restaurant today.</p>
         </div>
         <div className="flex items-center gap-3 shrink-0 flex-wrap">
-          {/* 🔔 Owner Bell Mute/Unmute Toggle Button */}
-          <button
-            type="button"
-            onClick={handleToggleBell}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs md:text-sm font-bold border transition-all cursor-pointer shadow-sm ${
-              alarmMuted
-                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100 hover:border-rose-400'
-                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 hover:border-emerald-400'
-            }`}
-            title={alarmMuted ? 'Owner Bell alerts are MUTED. Click to turn ON.' : 'Owner Bell alerts are ACTIVE. Click to MUTE.'}
-          >
-            {alarmMuted ? (
-              <>
-                <BellOff className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
-                <span>Bell: OFF (Muted)</span>
-              </>
-            ) : (
-              <>
-                <Bell className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 animate-bounce" />
-                <span>Bell: ON (Active)</span>
-              </>
-            )}
-          </button>
-
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs md:text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm shrink-0">
             {new Date().toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
           </div>
@@ -700,97 +1121,299 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Second Section: Recent Orders (7 cols) + Top Selling Items (5 cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Recent Orders List */}
-        <Card className="lg:col-span-7 min-w-0 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 overflow-hidden">
-          <CardContent className="!p-0 !px-0 !py-0">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Recent Orders</h3>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Latest incoming orders across all tables.</p>
-              </div>
-              <Link href="/dashboard/orders">
-                <Button variant="ghost" className="text-xs font-bold gap-1 text-emerald-600 dark:text-emerald-400">
-                  View All <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
+      {/* Active Tables & Quick Bill Settle / Release */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 flex items-center justify-center font-bold text-xs shadow-xs">
+              <Receipt className="h-4 w-4" />
             </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  Active Tables & Quick Action
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900">
+                  {activeDiningCards.length}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Click any table card to review & settle bill, or free occupied tables in 1-tap.
+              </p>
+            </div>
+          </div>
 
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {orders.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm flex flex-col items-center gap-2">
-                  <ShoppingBag className="h-8 w-8" />
-                  No orders placed yet. Scan a QR code to place an order!
-                </div>
-              ) : (
-                orders.slice(0, 5).map((order) => (
-                  <div key={order.id} className="p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                    <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 dark:text-white text-sm md:text-base">Order {getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
-                        {getStatusBadge(order.status)}
+          {activeDiningCards.length > 0 && (
+            <Link href="/dashboard/orders">
+              <Button variant="outline" size="sm" className="text-xs font-bold gap-1 rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                View in Orders <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          )}
+        </div>
+
+        {activeDiningCards.length === 0 ? (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 text-center text-slate-400 dark:text-slate-500 text-xs font-semibold flex items-center justify-center gap-2 shadow-xs">
+            <CheckCircle2 className="h-4 w-4 text-slate-400 dark:text-slate-500" />
+            <span>All tables are free. No active dining tables currently occupied.</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+            {activeDiningCards.map((card) => {
+              const isPaid = card.paymentStatus === 'paid' || card.isManualHold;
+              const isCompleting = completingOrderIds.includes(card.key) || completingOrderIds.includes(card.tableId || '');
+
+              return (
+                <div
+                  key={card.key}
+                  onClick={() => {
+                    if (card.isManualHold && card.tableId) {
+                      handleFreeManualTable(card.tableId);
+                    } else if (card.order) {
+                      if (isPaid) {
+                        handleCompleteAndFreeTable(card.order);
+                      } else {
+                        setQuickSettleOrder(card.order);
+                        setQuickSettlePaymentMethod('cash');
+                        setIsQuickSettleOpen(true);
+                      }
+                    }
+                  }}
+                  className={`bg-white dark:bg-slate-900 border rounded-2xl p-4 transition-all duration-150 flex flex-col justify-between group cursor-pointer shadow-xs hover:shadow-md ${
+                    isPaid 
+                      ? 'border-emerald-200/80 dark:border-emerald-900/60 hover:border-emerald-400 dark:hover:border-emerald-700 hover:bg-emerald-50/20' 
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-600 hover:bg-slate-50/80 dark:hover:bg-slate-850/80'
+                  }`}
+                >
+                  <div>
+                    {/* Top Row: Table Name + Payment & Status Badges */}
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-300/80 dark:border-slate-700 font-bold text-xs uppercase tracking-wider">
+                          {card.tableName}
+                        </span>
+                        {card.isReservation && (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold uppercase tracking-wider">
+                            Reservation
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold uppercase">
-                        {order.table_name || 'N/A'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items • {formatExactTimestamp(order.created_at)}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md truncate">
-                        {order.items.map(i => `${i.menu_item_name || (i as any).name || (i as any).item_name || 'Item'} x${i.quantity}`).join(', ')}
-                      </p>
+
+                      <div className="flex items-center gap-1.5">
+                        {card.isManualHold ? (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800 text-[10px] font-bold uppercase tracking-wider">
+                            Occupied (Seated)
+                          </span>
+                        ) : isPaid ? (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/60 dark:border-emerald-800 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                            <Check className="h-3 w-3" /> Paid
+                          </span>
+                        ) : card.isBillReq ? (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900 text-[10px] font-bold uppercase tracking-wider animate-pulse border border-slate-600">
+                            Bill Requested
+                          </span>
+                        ) : null}
+
+                        {!card.isManualHold && (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[10px] font-semibold uppercase tracking-wider">
+                            {card.status === 'served' ? 'Served' : card.status === 'ready' ? 'Ready' : card.status === 'preparing' ? 'Preparing' : card.status}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 dark:border-slate-800">
-                      <span className="font-extrabold text-slate-900 dark:text-white">
-                        {formatPrice(getOrderRevenueAmount(order))}
-                      </span>
-                      <Link href={`/dashboard/orders?id=${order.id}`}>
-                        <Button variant="outline" size="sm">Manage</Button>
-                      </Link>
-                    </div>
+
+                    {/* Order ID & Time */}
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-2.5">
+                      {card.order ? `Order ${getFormattedOrderId(card.order, restaurant?.name || '', orders)} • ` : ''}{formatExactTimestamp(card.created_at)}
+                    </p>
+
+                    {/* Dish Summary */}
+                    <p className="text-xs text-slate-700 dark:text-slate-300 font-medium truncate mt-1">
+                      {card.dishSummary}
+                    </p>
                   </div>
-                ))
-              )}
+
+                  {/* Bottom: Total & Action Button */}
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-3 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
+                        Net Total
+                      </span>
+                      <span className="text-base font-black text-slate-950 dark:text-white">
+                        {formatPrice(card.total, restaurant?.settings?.currency)}
+                      </span>
+                    </div>
+
+                    {card.isManualHold && card.tableId ? (
+                      <button
+                        type="button"
+                        disabled={isCompleting}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFreeManualTable(card.tableId!);
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xs flex items-center gap-1 transition-all disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>{isCompleting ? 'Freeing...' : 'Free Table'}</span>
+                      </button>
+                    ) : isPaid && card.order ? (
+                      <button
+                        type="button"
+                        disabled={isCompleting}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCompleteAndFreeTable(card.order!);
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xs flex items-center gap-1 transition-all disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>{isCompleting ? 'Freeing...' : 'Free Table'}</span>
+                      </button>
+                    ) : card.order ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQuickSettleOrder(card.order!);
+                          setQuickSettlePaymentMethod('cash');
+                          setIsQuickSettleOpen(true);
+                        }}
+                        className="bg-slate-700 hover:bg-slate-800 text-white dark:bg-slate-700 dark:hover:bg-slate-600 text-xs font-semibold px-3 py-1.5 rounded-xl shadow-xs flex items-center gap-1 transition-all"
+                      >
+                        <span>Settle</span>
+                        <ArrowRight className="h-3 w-3" />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Second Section: Recent Orders (7 cols) + Top Selling Items (5 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Recent Orders List */}
+        <Card className="lg:col-span-7 min-w-0 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-xs flex flex-col justify-between">
+          <CardContent className="!p-0 !px-0 !py-0 flex flex-col justify-between h-full">
+            <div>
+              <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Recent Orders</h3>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Latest incoming orders across all tables.</p>
+                </div>
+                <Link href="/dashboard/orders">
+                  <Button variant="ghost" className="text-xs font-bold gap-1 text-emerald-600 dark:text-emerald-400">
+                    View All <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              </div>
+
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {todayRecentOrders.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 dark:text-slate-500 text-sm flex flex-col items-center gap-2">
+                    <ShoppingBag className="h-8 w-8" />
+                    No orders placed today yet. Scan a QR code to place an order!
+                  </div>
+                ) : (
+                  todayRecentOrders.slice(0, 4).map((order) => (
+                    <div key={order.id} className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 dark:text-white text-sm">Order {getFormattedOrderId(order, restaurant?.name || '', orders)}</span>
+                          {getStatusBadge(order.status)}
+                        </div>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 font-semibold uppercase">
+                          {order.table_name || 'N/A'} • {order.items.reduce((s, i) => s + i.quantity, 0)} items • {formatExactTimestamp(order.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                          {formatPrice(getOrderRevenueAmount(order))}
+                        </span>
+                        <Link href={`/dashboard/orders?id=${order.id}`}>
+                          <Button variant="outline" size="sm" className="h-8 text-xs font-bold px-3">Manage</Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/30 text-center">
+              <Link href="/dashboard/orders" className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 inline-flex items-center gap-1.5 transition-colors">
+                <span>Manage all {todayRecentOrders.length} live orders</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </CardContent>
         </Card>
 
         {/* Top Selling Items */}
-        <Card className="lg:col-span-5 min-w-0 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900">
-          <CardContent className="p-6">
-            <h3 className="text-base font-extrabold text-slate-900 dark:text-white pb-4 border-b border-slate-100 dark:border-slate-800">Top Selling Items</h3>
-            {stats.topItems.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-sm">
-                Complete orders to see top selling items.
+        <Card className="lg:col-span-5 min-w-0 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 shadow-xs flex flex-col justify-between">
+          <CardContent className="p-4 sm:p-5 flex flex-col justify-between h-full">
+            <div>
+              <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Top Selling Items</h3>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Most popular dishes ordered today.</p>
+                </div>
+                <select
+                  value={topSellingFilter}
+                  onChange={(e) => setTopSellingFilter(e.target.value as any)}
+                  className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+                  title="Filter Top Selling Items by Time"
+                >
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="all">All Time</option>
+                </select>
               </div>
-            ) : (
-              <div className="space-y-5 pt-4">
-                {stats.topItems.map((item, index) => (
-                  <div key={item.name} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 dark:text-slate-400">
-                          {index + 1}
+
+              {filteredTopItems.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 dark:text-slate-500 text-sm">
+                  Complete orders to see top selling items.
+                </div>
+              ) : (
+                <div className="space-y-3.5 pt-3.5">
+                  {filteredTopItems.slice(0, 4).map((item, index) => (
+                    <div key={item.name} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                          <span className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                            {index + 1}
+                          </span>
+                          <span className="truncate max-w-[170px]">{item.name}</span>
                         </span>
-                        {item.name}
-                      </span>
-                      <span className="font-bold text-slate-900 dark:text-white">{item.count} sold</span>
+                        <span className="font-bold text-slate-900 dark:text-white shrink-0">{item.count} sold</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
+                          style={{ 
+                            width: `${(item.count / (filteredTopItems[0]?.count || 1)) * 100}%` 
+                          }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
+                        <span>Revenue Generated</span>
+                        <span>{formatPrice(item.revenue)}</span>
+                      </div>
                     </div>
-                    {/* Bar Visualization */}
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
-                        style={{ 
-                          width: `${(item.count / stats.topItems[0].count) * 100}%` 
-                        }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-slate-400 dark:text-slate-500 font-semibold">
-                      <span>Revenue Generated</span>
-                      <span>{formatPrice(item.revenue)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+              <Link href="/dashboard/reports" className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 inline-flex items-center gap-1.5 transition-colors">
+                <span>View full item sales reports</span>
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -899,20 +1522,13 @@ export default function DashboardPage() {
 
       {/* Fourth Section: Order Cancellation & Prepared Food Waste Impact */}
       <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-bold text-gray-950 dark:text-white uppercase tracking-wider">
-              Order Cancellation & Prepared Food Waste Impact
-            </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-              Breakdown of today's cancellations by stage, food disposition channels, and net financial loss.
-            </p>
-          </div>
-          <Link href="/dashboard/inventory">
-            <Button variant="outline" size="sm" className="text-xs font-bold gap-1 self-start sm:self-auto">
-              View Dispositions <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+        <div>
+          <h3 className="text-sm font-bold text-gray-950 dark:text-white uppercase tracking-wider">
+            Order Cancellation & Prepared Food Waste Impact
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Breakdown of today's cancellations by stage, food disposition channels, and net financial loss.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1056,6 +1672,176 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      {/* Quick Settle Bill Modal - Strictly Monochrome Black & Gray Theme */}
+      {isQuickSettleOpen && quickSettleOrder && restaurant && (
+        <Dialog 
+          isOpen={isQuickSettleOpen} 
+          onClose={() => {
+            if (!isSubmittingSettle) {
+              setIsQuickSettleOpen(false);
+              setQuickSettleOrder(null);
+            }
+          }} 
+          title="SETTLE TABLE BILL"
+          size="md"
+        >
+          <div className="space-y-4 p-1">
+            {(() => {
+              const calcResult = calculateBillingTotals({
+                items: quickSettleOrder.items || [],
+                batches: quickSettleOrder.batches || [],
+                discountAmount: Number(quickSettleOrder.discount_amount || 0),
+                offerCode: quickSettleOrder.offer_code,
+                specialInstructions: quickSettleOrder.special_instructions,
+                offers: restaurant.settings?.offers || [],
+                settings: restaurant.settings || {},
+                gstNumber: restaurant.gst_number,
+                gstEnabled: restaurant.settings?.gst_enabled,
+                gstPercentage: restaurant.settings?.gst_percentage || 0,
+                serviceChargeEnabled: restaurant.settings?.service_charge_enabled !== false,
+                serviceChargePercentage: restaurant.settings?.service_charge_percentage || 0,
+                customCharges: restaurant.settings?.custom_charges || []
+              });
+
+              const currency = restaurant.settings?.currency || 'INR';
+
+              return (
+                <>
+                  {/* Top Bill Banner - Refined Soft Slate */}
+                  <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 text-center space-y-1">
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Net Payable Amount ({quickSettleOrder.table_name || 'Takeaway'})
+                    </p>
+                    <p className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+                      {formatPrice(calcResult.grandTotal, currency)}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                      Order {getFormattedOrderId(quickSettleOrder, restaurant.name || '', orders)} • {quickSettleOrder.items?.reduce((s, i) => s + i.quantity, 0) || 0} items
+                    </p>
+                    {(() => {
+                      const cust = parseCustomerDetailsFromOrder(quickSettleOrder);
+                      if (!cust.name) return null;
+                      return (
+                        <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Billed To:</span>
+                          <span className="font-bold text-slate-900 dark:text-white">{cust.name}</span>
+                          {cust.phone && <span className="font-mono text-slate-500 dark:text-slate-400 text-[11px]">({cust.phone})</span>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Itemized Order Preview (Scrollable) */}
+                  <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
+                    <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex justify-between">
+                      <span>Ordered Dishes</span>
+                      <span>Amount</span>
+                    </div>
+                    <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 p-2 space-y-1 text-xs">
+                      {(quickSettleOrder.items || []).filter(item => !item.is_cancelled && item.status !== 'cancelled').map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center py-1 px-1">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[240px]">
+                            {item.quantity}x {item.menu_item_name}
+                          </span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100 shrink-0">
+                            {formatPrice(item.price * item.quantity, currency)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Financial Breakdown Table - Clean Monochrome */}
+                  <div className="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400 font-medium">
+                      <span>Subtotal</span>
+                      <span>{formatPrice(calcResult.validSubtotal, currency)}</span>
+                    </div>
+                    {calcResult.discountAmount > 0 && (
+                      <div className="flex justify-between text-slate-700 dark:text-slate-300 font-semibold">
+                        <span>Discount {quickSettleOrder.offer_code ? `(${quickSettleOrder.offer_code})` : ''}</span>
+                        <span>- {formatPrice(calcResult.discountAmount, currency)}</span>
+                      </div>
+                    )}
+                    {calcResult.gstAmount > 0 && (
+                      <div className="flex justify-between text-slate-600 dark:text-slate-400 font-medium">
+                        <span>GST ({restaurant.settings?.gst_percentage || 5}%)</span>
+                        <span>{formatPrice(calcResult.gstAmount, currency)}</span>
+                      </div>
+                    )}
+                    {calcResult.serviceChargeAmount > 0 && (
+                      <div className="flex justify-between text-slate-600 dark:text-slate-400 font-medium">
+                        <span>Service Charge</span>
+                        <span>{formatPrice(calcResult.serviceChargeAmount, currency)}</span>
+                      </div>
+                    )}
+                    <div className="border-t border-slate-200 dark:border-slate-700 pt-1.5 flex justify-between font-black text-sm text-slate-900 dark:text-white">
+                      <span>Grand Total</span>
+                      <span>{formatPrice(calcResult.grandTotal, currency)}</span>
+                    </div>
+                  </div>
+
+                  {/* Payment Mode Selector - Refined Slate Theme */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                      Select Payment Mode
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {(['cash', 'upi', 'card', 'split'] as const).map((method) => {
+                        const isSelected = quickSettlePaymentMethod === method;
+                        const labels = {
+                          cash: 'Cash',
+                          upi: 'UPI / QR',
+                          card: 'Card',
+                          split: 'Split Bill'
+                        };
+                        return (
+                          <button
+                            key={method}
+                            type="button"
+                            onClick={() => setQuickSettlePaymentMethod(method)}
+                            className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900 border border-slate-700 dark:border-slate-200 shadow-xs'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {labels[method]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-800">
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setIsQuickSettleOpen(false);
+                        setQuickSettleOrder(null);
+                      }}
+                      disabled={isSubmittingSettle}
+                      className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-slate-950 dark:hover:text-white"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      isLoading={isSubmittingSettle}
+                      disabled={isSubmittingSettle}
+                      onClick={handleQuickSettleConfirm}
+                      className="bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white font-bold text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-sm cursor-pointer transition-all"
+                    >
+                      Confirm Payment ({formatPrice(calcResult.grandTotal, currency)})
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

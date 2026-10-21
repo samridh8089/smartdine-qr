@@ -12,9 +12,9 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { 
   ChefHat, Clock, Check, ArrowRight, Play, CheckCircle2, 
-  X, AlertCircle, Volume2, Sparkles, Bell, ShoppingBag, Search, FileText
+  X, AlertCircle, Volume2, VolumeX, Sparkles, Bell, BellOff, ShoppingBag, Search, FileText
 } from 'lucide-react';
-import { playLoudBell, unlockAudio, stopLoudBell, isGloballyMuted, setGlobalMute } from '@/lib/soundAlert';
+import { playLoudBell, unlockAudio, stopLoudBell, isGloballyMuted, setGlobalMute, isBellRinging } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { dashboardStore } from '@/lib/dashboardStore';
 
@@ -167,6 +167,7 @@ export default function KitchenDisplayPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [isAcceptingAlert, setIsAcceptingAlert] = useState(false);
   const [isCancellingBatch, setIsCancellingBatch] = useState(false);
+  const [isBellRinging, setIsBellRinging] = useState(false);
 
   // ─── 2. useRef Declarations ───────────────────────────────────────────
   const processingBatchIdsRef = useRef<Set<string>>(new Set());
@@ -421,6 +422,9 @@ export default function KitchenDisplayPage() {
     nextStatus: OrderBatch['status'], 
     cancellationReasonText?: string
   ) => {
+    // Stop any active kitchen bell immediately when chef touches/updates a batch ticket
+    stopLoudBell();
+
     // 1. Synchronous atomic lock check on first click: prevent double-tap race condition
     if (processingBatchIdsRef.current.has(batchId)) return;
     processingBatchIdsRef.current.add(batchId);
@@ -634,6 +638,17 @@ export default function KitchenDisplayPage() {
   useEffect(() => {
     soundEnabledRef.current = !alarmMuted && !isGloballyMuted();
   }, [alarmMuted]);
+
+  // Realtime listener for bell ringing state to show Silence Bell button
+  useEffect(() => {
+    const handleBellState = (e: any) => {
+      setIsBellRinging(Boolean(e.detail?.isRinging));
+    };
+    window.addEventListener('cleverops-bell-state-changed', handleBellState);
+    return () => {
+      window.removeEventListener('cleverops-bell-state-changed', handleBellState);
+    };
+  }, []);
 
   // Update timer every second for real-time kitchen SLA countdown/stopwatch
   useEffect(() => {
@@ -940,6 +955,17 @@ export default function KitchenDisplayPage() {
               className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:focus:ring-slate-100"
             />
           </div>
+          {isBellRinging && (
+            <button
+              type="button"
+              onClick={() => stopLoudBell()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black animate-pulse cursor-pointer shadow-md"
+              title="Stop ringing alarm immediately"
+            >
+              <BellOff className="h-4 w-4 animate-bounce" />
+              Silence Bell
+            </button>
+          )}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-semibold transition-all cursor-pointer ${
@@ -1562,13 +1588,19 @@ export default function KitchenDisplayPage() {
       {/* --- Realtime New Order Alert Dialog --- */}
       <Dialog
         isOpen={!!newOrderAlert}
-        onClose={() => setNewOrderAlert(null)}
+        onClose={() => {
+          stopLoudBell();
+          setNewOrderAlert(null);
+        }}
         title="New Table Order Received!"
         footer={
           <div className="flex gap-2 w-full">
             <button 
               className="flex-1 border border-slate-200 dark:border-slate-700 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 font-extrabold px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-50" 
-              onClick={() => setNewOrderAlert(null)}
+              onClick={() => {
+                stopLoudBell();
+                setNewOrderAlert(null);
+              }}
             >
               Close
             </button>
@@ -1576,6 +1608,7 @@ export default function KitchenDisplayPage() {
               disabled={isAcceptingAlert}
               className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-2.5 rounded-xl cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2" 
               onClick={async () => {
+                stopLoudBell();
                 if (isAcceptingAlert) return;
                 setIsAcceptingAlert(true);
                 try {

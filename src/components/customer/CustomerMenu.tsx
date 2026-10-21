@@ -18,7 +18,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { 
   ShoppingBag, Search, Compass, Info, X, Plus, 
   Minus, AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, ChevronLeft, HelpCircle,
-  Bell, CreditCard, Sparkles, ClipboardList, Calendar, UtensilsCrossed
+  Bell, CreditCard, Sparkles, ClipboardList, Calendar, UtensilsCrossed, Loader2
 } from 'lucide-react';
 
 interface CustomerMenuProps {
@@ -850,7 +850,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       showToast('This table is temporarily unavailable. Please contact the staff.');
       return;
     }
-    if (cart.length === 0) {
+    if (cart.length === 0 && !isReservation) {
       isSubmittingRef.current = false;
       setOrderPlacing(false);
       return;
@@ -903,7 +903,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         showToast('Please specify the number of guests for your reservation.');
         return;
       }
-      if (!reservationPaymentCompleted) {
+      if (cartTotal > 0 && !reservationPaymentCompleted) {
         isSubmittingRef.current = false;
         setOrderPlacing(false);
         showToast('Please complete the UPI payment to confirm your table reservation.');
@@ -911,8 +911,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       }
     }
 
-    // Pre-checkout cart validation against fresh DB menu
-    const currentAvailableItems = (await db.getMenuItems(restaurant.id)).filter(i => i.is_available);
+    // High-speed pre-checkout cart validation against memory cache (<1ms instead of 1000ms+ network lag)
+    const currentAvailableItems = (menuItems && menuItems.length > 0 ? menuItems : await db.getMenuItems(restaurant.id)).filter(i => i.is_available);
     const validCart: CartItem[] = [];
     let cartChanged = false;
 
@@ -1023,7 +1023,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             takeawayNotes: isTakeaway ? takeawayNotes : undefined,
             customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : undefined,
             customerPhone: isTakeaway ? takeawayPhone.trim() : isReservation ? reservationPhone.trim() : undefined,
-            paymentStatus: (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
+            paymentStatus: isTakeaway ? 'customer_marked_paid' : (isReservation && cartTotal > 0 && reservationPaymentCompleted) ? 'customer_marked_paid' : 'pending',
             idempotencyKey,
             offerCode: appliedOffer?.code,
             discountAmount,
@@ -1428,7 +1428,12 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       {/* Cover Banner Image if present */}
       {restaurant.cover_image_url && (
         <div className="w-full h-32 md:h-44 relative shrink-0">
-          <img src={restaurant.cover_image_url} alt="" className="w-full h-full object-cover" />
+          <img 
+            src={restaurant.cover_image_url} 
+            alt="" 
+            className="w-full h-full object-cover" 
+            onError={(e) => { e.currentTarget.parentElement?.classList.add('hidden'); }}
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
         </div>
       )}
@@ -1477,45 +1482,52 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-5 space-y-4">
 
         {/* Action Bar (Call Waiter & Track Order) below restaurant header & above offer banner */}
-        <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 px-3.5 rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-sm">
-          <div className="flex items-center gap-2">
-            {table && !isTakeaway && planSpec?.features.call_waiter !== false && (
-              <button
-                onClick={() => handleCallStaff('call_waiter')}
-                disabled={callLoading}
-                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
-              >
-                <Bell className="h-4 w-4 text-white animate-bounce" />
-                <span>Call Waiter</span>
-              </button>
+        {((table && !isTakeaway && !isReservation && planSpec?.features.call_waiter !== false) || (activeOrderId && planSpec?.features.live_order_tracking !== false)) && (
+          <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 px-3.5 rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-xs">
+            <div className="flex items-center gap-2">
+              {table && !isTakeaway && !isReservation && planSpec?.features.call_waiter !== false && (
+                <button
+                  onClick={() => handleCallStaff('call_waiter')}
+                  disabled={callLoading}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  <span>Call Waiter</span>
+                </button>
+              )}
+            </div>
+
+            {activeOrderId && planSpec?.features.live_order_tracking !== false && (
+              <Link href={`/order-tracking/${activeOrderId}`}>
+                <button className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  <span>Track Order</span>
+                </button>
+              </Link>
             )}
           </div>
-
-          {activeOrderId && planSpec?.features.live_order_tracking !== false && (
-            <Link href={`/order-tracking/${activeOrderId}`}>
-              <button className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer animate-pop">
-                <ClipboardList className="h-4 w-4 text-indigo-600 dark:text-indigo-400 animate-pulse" />
-                <span>Track Order</span>
-              </button>
-            </Link>
-          )}
-        </div>
+        )}
         
-        {/* Table Temporarily Unavailable Banner when QR is disabled */}
+        {/* Single, Clean Table Unavailable Notice */}
         {isTableDisabled && (
-          <div className="sticky top-2 z-50 bg-rose-600 border border-rose-700 text-white rounded-2xl p-4 flex items-center justify-between gap-3 text-xs md:text-sm font-bold shadow-2xl animate-pop">
+          <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs md:text-sm">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-rose-700 rounded-xl shrink-0">
-                <AlertTriangle className="h-5 w-5 text-white animate-pulse" />
+              <div className="p-2 bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl shrink-0">
+                <AlertTriangle className="h-4 w-4" />
               </div>
               <div>
-                <p className="font-extrabold text-sm md:text-base leading-tight">This table is temporarily unavailable.</p>
-                <p className="text-[11px] text-rose-100 font-semibold mt-0.5">Ordering is disabled for this table. Please contact the staff.</p>
+                <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">Table Ordering Temporarily Unavailable</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Direct ordering from QR is currently unavailable for this table. Please contact staff to order.</p>
               </div>
             </div>
-            <span className="shrink-0 bg-rose-800 text-[11px] font-black uppercase px-2.5 py-1 rounded-lg border border-rose-500/50">
-              Disabled
-            </span>
+            {restaurant?.phone && (
+              <a
+                href={`tel:${restaurant.phone}`}
+                className="inline-flex items-center justify-center px-3.5 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 shrink-0"
+              >
+                Contact Staff
+              </a>
+            )}
           </div>
         )}
 
@@ -1644,9 +1656,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           </div>
         )}
 
-        {/* Floating Toast Notification (No Browser Alerts!) */}
+        {/* Floating Toast Notification (Above Dialog Modals) */}
         {toastNotice && (
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92%] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs font-extrabold border border-slate-700 animate-bounce">
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] max-w-md w-[92%] bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs font-extrabold border border-slate-700 animate-bounce">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-4.5 w-4.5 text-amber-400 shrink-0" />
               <span>{toastNotice}</span>
@@ -1673,16 +1685,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           </div>
         )}
 
-        {/* Table Inactive / QR Disabled Banner */}
-        {table && !isTakeaway && !isReservation && table.qr_enabled === false && !activeOrderId && (
-          <div className="bg-slate-900 text-amber-300 border-2 border-amber-500/50 rounded-2xl p-4 flex items-center gap-3 text-xs font-black shadow-lg animate-pulse">
-            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0" />
-            <div>
-              <p className="text-sm font-black text-white">Table Temporarily Inactive</p>
-              <p className="text-amber-300 font-semibold mt-0.5">This table is temporarily unavailable. Please contact the staff.</p>
-            </div>
-          </div>
-        )}
 
         {/* Welcome/Table Prompt if view-only */}
         {!table && (
@@ -1764,6 +1766,37 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                   className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/50 rounded-xl text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none"
                 />
               </div>
+            </div>
+
+            {/* Direct Booking Submission Action */}
+            <div className="pt-2 border-t border-indigo-100 dark:border-indigo-900/40">
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={orderPlacing || isSubmittingRef.current}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs sm:text-sm font-extrabold transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.98]"
+              >
+                {orderPlacing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Submitting Table Reservation...</span>
+                  </>
+                ) : (
+                  <>
+                    <Calendar className="h-4 w-4" />
+                    <span>{cart.length > 0 ? `Confirm Reservation (${cart.length} Dish Pre-ordered)` : 'Confirm Table Reservation (Free Booking)'}</span>
+                  </>
+                )}
+              </button>
+              {cart.length === 0 ? (
+                <p className="text-center text-[11px] text-indigo-600/80 dark:text-indigo-400 mt-2 font-medium">
+                  Selecting dishes from the menu is optional. You can book your table now!
+                </p>
+              ) : (
+                <p className="text-center text-[11px] text-indigo-600/80 dark:text-indigo-400 mt-2 font-medium">
+                  Pre-ordered dishes will be prepared once your table is allotted.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -2121,44 +2154,27 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         </div>
       </main>
 
-      {/* Floating Bottom Cart Bar / Disabled Table Alert Bar */}
-      {table && (
-        isTableDisabled ? (
-          <div className="fixed bottom-0 inset-x-0 bg-rose-600 text-white border-t border-rose-700 shadow-2xl p-4 z-50 animate-slide-up">
-            <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <AlertTriangle className="h-5 w-5 text-white animate-pulse shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-extrabold leading-tight truncate">Table Temporarily Unavailable</p>
-                  <p className="text-[11px] text-rose-100 font-medium truncate">Ordering is currently disabled for this table.</p>
-                </div>
-              </div>
-              <span className="px-3 py-1.5 bg-rose-800 text-white rounded-xl text-xs font-black shrink-0 border border-rose-500/40">
-                Disabled
-              </span>
+      {/* Floating Bottom Cart Bar */}
+      {table && !isTableDisabled && cart.length > 0 && (
+        <div className={`fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shadow-xl p-4 z-40 ${
+          cartBouncing ? 'animate-bounce' : ''
+        }`}>
+          <div className="max-w-md mx-auto flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Your Order Basket</span>
+              <p className="text-sm font-extrabold text-slate-900 dark:text-white">
+                {cartCount} item{cartCount > 1 ? 's' : ''} • {formatPrice(cartTotal, restaurant.settings.currency)}
+              </p>
             </div>
+            <Button 
+              className={`px-6 gap-2 ${theme.bg} ${theme.hoverBg} text-white cursor-pointer`}
+              onClick={() => setCartOpen(true)}
+            >
+              <ShoppingBag className="h-4.5 w-4.5" />
+              View Cart
+            </Button>
           </div>
-        ) : cart.length > 0 && (
-          <div className={`fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shadow-xl p-4 z-40 ${
-            cartBouncing ? 'animate-bounce' : ''
-          }`}>
-            <div className="max-w-md mx-auto flex items-center justify-between gap-4">
-              <div className="space-y-0.5">
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">Your Order Basket</span>
-                <p className="text-sm font-extrabold text-slate-900 dark:text-white">
-                  {cartCount} item{cartCount > 1 ? 's' : ''} • {formatPrice(cartTotal, restaurant.settings.currency)}
-                </p>
-              </div>
-              <Button 
-                className={`px-6 gap-2 ${theme.bg} ${theme.hoverBg} text-white cursor-pointer`}
-                onClick={() => setCartOpen(true)}
-              >
-                <ShoppingBag className="h-4.5 w-4.5" />
-                View Cart
-              </Button>
-            </div>
-          </div>
-        )
+        </div>
       )}
 
       {/* --- Item Detail & Notes Modal --- */}
@@ -2330,20 +2346,32 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                     <span>This table is temporarily unavailable. Please contact the staff.</span>
                   </div>
                 )}
+                {isTakeaway && !takeawayPaymentCompleted && (
+                  <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl p-2.5 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-xs font-bold">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Please complete the UPI payment above to place your takeaway order.</span>
+                  </div>
+                )}
+                {isReservation && cartTotal > 0 && !reservationPaymentCompleted && (
+                  <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl p-2.5 flex items-center gap-2 text-amber-800 dark:text-amber-200 text-xs font-bold">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Please complete the UPI payment above to confirm pre-ordered dishes.</span>
+                  </div>
+                )}
                 <Button 
                   className={`w-full py-3 text-base font-extrabold cursor-pointer ${
-                    orderPlacing || isSubmittingRef.current || (isTakeaway && !takeawayPaymentCompleted) || isQRDisabled
+                    orderPlacing || isSubmittingRef.current || isQRDisabled || (isTakeaway && !takeawayPaymentCompleted) || (isReservation && cartTotal > 0 && !reservationPaymentCompleted)
                       ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed pointer-events-none hover:bg-slate-200 dark:hover:bg-slate-800'
                       : theme.bg + ' ' + theme.hoverBg + ' text-white'
                   }`}
                   onClick={handlePlaceOrder}
                   isLoading={orderPlacing}
-                  disabled={orderPlacing || isSubmittingRef.current || (isTakeaway && !takeawayPaymentCompleted) || isQRDisabled}
+                  disabled={orderPlacing || isSubmittingRef.current || isQRDisabled || (isTakeaway && !takeawayPaymentCompleted) || (isReservation && cartTotal > 0 && !reservationPaymentCompleted)}
                 >
                   {isQRDisabled
                     ? 'Table Temporarily Unavailable'
                     : orderPlacing
-                    ? 'Sending Order to Kitchen...'
+                    ? 'Submitting Order...'
                     : isReservation
                     ? `Confirm Table Reservation • ${formatPrice(cartTotal, restaurant.settings.currency)}`
                     : isTakeaway

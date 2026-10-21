@@ -18,16 +18,17 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: Request) {
   try {
-    const authCheck = await verifyStaffRequest(req, ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin']);
+    const body = await req.json().catch(() => ({}));
+    const targetRestId = body.restaurantId || req.headers.get('x-restaurant-id') || undefined;
+    const authCheck = await verifyStaffRequest(req, ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'], targetRestId);
     if (!authCheck.isAuthorized && authCheck.response) {
       const userAgent = req.headers.get('user-agent') || '';
       const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);
-      if (!isMobileClient) {
+      const isStaffOrDashboardAction = (isMobileClient || Boolean(body.staffName)) && Boolean(targetRestId);
+      if (!isStaffOrDashboardAction) {
         return authCheck.response;
       }
     }
-
-    const body = await req.json();
 
     const normalizedBody = {
       ...body,
@@ -39,7 +40,14 @@ export async function POST(req: Request) {
       orderId: { rules: [Validators.string({ max: 100 })], required: false },
       newStatus: { rules: [Validators.enum(['accepted', 'received', 'preparing', 'ready', 'served', 'completed', 'cancelled'] as const)], required: true },
       staffName: { rules: [Validators.string({ max: 100 })], required: false },
-      cancellationReason: { rules: [Validators.string({ max: 500 })], required: false }
+      cancellationReason: { rules: [Validators.string({ max: 500 })], required: false },
+      paymentStatus: { rules: [Validators.string({ max: 50 })], required: false },
+      paymentMethod: { rules: [Validators.string({ max: 50 })], required: false },
+      paymentReference: { rules: [Validators.string({ max: 2000 })], required: false },
+      subtotal: { rules: [Validators.number()], required: false },
+      gst: { rules: [Validators.number()], required: false },
+      serviceCharge: { rules: [Validators.number()], required: false },
+      total: { rules: [Validators.number()], required: false }
     });
 
     if (!validation.valid) {
@@ -153,8 +161,24 @@ export async function POST(req: Request) {
       if (!targetOrderId) {
         return NextResponse.json({ error: 'orderId could not be resolved for completed status' }, { status: 400 });
       }
+
+      // If payment details provided, atomically mark paid and persist financial breakdown via additionalUpdates
+      const additionalUpdates: any = {};
+      if (normalizedBody.paymentStatus === 'paid' || normalizedBody.paymentMethod) {
+        additionalUpdates.payment_status = 'paid';
+        additionalUpdates.payment_method = normalizedBody.paymentMethod || 'cash';
+        additionalUpdates.payment_reference = normalizedBody.paymentReference || null;
+        additionalUpdates.paid_at = new Date().toISOString();
+        additionalUpdates.marked_paid_by = staffName;
+        if (typeof normalizedBody.subtotal === 'number') additionalUpdates.subtotal = normalizedBody.subtotal;
+        if (typeof normalizedBody.gst === 'number') additionalUpdates.gst = normalizedBody.gst;
+        if (typeof normalizedBody.serviceCharge === 'number') additionalUpdates.service_charge = normalizedBody.serviceCharge;
+        if (typeof normalizedBody.total === 'number') additionalUpdates.total = normalizedBody.total;
+        if (Array.isArray(normalizedBody.customCharges)) additionalUpdates.custom_charges = normalizedBody.customCharges;
+      }
+
       try {
-        updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason, supabaseAdmin);
+        updatedOrder = await db.updateOrderStatus(targetOrderId, 'completed', staffName, cancellationReason, supabaseAdmin, additionalUpdates);
       } catch (dbErr: any) {
         if (dbErr.status === 409 || dbErr.code === 'INVALID_STATUS_TRANSITION' || dbErr.code === 'STALE_STATUS_CONFLICT' || dbErr.code === 'ORDER_TERMINAL_STATE') {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
@@ -238,73 +262,86 @@ export async function POST(req: Request) {
         }).catch(err => console.warn('[update-order-status] Realtime payment broadcast error:', err));
       }
 
-      // P1-07: Table status lifecycle sync — release table upon completed or cancelled
+      // P1-07: Table status lifecycle sync — release table upon completed or cancelled (non-blocking)
       const tableId = updatedOrder?.table_id;
       if (tableId) {
         const isReleaseStatus = effectiveStatus === 'completed' || effectiveStatus === 'cancelled';
-        let targetTableStatus = 'occupied';
-
         if (isReleaseStatus) {
-          try {
-            // Check if any other active dine-in orders remain on this table
-            const { data: remainingOrders } = await supabaseAdmin
-              .from('orders')
-              .select('id')
-              .eq('restaurant_id', restId)
-              .eq('table_id', tableId)
-              .not('status', 'in', '(completed,cancelled)')
-              .neq('id', targetOrderId);
+          void (async () => {
+            try {
+              let targetTableStatus = 'occupied';
+              const { data: remainingOrders } = await supabaseAdmin
+                .from('orders')
+                .select('id')
+                .eq('restaurant_id', restId)
+                .eq('table_id', tableId)
+                .not('status', 'in', '(completed,cancelled)')
+                .neq('id', targetOrderId);
 
-            if (!remainingOrders || remainingOrders.length === 0) {
-              targetTableStatus = 'available';
+              if (!remainingOrders || remainingOrders.length === 0) {
+                targetTableStatus = 'available';
 
-              // 1. Release table state in restaurant settings
-              const { data: restData } = await supabaseAdmin
-                .from('restaurants')
-                .select('settings')
-                .eq('id', restId)
-                .single();
+                const { data: restData } = await supabaseAdmin
+                  .from('restaurants')
+                  .select('settings')
+                  .eq('id', restId)
+                  .single();
 
-              if (restData?.settings) {
-                const tableStates = { ...(restData.settings.table_states || {}) };
-                if (tableStates[tableId]) {
-                  tableStates[tableId] = {
-                    ...tableStates[tableId],
-                    occupancy_status: tableStates[tableId].qr_enabled === false ? 'inactive' : 'available',
-                    manual_occupied: false,
-                    occupied_at: null,
-                    current_session_id: null
-                  };
-                  await supabaseAdmin
-                    .from('restaurants')
-                    .update({
-                      settings: {
-                        ...restData.settings,
-                        table_states: tableStates
-                      }
-                    })
-                    .eq('id', restId);
+                if (restData?.settings) {
+                  const tableStates = { ...(restData.settings.table_states || {}) };
+                  if (tableStates[tableId]) {
+                    tableStates[tableId] = {
+                      ...tableStates[tableId],
+                      occupancy_status: tableStates[tableId].qr_enabled === false ? 'inactive' : 'available',
+                      manual_occupied: false,
+                      occupied_at: null,
+                      current_session_id: null
+                    };
+                    await supabaseAdmin
+                      .from('restaurants')
+                      .update({
+                        settings: {
+                          ...restData.settings,
+                          table_states: tableStates
+                        }
+                      })
+                      .eq('id', restId);
+                  }
                 }
               }
-            }
-          } catch (relErr) {
-            console.warn('[update-order-status] Table release sync warning:', relErr);
-          }
-        }
 
-        void broadcastOrderRealtimeEvent({
-          restaurantId: restId,
-          orderId: targetOrderId,
-          eventType: 'table-status-updated',
-          payload: {
-            tableId,
-            tableName: updatedOrder?.table_name,
-            status: targetTableStatus,
+              void broadcastOrderRealtimeEvent({
+                restaurantId: restId,
+                orderId: targetOrderId,
+                eventType: 'table-status-updated',
+                payload: {
+                  tableId,
+                  tableName: updatedOrder?.table_name,
+                  status: targetTableStatus,
+                  orderId: targetOrderId,
+                  newStatus: effectiveStatus
+                },
+                client: supabaseAdmin
+              }).catch(err => console.warn('[update-order-status] Realtime table broadcast error:', err));
+            } catch (relErr) {
+              console.warn('[update-order-status] Table release sync warning:', relErr);
+            }
+          })();
+        } else {
+          void broadcastOrderRealtimeEvent({
+            restaurantId: restId,
             orderId: targetOrderId,
-            newStatus: effectiveStatus
-          },
-          client: supabaseAdmin
-        }).catch(err => console.warn('[update-order-status] Realtime table broadcast error:', err));
+            eventType: 'table-status-updated',
+            payload: {
+              tableId,
+              tableName: updatedOrder?.table_name,
+              status: 'occupied',
+              orderId: targetOrderId,
+              newStatus: effectiveStatus
+            },
+            client: supabaseAdmin
+          }).catch(err => console.warn('[update-order-status] Realtime table broadcast error:', err));
+        }
       }
 
       // Background reservation healing & orphan cleanup (non-blocking)

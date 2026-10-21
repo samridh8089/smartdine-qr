@@ -12,7 +12,7 @@ export const VALID_ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   accepted: ['preparing', 'cancelled', 'completed'],
   preparing: ['ready', 'cancelled', 'completed'],
   ready: ['served', 'completed', 'cancelled'],
-  served: ['completed'],
+  served: ['completed', 'cancelled'],
   completed: [],
   cancelled: []
 };
@@ -213,7 +213,12 @@ export function parseCustomerDetailsFromOrder(order: any): {
 
   if (!name) {
     const nameMatch = textBlob.match(/(?:CUSTOMER|Name|Guest):\s*([^|]+)/i);
-    if (nameMatch) name = nameMatch[1].trim();
+    if (nameMatch) {
+      name = nameMatch[1].trim();
+    } else if (order.table_name && order.table_name.includes('•')) {
+      const tMatch = order.table_name.match(/•\s*([^(\n]+?)(?:\s*\(Reservation\))?$/i);
+      if (tMatch) name = tMatch[1].trim();
+    }
   }
   if (!phone) {
     const phoneMatch = textBlob.match(/(?:PHONE|Contact|Mobile):\s*([^|]+)/i);

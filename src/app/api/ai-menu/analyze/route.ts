@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'At least one image or text input is required' }, { status: 400 });
     }
 
-    const providerUsed = 'Gemini 2.5 Flash Vision Engine';
+    const providerUsed = 'Gemini 3.8 Flash Vision Engine';
 
     const systemPrompt = `You are an expert restaurant menu digitizer for CleverOps Smart Menu.
 Analyze the physical menu image(s) or menu text provided and extract ALL categories and menu items accurately.

@@ -385,11 +385,57 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
 }
 
 /**
+ * Extracts structured refund details from order fields and special instructions.
+ */
+export function parseOrderRefundDetails(order: any): {
+  isRefunded: boolean;
+  isPartial: boolean;
+  refundAmount: number;
+  refundMethod?: string;
+  refundReason?: string;
+} {
+  if (!order) return { isRefunded: false, isPartial: false, refundAmount: 0 };
+
+  const text = `${order.special_instructions || ''} ${order.notes || ''} ${order.cancellation_reason || ''}`;
+  // Matches e.g. [REFUND RECORDED: ₹90 via UPI | Reason: Billing Correction / Overcharge ...]
+  const match = text.match(/\[REFUND RECORDED:\s*[^0-9]*([0-9]+(?:\.[0-9]+)?)\s*via\s*([A-Z_]+)(?:\s*\|\s*Reason:\s*([^|\]]+))?/i);
+
+  let refundAmt = 0;
+  let refundMethod: string | undefined = undefined;
+  let refundReason: string | undefined = undefined;
+
+  if (match) {
+    refundAmt = parseFloat(match[1]) || 0;
+    refundMethod = match[2]?.trim();
+    refundReason = match[3]?.trim();
+  }
+
+  const orderTotal = Number((order as any).grand_total ?? (order as any).total ?? 0);
+  const isRefundStatus = order.payment_status === 'refunded' || order.refund_status === 'processed';
+
+  if (!refundAmt && isRefundStatus && orderTotal > 0) {
+    refundAmt = orderTotal;
+  }
+
+  const isPartial = refundAmt > 0 && orderTotal > 0 && refundAmt < orderTotal;
+  const isRefunded = isRefundStatus || refundAmt > 0;
+
+  return {
+    isRefunded,
+    isPartial,
+    refundAmount: refundAmt,
+    refundMethod: refundMethod || order.payment_method || 'UPI',
+    refundReason: refundReason || 'Refund Processed'
+  };
+}
+
+/**
  * Canonical check for whether an order represents realized revenue.
  * Realized Revenue includes only:
  * - payment_status === "paid"
  * - OR status === "completed"
- * Excludes: unpaid, pending, preparing, ready, cancelled, refunded.
+ * - OR orders with partial refunds (net positive balance)
+ * Excludes: unpaid, pending, preparing, ready, cancelled, fully refunded.
  */
 export function isRevenueOrder(order: {
   status?: string | null;
@@ -398,13 +444,24 @@ export function isRevenueOrder(order: {
 } | null | undefined): boolean {
   if (!order) return false;
   if (order.status === 'cancelled') return false;
-  if (order.payment_status === 'refunded' || order.refund_status === 'full') return false;
-  return order.payment_status === 'paid' || order.status === 'completed';
+
+  const refundInfo = parseOrderRefundDetails(order);
+  // Full refund means realized revenue is 0
+  if ((order.payment_status === 'refunded' || order.refund_status === 'full') && !refundInfo.isPartial) {
+    return false;
+  }
+
+  return (
+    order.payment_status === 'paid' ||
+    order.payment_status === 'partially_refunded' ||
+    order.status === 'completed' ||
+    refundInfo.isPartial
+  );
 }
 
 /**
  * Authoritative stored revenue amount for an order.
- * Follows Canonical Rule: Number(order.grand_total ?? order.total ?? 0)
+ * Follows Canonical Rule: Number(order.grand_total ?? order.total ?? 0) minus any processed refund.
  * Uses stored database values without recalculating GST or reconstructing totals.
  */
 export function getOrderRevenueAmount(order: {
@@ -413,7 +470,11 @@ export function getOrderRevenueAmount(order: {
 } | null | undefined): number {
   if (!order) return 0;
   const val = Number((order as any).grand_total ?? (order as any).total ?? 0);
-  return isNaN(val) ? 0 : val;
+  if (isNaN(val) || val <= 0) return 0;
+
+  const refundInfo = parseOrderRefundDetails(order);
+  const net = Math.max(0, val - refundInfo.refundAmount);
+  return Math.round((net + Number.EPSILON) * 100) / 100;
 }
 
 /**
