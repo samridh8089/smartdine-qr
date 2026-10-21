@@ -75,3 +75,15 @@ user_shade.png
 .vscode/
 .idea/
 .vercel
+*.xml
+*.apks
+*.txt
+temp_*.*
+*.cjs
+browser_role_audit_report.json
+cleverops_audit_summary.json
+customer_flow_events.json
+device_bundle.js
+module_*_dump.js
+parse_ui.js
+window_dump.xml

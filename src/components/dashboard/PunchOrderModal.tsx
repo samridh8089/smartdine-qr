@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { db, MenuItem, Table, Restaurant, Category } from '@/lib/db';
+import { db, MenuItem, Table, Restaurant, Category, Order } from '@/lib/db';
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { formatPrice } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { 
   Plus, Minus, Search, Trash2, ShoppingCart, 
-  CheckCircle, AlertCircle, Utensils, QrCode, Tag
+  CheckCircle, AlertCircle, Utensils, QrCode, Tag,
+  ShoppingBag, User, Phone
 } from 'lucide-react';
 
 interface CartItem {
@@ -28,6 +29,8 @@ interface PunchOrderModalProps {
   onOrderCreated: () => void;
   initialCustomerName?: string;
   initialCustomerPhone?: string;
+  initialTableId?: string;
+  existingOrderId?: string;
 }
 
 export default function PunchOrderModal({
@@ -37,7 +40,9 @@ export default function PunchOrderModal({
   staffName,
   onOrderCreated,
   initialCustomerName = '',
-  initialCustomerPhone = ''
+  initialCustomerPhone = '',
+  initialTableId = '',
+  existingOrderId = ''
 }: PunchOrderModalProps) {
   const [tables, setTables] = useState<Table[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -47,28 +52,30 @@ export default function PunchOrderModal({
 
   // Order Details Form State
   const [orderType, setOrderType] = useState<'dine_in' | 'takeaway'>('dine_in');
-  const [selectedTableId, setSelectedTableId] = useState<string>('');
+  const [selectedTableId, setSelectedTableId] = useState<string>(initialTableId || '');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [customerName, setCustomerName] = useState(initialCustomerName);
   const [customerPhone, setCustomerPhone] = useState(initialCustomerPhone);
 
-  // Sync initial customer details when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      if (initialCustomerName) setCustomerName(initialCustomerName);
-      if (initialCustomerPhone) setCustomerPhone(initialCustomerPhone);
-    }
-  }, [isOpen, initialCustomerName, initialCustomerPhone]);
-  
   // Payment Options
   const [markPaid, setMarkPaid] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'card'>('cash');
 
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const submittingRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const submittingRef = useRef(false);
+
+  // Sync initial customer details & table when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      if (initialCustomerName) setCustomerName(initialCustomerName);
+      if (initialCustomerPhone) setCustomerPhone(initialCustomerPhone);
+      if (initialTableId) setSelectedTableId(initialTableId);
+    }
+  }, [isOpen, initialCustomerName, initialCustomerPhone, initialTableId]);
 
   useEffect(() => {
     if (!isOpen || !restaurant.id) return;
@@ -88,7 +95,9 @@ export default function PunchOrderModal({
         setMenuItems(availableItems);
         setCategories(cats);
 
-        if (tbls.length > 0) {
+        if (initialTableId) {
+          setSelectedTableId(initialTableId);
+        } else if (tbls.length > 0 && !selectedTableId) {
           setSelectedTableId(tbls[0].id);
         }
       } catch (err: any) {
@@ -100,7 +109,7 @@ export default function PunchOrderModal({
     }
 
     loadData();
-  }, [isOpen, restaurant.id]);
+  }, [isOpen, restaurant.id, initialTableId]);
 
   const handleAddToCart = (item: MenuItem) => {
     setCart(prev => {
@@ -195,6 +204,15 @@ export default function PunchOrderModal({
         notes: c.notes || undefined
       }));
 
+      const batchItemsPayload = cart.map(c => ({
+        menu_item_id: c.menuItem.id,
+        menu_item_name: c.menuItem.name,
+        price: c.menuItem.price,
+        quantity: c.quantity,
+        notes: c.notes || undefined,
+        is_veg: c.menuItem.is_veg
+      }));
+
       // Format customer name & mobile into special_instructions for universal system parsing
       let fullInstructions = specialInstructions.trim();
       if (customerName.trim() || customerPhone.trim()) {
@@ -202,27 +220,52 @@ export default function PunchOrderModal({
         fullInstructions = fullInstructions ? `${custHeader} | NOTES: ${fullInstructions}` : custHeader;
       }
 
-      // 1. Create order in DB with idempotency protection
+      // 1. Create or attach order in DB with idempotency protection
       const punchIdempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : `punch_${Date.now()}_${Math.random()}`;
 
-      const newOrder = await db.createOrder(
-        restaurant.id,
-        targetTableId,
-        orderItemsPayload,
-        fullInstructions || undefined,
-        orderType,
-        undefined, // arrival mins
-        customerPhone.trim() || undefined, // takeaway notes / phone
-        markPaid ? 'paid' : 'pending',
-        punchIdempotencyKey
-      );
+      let orderResult: Order;
+      let targetOrder: Order | null = null;
+      if (existingOrderId && orderType === 'dine_in') {
+        try {
+          const ord = await db.getOrderById(existingOrderId);
+          if (ord && ord.status !== 'completed' && ord.status !== 'cancelled') {
+            targetOrder = ord;
+          }
+        } catch (e) {
+          console.warn('[PunchOrderModal] Could not fetch existing order:', e);
+        }
+      }
+
+      if (targetOrder) {
+        const batchSubtotal = cart.reduce((sum, c) => sum + (c.menuItem.price * c.quantity), 0);
+        orderResult = await db.addBatchToOrder(
+          targetOrder,
+          batchItemsPayload,
+          batchSubtotal,
+          fullInstructions || undefined,
+          punchIdempotencyKey,
+          restaurant
+        );
+      } else {
+        orderResult = await db.createOrder(
+          restaurant.id,
+          targetTableId,
+          orderItemsPayload,
+          fullInstructions || undefined,
+          orderType,
+          undefined, // arrival mins
+          customerPhone.trim() || undefined, // takeaway notes / phone
+          markPaid ? 'paid' : 'pending',
+          punchIdempotencyKey
+        );
+      }
 
       // 2. If marked paid immediately by waiter
-      if (markPaid && newOrder) {
+      if (markPaid && orderResult) {
         await db.updateOrderPaymentStatus(
-          newOrder.id,
+          orderResult.id,
           'paid',
           staffName || 'Waiter',
           paymentMethod,
@@ -237,14 +280,14 @@ export default function PunchOrderModal({
           const targetTableObj = tables.find(t => t.id === targetTableId);
           await broadcastOrderRealtimeEvent({
             restaurantId: restaurant.id,
-            orderId: newOrder.id,
+            orderId: orderResult.id,
             eventType: 'table-status-updated',
             payload: {
               tableId: targetTableId,
               tableName: targetTableObj?.name || `Table ${targetTableObj?.display_number || ''}`,
               status: 'occupied',
               occupiedAt: new Date().toISOString(),
-              orderId: newOrder.id
+              orderId: orderResult.id
             },
             client: supabase
           });
@@ -306,45 +349,42 @@ export default function PunchOrderModal({
           )}
 
           {/* Top Bar: Order Type & Table Selection */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl p-3 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               {/* Order Type Toggle */}
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Order Type</label>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setOrderType('dine_in')}
-                    className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
-                      orderType === 'dine_in'
-                        ? 'bg-emerald-600 text-white shadow-md'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                    }`}
-                  >
-                    <Utensils className="h-3.5 w-3.5" /> Dine-in Table
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOrderType('takeaway')}
-                    className={`px-4 py-2 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 ${
-                      orderType === 'takeaway'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                    }`}
-                  >
-                    Takeaway Counter
-                  </button>
-                </div>
+              <div className="flex items-center gap-1 bg-slate-200/60 dark:bg-slate-800 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setOrderType('dine_in')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    orderType === 'dine_in'
+                      ? 'bg-white dark:bg-slate-900 text-slate-950 dark:text-white shadow-xs font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  <Utensils className="h-3.5 w-3.5 text-emerald-600" /> Dine-in Table
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderType('takeaway')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    orderType === 'takeaway'
+                      ? 'bg-white dark:bg-slate-900 text-slate-950 dark:text-white shadow-xs font-black'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  <ShoppingBag className="h-3.5 w-3.5 text-indigo-600" /> Takeaway Counter
+                </button>
               </div>
 
               {/* Table Selector (Only for Dine-in) */}
               {orderType === 'dine_in' && (
-                <div className="flex-1 max-w-xs">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Select Dining Table</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Table:</span>
                   <select
                     value={selectedTableId}
                     onChange={(e) => setSelectedTableId(e.target.value)}
-                    className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-slate-400 shadow-xs"
                     required
                   >
                     {tables.map(t => (
@@ -357,32 +397,28 @@ export default function PunchOrderModal({
               )}
             </div>
 
-            {/* Customer Details Row (P0-7 Mandatory for Takeaway) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                  Customer Name {orderType === 'takeaway' ? <span className="text-rose-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                </label>
+            {/* Customer Details Row (Compact with icons) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+              <div className="relative">
+                <User className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="e.g. Rahul Sharma"
+                  placeholder={orderType === 'takeaway' ? "Customer Name *" : "Customer Name (Optional)"}
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="w-full pl-8 pr-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-slate-400 shadow-2xs"
                   required={orderType === 'takeaway'}
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
-                  Mobile Number (10 digits) {orderType === 'takeaway' ? <span className="text-rose-500 font-bold">*</span> : <span className="text-slate-400 font-normal">(Optional)</span>}
-                </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="tel"
                   maxLength={10}
-                  placeholder="e.g. 9876543210"
+                  placeholder={orderType === 'takeaway' ? "Mobile Number (10 Digits) *" : "Mobile (Optional)"}
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                  className="w-full px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono font-medium bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  className="w-full pl-8 pr-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-slate-400 shadow-2xs"
                   required={orderType === 'takeaway'}
                 />
               </div>
@@ -454,7 +490,10 @@ export default function PunchOrderModal({
                         className="p-3 border border-slate-100 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all flex items-center justify-between gap-3"
                       >
                         <div className="space-y-0.5 min-w-0">
-                          <p className="font-extrabold text-xs text-slate-900 dark:text-white truncate">{item.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${item.is_veg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                            <p className="font-extrabold text-xs text-slate-900 dark:text-white truncate">{item.name}</p>
+                          </div>
                           <p className="text-[10px] text-slate-400 capitalize">{getCategoryName(item.category_id)} • {formatPrice(item.price, restaurant.settings.currency)}</p>
                         </div>
 
@@ -510,9 +549,12 @@ export default function PunchOrderModal({
                     cart.map(c => (
                       <div key={c.menuItem.id} className="pt-2 space-y-1">
                         <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-900 dark:text-white">{c.quantity}x {c.menuItem.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span>{formatPrice(c.menuItem.price * c.quantity, restaurant.settings.currency)}</span>
+                          <span className="text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-mono">{c.quantity}×</span>
+                            <span className="truncate">{c.menuItem.name}</span>
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-mono">{formatPrice(c.menuItem.price * c.quantity, restaurant.settings.currency)}</span>
                             <button
                               type="button"
                               onClick={() => handleRemoveFromCart(c.menuItem.id)}

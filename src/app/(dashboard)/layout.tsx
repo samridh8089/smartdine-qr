@@ -17,9 +17,9 @@ import {
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
   LogOut, MenuSquare, X, ChevronRight, User, Settings,
   ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users,
-  Bell, BellOff
+  Bell, BellOff, UserCheck
 } from 'lucide-react';
-import { setGlobalMute, stopLoudBell, isGloballyMuted } from '@/lib/soundAlert';
+import { setGlobalMute, stopLoudBell, isGloballyMuted, playLoudBell } from '@/lib/soundAlert';
 
 // Central Route to Entitlement Feature Key Mapping
 const ROUTE_FEATURE_KEYS: Record<string, { key: string; name: string; desc: string }> = {
@@ -52,25 +52,22 @@ export function useRestaurant() {
 }
 
 const ALLOWED_PATHS: Record<string, string[]> = {
-  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder', '/dashboard/founder/control-center'],
-  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/founder', '/dashboard/founder/control-center'],
-  supervisor: ['/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu'],
-  waiter: ['/dashboard/orders', '/dashboard/tables'],
-  kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu'],
-  cashier: ['/dashboard/orders', '/dashboard/tables']
+  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
+  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
+  supervisor: ['/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  waiter: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  cashier: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch']
 };
 
 const ALL_MENU_ITEMS = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
   { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
-  { name: 'Tables & QRs', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
-  { name: 'Kitchen Display', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'kitchen'] },
-  { name: 'Menu Management', href: '/dashboard/menu', icon: MenuSquare, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
+  { name: 'Tables', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
+  { name: 'Smart Menu by Clever Ops', href: '/dashboard/menu', icon: Sparkles, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
+  { name: 'Attendance & Shifts', href: '/dashboard/attendance', icon: UserCheck, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
   { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
-  { name: 'Staff Management', href: '/dashboard/staff', icon: Users, roles: ['owner', 'manager'] },
   { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
-  { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
-  { name: 'Smart Menu by CleverOps', href: '/dashboard/ai-menu', icon: Sparkles, roles: ['owner', 'manager'] },
   { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
 ];
@@ -82,6 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
   const [alarmMuted, setAlarmMuted] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -254,7 +252,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const localOrderIdsRef = useRef<Set<string>>(new Set());
 
   const stopGlobalAlarm = () => {
-    // Web app order bells removed per product specification
+    stopLoudBell();
   };
 
   const checkActiveAlarmsGlobal = async (restId: string, role: string) => {
@@ -355,7 +353,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .channel(`global_notifications_${restId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restId}` },
+        { event: 'INSERT', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restId}` },
+        async (payload) => {
+          const newOrder = payload.new as any;
+          if (newOrder && !localOrderIdsRef.current.has(newOrder.id)) {
+            localOrderIdsRef.current.add(newOrder.id);
+            if (!isGloballyMuted()) {
+              playLoudBell(activeRole === 'kitchen' ? 'kitchen' : activeRole === 'waiter' ? 'waiter' : 'owner');
+            }
+          }
+          await checkActiveAlarmsGlobal(restId, activeRole);
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${restId}` },
         async () => {
           await checkActiveAlarmsGlobal(restId, activeRole);
         }
@@ -363,7 +375,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'customer_requests', filter: `restaurant_id=eq.${restId}` },
-        async () => {
+        async (payload) => {
+          if (payload.eventType === 'INSERT' && !isGloballyMuted()) {
+            playLoudBell('waiter');
+          }
           await checkActiveAlarmsGlobal(restId, activeRole);
         }
       )
@@ -372,6 +387,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { event: '*', schema: 'public', table: 'order_batches' },
         async (payload) => {
           const batch = payload.new as any;
+          if (payload.eventType === 'UPDATE' && batch?.status === 'ready' && !isGloballyMuted()) {
+            playLoudBell('waiter');
+          }
           if (batch && (localOrderIdsRef.current.has(batch.order_id) || localOrderIdsRef.current.size === 0)) {
             await checkActiveAlarmsGlobal(restId, activeRole);
           }
@@ -394,7 +412,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     if (!loading && profile) {
       const allowed = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'];
-      if (!allowed.includes(pathname)) {
+      const isPathAllowed = allowed.some(p => pathname === p || pathname?.startsWith(p + '/'));
+      if (!isPathAllowed) {
         const defaultRoute = dbRole === 'kitchen' ? '/dashboard/kds' : (dbRole === 'waiter' || dbRole === 'cashier') ? '/dashboard/orders' : '/dashboard';
         router.replace(defaultRoute);
       }
@@ -770,70 +789,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <MenuIcon className="h-6 w-6" />
                 </button>
                 <div className="flex items-center gap-3">
-                  {restaurant?.logo_url ? (
+                  {restaurant?.logo_url && !logoError ? (
                     <img 
                       src={restaurant.logo_url} 
-                      alt={restaurant.name} 
+                      alt={restaurant.name || 'Restaurant Logo'} 
+                      onError={() => setLogoError(true)}
                       className="h-8 w-8 rounded-lg object-cover border border-slate-100 dark:border-slate-800" 
                     />
                   ) : (
-                    <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold text-sm">
-                      {restaurant?.name?.charAt(0) || 'R'}
+                    <div className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center font-black text-sm shadow-xs select-none">
+                      {restaurant?.name?.replace(/^(The\s+)/i, '').charAt(0) || restaurant?.name?.charAt(0) || 'R'}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <h1 className="text-sm font-semibold text-slate-950 dark:text-white leading-none truncate max-w-[180px] sm:max-w-[280px] md:max-w-[400px]" title={restaurant?.name}>{restaurant?.name}</h1>
-                    <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Live QR Ordering Active
-                    </span>
+                    <h1 className="text-sm font-bold text-slate-950 dark:text-white leading-none truncate max-w-[180px] sm:max-w-[280px] md:max-w-[400px]" title={restaurant?.name}>{restaurant?.name}</h1>
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 sm:gap-3">
-                {/* 🔔 Owner & Staff Bell Alert Toggle Button */}
+                {/* 🔔 Minimalist Bell Alert Toggle Button */}
                 <button
                   type="button"
                   onClick={handleToggleBellMute}
-                  className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold rounded-lg border transition-all cursor-pointer shadow-sm ${
+                  className={`p-2 rounded-xl border transition-all cursor-pointer shadow-xs ${
                     alarmMuted
-                      ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800 hover:bg-rose-100 hover:border-rose-400'
-                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 hover:border-emerald-400'
+                      ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700 hover:bg-slate-200'
+                      : 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white hover:bg-slate-800'
                   }`}
                   title={alarmMuted ? 'Sound alerts are MUTED. Click to turn ON.' : 'Sound alerts are ACTIVE. Click to MUTE.'}
                   aria-label="Toggle bell sound alerts"
                 >
                   {alarmMuted ? (
-                    <>
-                      <BellOff className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
-                      <span className="hidden sm:inline">Bell: OFF</span>
-                      <span className="sm:hidden">Muted</span>
-                    </>
+                    <BellOff className="h-4 w-4 shrink-0" />
                   ) : (
-                    <>
-                      <Bell className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 animate-bounce" />
-                      <span className="hidden sm:inline">Bell: ON</span>
-                      <span className="sm:hidden">ON</span>
-                    </>
+                    <Bell className="h-4 w-4 shrink-0 fill-current" />
                   )}
                 </button>
-
-                {restaurant?.subscription_plan && (
-                  <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/50 uppercase tracking-wider">
-                    {planSpec.name} Plan
-                  </span>
-                )}
-                {restaurant && (
-                  <Link 
-                    href={`/menu/${restaurant.slug}`}
-                    target="_blank"
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:border-slate-300 dark:hover:border-slate-600"
-                  >
-                    View Digital Menu
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                )}
               </div>
             </header>
 

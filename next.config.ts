@@ -20,7 +20,7 @@ const securityHeaders = [
   },
   {
     key: 'Permissions-Policy',
-    value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://checkout.razorpay.com")'
+    value: 'camera=(self), microphone=(), geolocation=(self), payment=(self "https://checkout.razorpay.com")'
   },
   {
     key: 'Strict-Transport-Security',
@@ -38,12 +38,22 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/app-release.apk',
-        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/app-release.apk',
+        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/CleverOps.apk',
+        permanent: false,
+      },
+      {
+        source: '/CleverOps.apk',
+        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/CleverOps.apk',
+        permanent: false,
+      },
+      {
+        source: '/CleverOps-v2.2.0.apk',
+        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/CleverOps.apk',
         permanent: false,
       },
       {
         source: '/download-apk',
-        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/app-release.apk',
+        destination: 'https://raw.githubusercontent.com/samridh8089/smartdine-qr/main/public/CleverOps.apk',
         permanent: false,
       },
     ];

@@ -1,10 +1,12 @@
 /**
- * Loud Bell Sound Alert Utility for Web KDS, Web Waiter, & Owner Dashboard
+ * Smart Loud Bell Alert Utility for Web KDS, Web Waiter, & Owner Dashboard
  * Features:
- * - DynamicsCompressor + Gain boost for loud, punchy, unclipped alert volume
- * - Continuous looping ring with 28s auto-timeout (~8 loud chime cycles) so alerts aren't missed
- * - Central mute state synchronization across tabs & components
- * - Immediate stop & mute controls
+ * - Anti-Fatigue / Anti-Spam Queue Cooldown: Prevents endless ringing when multiple orders arrive in rapid succession.
+ * - Sensible Alert Duration: Rings for 5 seconds (~1-2 clear chime cycles), not 28 seconds continuous loop.
+ * - DynamicsCompressor + Gain boost for loud, punchy, unclipped alert volume.
+ * - Central mute state synchronization across tabs & components.
+ * - Realtime Ringing state broadcaster (cleverops-bell-state-changed) for instant 1-tap "Silence Bell" UI.
+ * - Immediate stop on chef / waiter screen interaction.
  */
 
 let globalAudioCtx: AudioContext | null = null;
@@ -15,6 +17,23 @@ let isLoadingBuffer = false;
 let fallbackAudio: HTMLAudioElement | null = null;
 let autoStopTimer: any = null;
 let isMutedState = false;
+let isCurrentlyRinging = false;
+
+// Per-role timestamps for smart burst cooldown
+const lastAlertTimestamps: Record<string, number> = {
+  kitchen: 0,
+  waiter: 0,
+  owner: 0
+};
+
+export const DEFAULT_ALERT_DURATION_MS = 5000; // 5s chime (1-2 clear cycles), never 28s endless loop
+export const DEFAULT_ALERT_COOLDOWN_MS = 15000; // 15s cooldown per role so queue bursts don't ring repeatedly
+
+export interface PlayBellOptions {
+  force?: boolean;
+  cooldownMs?: number;
+  durationMs?: number;
+}
 
 // Initialize mute state from localStorage if available
 if (typeof window !== 'undefined') {
@@ -24,6 +43,16 @@ if (typeof window !== 'undefined') {
     window.addEventListener('stop-waiter-sound', () => stopLoudBell());
     window.addEventListener('stop-all-sounds', () => stopLoudBell());
   } catch (_) {}
+}
+
+function notifyBellState(isRinging: boolean, type?: string) {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('cleverops-bell-state-changed', {
+        detail: { isRinging, type: type || 'general' }
+      }));
+    } catch (_) {}
+  }
 }
 
 export function setGlobalMute(muted: boolean): void {
@@ -49,6 +78,10 @@ export function isGloballyMuted(): boolean {
     } catch (_) {}
   }
   return isMutedState;
+}
+
+export function isBellRinging(): boolean {
+  return isCurrentlyRinging;
 }
 
 export function unlockAudio(): boolean {
@@ -112,7 +145,10 @@ async function preloadAudioBuffer() {
   }
 }
 
-export function playLoudBell(type: 'kitchen' | 'waiter' | 'owner' = 'kitchen'): void {
+export function playLoudBell(
+  type: 'kitchen' | 'waiter' | 'owner' = 'kitchen',
+  options?: PlayBellOptions
+): void {
   if (typeof window === 'undefined') return;
 
   // STRICT GUARD: If globally muted by Owner/KDS, do not play any sound!
@@ -121,7 +157,25 @@ export function playLoudBell(type: 'kitchen' | 'waiter' | 'owner' = 'kitchen'): 
     return;
   }
 
-  stopLoudBell(); // Stop any currently playing instance
+  const now = Date.now();
+  const cooldown = options?.cooldownMs ?? DEFAULT_ALERT_COOLDOWN_MS;
+  const duration = options?.durationMs ?? DEFAULT_ALERT_DURATION_MS;
+
+  // Smart Cooldown Guard:
+  // If an alert is already actively playing, or was triggered within the cooldown window for this role, coalesce it!
+  const lastPlay = lastAlertTimestamps[type] || 0;
+  const elapsed = now - lastPlay;
+  if (!options?.force && (elapsed < cooldown || isCurrentlyRinging)) {
+    console.log(`[soundAlert] Coalescing burst alert for ${type} (last played ${Math.round(elapsed / 1000)}s ago, cooldown ${cooldown / 1000}s, ringing: ${isCurrentlyRinging})`);
+    return;
+  }
+
+  lastAlertTimestamps[type] = now;
+  isCurrentlyRinging = true;
+  notifyBellState(true, type);
+
+  // Stop any previous sound cleanly without firing stop notification
+  stopLoudBellInternal(false);
 
   if (!isUnlocked) {
     unlockAudio();
@@ -134,7 +188,6 @@ export function playLoudBell(type: 'kitchen' | 'waiter' | 'owner' = 'kitchen'): 
       }
       const source = globalAudioCtx.createBufferSource();
       source.buffer = audioBuffer;
-      // Loop the audio so it rings continuously until dismissed (not just 3 times)
       source.loop = true;
 
       // Dynamics Compressor to maximize loudness and prevent distortion
@@ -156,15 +209,17 @@ export function playLoudBell(type: 'kitchen' | 'waiter' | 'owner' = 'kitchen'): 
       source.start(0);
       currentSource = source;
 
-      // Auto-stop after 28 seconds (~7-8 loud chimes) if nobody acknowledges it
+      // Auto-stop after 5 seconds (~1-2 loud chimes) so it does NOT ring continuously
       if (autoStopTimer) clearTimeout(autoStopTimer);
       autoStopTimer = setTimeout(() => {
         stopLoudBell();
-      }, 28000);
+      }, duration);
 
       source.onended = () => {
         if (currentSource === source) {
           currentSource = null;
+          isCurrentlyRinging = false;
+          notifyBellState(false, type);
         }
       };
       return;
@@ -188,13 +243,15 @@ export function playLoudBell(type: 'kitchen' | 'waiter' | 'owner' = 'kitchen'): 
     if (autoStopTimer) clearTimeout(autoStopTimer);
     autoStopTimer = setTimeout(() => {
       stopLoudBell();
-    }, 28000);
+    }, duration);
   } catch (e) {
     console.error('[soundAlert] playLoudBell failed:', e);
+    isCurrentlyRinging = false;
+    notifyBellState(false, type);
   }
 }
 
-export function stopLoudBell(): void {
+function stopLoudBellInternal(shouldNotify = true): void {
   if (autoStopTimer) {
     clearTimeout(autoStopTimer);
     autoStopTimer = null;
@@ -212,8 +269,12 @@ export function stopLoudBell(): void {
       fallbackAudio.currentTime = 0;
     } catch (_) {}
   }
+  isCurrentlyRinging = false;
+  if (shouldNotify) {
+    notifyBellState(false);
+  }
 }
 
-export function isAudioUnlocked(): boolean {
-  return isUnlocked;
+export function stopLoudBell(): void {
+  stopLoudBellInternal(true);
 }

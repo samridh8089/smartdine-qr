@@ -15,24 +15,29 @@ import {
   Settings, Users, History, Download, Upload, 
   Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard, Volume2, Copy, RefreshCw,
   Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil, QrCode,
-  Bell, BellOff
+  Bell, BellOff, Tag, Archive, Printer
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { getActiveDevices, removeTrustedDevice, logoutAllDevices } from '@/lib/sessionManager';
 import { QRDesignStudio } from '@/components/qr-studio/QRDesignStudio';
-import { setGlobalMute } from '@/lib/soundAlert';
+import { setGlobalMute, playLoudBell, stopLoudBell } from '@/lib/soundAlert';
+import { OffersSettings } from '@/components/dashboard/OffersSettings';
+import { downloadAllTablesQRZip, printAllTablesA4Sheet } from '@/components/qr-studio/cardCanvasExport';
+import { useQRDesign } from '@/components/qr-studio/storage';
+import { getCanonicalTableQRUrl } from '@/lib/qr';
+import { saveStaffProfile, getStaffProfiles, StaffProfile } from '@/lib/attendoEngine';
 
-export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' } = {}) {
+export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' | 'offers' } = {}) {
   const { restaurant, profile, planSpec, refresh } = useRestaurant();
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications'>(() => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' | 'offers'>(() => {
     if (initialTab && initialTab !== 'profile') return initialTab;
     if (typeof window !== 'undefined') {
       if (window.location.pathname.includes('/staff')) return 'staff';
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['profile', 'qr_design', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications'].includes(tabParam)) {
+      if (tabParam && ['profile', 'qr_design', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications', 'offers'].includes(tabParam)) {
         return tabParam as any;
       }
     }
@@ -87,6 +92,10 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(restaurant?.settings?.service_charge_enabled !== false);
   const [serviceChargePercentage, setServiceChargePercentage] = useState(restaurant?.settings?.service_charge_percentage ?? 5.0);
   const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[]>(restaurant?.settings?.custom_charges || []);
+  const [showCustomerDetailsOnBill, setShowCustomerDetailsOnBill] = useState<boolean>(restaurant?.settings?.show_customer_details_on_bill !== false);
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
+  const { designConfig: qrDesign } = useQRDesign(restaurant);
   
   const [newChargeName, setNewChargeName] = useState('');
   const [newChargeType, setNewChargeType] = useState<'fixed' | 'percentage'>('fixed');
@@ -100,6 +109,8 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [staffPhone, setStaffPhone] = useState('');
   const [staffRole, setStaffRole] = useState<'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier'>('waiter');
   const [staffDepartment, setStaffDepartment] = useState<'waiter' | 'kitchen' | 'cashier' | 'service' | 'general'>('waiter');
+  const [staffBaseSalary, setStaffBaseSalary] = useState(15000);
+  const [staffSalaryType, setStaffSalaryType] = useState<'fixed' | 'per_day'>('fixed');
   const [staffError, setStaffError] = useState('');
   const [staffLoading, setStaffLoading] = useState(false);
 
@@ -110,6 +121,9 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [editStaffPhone, setEditStaffPhone] = useState('');
   const [editStaffRole, setEditStaffRole] = useState<'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier'>('waiter');
   const [editStaffDepartment, setEditStaffDepartment] = useState<'waiter' | 'kitchen' | 'cashier' | 'service' | 'general'>('waiter');
+  const [editStaffBaseSalary, setEditStaffBaseSalary] = useState(15000);
+  const [editStaffSalaryType, setEditStaffSalaryType] = useState<'fixed' | 'per_day'>('fixed');
+  const [attendoStaffMap, setAttendoStaffMap] = useState<Record<string, StaffProfile>>({});
   const [editStaffLoading, setEditStaffLoading] = useState(false);
   const [editStaffError, setEditStaffError] = useState('');
 
@@ -143,6 +157,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       setServiceChargeEnabled(restaurant.settings?.service_charge_enabled !== false);
       setServiceChargePercentage(restaurant.settings?.service_charge_percentage ?? 5.0);
       setCustomCharges(restaurant.settings?.custom_charges || []);
+      setShowCustomerDetailsOnBill(restaurant.settings?.show_customer_details_on_bill !== false);
       setPaymentEnabled(restaurant.settings?.payment_enabled === true);
       setUpiId(restaurant.settings?.upi_id || '');
       setUpiName(restaurant.settings?.upi_name || '');
@@ -212,15 +227,24 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
     try {
       const promises: Promise<any>[] = [
         db.getStaffProfiles(restaurant.id),
-        db.getTables(restaurant.id)
+        db.getTables(restaurant.id),
+        getStaffProfiles(restaurant.id)
       ];
       if (activeTab === 'logs') {
         promises.push(db.getAuditLogs(restaurant.id));
       }
-      const [staff, tables, auditLogs] = await Promise.all(promises);
+      const [staff, tables, attendoStaff, auditLogs] = await Promise.all(promises);
       if (staff) setStaffList(staff);
       if (tables) setAllRestaurantTables(tables);
       if (auditLogs) setLogs(auditLogs);
+      if (attendoStaff) {
+        const map: Record<string, StaffProfile> = {};
+        attendoStaff.forEach((s: StaffProfile) => {
+          map[s.id] = s;
+          if (s.profile_id) map[s.profile_id] = s;
+        });
+        setAttendoStaffMap(map);
+      }
     } catch (e) {
       console.warn('Error loading staff/tables in settings:', e);
     }
@@ -284,6 +308,52 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
     setCustomCharges(prev => prev.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
   };
 
+  const handleDownloadAllQRZip = async () => {
+    if (!restaurant?.id) return;
+    try {
+      setIsBulkDownloading(true);
+      const tables = await db.getTables(restaurant.id);
+      if (!tables.length) {
+        alert('No tables found to export.');
+        return;
+      }
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const items = tables.map(t => ({
+        id: t.id,
+        name: t.name,
+        url: getCanonicalTableQRUrl(origin, restaurant.slug, t.id)
+      }));
+      await downloadAllTablesQRZip(qrDesign, items, restaurant.slug, (current, total) => {
+        setBulkProgress({ current, total });
+      });
+    } catch (err: any) {
+      alert('Failed to download QR zip: ' + (err.message || err));
+    } finally {
+      setIsBulkDownloading(false);
+      setBulkProgress(null);
+    }
+  };
+
+  const handlePrintAllQRA4 = async () => {
+    if (!restaurant?.id) return;
+    try {
+      const tables = await db.getTables(restaurant.id);
+      if (!tables.length) {
+        alert('No tables found to print.');
+        return;
+      }
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const items = tables.map(t => ({
+        id: t.id,
+        name: t.name,
+        url: getCanonicalTableQRUrl(origin, restaurant.slug, t.id)
+      }));
+      await printAllTablesA4Sheet(qrDesign, items, restaurant?.name || 'Restaurant');
+    } catch (err: any) {
+      alert('Failed to print QR sheets: ' + (err.message || err));
+    }
+  };
+
   const handleSaveCharges = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restaurant || !profile) return;
@@ -302,7 +372,8 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
           gst_percentage: calcGstRate,
           service_charge_enabled: serviceChargeEnabled,
           service_charge_percentage: Number(serviceChargePercentage) || 0,
-          custom_charges: customCharges
+          custom_charges: customCharges,
+          show_customer_details_on_bill: showCustomerDetailsOnBill
         }
       });
 
@@ -474,6 +545,18 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         staffPhone
       );
 
+      // Save baseline salary in attendo settings
+      await saveStaffProfile({
+        id: newStaff.id,
+        profile_id: newStaff.id,
+        restaurant_id: restaurant.id,
+        name: staffName.trim(),
+        role: staffRole,
+        phone: staffPhone.trim(),
+        base_salary: Number(staffBaseSalary) || 0,
+        salary_type: staffSalaryType
+      });
+
       // Dispatch Staff Email OTP
       try {
         await fetch('/api/auth/send-otp', {
@@ -509,6 +592,8 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
       setStaffPassword('');
       setStaffName('');
       setStaffPhone('');
+      setStaffBaseSalary(15000);
+      setStaffSalaryType('fixed');
 
       // Automatically open OTP Verification modal for staff
       setVerifyingStaff(newStaff);
@@ -728,6 +813,9 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
     setEditStaffPhone(st.phone || '');
     setEditStaffRole((['manager', 'supervisor', 'waiter', 'kitchen', 'cashier'].includes(st.role) ? st.role : 'waiter') as any);
     setEditStaffDepartment((st.department || 'waiter') as any);
+    const existingAttendo = attendoStaffMap[st.id] || Object.values(attendoStaffMap).find(s => s.profile_id === st.id);
+    setEditStaffBaseSalary(Number(existingAttendo?.base_salary) || 15000);
+    setEditStaffSalaryType(existingAttendo?.salary_type || 'fixed');
     setEditStaffError('');
     setEditStaffModalOpen(true);
   };
@@ -750,6 +838,17 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         phone: editStaffPhone.trim(),
         role: editStaffRole,
         department: editStaffRole === 'supervisor' ? editStaffDepartment : (editStaffRole === 'waiter' ? 'waiter' : editStaffRole === 'kitchen' ? 'kitchen' : 'general')
+      });
+
+      await saveStaffProfile({
+        id: editStaffTarget.id,
+        profile_id: editStaffTarget.id,
+        restaurant_id: restaurant.id,
+        name: editStaffName.trim(),
+        role: editStaffRole,
+        phone: editStaffPhone.trim(),
+        base_salary: Number(editStaffBaseSalary) || 0,
+        salary_type: editStaffSalaryType
       });
 
       await db.createAuditLog(
@@ -1053,6 +1152,17 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         >
           Notification Sounds
         </button>
+        <button
+          onClick={() => setActiveTab('offers')}
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'offers'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Tag className="h-4 w-4" />
+          Offers & Discounts
+        </button>
       </div>
 
       {/* Tab Panels */}
@@ -1060,7 +1170,43 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         
         {/* QR DESIGN STUDIO TAB */}
         {activeTab === 'qr_design' && (
-          <QRDesignStudio restaurant={restaurant} onSaved={refresh} />
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">Bulk Export QR Codes</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Download branded table QR cards as a zip bundle or print ready-to-cut A4 sheets.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleDownloadAllQRZip}
+                  disabled={isBulkDownloading}
+                  className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
+                  title="Download branded QR cards for all tables in a ZIP"
+                >
+                  <Archive className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                  {isBulkDownloading ? `Zipping (${bulkProgress?.current || 0}/${bulkProgress?.total || 0})...` : 'Download All QR (ZIP)'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handlePrintAllQRA4}
+                  className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
+                  title="Print all table QR cards on A4 sheets"
+                >
+                  <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
+                  <span>Print All QR (A4)</span>
+                </Button>
+              </div>
+            </div>
+            <QRDesignStudio restaurant={restaurant} onSaved={refresh} />
+          </div>
+        )}
+
+        {/* OFFERS & DISCOUNTS TAB */}
+        {activeTab === 'offers' && restaurant && (
+          <OffersSettings restaurant={restaurant} />
         )}
 
         {/* PROFILE BRANDING SETTINGS */}
@@ -1422,6 +1568,30 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                 </CardContent>
               </Card>
 
+              {/* Receipt & Bill Customer Details Toggle */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Bill & Receipt Preferences</h3>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
+                    <div>
+                      <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Show Customer Name & Mobile on Bills</span>
+                      <span className="text-xs text-slate-400 mt-0.5 block">When enabled, customer name and phone number fields will be included on printed thermal bills and PDF downloads. Both fields remain optional so bills can still be printed instantly.</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                      <input 
+                        type="checkbox" 
+                        checked={showCustomerDetailsOnBill} 
+                        onChange={(e) => setShowCustomerDetailsOnBill(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </CardContent>
+              </Card>
+
               <div className="flex justify-end">
                 <Button type="submit" isLoading={loading}>Save Taxes & Charges</Button>
               </div>
@@ -1579,6 +1749,51 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                       </div>
                     )}
 
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Monthly Base Salary (₹)</label>
+                      <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <span className="font-bold text-slate-400">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="500"
+                          value={staffBaseSalary}
+                          onChange={(e) => setStaffBaseSalary(Math.max(0, parseFloat(e.target.value) || 0))}
+                          placeholder="e.g. 15000"
+                          className="w-full text-sm font-bold bg-transparent text-slate-900 dark:text-white outline-none"
+                        />
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1">Synchronized with Attendance &amp; Payroll calculation.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Salary Calculation Mode</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setStaffSalaryType('fixed')}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold text-center border cursor-pointer transition ${
+                            staffSalaryType === 'fixed'
+                              ? 'border-emerald-600 bg-emerald-600 text-white'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          Fixed Monthly
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setStaffSalaryType('per_day')}
+                          className={`py-1.5 px-3 rounded-lg text-xs font-bold text-center border cursor-pointer transition ${
+                            staffSalaryType === 'per_day'
+                              ? 'border-emerald-600 bg-emerald-600 text-white'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}
+                        >
+                          Per-Day
+                        </button>
+                      </div>
+                    </div>
+
                     <Button type="submit" className="w-full mt-2" isLoading={staffLoading} disabled={staffLoading}>
                       <Plus className="h-4 w-4 mr-1" /> Create Staff Profile
                     </Button>
@@ -1625,6 +1840,11 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                                   )}
                                 </div>
                                 {st.phone && <div className="text-[10px] text-slate-400 font-mono mt-0.5">{st.phone}</div>}
+                                {!isOwner && (
+                                  <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
+                                    ₹{(attendoStaffMap[st.id]?.base_salary || 15000).toLocaleString('en-IN')}/mo • {attendoStaffMap[st.id]?.salary_type === 'per_day' ? 'Per-Day' : 'Fixed'}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-5 py-3 font-mono text-xs">
                                 <div>{st.email}</div>
@@ -2069,17 +2289,27 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                 </div>
 
                 {/* Default Bell Status */}
-                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl flex items-center justify-between">
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl flex items-center justify-between flex-wrap gap-3">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg text-emerald-600 dark:text-emerald-400">
                       <Volume2 className="h-5 w-5" />
                     </div>
                     <div>
-                      <span className="font-extrabold text-sm text-emerald-900 dark:text-emerald-100 block">Default Loud Bell Active</span>
-                      <span className="text-xs text-emerald-700 dark:text-emerald-400 mt-1 block">A high-visibility, continuous two-tone alarm is configured for Kitchen and Waiter portals. No further configuration is required.</span>
+                      <span className="font-extrabold text-sm text-emerald-900 dark:text-emerald-100 block">Smart Anti-Fatigue Chime Active</span>
+                      <span className="text-xs text-emerald-700 dark:text-emerald-400 mt-1 block">Rings a crisp 5-second chime with an automatic 15-second queue cooldown to prevent continuous ringing when multiple orders arrive in rapid succession.</span>
                     </div>
                   </div>
-                  <Check className="h-5 w-5 text-emerald-500" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 font-bold cursor-pointer text-xs"
+                    onClick={() => {
+                      playLoudBell('kitchen', { force: true });
+                    }}
+                  >
+                    <Volume2 className="h-4 w-4" /> Test Chime (5s)
+                  </Button>
                 </div>
 
                 <div className="pt-2 flex justify-end">
@@ -2278,6 +2508,51 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                 </select>
               </div>
             )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Monthly Base Salary (₹)</label>
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                <span className="font-bold text-slate-400">₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="500"
+                  value={editStaffBaseSalary}
+                  onChange={(e) => setEditStaffBaseSalary(Math.max(0, parseFloat(e.target.value) || 0))}
+                  placeholder="e.g. 15000"
+                  className="w-full text-sm font-bold bg-transparent text-slate-900 dark:text-white outline-none"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">Updates base salary used for payroll calculations and salary slips.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Salary Calculation Mode</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditStaffSalaryType('fixed')}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-bold text-center border cursor-pointer transition ${
+                    editStaffSalaryType === 'fixed'
+                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Fixed Monthly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditStaffSalaryType('per_day')}
+                  className={`py-1.5 px-3 rounded-lg text-xs font-bold text-center border cursor-pointer transition ${
+                    editStaffSalaryType === 'per_day'
+                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  Per-Day
+                </button>
+              </div>
+            </div>
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { db, Category, MenuItem } from '@/lib/db';
 import { useRestaurant } from '../../layout';
 import { ImageUpload } from '@/components/ui/ImageUpload';
@@ -13,8 +13,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
 import { 
-  Plus, Edit2, Trash2, Check, X, Tag, ListFilter, 
-  HelpCircle, Eye, EyeOff, AlertTriangle, Coffee, Sparkles, Camera, CheckCircle2, Upload, UtensilsCrossed, ArrowRight
+  Plus, Edit2, Trash2, Check, X, Tag, ListFilter, Search,
+  HelpCircle, Eye, EyeOff, AlertTriangle, AlertCircle, Coffee, Sparkles, Camera, CheckCircle2, Upload, UtensilsCrossed, ArrowRight
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -158,13 +158,16 @@ export default function MenuManagementPage() {
   const [categories, setCategories] = useState<Category[]>(() => initialCachedMenu?.categories || []);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => initialCachedMenu?.menuItems || []);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>(restaurant?.subscription_plan || 'starter');
   const [loading, setLoading] = useState(() => !initialCachedMenu);
+  const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'ai'>('catalog');
 
   // AI Scanner Modal State
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiStep, setAiStep] = useState<'scan' | 'extracting' | 'review' | 'publishing'>('scan');
   const [aiImagePreview, setAiImagePreview] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [extractedItems, setExtractedItems] = useState<Array<{
     id: string;
     category_name: string;
@@ -174,73 +177,9 @@ export default function MenuManagementPage() {
     is_veg: boolean;
     image_url?: string;
   }>>([]);
+  const [aiBase64, setAiBase64] = useState<string>('');
+  const [aiError, setAiError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
-
-  const handleOpenAiScanner = () => {
-    setAiStep('scan');
-    setAiImagePreview('https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500');
-    setExtractedItems([]);
-    setAiModalOpen(true);
-  };
-
-  const handleSimulateAiExtraction = () => {
-    setAiStep('extracting');
-    setTimeout(() => {
-      setExtractedItems([
-        { id: '1', category_name: 'Starters', name: 'Crispy Paneer Tikka', description: 'Cottage cheese marinated in tandoori spices and cooked in clay oven.', price: 280, is_veg: true, image_url: 'https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=500' },
-        { id: '2', category_name: 'Starters', name: 'Chicken Seekh Kabab', description: 'Minced chicken blended with herbs and spices grilled on skewers.', price: 340, is_veg: false, image_url: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=500' },
-        { id: '3', category_name: 'Main Course', name: 'Butter Chicken Special', description: 'Tender chicken pieces simmered in rich creamy tomato and butter gravy.', price: 420, is_veg: false, image_url: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=500' },
-        { id: '4', category_name: 'Main Course', name: 'Dal Makhani Signature', description: 'Black lentils slow cooked overnight with butter and fresh cream.', price: 290, is_veg: true, image_url: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=500' },
-        { id: '5', category_name: 'Breads & Desserts', name: 'Butter Garlic Naan', description: 'Leavened flatbread topped with minced garlic and melted butter.', price: 65, is_veg: true }
-      ]);
-      setAiStep('review');
-    }, 1500);
-  };
-
-  const handlePublishExtractedMenu = async () => {
-    if (!restaurantId || extractedItems.length === 0) return;
-    setIsPublishing(true);
-    try {
-      const existingCats = await db.getCategories(restaurantId);
-      const catMap: Record<string, string> = {};
-      
-      existingCats.forEach(c => {
-        catMap[c.name.toLowerCase().trim()] = c.id;
-      });
-
-      for (const item of extractedItems) {
-        const catNameClean = item.category_name.trim();
-        const catKey = catNameClean.toLowerCase();
-        if (!catMap[catKey]) {
-          const newCat = await db.createCategory(restaurantId, catNameClean);
-          catMap[catKey] = newCat.id;
-        }
-      }
-
-      for (const item of extractedItems) {
-        const catId = catMap[item.category_name.trim().toLowerCase()];
-        if (catId) {
-          await db.createMenuItem(restaurantId, {
-            category_id: catId,
-            name: item.name,
-            description: item.description,
-            price: Number(item.price),
-            is_veg: item.is_veg,
-            is_available: true,
-            image_url: item.image_url
-          });
-        }
-      }
-
-      setAiModalOpen(false);
-      await refreshMenu();
-      alert(`Successfully published ${extractedItems.length} menu items!`);
-    } catch (err: any) {
-      alert(`Failed to publish extracted menu: ${err.message}`);
-    } finally {
-      setIsPublishing(false);
-    }
-  };
 
   // Modals state
   const [catModalOpen, setCatModalOpen] = useState(false);
@@ -258,8 +197,22 @@ export default function MenuManagementPage() {
   const [itemCategoryId, setItemCategoryId] = useState('');
   const [itemHasVariants, setItemHasVariants] = useState(false);
   const [itemVariants, setItemVariants] = useState<Array<{ id?: string; name: string; price: number }>>([]);
-
   const [errorMsg, setErrorMsg] = useState('');
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const filteredItems = useMemo(() => {
+    return menuItems.filter(item => {
+      const matchesCategory = selectedCategoryId === 'all' || item.category_id === selectedCategoryId;
+      if (!matchesCategory) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        item.name.toLowerCase().includes(q) ||
+        (item.description && item.description.toLowerCase().includes(q))
+      );
+    });
+  }, [menuItems, selectedCategoryId, searchQuery]);
 
   useEffect(() => {
     async function loadMenu() {
@@ -293,6 +246,200 @@ export default function MenuManagementPage() {
     }
     loadMenu();
   }, [restaurant?.id, profile?.restaurant_id]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'ai') {
+        setActiveSubTab('ai');
+      }
+    }
+  }, []);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFileName(file.name);
+      setAiError(null);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const rawBase64 = event.target?.result as string;
+        // Optimize image with HTML5 canvas to max 1600px for instant upload (<300KB)
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1600;
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            const optimizedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+            setAiBase64(optimizedBase64);
+            setAiImagePreview(optimizedBase64);
+          } else {
+            setAiBase64(rawBase64);
+            setAiImagePreview(rawBase64);
+          }
+        };
+        img.onerror = () => {
+          setAiBase64(rawBase64);
+          setAiImagePreview(rawBase64);
+        };
+        img.src = rawBase64;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleOpenAiScanner = () => {
+    setAiStep('scan');
+    setAiImagePreview(null);
+    setAiBase64('');
+    setUploadedFileName('');
+    setAiError(null);
+    setExtractedItems([]);
+    setAiModalOpen(true);
+  };
+
+  const handleStartAiExtraction = async () => {
+    if (!aiBase64) {
+      setAiError('Please select or upload a menu photo first.');
+      return;
+    }
+    const targetRestId = restaurantId || restaurant?.id || profile?.restaurant_id;
+    if (!targetRestId) {
+      setAiError('Restaurant ID not found. Please reload the page.');
+      return;
+    }
+
+    setAiStep('extracting');
+    setAiError(null);
+
+    try {
+      const res = await fetch('/api/ai-menu/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId: targetRestId,
+          images: [
+            {
+              base64: aiBase64,
+              name: uploadedFileName || 'menu_photo.jpg',
+              type: 'image/jpeg'
+            }
+          ]
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.categories || data.categories.length === 0) {
+        throw new Error(data.error || data.message || 'AI menu analysis failed. Please try a clearer photo or text import.');
+      }
+
+      // Flatten extracted categories into items list for review
+      const itemsList: Array<{
+        id: string;
+        category_name: string;
+        name: string;
+        description: string;
+        price: number;
+        is_veg: boolean;
+        image_url?: string;
+      }> = [];
+
+      for (const cat of data.categories) {
+        for (const item of (cat.items || [])) {
+          itemsList.push({
+            id: item.id || `ext_${Math.random().toString(36).substr(2, 9)}`,
+            category_name: cat.name || 'Main Menu',
+            name: item.name || 'Unnamed Dish',
+            description: item.description || '',
+            price: Number(item.price || 0),
+            is_veg: Boolean(item.is_veg),
+            image_url: item.selectedImageUrl || item.sourceCropUrl || undefined
+          });
+        }
+      }
+
+      if (itemsList.length === 0) {
+        throw new Error('No menu items could be detected from this image. Please upload a clearer photo.');
+      }
+
+      setExtractedItems(itemsList);
+      setAiStep('review');
+    } catch (err: any) {
+      console.error('[AI Menu Extraction] Error:', err);
+      setAiError(err.message || 'Failed to extract menu items. Please try again.');
+      setAiStep('scan');
+    }
+  };
+
+  const handlePublishExtractedMenu = async () => {
+    if (!restaurantId || extractedItems.length === 0) return;
+    setIsPublishing(true);
+    try {
+      const existingCats = await db.getCategories(restaurantId);
+      const catMap: Record<string, string> = {};
+      
+      existingCats.forEach(c => {
+        catMap[c.name.toLowerCase().trim()] = c.id;
+      });
+
+      // Find missing categories and create in parallel
+      const missingCatNames = Array.from(new Set(
+        extractedItems
+          .map(i => i.category_name.trim())
+          .filter(name => !catMap[name.toLowerCase()])
+      ));
+
+      if (missingCatNames.length > 0) {
+        const createdCats = await Promise.all(
+          missingCatNames.map(name => db.createCategory(restaurantId, name))
+        );
+        createdCats.forEach(c => {
+          catMap[c.name.toLowerCase().trim()] = c.id;
+        });
+      }
+
+      // Fast parallel batch creation for all items (<300ms)
+      await Promise.all(
+        extractedItems.map(item => {
+          const catId = catMap[item.category_name.trim().toLowerCase()];
+          if (!catId) return Promise.resolve();
+          return db.createMenuItem(restaurantId, {
+            category_id: catId,
+            name: item.name,
+            description: item.description,
+            price: Number(item.price),
+            is_veg: item.is_veg,
+            is_available: true,
+            image_url: item.image_url
+          });
+        })
+      );
+
+      setAiModalOpen(false);
+      await refreshMenu();
+    } catch (err: any) {
+      alert(`Failed to publish extracted menu: ${err.message}`);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   const refreshMenu = async () => {
     if (!restaurantId) return;
@@ -448,10 +595,6 @@ export default function MenuManagementPage() {
     );
   }
 
-  const filteredItems = selectedCategoryId === 'all'
-    ? menuItems
-    : menuItems.filter(item => item.category_id === selectedCategoryId);
-
   const maxItemsLimit = planSpec.limits.menu_items;
   const itemsUsed = menuItems.length;
 
@@ -460,8 +603,8 @@ export default function MenuManagementPage() {
       {/* Title Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Menu Management</h2>
-          <p className="text-slate-500 text-sm mt-1">Organize your dishes, categories, pricing, and availability.</p>
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Smart Menu by Clever Ops</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Organize your dishes, categories, pricing, and AI menu scanning.</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Button variant="outline" size="sm" onClick={() => handleOpenCatModal()}>
@@ -473,123 +616,244 @@ export default function MenuManagementPage() {
         </div>
       </div>
 
-      {/* Resource Usage Counter */}
-      <div className="max-w-md">
-        <ResourceUsageCard
-          title="Menu Items"
-          used={itemsUsed}
-          limit={maxItemsLimit}
-          unitLabel="used"
-        />
+      {/* Smart Menu Navigation Tabs */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('catalog')}
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            activeSubTab === 'catalog'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <UtensilsCrossed className="h-4 w-4" />
+          Menu Catalog
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('ai')}
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+            activeSubTab === 'ai'
+              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Sparkles className="h-4 w-4" />
+          AI Menu Scanner & OCR
+        </button>
       </div>
 
-      {/* Subscription limits banner */}
-      {maxItemsLimit !== null && itemsUsed >= maxItemsLimit * 0.8 && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 flex items-center gap-3 text-sm">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-          <div>
-            <strong>Plan usage alert:</strong> You have created {itemsUsed}/{maxItemsLimit} menu items. 
-            Upgrade to a higher plan under <Link href="/dashboard/billing" className="font-bold underline">Billing</Link> to lift limits.
+      {activeSubTab === 'catalog' ? (
+        <>
+          {/* Subscription limits banner */}
+          {maxItemsLimit !== null && itemsUsed >= maxItemsLimit * 0.8 && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 flex items-center gap-3 text-sm">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+              <div>
+                <strong>Plan usage alert:</strong> You have created {itemsUsed}/{maxItemsLimit} menu items. 
+                Upgrade to a higher plan under <Link href="/dashboard/billing" className="font-bold underline">Billing</Link> to lift limits.
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            
+            {/* Categories Sidebar */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Categories</h3>
+                <span className="text-xs font-semibold text-slate-500">{categories.length} total</span>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => setSelectedCategoryId('all')}
+                  className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold text-left transition-colors ${
+                    selectedCategoryId === 'all' 
+                      ? 'bg-slate-900 text-white' 
+                      : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-100'
+                  }`}
+                >
+                  <span>All Items</span>
+                  <Badge variant="neutral" className={selectedCategoryId === 'all' ? 'bg-slate-800 border-slate-700 text-slate-300' : ''}>
+                    {menuItems.length}
+                  </Badge>
+                </button>
+
+                {categories.map((cat) => {
+                  const catCount = menuItems.filter(item => item.category_id === cat.id).length;
+                  return (
+                    <div key={cat.id} className="group relative flex items-center">
+                      <button
+                        onClick={() => setSelectedCategoryId(cat.id)}
+                        className={`flex-1 flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold text-left transition-colors truncate ${
+                          selectedCategoryId === cat.id 
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-100'
+                        }`}
+                      >
+                        <span className="truncate pr-24 lg:pr-8">{cat.name}</span>
+                        <Badge 
+                          variant="neutral" 
+                          className={selectedCategoryId === cat.id ? 'bg-emerald-700 border-emerald-500 text-emerald-100' : ''}
+                        >
+                          {catCount}
+                        </Badge>
+                      </button>
+                      <div className="absolute right-10 flex lg:hidden lg:group-hover:flex items-center gap-1">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleOpenCatModal(cat); }}
+                          className={`p-1.5 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-800 shadow-sm`}
+                          title="Edit category"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
+                          className={`p-1.5 rounded bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 shadow-sm`}
+                          title="Delete category"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Menu Items Grid */}
+            <div className="lg:col-span-3 space-y-4">
+              {/* Menu Items Usage Counter - Aligned to Right */}
+              <div className="flex justify-end">
+                <div className="w-full sm:max-w-md">
+                  <ResourceUsageCard
+                    title="Menu Items"
+                    used={itemsUsed}
+                    limit={maxItemsLimit}
+                    unitLabel="used"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+                    {selectedCategoryId === 'all' ? 'All Dishes' : categories.find(c => c.id === selectedCategoryId)?.name}
+                  </h3>
+                  <span className="text-xs font-semibold text-slate-500">{filteredItems.length} items listed</span>
+                </div>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search dishes..."
+                    className="w-full pl-9 pr-8 py-1.5 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {filteredItems.length === 0 ? (
+                <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-3">
+                  <Coffee className="h-10 w-10 text-slate-300" />
+                  <span>
+                    {searchQuery ? `No dishes found matching "${searchQuery}".` : 'No dishes found in this category. Click "Menu Item" above to add some delicious food!'}
+                  </span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {filteredItems.map((item) => (
+                    <MenuItemCard
+                      key={item.id}
+                      item={item}
+                      onToggleAvailability={toggleAvailability}
+                      onEdit={handleOpenItemModal}
+                      onDelete={handleDeleteItem}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </>
+      ) : (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">AI Menu Scanner & Smart Importer</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Automatically extract dishes, categories, pricing, descriptions, and veg/non-veg tags from physical menu photos or PDFs.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+            <div className="space-y-4">
+              <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Instant OCR recognition from paper menu photos</span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Automatic dish category sorting & price formatting</span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>AI dietary detection (Veg vs. Non-Veg indicators)</span>
+                </div>
+                <div className="flex items-center gap-2 font-semibold">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <span>Review and edit extracted items before publishing live</span>
+                </div>
+              </div>
+
+              <div className="pt-2 flex flex-wrap gap-3">
+                <Button
+                  onClick={handleOpenAiScanner}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold gap-2 text-xs"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Launch AI Menu Scanner</span>
+                </Button>
+                <Link href="/dashboard/ai-menu">
+                  <Button variant="outline" className="text-xs font-semibold gap-1.5">
+                    <span>Full AI Studio View</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <div 
+              onClick={handleOpenAiScanner}
+              className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-purple-400 dark:hover:border-purple-500 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 dark:bg-slate-800/20 hover:bg-purple-50/20 transition-all group"
+            >
+              <div className="h-16 w-16 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                <Upload className="h-7 w-7" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">Upload or Snap Menu Photo</h4>
+              <p className="text-xs text-slate-400 mt-1 max-w-xs">Click here to select a menu image file or photo to extract dishes automatically.</p>
+            </div>
           </div>
         </div>
       )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        
-        {/* Categories Sidebar */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Categories</h3>
-            <span className="text-xs font-semibold text-slate-500">{categories.length} total</span>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={() => setSelectedCategoryId('all')}
-              className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold text-left transition-colors ${
-                selectedCategoryId === 'all' 
-                  ? 'bg-slate-900 text-white' 
-                  : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-100'
-              }`}
-            >
-              <span>All Items</span>
-              <Badge variant="neutral" className={selectedCategoryId === 'all' ? 'bg-slate-800 border-slate-700 text-slate-300' : ''}>
-                {menuItems.length}
-              </Badge>
-            </button>
-
-            {categories.map((cat) => {
-              const catCount = menuItems.filter(item => item.category_id === cat.id).length;
-              return (
-                <div key={cat.id} className="group relative flex items-center">
-                  <button
-                    onClick={() => setSelectedCategoryId(cat.id)}
-                    className={`flex-1 flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold text-left transition-colors truncate ${
-                      selectedCategoryId === cat.id 
-                        ? 'bg-emerald-600 text-white' 
-                        : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-100'
-                    }`}
-                  >
-                    <span className="truncate pr-24 lg:pr-8">{cat.name}</span>
-                    <Badge 
-                      variant="neutral" 
-                      className={selectedCategoryId === cat.id ? 'bg-emerald-700 border-emerald-500 text-emerald-100' : ''}
-                    >
-                      {catCount}
-                    </Badge>
-                  </button>
-                  <div className="absolute right-10 flex lg:hidden lg:group-hover:flex items-center gap-1">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleOpenCatModal(cat); }}
-                      className={`p-1.5 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-800 shadow-sm`}
-                      title="Edit category"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
-                      className={`p-1.5 rounded bg-white border border-slate-200 text-rose-500 hover:bg-rose-50 shadow-sm`}
-                      title="Delete category"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Menu Items Grid */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
-              {selectedCategoryId === 'all' ? 'All Dishes' : categories.find(c => c.id === selectedCategoryId)?.name}
-            </h3>
-            <span className="text-xs font-semibold text-slate-500">{filteredItems.length} items listed</span>
-          </div>
-
-          {filteredItems.length === 0 ? (
-            <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-3">
-              <Coffee className="h-10 w-10 text-slate-300" />
-              <span>No dishes found in this category. Click "Menu Item" above to add some delicious food!</span>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {filteredItems.map((item) => (
-                <MenuItemCard
-                  key={item.id}
-                  item={item}
-                  onToggleAvailability={toggleAvailability}
-                  onEdit={handleOpenItemModal}
-                  onDelete={handleDeleteItem}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-      </div>
 
       {/* --- Category Modal --- */}
       <Dialog
@@ -822,19 +1086,63 @@ export default function MenuManagementPage() {
 
             {aiStep === 'scan' && (
               <div className="space-y-4 text-center">
-                <div className="border-2 border-dashed border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 rounded-3xl p-8 space-y-3 flex flex-col items-center justify-center">
-                  <div className="h-16 w-16 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center">
-                    <Camera className="h-8 w-8" />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-slate-900 dark:text-white text-base">Upload Physical Restaurant Menu Photo</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">Take a photo of your paper menu or upload an image/PDF. AI will extract categories, dishes, prices, and veg indicators automatically.</p>
-                  </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept="image/*,.pdf"
+                  className="hidden"
+                />
+
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-purple-500 bg-gray-50/70 dark:bg-gray-900/50 rounded-3xl p-6 sm:p-8 space-y-3 flex flex-col items-center justify-center cursor-pointer transition-all hover:bg-purple-50/20"
+                >
+                  {aiImagePreview ? (
+                    <div className="space-y-3 flex flex-col items-center">
+                      <div className="relative w-40 h-28 rounded-xl overflow-hidden border border-purple-200 dark:border-purple-800 shadow-sm">
+                        <img src={aiImagePreview} alt="Uploaded Menu" className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {uploadedFileName || 'Menu Photo Selected'}
+                        </p>
+                        <p className="text-[11px] text-purple-600 font-semibold hover:underline mt-0.5">
+                          Click to choose a different photo
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="h-16 w-16 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                        <Camera className="h-8 w-8" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 dark:text-white text-base">Upload Physical Restaurant Menu Photo</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">Take a photo of your paper menu or upload an image/PDF. AI will extract categories, dishes, prices, and veg indicators automatically.</p>
+                      </div>
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-300 shadow-xs">
+                        <Upload className="h-3.5 w-3.5 text-purple-600" />
+                        Browse / Take Photo
+                      </div>
+                    </>
+                  )}
                 </div>
+
+                {aiError && (
+                  <div className="bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 text-left">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
+                    <span>{aiError}</span>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-2">
                   <Button variant="ghost" onClick={() => setAiModalOpen(false)}>Cancel</Button>
-                  <Button className="bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white font-bold px-6" onClick={handleSimulateAiExtraction}>
+                  <Button 
+                    className="bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white font-bold px-6 cursor-pointer" 
+                    onClick={handleStartAiExtraction}
+                    disabled={!aiBase64}
+                  >
                     <Sparkles className="h-4 w-4 mr-1.5" /> Start AI Extraction
                   </Button>
                 </div>
@@ -842,13 +1150,21 @@ export default function MenuManagementPage() {
             )}
 
             {aiStep === 'extracting' && (
-              <div className="py-12 text-center space-y-4">
-                <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex items-center justify-center mx-auto animate-spin">
+              <div className="py-10 text-center space-y-4">
+                <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto animate-spin">
                   <Sparkles className="h-8 w-8" />
                 </div>
-                <div>
-                  <h4 className="font-extrabold text-slate-900 text-lg">AI Parsing Menu Content...</h4>
-                  <p className="text-xs text-slate-500">Extracting categories, item titles, prices, descriptions, and veg status.</p>
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white text-lg">AI Parsing Menu Content...</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Extracting categories, dishes, prices, descriptions, and veg status using Gemini AI.</p>
+                </div>
+                <div className="max-w-xs mx-auto pt-2">
+                  <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-600 rounded-full animate-pulse w-3/4" />
+                  </div>
+                  <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-2 block">
+                    Fast scanning in progress (usually 2–5 seconds)...
+                  </span>
                 </div>
               </div>
             )}

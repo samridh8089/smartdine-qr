@@ -53,6 +53,7 @@ export interface Restaurant {
     kitchen_bell_url?: string;
     waiter_bell_url?: string;
     owner_bell_enabled?: boolean;
+    show_customer_details_on_bill?: boolean;
     offers?: any[];
     table_assignments?: TableAssignment[];
     zones?: RestaurantZone[];
@@ -398,7 +399,7 @@ export interface Order {
   items: OrderItem[];
   batches?: OrderBatch[];
   custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[];
-  payment_status?: 'pending' | 'customer_marked_paid' | 'paid';
+  payment_status?: 'pending' | 'customer_marked_paid' | 'paid' | 'refunded' | 'partially_paid';
   payment_method?: string;
   payment_reference?: string;
   paid_at?: string;
@@ -2036,12 +2037,13 @@ export const db = {
     }) as Order[];
   },
 
-  async getOrderById(id: string): Promise<Order | null> {
+  async getOrderById(id: string, client?: any): Promise<Order | null> {
     if (!id) return null;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isUuid) return null;
 
-    const { data, error } = await supabase
+    const activeClient = client || supabase;
+    const { data, error } = await activeClient
       .from('orders')
       .select('*, order_items(*), order_batches(*)')
       .eq('id', id);
@@ -2641,13 +2643,44 @@ export const db = {
 
     const newBatch = batchData[0];
 
-    // Create order items
-    const finalItemsPayload = itemsPayload.map(item => ({
-      order_id: activeOrder.id,
-      batch_id: newBatch.id,
-      ...item,
-      variant_id: (typeof item.variant_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.variant_id.trim())) ? item.variant_id.trim() : null
-    }));
+    // Create order items with robust schema normalization & enrichment
+    let menuItemsCache: MenuItem[] = [];
+    const getMenu = async () => {
+      if (menuItemsCache.length === 0) {
+        menuItemsCache = await this.getMenuItems(activeOrder.restaurant_id);
+      }
+      return menuItemsCache;
+    };
+
+    const finalItemsPayload: any[] = [];
+    for (const item of itemsPayload) {
+      const targetItemId = item.menu_item_id || item.menuItemId || item.id;
+      let itemName = item.menu_item_name || item.name;
+      let itemPrice = item.price !== undefined ? Number(item.price) : undefined;
+      
+      if (!itemName || itemPrice === undefined) {
+        const menu = await getMenu();
+        const found = menu.find(m => m.id === targetItemId);
+        if (found) {
+          itemName = itemName || found.name;
+          itemPrice = itemPrice !== undefined ? itemPrice : Number(found.price || 0);
+        }
+      }
+
+      finalItemsPayload.push({
+        order_id: activeOrder.id,
+        batch_id: newBatch.id,
+        menu_item_id: targetItemId,
+        menu_item_name: itemName || 'Item',
+        price: Number(itemPrice || 0),
+        quantity: Number(item.quantity || 1),
+        notes: item.notes || null,
+        variant_id: (typeof item.variant_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.variant_id.trim())) ? item.variant_id.trim() : null,
+        variant_name: item.variant_name || null,
+        is_cancelled: false,
+        is_served: false
+      });
+    }
 
     console.log('BATCH ITEMS CREATED (Active Order Append):', JSON.stringify(finalItemsPayload));
 
@@ -2749,6 +2782,16 @@ export const db = {
       custom_charges: customChargesSnapshot
     };
 
+    if (activeOrder.order_type === 'reservation' && activeOrder.table_id) {
+      updatePayload.order_type = 'dine_in';
+    }
+
+    if (activeOrder.payment_status === 'paid' && Number(activeOrder.total || 0) <= 0) {
+      updatePayload.payment_status = 'pending';
+      updatePayload.payment_method = null;
+      updatePayload.paid_at = null;
+    }
+
     if (!activeOrder.merge_group_id && activeOrder.table_id) {
       const activeMerge = await this.getActiveMergeGroupForTable(activeOrder.restaurant_id, activeOrder.table_id);
       if (activeMerge) {
@@ -2788,7 +2831,7 @@ export const db = {
       return fullOrder;
   },
 
-  async updateOrderStatus(id: string, status: Order['status'], userName?: string, cancellationReason?: string, client?: any): Promise<Order> {
+  async updateOrderStatus(id: string, status: Order['status'], userName?: string, cancellationReason?: string, client?: any, additionalUpdates?: Record<string, any>): Promise<Order> {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isUuid) {
       return {
@@ -2804,7 +2847,8 @@ export const db = {
         items: []
       } as Order;
     }
-    const currentOrder = await this.getOrderById(id);
+    const activeClient = client || supabase;
+    const currentOrder = await this.getOrderById(id, activeClient);
     if (!currentOrder) throw new Error('Order not found');
 
     // BUG-ORD-003: Idempotent return if already in requested status or already advanced beyond it
@@ -2836,7 +2880,7 @@ export const db = {
     // BUG-ORD-003: Concurrency-Safe Atomic Conditional Row Lock in Database
     const allowedPriors = ALLOWED_PRIOR_STATUSES[status] || [];
     const nowIso = new Date().toISOString();
-    const orderUpdate: any = { status, updated_at: nowIso };
+    const orderUpdate: any = { status, updated_at: nowIso, ...(additionalUpdates || {}) };
     if (status === 'served' || status === 'completed') {
       orderUpdate.completed_at = nowIso;
       orderUpdate.completed_by = userName || 'Staff Member';
@@ -2846,7 +2890,6 @@ export const db = {
       orderUpdate.cancellation_reason = cancellationReason || 'Cancelled';
     }
 
-    const activeClient = client || supabase;
     const { data: lockResult, error: lockErr } = await activeClient
       .from('orders')
       .update(orderUpdate)
@@ -2858,7 +2901,7 @@ export const db = {
 
     if (!lockResult || lockResult.length === 0) {
       // Zero rows affected indicates another tab/staff member won the race, or parent row lagged
-      const freshOrder = await this.getOrderById(id);
+      const freshOrder = await this.getOrderById(id, activeClient);
       if (freshOrder?.status === status || (status !== 'cancelled' && (STATUS_RANK[freshOrder?.status || ''] ?? -1) >= (STATUS_RANK[status] ?? 99))) {
         return freshOrder || currentOrder; // Concurrent winner already transitioned to target or beyond
       }
@@ -2918,28 +2961,29 @@ export const db = {
       cancellationReason
     });
 
-    await activeClient
-      .from('order_batches')
-      .update(batchUpdateData)
-      .eq('order_id', id)
-      .neq('status', 'cancelled');
-
-    if (['served', 'completed'].includes(status)) {
-      try {
-        await activeClient
+    const itemsUpdatePromise = ['served', 'completed'].includes(status)
+      ? activeClient
           .from('order_items')
           .update({ is_served: true })
           .eq('order_id', id)
-          .eq('is_cancelled', false);
-      } catch (e) {}
-    } else if (status === 'cancelled') {
-      try {
-        await activeClient
-          .from('order_items')
-          .update({ is_cancelled: true })
-          .eq('order_id', id);
-      } catch (e) {}
+          .eq('is_cancelled', false)
+      : (status === 'cancelled'
+          ? activeClient
+              .from('order_items')
+              .update({ is_cancelled: true })
+              .eq('order_id', id)
+          : Promise.resolve());
 
+    await Promise.all([
+      activeClient
+        .from('order_batches')
+        .update(batchUpdateData)
+        .eq('order_id', id)
+        .neq('status', 'cancelled'),
+      itemsUpdatePromise
+    ]);
+
+    if (status === 'cancelled') {
       await executeAutomaticCancellationRollback(
         currentOrder.restaurant_id,
         id,
@@ -2949,7 +2993,7 @@ export const db = {
       );
     }
 
-    const fullOrder = await this.getOrderById(id);
+    const fullOrder = await this.getOrderById(id, activeClient);
     if (!fullOrder) throw new Error('Order not found');
 
     if (status === 'ready') {
@@ -2985,8 +3029,8 @@ export const db = {
       return currentOrder;
     }
 
-    // BUG-ORD-002: Once an order is paid, prevent any downgrades or duplicate updates
-    if (currentOrder && currentOrder.payment_status === 'paid' && paymentStatus !== 'paid') {
+    // BUG-ORD-002: Once an order is paid, prevent any downgrades or duplicate updates (except refunds)
+    if (currentOrder && currentOrder.payment_status === 'paid' && paymentStatus !== 'paid' && paymentStatus !== 'refunded') {
       console.warn(`[updateOrderPaymentStatus] Order ${orderId} is already paid. Ignoring request to change status to ${paymentStatus}.`);
       return currentOrder;
     }
@@ -4151,7 +4195,16 @@ export const db = {
     try {
       const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
       const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
+      let token = sessionData?.session?.access_token;
+      if (!token && typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('smartdine_auth_token_v2');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+          }
+        } catch (e) {}
+      }
       const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
       const res = await fetch(`${baseUrl}/api/staff/list?restaurantId=${restaurantId}`, { headers });
       if (res.ok) {

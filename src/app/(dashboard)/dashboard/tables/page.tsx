@@ -683,11 +683,8 @@ export default function TablesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Tables & QR Codes
+            Tables
           </h2>
-          <p className="text-xs text-slate-500 font-normal mt-0.5">
-            Generate QR codes for tables, assign waiters, merge dining groups, and monitor order flows by location.
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -700,41 +697,16 @@ export default function TablesPage() {
           </Link>
 
           {tables.length > 0 && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleDownloadAllQRZip}
-                disabled={isBulkDownloading}
-                className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
-                title="Download branded QR cards for all tables in a ZIP"
-              >
-                <Archive className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                {isBulkDownloading ? `Zipping (${bulkProgress?.current || 0}/${bulkProgress?.total || tables.length})...` : 'Download All QR (ZIP)'}
-              </Button>
-
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handlePrintAllQRA4}
-                className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
-                title="Print all table QR cards on A4 sheets"
-              >
-                <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                <span>Print All QR (A4)</span>
-              </Button>
-
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleOpenAssignModal(selectedTableIds.length > 0 ? selectedTableIds : [])}
-                className="border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                title="Assign tables to waiters"
-              >
-                <Users className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
-                <span>{selectedTableIds.length > 0 ? `Assign Waiter (${selectedTableIds.length})` : 'Assign Tables'}</span>
-              </Button>
-            </>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenAssignModal(selectedTableIds.length > 0 ? selectedTableIds : [])}
+              className="border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              title="Assign tables to waiters"
+            >
+              <Users className="h-3.5 w-3.5 mr-1 text-blue-600 dark:text-blue-400" />
+              <span>{selectedTableIds.length > 0 ? `Assign Waiter (${selectedTableIds.length})` : 'Assign Tables'}</span>
+            </Button>
           )}
 
           {selectedTableIds.length >= 2 && (
@@ -773,30 +745,6 @@ export default function TablesPage() {
         <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xs col-span-2 sm:col-span-1">
           <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Occupancy %</p>
           <p className="text-xl sm:text-2xl font-bold font-mono text-slate-900 dark:text-white mt-1 leading-tight">{tableStats.occupancyRate}%</p>
-        </div>
-      </div>
-
-      {/* Table SLA Overlay Legend Banner */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 font-bold text-slate-700 dark:text-slate-300">
-          <span>Table SLA Overlay:</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 font-semibold">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-900 dark:bg-gray-100" /> On Time (&lt; 10m)
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-600 dark:bg-gray-400" /> Near SLA (10–15m)
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-200 text-gray-950 dark:bg-gray-800 dark:text-white border border-gray-400 dark:border-gray-600 font-bold">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-950 dark:bg-white" /> Breached (&gt; 15m)
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-gray-400" /> Free
-          </span>
-        </div>
-        <div className="text-[11px] font-mono text-slate-400">
-          Live Clock: {new Date(nowTime).toLocaleTimeString()}
         </div>
       </div>
 
@@ -842,16 +790,6 @@ export default function TablesPage() {
         </div>
       )}
 
-      {/* Subscription limits banner */}
-      {maxTablesLimit !== null && tablesUsed >= maxTablesLimit * 0.8 && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 flex items-center gap-3 text-sm">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-          <div>
-            <strong>Plan usage alert:</strong> You are using {tablesUsed}/{maxTablesLimit} tables. 
-            Upgrade your plan under <Link href="/dashboard/billing" className="font-bold underline">Billing</Link> to create more tables.
-          </div>
-        </div>
-      )}
 
       {/* Takeaway QR Section */}
       <div className="bg-white border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
@@ -1089,55 +1027,39 @@ export default function TablesPage() {
             const elapsedSec = Math.floor((elapsedMs % 60000) / 1000);
             const elapsedStr = `${elapsedMin}m ${String(elapsedSec).padStart(2, '0')}s`;
 
-            let slaBadge = null;
+            let statusBadge = null;
             let borderClass = 'border-slate-200 dark:border-slate-800';
 
             if (table.payment_pending) {
-              borderClass = 'border-2 border-gray-950 dark:border-gray-100 shadow-sm';
-              slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-200 text-gray-950 dark:bg-gray-800 dark:text-white border border-gray-400 dark:border-gray-600">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-950 dark:bg-white" />
-                  Breached ({elapsedStr})
+              borderClass = 'border-2 border-amber-500/80 dark:border-amber-400/80 shadow-xs';
+              statusBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-200 dark:border-amber-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Bill Requested
                 </span>
               );
             } else if (table.occupancy_status === 'reserved') {
-              borderClass = 'border border-gray-400 dark:border-gray-600 shadow-sm';
-              slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-700 dark:bg-gray-300" />
+              borderClass = 'border border-indigo-300 dark:border-indigo-700 shadow-xs';
+              statusBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400" />
                   Reserved ({table.reservation_time || 'Upcoming'}{table.reservation_party_name ? ` • ${table.reservation_party_name}` : ''})
                 </span>
               );
             } else if (!isOccupied) {
               borderClass = 'border-slate-200 dark:border-slate-800';
-              slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                  Free
-                </span>
-              );
-            } else if (elapsedMin < 10) {
-              borderClass = 'border-2 border-gray-900 dark:border-gray-100 shadow-sm';
-              slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-900 dark:bg-gray-100" />
-                  On Time ({elapsedStr})
-                </span>
-              );
-            } else if (elapsedMin <= 15) {
-              borderClass = 'border-2 border-gray-900 dark:border-gray-100 shadow-sm';
-              slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-600 dark:bg-gray-400" />
-                  Near SLA ({elapsedStr})
+              statusBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Available
                 </span>
               );
             } else {
-              borderClass = 'border-2 border-gray-950 dark:border-gray-100 shadow-sm';
-              slaBadge = (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-200 text-gray-950 dark:bg-gray-800 dark:text-white border border-gray-400 dark:border-gray-600">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-950 dark:bg-white" />
-                  Breached ({elapsedStr})
+              borderClass = 'border-2 border-slate-900 dark:border-slate-100 shadow-xs';
+              statusBadge = (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-900 dark:bg-white" />
+                  Occupied ({elapsedMin}m)
                 </span>
               );
             }
@@ -1193,13 +1115,30 @@ export default function TablesPage() {
 
                   {/* Branded QR Card Container (Auto-applied from QR Design Studio) */}
                   <div className="relative flex items-center justify-center my-1 group transition-transform hover:scale-[1.02]">
-                    <QRCardRenderer
-                      config={qrDesign}
-                      tableName={table.name}
-                      directUrl={customerUrl}
-                      previewScale={0.72}
-                      className="shadow-md rounded-2xl"
-                    />
+                    {table.qr_enabled === false ? (
+                      <div className="w-[190px] h-[260px] rounded-2xl border-2 border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/20 flex flex-col items-center justify-center p-4 text-center">
+                        <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-600 flex items-center justify-center mb-3">
+                          <AlertTriangle className="h-5 w-5" />
+                        </div>
+                        <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">Table Temporarily Unavailable</p>
+                        <p className="text-[11px] text-slate-500 mt-1">Ordering QR disabled by management</p>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleQR(table.id, false)}
+                          className="mt-3 px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          Enable Table QR
+                        </button>
+                      </div>
+                    ) : (
+                      <QRCardRenderer
+                        config={qrDesign}
+                        tableName={table.name}
+                        directUrl={customerUrl}
+                        previewScale={0.72}
+                        className="shadow-md rounded-2xl"
+                      />
+                    )}
                   </div>
 
                   {/* QR Link */}
@@ -1210,7 +1149,7 @@ export default function TablesPage() {
                   {/* Live Status & QR Controls Row */}
                   <div className="w-full flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                     <div className="flex items-center gap-1.5">
-                      {slaBadge}
+                      {statusBadge}
                     </div>
 
                     <div className="flex items-center gap-1.5">
@@ -1236,19 +1175,15 @@ export default function TablesPage() {
                             Release
                           </button>
                         </div>
-                      ) : (
+                      ) : table.occupancy_status === 'occupied' ? (
                         <button
                           type="button"
-                          onClick={() => handleToggleOccupancy(table.id, table.occupancy_status || 'available')}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                            table.occupancy_status === 'occupied'
-                              ? 'bg-gray-900 hover:bg-black text-white'
-                              : 'bg-gray-800 hover:bg-gray-900 text-white'
-                          }`}
+                          onClick={() => handleToggleOccupancy(table.id, 'occupied')}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs bg-gray-900 hover:bg-black text-white"
                         >
-                          {table.occupancy_status === 'occupied' ? 'Mark Available' : 'Mark Occupied'}
+                          Mark Available
                         </button>
-                      )}
+                      ) : null}
 
                       <button
                         type="button"

@@ -10,7 +10,7 @@
 import { GoogleGenAI } from '@google/genai';
 
 export const getGeminiModel = (): string => {
-  return (process.env.GEMINI_MODEL || 'gemini-3.6-flash').trim();
+  return (process.env.GEMINI_MODEL || 'gemini-3.5-flash').trim();
 };
 
 export const getGeminiClient = (): GoogleGenAI => {
@@ -42,12 +42,10 @@ export async function generateStructuredGeminiJSON<T = any>(options: {
   const ai = getGeminiClient();
   const modelsToTry = [
     (process.env.GEMINI_MODEL || '').trim(),
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.6-flash',
-    'gemini-2.5-flash',
-    'gemini-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-3.8-flash'
   ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
   const contents: any[] = [];

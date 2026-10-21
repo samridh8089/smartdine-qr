@@ -77,7 +77,7 @@ export async function POST(req: Request) {
       }
     }
 
-    if (!restaurantId || !Array.isArray(items) || items.length === 0) {
+    if (!restaurantId || !Array.isArray(items) || (items.length === 0 && orderType !== 'reservation')) {
       timer.end('auth');
       return NextResponse.json({ error: 'restaurantId and items are required' }, { status: 400 });
     }
@@ -469,7 +469,7 @@ export async function POST(req: Request) {
       const orderPayload = {
         restaurant_id: restaurantId,
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
-        table_name: table.name || 'Table 1',
+        table_name: (orderType === 'reservation' || tableId === 'reservation') ? 'Reservation' : (table.name || 'Table 1'),
         status: 'new',
         order_type: (orderType === 'reservation') ? 'dine_in' : orderType,
         payment_status: paymentStatus,
@@ -528,57 +528,59 @@ export async function POST(req: Request) {
         order_type: orderType
       };
 
-      // Insert initial batch
-      const { data: initialBatchData } = await supabase.from('order_batches').insert([{
-        order_id: createdOrder.id,
-        batch_number: 1,
-        status: 'new',
-        special_instructions: specialInstructions || null,
-        idempotency_key: cleanKey
-      }]).select().single();
+      // Insert initial batch (only if order has items)
+      if (itemsPayload.length > 0) {
+        const { data: initialBatchData } = await supabase.from('order_batches').insert([{
+          order_id: createdOrder.id,
+          batch_number: 1,
+          status: 'new',
+          special_instructions: specialInstructions || null,
+          idempotency_key: cleanKey
+        }]).select().single();
 
-      // Insert items into relational order_items table and reserve inventory in parallel
-      const orderItemsPayload = itemsPayload.map((item: any) => ({
-        order_id: createdOrder.id,
-        batch_id: initialBatchData?.id || null,
-        menu_item_id: item.menu_item_id,
-        menu_item_name: item.menu_item_name,
-        quantity: item.quantity,
-        price: item.price,
-        variant_id: item.variant_id || null,
-        variant_name: item.variant_name || null,
-        notes: item.notes || null,
-        created_at: new Date().toISOString()
-      }));
+        // Insert items into relational order_items table and reserve inventory in parallel
+        const orderItemsPayload = itemsPayload.map((item: any) => ({
+          order_id: createdOrder.id,
+          batch_id: initialBatchData?.id || null,
+          menu_item_id: item.menu_item_id,
+          menu_item_name: item.menu_item_name,
+          quantity: item.quantity,
+          price: item.price,
+          variant_id: item.variant_id || null,
+          variant_name: item.variant_name || null,
+          notes: item.notes || null,
+          created_at: new Date().toISOString()
+        }));
 
-      const reservationItems = itemsPayload.map((item: any) => ({
-        menuItemId: item.menu_item_id,
-        menuItemName: item.menu_item_name,
-        variantId: item.variant_id || undefined,
-        variantName: item.variant_name || undefined,
-        quantity: item.quantity
-      }));
+        const reservationItems = itemsPayload.map((item: any) => ({
+          menuItemId: item.menu_item_id,
+          menuItemName: item.menu_item_name,
+          variantId: item.variant_id || undefined,
+          variantName: item.variant_name || undefined,
+          quantity: item.quantity
+        }));
 
-      await Promise.all([
-        orderItemsPayload.length > 0
-          ? supabase.from('order_items').insert(orderItemsPayload).then(r => {
-              if (r.error) console.error('Failed to insert order items:', r.error);
-              return r;
-            })
-          : Promise.resolve({ data: null, error: null }),
-        (initialBatchData?.id && itemsPayload.length > 0)
-          ? reserveInventoryForOrderBatch(
-              restaurantId,
-              createdOrder.id,
-              initialBatchData.id,
-              reservationItems,
-              undefined,
-              'Customer QR Order'
-            ).catch(err => {
-              console.error('[CustomerOrder] Failed to reserve inventory for initial batch:', err);
-            })
-          : Promise.resolve()
-      ]);
+        await Promise.all([
+          orderItemsPayload.length > 0
+            ? supabase.from('order_items').insert(orderItemsPayload).then(r => {
+                if (r.error) console.error('Failed to insert order items:', r.error);
+                return r;
+              })
+            : Promise.resolve({ data: null, error: null }),
+          (initialBatchData?.id && itemsPayload.length > 0)
+            ? reserveInventoryForOrderBatch(
+                restaurantId,
+                createdOrder.id,
+                initialBatchData.id,
+                reservationItems,
+                undefined,
+                'Customer QR Order'
+              ).catch(err => {
+                console.error('[CustomerOrder] Failed to reserve inventory for initial batch:', err);
+              })
+            : Promise.resolve()
+        ]);
+      }
     }
     timer.end('order_insert');
 
@@ -610,23 +612,21 @@ export async function POST(req: Request) {
       : 'Dine-in';
     const tableName = createdOrder.table_name || (tableId ? `Table` : 'Takeaway Counter');
 
-    try {
-      await dispatchFCMNotification(
-        restaurantId,
-        pushTitle,
-        `${tableName} • ${orderTypeLabel} • Total: ₹${createdOrder.total}`,
-        ['kitchen', 'waiter', 'owner', 'manager'],
-        {
-          orderId: createdOrder.id,
-          tableId: tableId || null,
-          orderType,
-          notificationType: 'NEW_ORDER'
-        },
-        tableId || undefined
-      );
-    } catch (pushErr) {
+    void dispatchFCMNotification(
+      restaurantId,
+      pushTitle,
+      `${tableName} • ${orderTypeLabel} • Total: ₹${createdOrder.total}`,
+      ['kitchen', 'waiter', 'owner', 'manager'],
+      {
+        orderId: createdOrder.id,
+        tableId: tableId || null,
+        orderType,
+        notificationType: 'NEW_ORDER'
+      },
+      tableId || undefined
+    ).catch(pushErr => {
       console.warn('[CustomerOrder] Push dispatch error:', pushErr);
-    }
+    });
 
     // P1-07: Table Status Sync — automatically occupy table on dine-in order creation
     const isDiningOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';
