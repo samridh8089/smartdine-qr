@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Dialog } from '@/components/ui/Dialog';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   Plus, Edit2, Trash2, Check, X, Tag, ListFilter, Search,
   HelpCircle, Eye, EyeOff, AlertTriangle, AlertCircle, Coffee, Sparkles, Camera, CheckCircle2, Upload, UtensilsCrossed, ArrowRight
@@ -151,9 +152,21 @@ function MenuItemCard({ item, onToggleAvailability, onEdit, onDelete }: MenuItem
 }
 
 export default function MenuManagementPage() {
+  const router = useRouter();
   const { restaurant, activeRole, planSpec, profile } = useRestaurant();
   const restId = restaurant?.id || profile?.restaurant_id;
-  const initialCachedMenu = restId ? dashboardStore.getCachedMenu(restId) : null;
+  const initialCachedMenu = (() => {
+    if (!restId) return null;
+    const memory = dashboardStore.getCachedMenu(restId);
+    if (memory) return memory;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem(`smartdine_menu_${restId}`);
+        if (stored) return JSON.parse(stored);
+      } catch (_) {}
+    }
+    return null;
+  })();
   const [restaurantId, setRestaurantId] = useState(restId || '');
   const [categories, setCategories] = useState<Category[]>(() => initialCachedMenu?.categories || []);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => initialCachedMenu?.menuItems || []);
@@ -224,6 +237,26 @@ export default function MenuManagementPage() {
         }
         setRestaurantId(targetRestId);
 
+        // Immediate hydrate from cache if available to prevent UI freezing
+        const mem = dashboardStore.getCachedMenu(targetRestId);
+        if (mem && mem.categories.length > 0) {
+          setCategories(mem.categories);
+          setMenuItems(mem.menuItems);
+          setLoading(false);
+        } else if (typeof window !== 'undefined') {
+          try {
+            const raw = sessionStorage.getItem(`smartdine_menu_${targetRestId}`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed?.categories) {
+                setCategories(parsed.categories);
+                setMenuItems(parsed.menuItems);
+                setLoading(false);
+              }
+            }
+          } catch (_) {}
+        }
+
         if (restaurant) {
           setActivePlan(restaurant.subscription_plan);
         } else {
@@ -238,6 +271,11 @@ export default function MenuManagementPage() {
         setCategories(cats);
         setMenuItems(items);
         dashboardStore.setCachedMenu(targetRestId, { categories: cats, menuItems: items });
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem(`smartdine_menu_${targetRestId}`, JSON.stringify({ categories: cats, menuItems: items }));
+          } catch (_) {}
+        }
       } catch (err) {
         console.error('[MenuManagement] loadMenu error:', err);
       } finally {
@@ -251,10 +289,10 @@ export default function MenuManagementPage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.get('tab') === 'ai') {
-        setActiveSubTab('ai');
+        router.replace('/dashboard/ai-menu');
       }
     }
-  }, []);
+  }, [router]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -600,37 +638,43 @@ export default function MenuManagementPage() {
 
   return (
     <div className="space-y-8">
-      {/* Title Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Title Bar with Action Buttons & Usage Counter Shifted to Top */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Smart Menu by Clever Ops</h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="outline" size="sm" onClick={() => handleOpenCatModal()}>
+            <Plus className="h-4 w-4 mr-1" /> Category
+          </Button>
+          <Button size="sm" onClick={() => handleOpenItemModal()}>
+            <Plus className="h-4 w-4 mr-1" /> Menu Item
+          </Button>
+          <div className="w-full sm:w-64">
+            <ResourceUsageCard
+              title="Menu Items"
+              used={itemsUsed}
+              limit={maxItemsLimit}
+              unitLabel="used"
+            />
+          </div>
         </div>
       </div>
 
       {/* Smart Menu Navigation Tabs */}
       <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6">
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('catalog')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center ${
-            activeSubTab === 'catalog'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
+        <Link
+          href="/dashboard/menu"
+          className="pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center border-emerald-600 text-emerald-600 dark:text-emerald-400"
         >
           Menu Catalog
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveSubTab('ai')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center ${
-            activeSubTab === 'ai'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
+        </Link>
+        <Link
+          href="/dashboard/ai-menu"
+          className="pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
         >
           AI Menu
-        </button>
+        </Link>
       </div>
 
       {activeSubTab === 'catalog' ? (
@@ -714,26 +758,6 @@ export default function MenuManagementPage() {
 
             {/* Menu Items Grid */}
             <div className="lg:col-span-3 space-y-4">
-              {/* Action Buttons & Resource Usage Counter */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <Button variant="outline" size="sm" onClick={() => handleOpenCatModal()}>
-                    <Plus className="h-4 w-4 mr-1" /> Category
-                  </Button>
-                  <Button size="sm" onClick={() => handleOpenItemModal()}>
-                    <Plus className="h-4 w-4 mr-1" /> Menu Item
-                  </Button>
-                </div>
-                <div className="w-full sm:max-w-md">
-                  <ResourceUsageCard
-                    title="Menu Items"
-                    used={itemsUsed}
-                    limit={maxItemsLimit}
-                    unitLabel="used"
-                  />
-                </div>
-              </div>
-
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
@@ -787,68 +811,8 @@ export default function MenuManagementPage() {
           </div>
         </>
       ) : (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">AI Menu Scanner & Smart Importer</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Automatically extract dishes, categories, pricing, descriptions, and veg/non-veg tags from physical menu photos or PDFs.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div className="space-y-4">
-              <div className="space-y-2.5 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                <div className="flex items-center gap-2 font-semibold">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>Instant OCR recognition from paper menu photos</span>
-                </div>
-                <div className="flex items-center gap-2 font-semibold">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>Automatic dish category sorting & price formatting</span>
-                </div>
-                <div className="flex items-center gap-2 font-semibold">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>AI dietary detection (Veg vs. Non-Veg indicators)</span>
-                </div>
-                <div className="flex items-center gap-2 font-semibold">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>Review and edit extracted items before publishing live</span>
-                </div>
-              </div>
-
-              <div className="pt-2 flex flex-wrap gap-3">
-                <Button
-                  onClick={handleOpenAiScanner}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold gap-2 text-xs"
-                >
-                  <Camera className="h-4 w-4" />
-                  <span>Launch AI Menu Scanner</span>
-                </Button>
-                <Link href="/dashboard/ai-menu">
-                  <Button variant="outline" className="text-xs font-semibold gap-1.5">
-                    <span>Full AI Studio View</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Button>
-                </Link>
-              </div>
-            </div>
-
-            <div 
-              onClick={handleOpenAiScanner}
-              className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-purple-400 dark:hover:border-purple-500 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer bg-slate-50/50 dark:bg-slate-800/20 hover:bg-purple-50/20 transition-all group"
-            >
-              <div className="h-16 w-16 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <Upload className="h-7 w-7" />
-              </div>
-              <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">Upload or Snap Menu Photo</h4>
-              <p className="text-xs text-slate-400 mt-1 max-w-xs">Click here to select a menu image file or photo to extract dishes automatically.</p>
-            </div>
-          </div>
+        <div className="p-12 text-center text-slate-500 font-semibold animate-pulse">
+          Opening AI Menu Studio...
         </div>
       )}
 

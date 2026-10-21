@@ -75,9 +75,34 @@ const ALL_MENU_ITEMS = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('smartdine_cached_profile');
+        if (stored) return JSON.parse(stored);
+      } catch (_) {}
+    }
+    return null;
+  });
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('smartdine_cached_restaurant');
+        if (stored) return JSON.parse(stored);
+      } catch (_) {}
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedProfile = sessionStorage.getItem('smartdine_cached_profile');
+        const storedRest = sessionStorage.getItem('smartdine_cached_restaurant');
+        if (storedProfile && storedRest) return false;
+      } catch (_) {}
+    }
+    return true;
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [alarmMuted, setAlarmMuted] = useState<boolean>(() => {
@@ -94,11 +119,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Separate Portals Role View
-  const [dbRole, setDbRole] = useState<Profile['role']>('owner');
-  const [activeRole, setActiveRole] = useState<Profile['role']>('owner');
+  const [dbRole, setDbRole] = useState<Profile['role']>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('smartdine_cached_profile');
+        if (stored) return JSON.parse(stored)?.role || 'owner';
+      } catch (_) {}
+    }
+    return 'owner';
+  });
+  const [activeRole, setActiveRole] = useState<Profile['role']>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('smartdine_cached_profile');
+        if (stored) return JSON.parse(stored)?.role || 'owner';
+      } catch (_) {}
+    }
+    return 'owner';
+  });
 
   // Plan Entitlement Specification State
-  const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec>(DEFAULT_PLAN_SPECS.starter);
+  const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedRest = sessionStorage.getItem('smartdine_cached_restaurant');
+        if (storedRest) {
+          const rest = JSON.parse(storedRest);
+          const p = (rest?.subscription_plan || 'starter').toLowerCase();
+          return DEFAULT_PLAN_SPECS[p] || DEFAULT_PLAN_SPECS.starter;
+        }
+      } catch (_) {}
+    }
+    return DEFAULT_PLAN_SPECS.starter;
+  });
 
   const [isImpersonating, setIsImpersonating] = useState(false);
 
@@ -127,7 +180,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           setActiveRole(impProf.role || 'owner');
 
           if (impProf.restaurant_id) {
-            db.clearRestaurantCache(impProf.restaurant_id);
             const rest = await db.getRestaurantById(impProf.restaurant_id);
             if (rest) {
               setRestaurant(rest);
@@ -142,6 +194,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const user = await getActiveUser();
     if (!user) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('smartdine_cached_profile');
+        sessionStorage.removeItem('smartdine_cached_restaurant');
+        sessionStorage.removeItem('smartdine_cached_rest_id');
+      }
       router.push('/login');
       return;
     }
@@ -161,14 +218,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setProfile(user);
     setDbRole(user.role);
     setActiveRole(user.role);
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.setItem('smartdine_cached_profile', JSON.stringify(user));
+      } catch (_) {}
+    }
 
     // Parallel fetch restaurant and plan spec
     if (user.restaurant_id) {
       try {
-        db.clearRestaurantCache(user.restaurant_id);
         const rest = await db.getRestaurantById(user.restaurant_id);
         if (rest) {
           setRestaurant(rest);
+          if (typeof window !== 'undefined') {
+            try {
+              sessionStorage.setItem('smartdine_cached_restaurant', JSON.stringify(rest));
+              sessionStorage.setItem('smartdine_cached_rest_id', rest.id);
+            } catch (_) {}
+          }
           await fetchPlanSpec(rest.subscription_plan || 'starter');
         }
       } catch (e) {

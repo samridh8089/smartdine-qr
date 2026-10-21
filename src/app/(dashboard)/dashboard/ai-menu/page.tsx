@@ -18,7 +18,7 @@ export default function AiMenuPage() {
   const { restaurant, planSpec } = useRestaurant();
   const [restaurantId, setRestaurantId] = useState('');
   const [restaurantName, setRestaurantName] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !restaurant?.id);
   const [aiUsage, setAiUsage] = useState<{ used: number; limit: number | null; remaining: number | null }>({
     used: 0,
     limit: planSpec?.ai_limits?.ai_menu_analysis ?? null,
@@ -47,6 +47,14 @@ export default function AiMenuPage() {
 
   useEffect(() => {
     async function initPage() {
+      const targetRestId = restaurant?.id || (typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_cached_rest_id') : '');
+      if (targetRestId) {
+        setRestaurantId(targetRestId);
+        if (restaurant?.name) setRestaurantName(restaurant.name);
+        fetchAiUsage(targetRestId);
+        setLoading(false);
+        return;
+      }
       const user = await getActiveUser();
       if (user && user.restaurant_id) {
         setRestaurantId(user.restaurant_id);
@@ -57,7 +65,7 @@ export default function AiMenuPage() {
       setLoading(false);
     }
     initPage();
-  }, []);
+  }, [restaurant?.id, restaurant?.name]);
 
   if (planSpec?.features?.ai_menu === false) {
     return (
@@ -237,9 +245,6 @@ export default function AiMenuPage() {
               Smart Menu by CleverOps
             </h1>
           </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Turn your physical menu photos, price lists, or documents into a ready-to-publish digital menu.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -253,6 +258,21 @@ export default function AiMenuPage() {
         </div>
       </div>
 
+      {/* Smart Menu Navigation Tabs */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-6">
+        <Link
+          href="/dashboard/menu"
+          className="pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+        >
+          Menu Catalog
+        </Link>
+        <span
+          className="pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center border-emerald-600 text-emerald-600 dark:text-emerald-400"
+        >
+          AI Menu
+        </span>
+      </div>
+
       {/* AI Usage Counter */}
       <div className="max-w-md">
         <ResourceUsageCard
@@ -262,18 +282,6 @@ export default function AiMenuPage() {
           unitLabel="credits used"
           resetNote="1 extracted menu item = 1 AI Menu credit. Resets monthly."
         />
-      </div>
-
-      {/* Safety Notice */}
-      <div className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold">
-            <strong>Owner Control Guaranteed:</strong> Smart Menu suggestions will <u>never</u> automatically publish or modify your live menu without your explicit approval.
-          </p>
-        </div>
-        <span className="text-[10px] font-black uppercase tracking-wider bg-slate-200 dark:bg-slate-800 px-2.5 py-1 rounded-md text-slate-600 dark:text-slate-300 shrink-0">
-          Smart Menu Vision Engine
-        </span>
       </div>
 
       {/* Step View */}
