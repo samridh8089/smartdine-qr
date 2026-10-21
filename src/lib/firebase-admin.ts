@@ -33,17 +33,17 @@ export function getFirebaseAdminApp(): App {
   }
 
   if (!serviceAccount) {
-    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json';
+    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || 'firebase-service-account.json';
     const absolutePath = path.isAbsolute(serviceAccountPath)
       ? serviceAccountPath
-      : path.join(process.cwd(), serviceAccountPath);
+      : path.join(/*turbopackIgnore: true*/ process.cwd(), serviceAccountPath);
 
-    if (!fs.existsSync(absolutePath)) {
-      throw new Error(`[FirebaseAdmin] Service account credentials not found (neither FIREBASE_SERVICE_ACCOUNT_KEY env var nor file at ${absolutePath})`);
+    if (fs.existsSync(absolutePath)) {
+      const serviceAccountContent = fs.readFileSync(absolutePath, 'utf8');
+      serviceAccount = JSON.parse(serviceAccountContent);
+    } else {
+      console.warn(`[FirebaseAdmin] Service account credentials not found (neither FIREBASE_SERVICE_ACCOUNT_KEY env var nor file at ${absolutePath})`);
     }
-
-    const serviceAccountContent = fs.readFileSync(absolutePath, 'utf8');
-    serviceAccount = JSON.parse(serviceAccountContent);
   }
 
   firebaseAdminApp = initializeApp({
