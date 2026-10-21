@@ -873,15 +873,41 @@ export default function OrdersPage() {
   // Priority 9 (Phase-20E): Open Order deep-linking with auto-scroll, statusFilter unblocking, and focus
   useEffect(() => {
     if (hasHandledDeepLinkRef.current || loading || !orderIdParam || orders.length === 0) return;
-    
-    const targetOrder = orders.find(o => o.id === orderIdParam || getFormattedOrderId(o, restaurant?.name || '', orders) === orderIdParam);
+
+    const cleanParam = orderIdParam.trim();
+    const targetOrder = orders.find(o => 
+      o.id === cleanParam || 
+      (cleanParam.length >= 6 && o.id.startsWith(cleanParam)) ||
+      getFormattedOrderId(o, restaurant?.name || '', orders) === cleanParam ||
+      getFormattedOrderId(o, restaurant?.name || '', orders) === `#${cleanParam.replace(/^#/, '')}` ||
+      getFormattedOrderId(o, restaurant?.name || '', orders).replace(/^#/, '') === cleanParam.replace(/^#/, '')
+    );
+
     if (targetOrder) {
       setSelectedOrderId(targetOrder.id);
       if (statusFilter !== 'all' && targetOrder.status !== statusFilter) {
         setStatusFilter('all');
       }
+      // Ensure the correct queue tab is selected
+      const isRes = isOrderReservation(targetOrder);
+      if (isRes) {
+        setOrderQueue('reservations');
+      } else if (targetOrder.order_type === 'takeaway') {
+        setOrderQueue('takeaway');
+      } else {
+        setOrderQueue('dine_in');
+      }
+      // Ensure date matches the order's created_at date
+      if (targetOrder.created_at) {
+        try {
+          const orderDateStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(targetOrder.created_at));
+          if (orderDateStr && selectedDate !== orderDateStr) {
+            setSelectedDate(orderDateStr);
+          }
+        } catch {}
+      }
     } else {
-      setSelectedOrderId(orderIdParam);
+      setSelectedOrderId(cleanParam);
     }
     hasHandledDeepLinkRef.current = true;
 
@@ -2683,6 +2709,9 @@ export default function OrdersPage() {
                   const orderCardStatus = optimisticStatusMap[order.id] || order.status;
                   const isNewOrder = orderCardStatus === 'new';
                   const cardRefund = parseOrderRefundDetails(order);
+                  const netPaidTotal = displayTotal != null 
+                    ? Math.max(0, displayTotal - (cardRefund.refundAmount || 0)) 
+                    : null;
 
                   return (
                     <div
@@ -2745,8 +2774,13 @@ export default function OrdersPage() {
                         </div>
                         <div className="text-right shrink-0">
                           <span className={`font-bold text-xs ${isSelected ? 'text-emerald-950 dark:text-white font-extrabold' : 'text-slate-900 dark:text-white'}`}>
-                            {displayTotal != null ? formatPrice(displayTotal, restaurant?.settings?.currency) : '—'}
+                            {netPaidTotal != null ? formatPrice(netPaidTotal, restaurant?.settings?.currency) : '—'}
                           </span>
+                          {cardRefund.refundAmount > 0 && (
+                            <span className="text-[9px] text-rose-500 font-bold block leading-none mt-0.5">
+                              (₹{cardRefund.refundAmount} ref)
+                            </span>
+                          )}
                           <span className={`text-[10px] ml-1 ${isSelected ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
                             ({itemCount})
                           </span>
