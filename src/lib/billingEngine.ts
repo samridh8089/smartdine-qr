@@ -397,17 +397,20 @@ export function parseOrderRefundDetails(order: any): {
   if (!order) return { isRefunded: false, isPartial: false, refundAmount: 0 };
 
   const text = `${order.special_instructions || ''} ${order.notes || ''} ${order.cancellation_reason || ''}`;
-  // Matches e.g. [REFUND RECORDED: ₹90 via UPI | Reason: Billing Correction / Overcharge ...]
-  const match = text.match(/\[REFUND RECORDED:\s*[^0-9]*([0-9]+(?:\.[0-9]+)?)\s*via\s*([A-Z_]+)(?:\s*\|\s*Reason:\s*([^|\]]+))?/i);
+  // Matches all e.g. [REFUND RECORDED: ₹90 via UPI | Reason: Billing Correction / Overcharge ...]
+  const matches = [...text.matchAll(/\[REFUND RECORDED:\s*[^0-9]*([0-9]+(?:\.[0-9]+)?)\s*via\s*([A-Z_]+)(?:\s*\|\s*Reason:\s*([^|\]]+))?/gi)];
 
   let refundAmt = 0;
   let refundMethod: string | undefined = undefined;
   let refundReason: string | undefined = undefined;
 
-  if (match) {
-    refundAmt = parseFloat(match[1]) || 0;
-    refundMethod = match[2]?.trim();
-    refundReason = match[3]?.trim();
+  if (matches.length > 0) {
+    for (const m of matches) {
+      refundAmt += parseFloat(m[1]) || 0;
+    }
+    const last = matches[matches.length - 1];
+    refundMethod = matches.length > 1 ? 'MULTIPLE' : last[2]?.trim();
+    refundReason = last[3]?.trim();
   }
 
   const orderTotal = Number((order as any).grand_total ?? (order as any).total ?? 0);
@@ -417,13 +420,18 @@ export function parseOrderRefundDetails(order: any): {
     refundAmt = orderTotal;
   }
 
+  // Cap refund at order total
+  if (orderTotal > 0 && refundAmt > orderTotal) {
+    refundAmt = orderTotal;
+  }
+
   const isPartial = refundAmt > 0 && orderTotal > 0 && refundAmt < orderTotal;
   const isRefunded = isRefundStatus || refundAmt > 0;
 
   return {
     isRefunded,
     isPartial,
-    refundAmount: refundAmt,
+    refundAmount: Math.round((refundAmt + Number.EPSILON) * 100) / 100,
     refundMethod: refundMethod || order.payment_method || 'UPI',
     refundReason: refundReason || 'Refund Processed'
   };
@@ -446,8 +454,16 @@ export function isRevenueOrder(order: {
   if (order.status === 'cancelled') return false;
 
   const refundInfo = parseOrderRefundDetails(order);
+  const orderTotal = Number((order as any).grand_total ?? (order as any).total ?? 0);
+
   // Full refund means realized revenue is 0
-  if ((order.payment_status === 'refunded' || order.refund_status === 'full') && !refundInfo.isPartial) {
+  const isFullRefund = (
+    order.payment_status === 'refunded' || 
+    order.refund_status === 'full' || 
+    (orderTotal > 0 && refundInfo.refundAmount >= orderTotal)
+  );
+
+  if (isFullRefund && !refundInfo.isPartial) {
     return false;
   }
 
