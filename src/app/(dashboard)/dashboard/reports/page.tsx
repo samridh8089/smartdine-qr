@@ -1171,8 +1171,8 @@ export default function ReportsPage() {
       .then(res => res.json())
       .then(data => {
         if (isMounted) {
-          setAuditLogs(data.auditLogs || []);
-          setAuditTotal(data.total || 0);
+          setAuditLogs(data.auditLogs || data.logs || []);
+          setAuditTotal(data.total || (data.logs?.length ?? 0));
           setAuditLoading(false);
         }
       })
@@ -1869,7 +1869,6 @@ export default function ReportsPage() {
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">GST Tax Summary</h3>
-            <p className="text-xs text-slate-400 font-medium">Tax calculated from stored order snapshots for {salesSummary.periodLabel}.</p>
           </div>
           <Badge variant="success" className="font-bold text-xs">
             Stored Snapshots Active
@@ -1938,7 +1937,6 @@ export default function ReportsPage() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Kitchen SLA Intelligence</h3>
-              <p className="text-xs text-slate-400 font-medium">Automatic lifecycle velocity from order placement to table delivery.</p>
             </div>
           </div>
           <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
@@ -1988,7 +1986,6 @@ export default function ReportsPage() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Waiter Performance Intelligence</h3>
-              <p className="text-xs text-slate-400 font-medium">Productivity leaderboard, delivery speeds, and table turnaround.</p>
             </div>
           </div>
         </CardHeader>
@@ -2090,7 +2087,6 @@ export default function ReportsPage() {
               </div>
               <div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Table Turnover Intelligence</h3>
-                <p className="text-xs text-slate-400 font-medium">Turnover counts, stay durations, and revenue density.</p>
               </div>
             </div>
           </CardHeader>
@@ -2133,7 +2129,6 @@ export default function ReportsPage() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">Peak Hour Heatmap</h3>
-                <p className="text-[11px] text-slate-400 font-medium">Hourly order rush and revenue distribution matrix.</p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-[11px] font-bold">
@@ -2212,7 +2207,6 @@ export default function ReportsPage() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Kitchen Bottleneck Detection</h3>
-              <p className="text-xs text-slate-400 font-medium">Automated identification of slow dishes, cancelled recipes, and stuck tickets.</p>
             </div>
           </div>
           <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
@@ -2279,7 +2273,6 @@ export default function ReportsPage() {
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Item & Portion Performance</h3>
-              <p className="text-xs text-slate-400 font-medium">Distinct sales metrics for each dish and portion size.</p>
             </div>
             
             <div className="flex items-center gap-2 print:hidden">
@@ -2347,7 +2340,6 @@ export default function ReportsPage() {
         <Card className="lg:col-span-1 border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Category Performance</h3>
-            <p className="text-xs text-slate-400 font-medium">Sales breakdown across menu categories.</p>
           </CardHeader>
           <CardContent>
             {categoryPerformance.length === 0 ? (
@@ -2376,7 +2368,6 @@ export default function ReportsPage() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Customer Analytics & Retention</h3>
-            <p className="text-xs text-slate-400 font-medium">Customer order counts, lifetime spending, and frequency for {salesSummary.periodLabel}.</p>
           </div>
         </div>
 
@@ -2413,7 +2404,6 @@ export default function ReportsPage() {
         <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
           <CardHeader className="pb-3">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Top Spending Customers / Tables</h3>
-            <p className="text-xs text-slate-400 font-medium">Ranked by total spending in the selected period.</p>
           </CardHeader>
           <CardContent>
             {topCustomers.length === 0 ? (
@@ -2468,15 +2458,9 @@ export default function ReportsPage() {
                     <Phone className="h-4 w-4" />
                   </span>
                   <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
-                    Customer Marketing Directory (CRM)
+                    Customer Marketing Directory
                   </h3>
-                  <Badge variant="neutral" className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
-                    {marketingContacts.length} Verified Contacts
-                  </Badge>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
-                  10-digit customer contacts collected from Takeaway, Reservations, and Dine-In bill prints for SMS & WhatsApp marketing.
-                </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -2625,7 +2609,6 @@ export default function ReportsPage() {
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-red-900 dark:text-red-300 tracking-tight">Order Cancellations & Loss Analysis</h3>
-            <p className="text-xs text-red-600/80 dark:text-red-400/80 font-medium">Audit of cancelled orders and lost revenue during {salesSummary.periodLabel}.</p>
           </div>
           <div className="text-right">
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -2683,11 +2666,7 @@ export default function ReportsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">System Audit Trail & Compliance Log</h3>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 uppercase">
-                  Owner Access Only
-                </span>
               </div>
-              <p className="text-xs text-slate-400 font-medium">Immutable audit logs for orders, payments, voids, and table operations.</p>
             </div>
           </div>
 
