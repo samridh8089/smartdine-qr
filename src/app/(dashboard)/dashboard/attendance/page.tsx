@@ -113,9 +113,6 @@ export default function AttendancePage() {
           <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white">
             Staff Attendance & Payroll
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Real-time biometric selfie punch, shift rosters, geofenced tracking, and automated payroll slips.
-          </p>
         </div>
 
         {/* View Switcher for Owners/Managers */}

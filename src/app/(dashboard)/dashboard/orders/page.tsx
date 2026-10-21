@@ -2625,7 +2625,7 @@ export default function OrdersPage() {
                       onClick={() => handleSelectOrder(order)}
                       className={`w-full text-left p-3 rounded-xl transition-all duration-150 cursor-pointer overflow-hidden relative ${
                         isSelected 
-                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-md ring-2 ring-slate-900/20' 
+                          ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-2 border-emerald-500/80 dark:border-emerald-500/80 shadow-xs ring-2 ring-emerald-500/15 text-slate-900 dark:text-white' 
                           : isNewOrder
                           ? 'bg-white dark:bg-slate-900/90 border-l-4 border-l-emerald-500 border-t border-r border-b border-slate-200 dark:border-slate-800 shadow-xs text-slate-800 dark:text-slate-200'
                           : 'bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-800 dark:text-slate-200'
@@ -2633,7 +2633,7 @@ export default function OrdersPage() {
                     >
                       <div className="flex items-center justify-between gap-2 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          <span className={`font-mono font-bold text-xs tracking-tight shrink-0 ${isSelected ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'}`}>
+                          <span className={`font-mono font-bold text-xs tracking-tight shrink-0 ${isSelected ? 'text-emerald-950 dark:text-emerald-200' : 'text-slate-900 dark:text-white'}`}>
                             {shortOrderId}
                           </span>
                           {isNewOrder && (
@@ -2645,12 +2645,12 @@ export default function OrdersPage() {
                           <span 
                             title={isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RES: ${parsedRes.name}` : 'RESERVATION') : tableDisplay}
                             className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider truncate max-w-[120px] shrink-0 ${
-                            isSelected
-                              ? 'bg-white/20 text-white border-white/30 dark:bg-slate-900/20 dark:text-slate-900 dark:border-slate-900/30'
-                              : isTakeaway
+                            isTakeaway
                               ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
                               : isReservation
                               ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+                              : isSelected
+                              ? 'bg-white/90 text-emerald-900 border-emerald-200 dark:bg-slate-800 dark:text-emerald-300 dark:border-emerald-800'
                               : 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200'
                           }`}>
                             {isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RES: ${parsedRes.name}` : 'RESERVATION') : tableDisplay}
@@ -2658,13 +2658,13 @@ export default function OrdersPage() {
                         </div>
                         <span 
                           title={formatExactTimestamp(order.created_at)}
-                          className={`text-[10px] font-medium shrink-0 whitespace-nowrap ${isSelected ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400'}`}
+                          className={`text-[10px] font-medium shrink-0 whitespace-nowrap ${isSelected ? 'text-emerald-700/80 dark:text-emerald-300/80' : 'text-slate-400'}`}
                         >
                           {formatOrderCardTime(order.created_at)}
                         </span>
                       </div>
 
-                      <div className={`flex items-center justify-between gap-2 mt-2 pt-2 border-t ${isSelected ? 'border-white/10 dark:border-slate-900/10' : 'border-slate-100 dark:border-slate-800'}`}>
+                      <div className={`flex items-center justify-between gap-2 mt-2 pt-2 border-t ${isSelected ? 'border-emerald-200/60 dark:border-emerald-900/40' : 'border-slate-100 dark:border-slate-800'}`}>
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {getStatusBadge(orderCardStatus, order.order_type)}
                           {cardRefund.isRefunded ? (
@@ -2684,10 +2684,10 @@ export default function OrdersPage() {
                           )}
                         </div>
                         <div className="text-right shrink-0">
-                          <span className={`font-bold text-xs ${isSelected ? 'text-white dark:text-slate-900' : 'text-slate-900 dark:text-white'}`}>
+                          <span className={`font-bold text-xs ${isSelected ? 'text-emerald-950 dark:text-white font-extrabold' : 'text-slate-900 dark:text-white'}`}>
                             {displayTotal != null ? formatPrice(displayTotal, restaurant?.settings?.currency) : '—'}
                           </span>
-                          <span className={`text-[10px] ml-1 ${isSelected ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400'}`}>
+                          <span className={`text-[10px] ml-1 ${isSelected ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
                             ({itemCount})
                           </span>
                         </div>
@@ -3515,14 +3515,14 @@ export default function OrdersPage() {
                             </Button>
                           )}
                           {Number(selectedOrder.total || 0) > 0 && (selectedOrder.payment_status === 'paid' || effectiveStatus === 'completed' || selectedOrderRefundInfo.isPartial) && selectedOrder.payment_status !== 'refunded' ? (
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white font-bold text-xs rounded-xl border border-gray-300 dark:border-gray-700 w-full sm:w-auto justify-center">
-                              <Check className="h-3.5 w-3.5 text-gray-900 dark:text-gray-100" />
+                            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 font-semibold text-xs rounded-xl border border-emerald-200 dark:border-emerald-800/60 w-full sm:w-auto justify-center">
+                              <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                               <span>Paid ({selectedOrder.payment_method?.toUpperCase() || 'PAID'})</span>
                             </div>
                           ) : null}
                       {selectedOrderRefundInfo.isRefunded && (
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-bold text-xs rounded-xl border border-rose-300 dark:border-rose-800 w-full sm:w-auto justify-center">
-                          <RotateCcw className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50/80 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 font-semibold text-xs rounded-xl border border-rose-200/80 dark:border-rose-900/40 w-full sm:w-auto justify-center">
+                          <RotateCcw className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
                           <span>
                             {selectedOrderRefundInfo.isPartial 
                               ? `Refunded: ${formatPrice(selectedOrderRefundInfo.refundAmount, restaurant?.settings?.currency)}` 
@@ -3534,7 +3534,7 @@ export default function OrdersPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-bold flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto"
+                          className="border-rose-200 dark:border-rose-800/80 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-medium flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto"
                           onClick={() => {
                             const remainingBal = selectedOrderRefundInfo.isPartial 
                               ? Math.max(0, Number(selectedOrder.total || 0) - selectedOrderRefundInfo.refundAmount)

@@ -604,15 +604,6 @@ export default function MenuManagementPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Smart Menu by Clever Ops</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Organize your dishes, categories, pricing, and AI menu scanning.</p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button variant="outline" size="sm" onClick={() => handleOpenCatModal()}>
-            <Plus className="h-4 w-4 mr-1" /> Category
-          </Button>
-          <Button size="sm" onClick={() => handleOpenItemModal()}>
-            <Plus className="h-4 w-4 mr-1" /> Menu Item
-          </Button>
         </div>
       </div>
 
@@ -621,26 +612,24 @@ export default function MenuManagementPage() {
         <button
           type="button"
           onClick={() => setActiveSubTab('catalog')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center ${
             activeSubTab === 'catalog'
               ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
               : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
           }`}
         >
-          <UtensilsCrossed className="h-4 w-4" />
           Menu Catalog
         </button>
         <button
           type="button"
           onClick={() => setActiveSubTab('ai')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
+          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer flex items-center ${
             activeSubTab === 'ai'
               ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
               : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
           }`}
         >
-          <Sparkles className="h-4 w-4" />
-          AI Menu Scanner & OCR
+          AI Menu
         </button>
       </div>
 
@@ -725,8 +714,16 @@ export default function MenuManagementPage() {
 
             {/* Menu Items Grid */}
             <div className="lg:col-span-3 space-y-4">
-              {/* Menu Items Usage Counter - Aligned to Right */}
-              <div className="flex justify-end">
+              {/* Action Buttons & Resource Usage Counter */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Button variant="outline" size="sm" onClick={() => handleOpenCatModal()}>
+                    <Plus className="h-4 w-4 mr-1" /> Category
+                  </Button>
+                  <Button size="sm" onClick={() => handleOpenItemModal()}>
+                    <Plus className="h-4 w-4 mr-1" /> Menu Item
+                  </Button>
+                </div>
                 <div className="w-full sm:max-w-md">
                   <ResourceUsageCard
                     title="Menu Items"
