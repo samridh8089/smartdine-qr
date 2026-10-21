@@ -7,7 +7,7 @@ import { calculateBillingTotals, calculateBillSplit, parseOrderRefundDetails } f
 import { recordAuditLog } from '@/lib/auditLogger';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
-import { formatPrice, formatDate, getFormattedOrderId, matchesOrderSearchQuery, parseCustomerDetailsFromOrder } from '@/lib/utils';
+import { formatPrice, formatDate, getFormattedOrderId, matchesOrderSearchQuery, parseCustomerDetailsFromOrder, validateIndianMobileNumber, cleanIndianMobileNumber } from '@/lib/utils';
 import { formatExactTimestamp } from '@/lib/timestamp';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -1825,8 +1825,68 @@ export default function OrdersPage() {
     setPrintModalOpen(true);
   };
 
-  const handleExecutePrint = () => {
+  const persistBillCustomerDetails = async (orderId: string, name: string, phone: string) => {
+    const cleanName = name.trim();
+    const cleanPhone = phone ? cleanIndianMobileNumber(phone) : '';
+
+    if (cleanPhone) {
+      const phoneCheck = validateIndianMobileNumber(cleanPhone);
+      if (!phoneCheck.valid) {
+        showToast(phoneCheck.error || 'Please enter a valid 10-digit Indian mobile number.', 'Invalid Mobile', 'error');
+        return false;
+      }
+    }
+
+    const currentOrder = orders.find(o => o.id === orderId) || printOrderData?.order;
+    const existingInstructions = currentOrder?.special_instructions || '';
+
+    // Remove old customer tags to prevent duplicates
+    const cleanedOtherNotes = existingInstructions
+      .replace(/(?:CUSTOMER|Customer):\s*[^|•\n]+?(?:\s*\([^)]*\))?/gi, '')
+      .replace(/(?:PHONE|Contact|Mobile):\s*[^|•\n]+/gi, '')
+      .replace(/\|\s*\|/g, '|')
+      .replace(/^\s*\|\s*|\s*\|\s*$/g, '')
+      .trim();
+
+    let newInstructions = cleanedOtherNotes;
+    if (cleanName || cleanPhone) {
+      const custPart = `CUSTOMER: ${cleanName || 'Guest'} | PHONE: ${cleanPhone}`;
+      newInstructions = cleanedOtherNotes ? `${custPart} | ${cleanedOtherNotes}` : custPart;
+    }
+
+    try {
+      await supabase.from('orders').update({
+        special_instructions: newInstructions || null
+      }).eq('id', orderId);
+    } catch (err) {
+      console.error('Error persisting bill customer details:', err);
+    }
+
+    // Update in-memory state
+    setOrders(prev => prev.map(o => o.id === orderId ? {
+      ...o,
+      special_instructions: newInstructions || null,
+      customer_name: cleanName || undefined,
+      customer_phone: cleanPhone || undefined
+    } : o));
+
+    setPrintOrderData((prev: any) => prev ? {
+      ...prev,
+      order: {
+        ...prev.order,
+        special_instructions: newInstructions || null,
+        customer_name: cleanName || undefined,
+        customer_phone: cleanPhone || undefined
+      }
+    } : prev);
+
+    return true;
+  };
+
+  const handleExecutePrint = async () => {
     if (!printOrderData) return;
+    const ok = await persistBillCustomerDetails(printOrderData.order.id, billCustomerName, billCustomerPhone);
+    if (!ok) return;
     const { order, calcResult, validItems, restaurant } = printOrderData;
     const formattedId = getFormattedOrderId(order, restaurant.name, orders);
     try {
@@ -1892,8 +1952,10 @@ export default function OrdersPage() {
     } catch (e) {}
   };
 
-  const handleDownloadReceipt = () => {
+  const handleDownloadReceipt = async () => {
     if (!printOrderData) return;
+    const ok = await persistBillCustomerDetails(printOrderData.order.id, billCustomerName, billCustomerPhone);
+    if (!ok) return;
     const { order, calcResult, validItems, restaurant } = printOrderData;
     const formattedId = getFormattedOrderId(order, restaurant.name, orders);
     const receiptRefund = parseOrderRefundDetails(order);
@@ -1967,6 +2029,8 @@ export default function OrdersPage() {
 
   const handleShareReceipt = async () => {
     if (!printOrderData) return;
+    const ok = await persistBillCustomerDetails(printOrderData.order.id, billCustomerName, billCustomerPhone);
+    if (!ok) return;
     const { order, calcResult, validItems, restaurant } = printOrderData;
     const formattedId = getFormattedOrderId(order, restaurant.name, orders);
     const shareRefund = parseOrderRefundDetails(order);
@@ -4764,14 +4828,30 @@ export default function OrdersPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                      Mobile Number <span className="font-normal text-slate-400">(Optional)</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                        Mobile Number <span className="font-normal text-slate-400">(Optional)</span>
+                      </label>
+                      {(billCustomerName || billCustomerPhone) && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!printOrderData) return;
+                            const saved = await persistBillCustomerDetails(printOrderData.order.id, billCustomerName, billCustomerPhone);
+                            if (saved) showToast('Customer details saved successfully!', 'Saved', 'success');
+                          }}
+                          className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+                        >
+                          Save Details
+                        </button>
+                      )}
+                    </div>
                     <input
                       type="tel"
                       placeholder="10-digit mobile..."
+                      maxLength={10}
                       value={billCustomerPhone}
-                      onChange={(e) => setBillCustomerPhone(e.target.value)}
+                      onChange={(e) => setBillCustomerPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                       className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-mono"
                     />
                   </div>

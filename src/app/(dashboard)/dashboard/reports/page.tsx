@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRestaurant } from '../../layout';
 import { db, Order, Category, MenuItem, getPlanFeatures } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, parseCustomerDetailsFromOrder, cleanIndianMobileNumber, validateIndianMobileNumber, isOrderReservation } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -13,7 +13,7 @@ import {
   Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle,
   ShoppingBag, ClipboardList, Lock, Banknote, Download, FileText, Filter, ArrowUpDown,
   Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight,
-  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers, Search
+  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers, Search, Phone, MessageSquare
 } from 'lucide-react';
 import { isRevenueOrder, parseOrderRefundDetails, getOrderRevenueAmount } from '@/lib/billingEngine';
 
@@ -40,6 +40,17 @@ interface CustomerPerformanceRow {
   totalSpent: number;
   avgOrderValue: number;
   lastVisit: string;
+}
+
+export interface CustomerMarketingContact {
+  phone: string;
+  name: string;
+  orderTypes: string[];
+  orderCount: number;
+  totalSpent: number;
+  avgOrderValue: number;
+  lastVisit: string;
+  firstVisit: string;
 }
 
 interface CancellationPerformanceRow {
@@ -185,6 +196,9 @@ export default function ReportsPage() {
   });
 
   const [topCustomers, setTopCustomers] = useState<CustomerPerformanceRow[]>([]);
+  const [marketingContacts, setMarketingContacts] = useState<CustomerMarketingContact[]>([]);
+  const [marketingSearchQuery, setMarketingSearchQuery] = useState('');
+  const [marketingChannelFilter, setMarketingChannelFilter] = useState<'all' | 'dine_in' | 'takeaway' | 'reservation'>('all');
 
   const [cancellationStats, setCancellationStats] = useState({
     cancelledCount: 0,
@@ -477,18 +491,73 @@ export default function ReportsPage() {
     const performanceRows = Object.values(itemMap);
     setItemPerformance(performanceRows);
 
-    // Customer Analytics Breakdown (BUG-AN-004 Fix: prevent collapsing distinct table guests across days)
+    // Customer Analytics & Marketing CRM Breakdown
     const customerMap: Record<string, CustomerPerformanceRow> = {};
+    const marketingMap: Record<string, CustomerMarketingContact> = {};
+
     validOrders.forEach(o => {
+      const cust = parseCustomerDetailsFromOrder(o);
+      const rawPhone = cust.phone || (o as any).customer_phone || '';
+      const cleanPhone = cleanIndianMobileNumber(rawPhone);
+      const phoneCheck = validateIndianMobileNumber(cleanPhone);
+      const validPhone = phoneCheck.valid ? cleanPhone : '';
+      const validName = cust.name || (o as any).customer_name || '';
+
+      const orderChannel = o.order_type === 'takeaway'
+        ? 'takeaway'
+        : (isOrderReservation(o) || (o.special_instructions && o.special_instructions.includes('RESERVATION')))
+          ? 'reservation'
+          : 'dine_in';
+
+      const orderNetSpent = (() => {
+        const grand = Number(o.total || (o as any).grand_total || 0);
+        const ref = parseOrderRefundDetails(o);
+        return Math.max(0, grand - (ref.refundAmount || 0));
+      })();
+
+      // Populate Marketing CRM Directory (strict valid 10-digit mobile numbers)
+      if (validPhone) {
+        if (!marketingMap[validPhone]) {
+          marketingMap[validPhone] = {
+            phone: validPhone,
+            name: validName || 'Guest',
+            orderTypes: [orderChannel],
+            orderCount: 1,
+            totalSpent: orderNetSpent,
+            avgOrderValue: orderNetSpent,
+            lastVisit: o.created_at,
+            firstVisit: o.created_at
+          };
+        } else {
+          const entry = marketingMap[validPhone];
+          entry.orderCount += 1;
+          entry.totalSpent += orderNetSpent;
+          if (!entry.orderTypes.includes(orderChannel)) {
+            entry.orderTypes.push(orderChannel);
+          }
+          if (validName && validName.toLowerCase() !== 'guest') {
+            entry.name = validName;
+          }
+          if (new Date(o.created_at) > new Date(entry.lastVisit)) {
+            entry.lastVisit = o.created_at;
+          }
+          if (new Date(o.created_at) < new Date(entry.firstVisit)) {
+            entry.firstVisit = o.created_at;
+          }
+        }
+      }
+
+      // Customer Analytics Breakdown for Top Spending Customers & KPIs
       let custKey = '';
       let displayName = '';
 
-      if ((o as any).customer_phone) {
-        custKey = (o as any).customer_phone;
-        displayName = (o as any).customer_name ? `${(o as any).customer_name} (${(o as any).customer_phone})` : `Guest (${(o as any).customer_phone})`;
-      } else if ((o as any).customer_name) {
-        custKey = (o as any).customer_name;
-        displayName = (o as any).customer_name;
+      if (validPhone) {
+        custKey = validPhone;
+        displayName = validName ? `${validName} (${validPhone})` : `Guest (${validPhone})`;
+      } else if (validName && validName.toLowerCase() !== 'guest') {
+        const visitDate = getISTDateString(o.created_at);
+        custKey = `${validName} (${visitDate})`;
+        displayName = validName;
       } else if (o.payment_reference) {
         custKey = o.payment_reference;
         displayName = `Guest (Ref: ${o.payment_reference.slice(-6)})`;
@@ -517,7 +586,7 @@ export default function ReportsPage() {
         };
       }
       customerMap[custKey].orderCount += 1;
-      customerMap[custKey].totalSpent += Number(o.total || (o as any).grand_total || 0);
+      customerMap[custKey].totalSpent += orderNetSpent;
       if (new Date(o.created_at) > new Date(customerMap[custKey].lastVisit)) {
         customerMap[custKey].lastVisit = o.created_at;
       }
@@ -532,6 +601,13 @@ export default function ReportsPage() {
     const newCustCount = totalCustCount - returningCustCount;
     const avgAOV = validOrders.length > 0 ? netRevenue / validOrders.length : 0;
     const avgFreq = totalCustCount > 0 ? (validOrders.length / totalCustCount).toFixed(1) : '1.0';
+
+    const marketingList = Object.values(marketingMap).map(m => ({
+      ...m,
+      avgOrderValue: m.orderCount > 0 ? Math.round((m.totalSpent / m.orderCount + Number.EPSILON) * 100) / 100 : 0
+    })).sort((a, b) => new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime());
+
+    setMarketingContacts(marketingList);
 
     setCustomerSummary({
       totalCustomers: totalCustCount,
@@ -1005,6 +1081,15 @@ export default function ReportsPage() {
     return Array.from(set).filter(Boolean).sort();
   }, [orders]);
 
+  const filteredMarketingContacts = useMemo(() => {
+    return marketingContacts.filter(c => {
+      const q = marketingSearchQuery.toLowerCase().trim();
+      const matchesSearch = !q || c.name.toLowerCase().includes(q) || c.phone.includes(q);
+      const matchesChannel = marketingChannelFilter === 'all' || c.orderTypes.includes(marketingChannelFilter);
+      return matchesSearch && matchesChannel;
+    });
+  }, [marketingContacts, marketingSearchQuery, marketingChannelFilter]);
+
   useEffect(() => {
     loadReportsRef.current = loadReports;
   });
@@ -1448,6 +1533,67 @@ export default function ReportsPage() {
 
     const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     triggerDownload(`CleverOps_Accounting_${timeRange}_${getISTDateString()}.csv`, csvContent);
+  };
+
+  // CSV EXPORT 4: CUSTOMER MARKETING DIRECTORY CSV (WhatsApp & SMS CRM Campaign Ready!)
+  const handleExportCustomerMarketingCSV = () => {
+    if (!marketingContacts || marketingContacts.length === 0) {
+      alert(`No customer marketing contacts recorded for ${salesSummary.periodLabel || timeRange}.`);
+      return;
+    }
+
+    const contactsToExport = filteredMarketingContacts;
+    if (contactsToExport.length === 0) {
+      alert('No contacts match the current search or channel filter.');
+      return;
+    }
+
+    const headers = [
+      'Customer Name',
+      'Mobile Number (10 Digits)',
+      'WhatsApp Number',
+      'Order Channels',
+      'Total Orders Placed',
+      'Total Net Spent (INR)',
+      'Average Order Value (INR)',
+      'Last Visit Date (IST)',
+      'First Visit Date (IST)'
+    ];
+
+    const formatOrderTypes = (types: string[]) => {
+      return types.map(t => t === 'dine_in' ? 'Dine-In' : t === 'takeaway' ? 'Takeaway' : 'Reservation').join('; ');
+    };
+
+    const formatISTDateTime = (iso: string) => {
+      try {
+        return new Date(iso).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+      } catch (_) {
+        return iso;
+      }
+    };
+
+    const rows = contactsToExport.map(c => [
+      `"${c.name.replace(/"/g, '""')}"`,
+      `"${c.phone}"`, // Quoted so Excel keeps as clean text without scientific notation
+      `"91${c.phone}"`, // Standard WhatsApp format for CRM tools
+      `"${formatOrderTypes(c.orderTypes)}"`,
+      c.orderCount,
+      c.totalSpent.toFixed(2),
+      c.avgOrderValue.toFixed(2),
+      `"${formatISTDateTime(c.lastVisit)}"`,
+      `"${formatISTDateTime(c.firstVisit)}"`
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    triggerDownload(`CleverOps_Customer_Marketing_${timeRange}_${getISTDateString()}.csv`, csvContent);
   };
 
   // PDF Export Handler (Triggers Printable Report View)
@@ -2302,6 +2448,167 @@ export default function ReportsPage() {
                         </td>
                         <td className="py-3.5 px-4 text-right text-xs text-slate-400">
                           {new Date(cust.lastVisit).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 5.1 CUSTOMER MARKETING DIRECTORY & CRM EXPORT */}
+        <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden mt-6">
+          <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/60 bg-gradient-to-r from-slate-50/50 via-white to-emerald-50/20 dark:from-slate-900/40 dark:via-slate-900/20 dark:to-emerald-950/20">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                    <Phone className="h-4 w-4" />
+                  </span>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+                    Customer Marketing Directory (CRM)
+                  </h3>
+                  <Badge variant="neutral" className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+                    {marketingContacts.length} Verified Contacts
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
+                  10-digit customer contacts collected from Takeaway, Reservations, and Dine-In bill prints for SMS & WhatsApp marketing.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleExportCustomerMarketingCSV}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 shadow-xs cursor-pointer"
+                  disabled={marketingContacts.length === 0}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download Marketing List (Excel / CSV)</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Search & Channel Filter Bar */}
+            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/60 flex flex-col sm:flex-row items-center gap-2.5">
+              <div className="relative flex-1 w-full">
+                <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search customer name or 10-digit mobile..."
+                  value={marketingSearchQuery}
+                  onChange={(e) => setMarketingSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                {marketingSearchQuery && (
+                  <button
+                    onClick={() => setMarketingSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <select
+                  value={marketingChannelFilter}
+                  onChange={(e) => setMarketingChannelFilter(e.target.value as any)}
+                  className="w-full sm:w-auto px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer focus:outline-none"
+                >
+                  <option value="all">All Channels ({marketingContacts.length})</option>
+                  <option value="dine_in">Dine-In ({marketingContacts.filter(c => c.orderTypes.includes('dine_in')).length})</option>
+                  <option value="takeaway">Takeaway ({marketingContacts.filter(c => c.orderTypes.includes('takeaway')).length})</option>
+                  <option value="reservation">Reservation ({marketingContacts.filter(c => c.orderTypes.includes('reservation')).length})</option>
+                </select>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {filteredMarketingContacts.length === 0 ? (
+              <div className="py-10 text-center px-4">
+                <Users className="h-8 w-8 text-slate-300 dark:text-slate-600 mx-auto mb-2 opacity-60" />
+                <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  {marketingContacts.length === 0
+                    ? "No customer marketing contacts recorded for this period."
+                    : "No contacts match the current search or channel filter."}
+                </p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 max-w-md mx-auto">
+                  Customer numbers saved from Dine-In bills, Takeaway orders, or Table Reservations will automatically appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto border-t border-slate-100 dark:border-slate-800">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 dark:bg-slate-900/80 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Customer Name</th>
+                      <th className="py-3 px-4">Mobile Number</th>
+                      <th className="py-3 px-4">Channels</th>
+                      <th className="py-3 px-4 text-center">Orders</th>
+                      <th className="py-3 px-4 text-right">Avg Order Value</th>
+                      <th className="py-3 px-4 text-right">Total Net Spend</th>
+                      <th className="py-3 px-4 text-right">Last Visit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
+                    {filteredMarketingContacts.map((cust, idx) => (
+                      <tr key={cust.phone} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/60 transition-all">
+                        <td className="py-3.5 px-4 text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                          <div className="flex items-center gap-2">
+                            <span className="h-6 w-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] flex items-center justify-center uppercase">
+                              {cust.name.slice(0, 2) || 'GU'}
+                            </span>
+                            <span>{cust.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-800 dark:text-slate-200">
+                          <div className="flex items-center gap-2">
+                            <span>{cust.phone}</span>
+                            <a
+                              href={`https://wa.me/91${cust.phone}?text=${encodeURIComponent(`Hello ${cust.name}, greetings from ${restaurant?.name || 'SmartDine'}!`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/60 hover:bg-emerald-100 transition-colors font-medium cursor-pointer"
+                              title="Chat on WhatsApp"
+                            >
+                              <MessageSquare className="h-2.5 w-2.5" />
+                              <span>WhatsApp</span>
+                            </a>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-wrap gap-1">
+                            {cust.orderTypes.map(t => (
+                              <span
+                                key={t}
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                                  t === 'takeaway'
+                                    ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                                    : t === 'reservation'
+                                      ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300'
+                                      : 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300'
+                                }`}
+                              >
+                                {t === 'dine_in' ? 'Dine-In' : t === 'takeaway' ? 'Takeaway' : 'Reservation'}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-bold text-slate-900 dark:text-white">{cust.orderCount}</td>
+                        <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">
+                          {formatPrice(cust.avgOrderValue, restaurant?.settings?.currency || 'INR')}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-black text-emerald-600 dark:text-emerald-400">
+                          {formatPrice(cust.totalSpent, restaurant?.settings?.currency || 'INR')}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-xs text-slate-400">
+                          {new Date(cust.lastVisit).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' })}
                         </td>
                       </tr>
                     ))}

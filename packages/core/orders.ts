@@ -187,6 +187,74 @@ export function getFormattedOrderId(
 }
 
 /**
+ * Strips non-digits, and removes leading +91, 91 (if length 12), or 0 (if length 11).
+ */
+export function cleanIndianMobileNumber(phone: any): string {
+  if (!phone || typeof phone !== 'string') return '';
+  let cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.length === 12 && cleaned.startsWith('91')) {
+    cleaned = cleaned.slice(2);
+  } else if (cleaned.length === 11 && cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1);
+  }
+  return cleaned;
+}
+
+/**
+ * Production-grade validator for Indian Mobile Numbers:
+ * 1. Exactly 10 digits
+ * 2. Starts with [6-9]
+ * 3. Rejects all-repeating digits (e.g. 9999999999, 8888888888)
+ * 4. Rejects known dummy sequential numbers (e.g. 1234567890, 9876543210, 0123456789)
+ * 5. Rejects numbers with 8 or more identical digits (e.g. 9899999999, 9999999912)
+ */
+export function validateIndianMobileNumber(phone: any): { valid: boolean; cleaned: string; error?: string } {
+  if (!phone || typeof phone !== 'string') {
+    return { valid: false, cleaned: '', error: 'Mobile number is required' };
+  }
+  const cleaned = cleanIndianMobileNumber(phone);
+  if (cleaned.length === 0) {
+    return { valid: false, cleaned, error: 'Mobile number cannot be empty' };
+  }
+  if (cleaned.length !== 10) {
+    return { valid: false, cleaned, error: 'Mobile number must be exactly 10 digits' };
+  }
+  if (!/^[6-9]/.test(cleaned)) {
+    return { valid: false, cleaned, error: 'Mobile number must start with 6, 7, 8, or 9' };
+  }
+  if (/^(\d)\1{9}$/.test(cleaned)) {
+    return { valid: false, cleaned, error: 'Invalid dummy mobile number (all repeating digits)' };
+  }
+  const knownDummies = new Set([
+    '1234567890', '9876543210', '0123456789', '9012345678', '8901234567',
+    '7890123456', '6789012345', '9876543211', '9123456789', '9999988888',
+    '8888899999', '9898989898', '9090909090', '9191919191', '9292929292',
+    '8989898989', '7878787878', '6767676767'
+  ]);
+  if (knownDummies.has(cleaned)) {
+    return { valid: false, cleaned, error: 'Invalid dummy mobile number' };
+  }
+  const counts: Record<string, number> = {};
+  for (const d of cleaned) {
+    counts[d] = (counts[d] || 0) + 1;
+    if (counts[d] >= 8) {
+      return { valid: false, cleaned, error: 'Invalid fake number (too many repeating digits)' };
+    }
+  }
+  return { valid: true, cleaned };
+}
+
+/**
+ * Checks whether an order is a table reservation.
+ */
+export function isOrderReservation(order?: any): boolean {
+  if (!order) return false;
+  return order.order_type === 'reservation' || 
+    Boolean(order.table_name?.toLowerCase().includes('reservation')) || 
+    Boolean(order.special_instructions?.includes('TABLE RESERVATION') || order.special_instructions?.includes('RESERVATION'));
+}
+
+/**
  * Returns customer-facing order ID concealing the internal restaurant code.
  */
 export function getCustomerFacingOrderId(order: any, restaurantName: string = '', allOrders: any[] = []): string {
@@ -212,7 +280,7 @@ export function parseCustomerDetailsFromOrder(order: any): {
   const textBlob = `${order.special_instructions || ''} | ${order.customer_notes || ''} | ${order.notes || ''}`;
 
   if (!name) {
-    const nameMatch = textBlob.match(/(?:CUSTOMER|Name|Guest):\s*([^|]+)/i);
+    const nameMatch = textBlob.match(/(?:CUSTOMER|Name|Guest):\s*([^|•\n]+)/i);
     if (nameMatch) {
       name = nameMatch[1].trim();
     } else if (order.table_name && order.table_name.includes('•')) {
@@ -221,8 +289,33 @@ export function parseCustomerDetailsFromOrder(order: any): {
     }
   }
   if (!phone) {
-    const phoneMatch = textBlob.match(/(?:PHONE|Contact|Mobile):\s*([^|]+)/i);
+    const phoneMatch = textBlob.match(/(?:PHONE|Contact|Mobile):\s*([^|•\n\)]+)/i);
     if (phoneMatch) phone = phoneMatch[1].trim();
+  }
+  if (name && !phone) {
+    const embeddedPhone = name.match(/\((?:[+]?91[\s\-]?)?([6-9]\d{9})\)/);
+    if (embeddedPhone) {
+      phone = embeddedPhone[1];
+      name = name.replace(/\s*\([^)]*\)/g, '').trim();
+    }
+  }
+  if (!phone && notes) {
+    const cleanNotePhone = notes.replace(/\D/g, '');
+    if (cleanNotePhone.length === 10 && /^[6-9]/.test(cleanNotePhone)) {
+      phone = cleanNotePhone;
+    }
+  }
+  if (!phone) {
+    const standaloneMatch = textBlob.match(/\b([6-9]\d{9})\b/);
+    if (standaloneMatch) {
+      phone = standaloneMatch[1];
+    }
+  }
+  if (name) {
+    name = name.replace(/^(?:CUSTOMER|Customer|Guest|Name):\s*/i, '').replace(/\s*\([^)]*\)/g, '').trim();
+  }
+  if (phone) {
+    phone = cleanIndianMobileNumber(phone);
   }
   if (!notes) {
     const notesMatch = textBlob.match(/(?:NOTES|Notes):\s*([^|]+)/i);

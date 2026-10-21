@@ -34,7 +34,10 @@ export {
   getFormattedOrderId,
   getCustomerFacingOrderId,
   parseCustomerDetailsFromOrder,
-  matchesOrderSearchQuery
+  matchesOrderSearchQuery,
+  cleanIndianMobileNumber,
+  validateIndianMobileNumber,
+  isOrderReservation
 } from '../../packages/core';
 
 export function getCleanSpecialInstructions(order?: any, batch?: any): string {
