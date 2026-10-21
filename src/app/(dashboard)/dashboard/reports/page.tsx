@@ -339,9 +339,16 @@ export default function ReportsPage() {
     // REVENUE-ELIGIBLE ORDERS ONLY: PAID OR COMPLETED ORDERS (EXCLUDES UNPAID PENDING & CANCELLED)
     const validOrders = rangeOrders.filter(isRevenueOrder);
 
+    // Track total refunds across all orders in this period (both full and partial)
+    let totalRefunds = 0;
+    rangeOrders.forEach(o => {
+      if (o.status === 'cancelled' && !o.special_instructions?.includes('REFUND RECORDED')) return;
+      const rInfo = parseOrderRefundDetails(o);
+      totalRefunds += rInfo.refundAmount;
+    });
+
     let grossSales = 0;
     let totalDiscount = 0;
-    let totalRefunds = 0;
     let taxableSales = 0;
     let cgstCollected = 0;
     let sgstCollected = 0;
@@ -403,15 +410,17 @@ export default function ReportsPage() {
       const refundInfo = parseOrderRefundDetails(o);
       const oNetTotal = Math.max(0, oGrandTotal - refundInfo.refundAmount);
 
+      // Proportion of realized revenue after partial refund
+      const netRatio = oGrandTotal > 0 ? Math.max(0, oNetTotal / oGrandTotal) : 1;
+
       grossSales += oSubtotal;
       totalDiscount += oDisc;
-      totalRefunds += refundInfo.refundAmount;
-      taxableSales += oTaxable;
+      taxableSales += (oTaxable * netRatio);
 
-      cgstCollected += oCgst;
-      sgstCollected += oSgst;
-      igstCollected += oIgst;
-      totalGstCollected += oTaxTotal;
+      cgstCollected += (oCgst * netRatio);
+      sgstCollected += (oSgst * netRatio);
+      igstCollected += (oIgst * netRatio);
+      totalGstCollected += (oTaxTotal * netRatio);
       netRevenue += oNetTotal;
     });
 
@@ -1179,6 +1188,8 @@ export default function ReportsPage() {
       'IGST Amount',
       'Total GST',
       'Grand Total',
+      'Refund Amount',
+      'Net Paid',
       'Order Status'
     ];
 
@@ -1233,6 +1244,9 @@ export default function ReportsPage() {
         ? Number(o.grand_total) 
         : (Number(o.total) > 0 ? Number(o.total) : Math.round((oTaxable + oTaxTotal) * 100) / 100);
 
+      const refundInfo = parseOrderRefundDetails(o);
+      const oNetPaid = Math.max(0, oGrandTotal - refundInfo.refundAmount);
+
       return [
         `"${o.id.slice(-6).toUpperCase()}"`,
         `"${dt}"`,
@@ -1245,6 +1259,8 @@ export default function ReportsPage() {
         `${oIgst.toFixed(2)}`,
         `${oTaxTotal.toFixed(2)}`,
         `${oGrandTotal.toFixed(2)}`,
+        `${refundInfo.refundAmount.toFixed(2)}`,
+        `${oNetPaid.toFixed(2)}`,
         `"${o.status}"`
       ];
     });
@@ -1331,7 +1347,9 @@ export default function ReportsPage() {
       'SGST',
       'IGST',
       'Total GST',
-      'Grand Total'
+      'Grand Total',
+      'Refund Amount',
+      'Net Paid'
     ];
 
     const rows: string[][] = [];
@@ -1387,6 +1405,9 @@ export default function ReportsPage() {
         ? Number(o.grand_total) 
         : (Number(o.total) > 0 ? Number(o.total) : Math.round((oTaxable + oTaxTotal) * 100) / 100);
 
+      const refundInfo = parseOrderRefundDetails(o);
+      const oNetPaid = Math.max(0, oGrandTotal - refundInfo.refundAmount);
+
       const validItems = (o.items || []).filter(i => !i.is_cancelled && i.status !== 'cancelled');
 
       validItems.forEach((item, idx) => {
@@ -1418,7 +1439,9 @@ export default function ReportsPage() {
           isFirst ? `${oSgst.toFixed(2)}` : '""',
           isFirst ? `${oIgst.toFixed(2)}` : '""',
           isFirst ? `${oTaxTotal.toFixed(2)}` : '""',
-          isFirst ? `${oGrandTotal.toFixed(2)}` : '""'
+          isFirst ? `${oGrandTotal.toFixed(2)}` : '""',
+          isFirst ? `${refundInfo.refundAmount.toFixed(2)}` : '""',
+          isFirst ? `${oNetPaid.toFixed(2)}` : '""'
         ]);
       });
     });

@@ -1734,7 +1734,9 @@ export default function OrdersPage() {
       : auditNote;
 
     const orderTotal = Number(selectedOrder.total || 0);
-    const isPartial = refundAmount < orderTotal && orderTotal > 0;
+    const existingRefundInfo = parseOrderRefundDetails(selectedOrder);
+    const cumulativeRefund = existingRefundInfo.refundAmount + refundAmount;
+    const isPartial = cumulativeRefund < orderTotal && orderTotal > 0;
     const newPaymentStatus = isPartial ? 'paid' : 'refunded';
     const newRefundStatus = 'processed';
 
