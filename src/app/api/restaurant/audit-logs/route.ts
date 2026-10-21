@@ -32,7 +32,17 @@ export async function GET(req: Request) {
     }
 
     if (action && action !== 'all') {
-      query = query.ilike('action', `%${action}%`);
+      if (action === 'table') {
+        query = query.or('action.ilike.%table%,details.ilike.%table%');
+      } else if (action === 'reservation') {
+        query = query.or('action.ilike.%reservation%,details.ilike.%reservation%');
+      } else if (action === 'order') {
+        query = query.or('action.ilike.%order%,details.ilike.%order%');
+      } else if (action === 'payment') {
+        query = query.or('action.ilike.%payment%,action.ilike.%void%,action.ilike.%refund%,details.ilike.%payment%');
+      } else {
+        query = query.or(`action.ilike.%${action}%,details.ilike.%${action}%`);
+      }
     }
 
     const { data, count, error } = await query;
@@ -48,11 +58,20 @@ export async function GET(req: Request) {
           parsedDetails = { message: log.details };
         }
       }
+
+      const orderIdMatch = typeof log.details === 'string' ? log.details.match(/Order #([a-f0-9\-]+)/i) : null;
+      const detectedOrderId = parsedDetails?.entityId || parsedDetails?.orderId || orderIdMatch?.[1] || null;
+      const isRes = log.action?.includes('reservation') || String(log.details).toLowerCase().includes('reservation');
+      const isTbl = !isRes && (log.action?.includes('table') || String(log.details).toLowerCase().includes('table'));
+      const isOrd = Boolean(detectedOrderId) || log.action?.includes('order') || log.action?.includes('payment');
+
+      const detectedEntityType = parsedDetails?.entity || (isRes ? 'reservation' : (isOrd ? 'order' : (isTbl ? 'table' : null)));
+
       return {
         ...log,
         user_role: parsedDetails?.role || null,
-        entity_type: parsedDetails?.entity || null,
-        entity_id: parsedDetails?.entityId || null,
+        entity_type: detectedEntityType,
+        entity_id: detectedOrderId,
         details: typeof parsedDetails?.message === 'string' 
           ? parsedDetails.message 
           : (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)),

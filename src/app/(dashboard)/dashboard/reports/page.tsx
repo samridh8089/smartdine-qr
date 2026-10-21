@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRestaurant } from '../../layout';
 import { db, Order, Category, MenuItem, getPlanFeatures } from '@/lib/db';
 import { getActiveUser, supabase } from '@/lib/supabase';
-import { formatPrice, parseCustomerDetailsFromOrder, cleanIndianMobileNumber, validateIndianMobileNumber, isOrderReservation } from '@/lib/utils';
+import { formatPrice, parseCustomerDetailsFromOrder, cleanIndianMobileNumber, validateIndianMobileNumber, isOrderReservation, getFormattedOrderId } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -2740,7 +2740,44 @@ export default function ReportsPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px]">
-                        {entry.entity_type ? `${entry.entity_type} #${(entry.entity_id || '').slice(0, 8)}` : 'System'}
+                        {(() => {
+                          const orderId = entry.entity_id || entry.parsedDetails?.orderId;
+                          const isOrder = entry.entity_type === 'order' || 
+                            entry.action?.includes('order') || 
+                            entry.action?.includes('payment') || 
+                            Boolean(orderId);
+
+                          if (isOrder && orderId) {
+                            const matchedOrder = orders.find(o => 
+                              o.id === orderId || 
+                              (orderId.length >= 6 && o.id.startsWith(orderId))
+                            );
+                            const displayId = matchedOrder 
+                              ? getFormattedOrderId(matchedOrder, restaurant?.name || '', orders) 
+                              : `#${orderId.slice(0, 8)}`;
+
+                            return (
+                              <a
+                                href={`/dashboard/orders?id=${matchedOrder ? matchedOrder.id : orderId}`}
+                                className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-200 hover:underline transition-colors group cursor-pointer"
+                                title="Click to open this order in Live Orders"
+                              >
+                                <span>{displayId}</span>
+                                <ArrowUpRight className="h-3 w-3 inline opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-transform" />
+                              </a>
+                            );
+                          }
+
+                          if (entry.entity_type) {
+                            return (
+                              <span className="text-slate-600 dark:text-slate-400 font-semibold">
+                                {entry.entity_type} {entry.entity_id ? `#${entry.entity_id.slice(0, 8)}` : ''}
+                              </span>
+                            );
+                          }
+
+                          return <span className="text-slate-400">System</span>;
+                        })()}
                       </td>
                       <td className="py-3 px-4 text-slate-600 dark:text-slate-400 max-w-xs truncate" title={entry.details}>
                         {entry.details || (entry.previous_state && entry.new_state ? `${JSON.stringify(entry.previous_state)} -> ${JSON.stringify(entry.new_state)}` : '-')}
