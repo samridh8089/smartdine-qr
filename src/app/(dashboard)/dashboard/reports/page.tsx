@@ -183,6 +183,7 @@ export default function ReportsPage() {
     sgstCollected: 0,
     igstCollected: 0,
     totalGstCollected: 0,
+    totalServiceCharge: 0,
     netRevenue: 0,
     periodLabel: ''
   });
@@ -368,6 +369,7 @@ export default function ReportsPage() {
     let sgstCollected = 0;
     let igstCollected = 0;
     let totalGstCollected = 0;
+    let totalServiceCharge = 0;
     let netRevenue = 0;
 
     validOrders.forEach(o => {
@@ -404,17 +406,22 @@ export default function ReportsPage() {
           : (o.gst || 0)
       );
 
-      // Fallback for legacy orders where tax_total / gst > 0 but cgst/sgst/igst are 0
-      if (oTaxTotal > 0 && oCgst === 0 && oSgst === 0 && oIgst === 0) {
-        const isIgst = o.tax_type_snapshot === 'igst' || restaurant?.settings?.tax_mode === 'igst';
-        if (isIgst) {
-          oIgst = oTaxTotal;
-        } else {
-          oCgst = Math.round((oTaxTotal / 2 + Number.EPSILON) * 100) / 100;
-          oSgst = Math.round((oTaxTotal - oCgst + Number.EPSILON) * 100) / 100;
+      // Handle GST distribution: Interstate (IGST) vs Intrastate (CGST + SGST 50/50)
+      const isIgst = o.tax_type_snapshot === 'igst' || (restaurant?.settings?.tax_mode === 'igst' && oCgst === 0 && oSgst === 0);
+      if (isIgst) {
+        if (oIgst === 0 && oTaxTotal > 0) oIgst = oTaxTotal;
+        if (oTaxTotal === 0 && oIgst > 0) oTaxTotal = oIgst;
+        oCgst = 0;
+        oSgst = 0;
+      } else {
+        if (oTaxTotal === 0 && (oCgst > 0 || oSgst > 0)) {
+          oTaxTotal = oCgst + oSgst;
         }
-      } else if (oTaxTotal === 0 && (oCgst > 0 || oSgst > 0 || oIgst > 0)) {
-        oTaxTotal = oCgst + oSgst + oIgst;
+        // Strict intrastate equality: CGST and SGST must each be strictly half of intrastate tax
+        const halfTax = oTaxTotal / 2;
+        oCgst = halfTax;
+        oSgst = halfTax;
+        oIgst = 0;
       }
 
       const oGrandTotal = Number(o.grand_total) > 0 
@@ -426,6 +433,7 @@ export default function ReportsPage() {
 
       // Proportion of realized revenue after partial refund
       const netRatio = oGrandTotal > 0 ? Math.max(0, oNetTotal / oGrandTotal) : 1;
+      const oServiceCharge = Number(o.service_charge || 0);
 
       grossSales += oSubtotal;
       totalDiscount += oDisc;
@@ -435,8 +443,14 @@ export default function ReportsPage() {
       sgstCollected += (oSgst * netRatio);
       igstCollected += (oIgst * netRatio);
       totalGstCollected += (oTaxTotal * netRatio);
+      totalServiceCharge += (oServiceCharge * netRatio);
       netRevenue += oNetTotal;
     });
+
+    const roundedCgst = Math.round((cgstCollected + Number.EPSILON) * 100) / 100;
+    const roundedSgst = roundedCgst; // Strictly identical for intrastate
+    const roundedIgst = Math.round((igstCollected + Number.EPSILON) * 100) / 100;
+    const roundedTotalGst = Math.round((roundedCgst + roundedSgst + roundedIgst + Number.EPSILON) * 100) / 100;
 
     setSalesSummary({
       totalOrders: validOrders.length,
@@ -444,10 +458,11 @@ export default function ReportsPage() {
       totalDiscount: Math.round((totalDiscount + Number.EPSILON) * 100) / 100,
       totalRefunds: Math.round((totalRefunds + Number.EPSILON) * 100) / 100,
       taxableSales: Math.round((taxableSales + Number.EPSILON) * 100) / 100,
-      cgstCollected: Math.round((cgstCollected + Number.EPSILON) * 100) / 100,
-      sgstCollected: Math.round((sgstCollected + Number.EPSILON) * 100) / 100,
-      igstCollected: Math.round((igstCollected + Number.EPSILON) * 100) / 100,
-      totalGstCollected: Math.round((totalGstCollected + Number.EPSILON) * 100) / 100,
+      cgstCollected: roundedCgst,
+      sgstCollected: roundedSgst,
+      igstCollected: roundedIgst,
+      totalGstCollected: roundedTotalGst,
+      totalServiceCharge: Math.round((totalServiceCharge + Number.EPSILON) * 100) / 100,
       netRevenue: Math.round((netRevenue + Number.EPSILON) * 100) / 100,
       periodLabel
     });
@@ -1650,7 +1665,9 @@ export default function ReportsPage() {
     {
       id: 'discounts',
       label: 'DISCOUNTS',
-      value: `-${formatPrice(salesSummary.totalDiscount, restaurant?.settings?.currency || 'INR')}`,
+      value: salesSummary.totalDiscount > 0
+        ? `-${formatPrice(salesSummary.totalDiscount, restaurant?.settings?.currency || 'INR')}`
+        : formatPrice(0, restaurant?.settings?.currency || 'INR'),
       desc: 'Promo & offer vouchers',
       icon: Tag,
       iconColor: 'text-gray-700 dark:text-gray-300',
@@ -1660,7 +1677,7 @@ export default function ReportsPage() {
       id: 'taxable-sales',
       label: 'TAXABLE SALES',
       value: formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR'),
-      desc: 'Gross minus discount',
+      desc: salesSummary.totalRefunds > 0 ? 'Net of promo & refunds' : 'Gross minus discount',
       icon: Calculator,
       iconColor: 'text-gray-700 dark:text-gray-300',
       valueColor: 'text-gray-950 dark:text-white',
@@ -1678,16 +1695,27 @@ export default function ReportsPage() {
       id: 'net-revenue',
       label: 'NET REVENUE',
       value: formatPrice(salesSummary.netRevenue, restaurant?.settings?.currency || 'INR'),
-      desc: salesSummary.totalRefunds > 0 ? `Net after ${formatPrice(salesSummary.totalRefunds, restaurant?.settings?.currency || 'INR')} refund` : 'Grand total collected',
+      desc: (() => {
+        if (salesSummary.totalRefunds > 0 && salesSummary.totalServiceCharge > 0) {
+          return `Net after ${formatPrice(Math.round(salesSummary.totalRefunds), restaurant?.settings?.currency || 'INR')} ref (Incl. ${formatPrice(Math.round(salesSummary.totalServiceCharge), restaurant?.settings?.currency || 'INR')} charges)`;
+        }
+        if (salesSummary.totalRefunds > 0) {
+          return `Net after ${formatPrice(salesSummary.totalRefunds, restaurant?.settings?.currency || 'INR')} refund`;
+        }
+        if (salesSummary.totalServiceCharge > 0) {
+          return `Incl. ${formatPrice(Math.round(salesSummary.totalServiceCharge), restaurant?.settings?.currency || 'INR')} service charge`;
+        }
+        return 'Grand total collected';
+      })(),
       icon: Wallet,
       iconColor: 'text-gray-700 dark:text-gray-300',
       valueColor: 'text-gray-950 dark:text-white',
     },
     {
       id: 'guest-count',
-      label: 'GUEST COUNT',
+      label: 'GUEST PROFILES',
       value: customerSummary.totalCustomers.toString(),
-      desc: 'Distinct guests served',
+      desc: 'Unique customer records',
       icon: Users,
       iconColor: 'text-gray-700 dark:text-gray-300',
       valueColor: 'text-gray-950 dark:text-white',
@@ -1890,32 +1918,32 @@ export default function ReportsPage() {
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
                 <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Intrastate (CGST + SGST)</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
                   <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
-                    {formatPrice(salesSummary.cgstCollected + salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}
+                    {formatPrice(salesSummary.cgstCollected + salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}
                   </td>
                 </tr>
                 <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
                   <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Interstate (IGST)</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.igstCollected > 0 ? salesSummary.taxableSales : 0, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">₹0.00</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.igstCollected > 0 ? salesSummary.taxableSales : 0, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
                   <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
-                    {formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}
+                    {formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}
                   </td>
                 </tr>
                 <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-black text-xs border-t-2 border-slate-200 dark:border-slate-700">
                   <td className="py-4 px-4 text-slate-900 dark:text-white font-black">Total GST Collected</td>
-                  <td className="py-4 px-4 text-right font-extrabold text-slate-900 dark:text-white">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR')}</td>
-                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR')}</td>
+                  <td className="py-4 px-4 text-right font-extrabold text-slate-900 dark:text-white">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
                   <td className="py-4 px-4 text-right font-bold text-slate-950 dark:text-white">
-                    {formatPrice(salesSummary.totalGstCollected, restaurant?.settings?.currency || 'INR')}
+                    {formatPrice(salesSummary.totalGstCollected, restaurant?.settings?.currency || 'INR', 2)}
                   </td>
                 </tr>
               </tbody>
