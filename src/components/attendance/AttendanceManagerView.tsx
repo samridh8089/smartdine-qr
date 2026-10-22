@@ -7,6 +7,7 @@ import {
   StaffShift,
   StaffAttendance,
   SalaryRecord,
+  StaffLeaveRequest,
   getStaffProfiles,
   saveStaffProfile,
   getShifts,
@@ -29,12 +30,17 @@ import {
   approveAllSalaryRecords,
   isPunchOutMandatory,
   setPunchOutMandatory,
-  managerApprovePunchOut
+  managerApprovePunchOut,
+  calculateStaffEarnedSalary,
+  reviewAttendanceDays,
+  getRestaurantLeaveRequests,
+  reviewLeaveRequest
 } from '@/lib/attendoEngine';
 import { supabase } from '@/lib/supabase';
 import { db, Restaurant, Profile } from '@/lib/db';
 import SalarySlipModal from './SalarySlipModal';
 import SalaryEditorModal from './SalaryEditorModal';
+import StaffAttendanceCalendarModal from './StaffAttendanceCalendarModal';
 import {
   Users,
   CheckCircle,
@@ -54,7 +60,14 @@ import {
   Shield,
   Search,
   Filter,
-  X
+  X,
+  CalendarCheck,
+  Check,
+  Ban,
+  Send,
+  Eye,
+  Info,
+  XCircle
 } from 'lucide-react';
 
 interface AttendanceManagerViewProps {
@@ -72,7 +85,7 @@ export default function AttendanceManagerView({
   profile
 }: AttendanceManagerViewProps) {
   // 1. useState
-  const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'logs' | 'payroll' | 'settings'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'logs' | 'payroll' | 'leaves' | 'settings'>('live');
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
@@ -119,6 +132,7 @@ export default function AttendanceManagerView({
   const [staffPhoneInput, setStaffPhoneInput] = useState('');
   const [staffSalaryInput, setStaffSalaryInput] = useState<number>(15000);
   const [staffSalaryTypeInput, setStaffSalaryTypeInput] = useState<'fixed' | 'per_day'>('per_day');
+  const [staffWeeklyOffInput, setStaffWeeklyOffInput] = useState<StaffProfile['weekly_off']>('none');
   const [staffEmailInput, setStaffEmailInput] = useState('');
   const [staffPasswordInput, setStaffPasswordInput] = useState('');
   const [staffModalError, setStaffModalError] = useState<string | null>(null);
@@ -130,6 +144,33 @@ export default function AttendanceManagerView({
   const [settingsNotice, setSettingsNotice] = useState<string | null>(null);
   const [punchOutMandatory, setPunchOutMandatoryState] = useState<boolean>(() => isPunchOutMandatory(restaurant));
   const [approvingPayroll, setApprovingPayroll] = useState(false);
+
+  // In-Place Staff OTP Verification Modal State
+  const [staffOtpModalOpen, setStaffOtpModalOpen] = useState(false);
+  const [verifyingStaff, setVerifyingStaff] = useState<Profile | null>(null);
+  const [staffOtpInput, setStaffOtpInput] = useState('');
+  const [staffOtpLoading, setStaffOtpLoading] = useState(false);
+  const [staffOtpError, setStaffOtpError] = useState<string | null>(null);
+  const [staffOtpSuccess, setStaffOtpSuccess] = useState<string | null>(null);
+
+  // Day-by-Day Attendance Approval Center State
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [approvalStaffId, setApprovalStaffId] = useState<string>('');
+  const [approvalSelectedDates, setApprovalSelectedDates] = useState<string[]>([]);
+  const [approvalMonthAttendances, setApprovalMonthAttendances] = useState<StaffAttendance[]>([]);
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [approvalRejectNote, setApprovalRejectNote] = useState('');
+  const [showRejectNoteInput, setShowRejectNoteInput] = useState(false);
+
+  // Leave Management State
+  const [leaveRequests, setLeaveRequests] = useState<StaffLeaveRequest[]>([]);
+  const [leaveFilter, setLeaveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [leaveActionLoading, setLeaveActionLoading] = useState(false);
+
+  // Employee Attendance Calendar Modal State
+  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
+  const [calendarModalStaff, setCalendarModalStaff] = useState<StaffProfile | null>(null);
+  const [calendarModalAttendances, setCalendarModalAttendances] = useState<StaffAttendance[]>([]);
 
   // 2. useMemo: Filtered Staff List
   const filteredStaffList = useMemo(() => {
@@ -174,7 +215,49 @@ export default function AttendanceManagerView({
     };
   }, [staffList, todayAttendances]);
 
-  // 4. useEffect: Initial Data Loading
+  // 4. useMemo: Selected Staff Member for Day-by-Day Attendance Approval
+  const approvalStaffMember = useMemo(() => {
+    return staffList.find(s => s.id === approvalStaffId) || staffList[0] || null;
+  }, [staffList, approvalStaffId]);
+
+  // 5. useMemo: Total Days in selected month for Day-by-Day Attendance Approval
+  const approvalDaysInMonth = useMemo(() => {
+    return new Date(selectedYear, selectedMonth, 0).getDate();
+  }, [selectedYear, selectedMonth]);
+
+  // 6. useMemo: Real-time Live Salary Recalculation for Day-by-Day Approval
+  const approvalEarnedSalary = useMemo(() => {
+    if (!approvalStaffMember) return 0;
+    const baseSalary = Number(approvalStaffMember.base_salary) || 0;
+    const salaryType = approvalStaffMember.salary_type || 'per_day';
+    const monthStr = String(selectedMonth).padStart(2, '0');
+    const staffAtts = approvalMonthAttendances.filter(
+      a => a.staff_id === approvalStaffMember.id && a.date.startsWith(`${selectedYear}-${monthStr}`)
+    );
+    let approvedDays = 0;
+    let halfDays = 0;
+    for (const a of staffAtts) {
+      if (a.approval_status === 'rejected') continue;
+      if (a.approval_status === 'approved' || a.status === 'present' || a.status === 'late') {
+        approvedDays += 1;
+      } else if (a.status === 'half_day') {
+        halfDays += 1;
+      }
+    }
+    return calculateStaffEarnedSalary(baseSalary, salaryType, approvalDaysInMonth, approvedDays, halfDays);
+  }, [approvalStaffMember, approvalMonthAttendances, selectedYear, selectedMonth, approvalDaysInMonth]);
+
+  // 7. useMemo: Leave requests filtered
+  const filteredLeaveRequests = useMemo(() => {
+    return leaveRequests.filter(l => leaveFilter === 'all' || l.status === leaveFilter);
+  }, [leaveRequests, leaveFilter]);
+
+  // 8. useMemo: Pending leaves count badge
+  const pendingLeavesCount = useMemo(() => {
+    return leaveRequests.filter(l => l.status === 'pending').length;
+  }, [leaveRequests]);
+
+  // 9. useEffect: Initial Data Loading
   useEffect(() => {
     if (!restaurant?.id) return;
     loadAllData();
@@ -233,17 +316,19 @@ export default function AttendanceManagerView({
     setLoading(true);
     try {
       db.clearRestaurantCache(restaurant.id);
-      const [profiles, shiftList, attendances, roster] = await Promise.all([
+      const [profiles, shiftList, attendances, roster, leaves] = await Promise.all([
         getStaffProfiles(restaurant.id),
         getShifts(restaurant.id),
         getAttendanceForDate(restaurant.id, selectedDate),
-        getStaffShiftsForDate(restaurant.id, selectedDate)
+        getStaffShiftsForDate(restaurant.id, selectedDate),
+        getRestaurantLeaveRequests(restaurant.id)
       ]);
 
       setStaffList(profiles);
       setShifts(shiftList);
       setTodayAttendances(attendances);
       setDateRoster(roster);
+      setLeaveRequests(leaves);
     } catch (e) {
       console.warn('Error loading attendo data:', e);
     } finally {
@@ -323,6 +408,7 @@ export default function AttendanceManagerView({
       setStaffRoleInput('waiter');
       setStaffSalaryInput(15000);
       setStaffSalaryTypeInput('per_day');
+      setStaffWeeklyOffInput('none');
       setStaffModalOpen(true);
       return;
     }
@@ -339,6 +425,7 @@ export default function AttendanceManagerView({
       setStaffRoleInput(member.role);
       setStaffSalaryInput(Number(member.base_salary) || 15000);
       setStaffSalaryTypeInput(member.salary_type || 'per_day');
+      setStaffWeeklyOffInput(member.weekly_off || 'none');
     } else {
       setEditingStaffMember(null);
       setStaffNameInput('');
@@ -348,6 +435,7 @@ export default function AttendanceManagerView({
       setStaffRoleInput('waiter');
       setStaffSalaryInput(15000);
       setStaffSalaryTypeInput('fixed');
+      setStaffWeeklyOffInput('none');
     }
     setStaffModalOpen(true);
   };
@@ -416,7 +504,8 @@ export default function AttendanceManagerView({
           role: staffRoleInput,
           phone: staffPhoneInput.trim(),
           base_salary: Number(staffSalaryInput) || 0,
-          salary_type: staffSalaryTypeInput
+          salary_type: staffSalaryTypeInput,
+          weekly_off: staffWeeklyOffInput || 'none'
         });
 
         // Audit log
@@ -425,8 +514,33 @@ export default function AttendanceManagerView({
           profile.id,
           profile.email,
           'create_staff',
-          `Created staff account & baseline salary for ${staffNameInput.trim()} (${staffRoleInput})`
+          `Created staff account for ${staffNameInput.trim()}`
         );
+
+
+        // Dispatch Staff Email OTP directly
+        try {
+          await fetch('/api/auth/send-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'staff_creation',
+              email: cleanEmail,
+              recipientName: staffNameInput.trim(),
+              restaurantName: restaurant.name,
+              userId: newProfile.id,
+              restaurantId: restaurant.id
+            })
+          });
+        } catch (e) {
+          console.warn('Failed to dispatch staff OTP:', e);
+        }
+
+        setVerifyingStaff(newProfile);
+        setStaffOtpInput('');
+        setStaffOtpError(null);
+        setStaffOtpSuccess(null);
+        setStaffOtpModalOpen(true);
 
         await loadAllData();
         setStaffModalOpen(false);
@@ -454,7 +568,8 @@ export default function AttendanceManagerView({
           role: staffRoleInput,
           phone: staffPhoneInput.trim(),
           base_salary: Number(staffSalaryInput) || 0,
-          salary_type: staffSalaryTypeInput
+          salary_type: staffSalaryTypeInput,
+          weekly_off: staffWeeklyOffInput || 'none'
         });
 
         // Update local staff list
@@ -644,6 +759,191 @@ export default function AttendanceManagerView({
     }
   };
 
+  // --- OTP VERIFICATION HANDLERS ---
+  const handleVerifyStaffOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verifyingStaff || !restaurant) return;
+    setStaffOtpLoading(true);
+    setStaffOtpError(null);
+    setStaffOtpSuccess(null);
+
+    const cleanOtp = staffOtpInput.trim().replace(/\D/g, '');
+    if (!/^\d{6,8}$/.test(cleanOtp)) {
+      setStaffOtpError('Please enter a valid OTP code (6 or 8 digits).');
+      setStaffOtpLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/staff/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: verifyingStaff.email,
+          otp: cleanOtp,
+          staffId: verifyingStaff.id,
+          restaurantId: restaurant.id
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setStaffOtpError(data.error || 'Verification failed. Please enter the correct OTP.');
+        setStaffOtpLoading(false);
+        return;
+      }
+
+      setStaffOtpSuccess('Staff account verified and activated successfully!');
+      setTimeout(() => {
+        setStaffOtpModalOpen(false);
+        setVerifyingStaff(null);
+      }, 1200);
+
+      await loadAllData();
+    } catch (err: any) {
+      setStaffOtpError(err.message || 'Error verifying OTP.');
+    } finally {
+      setStaffOtpLoading(false);
+    }
+  };
+
+  const handleResendStaffOtp = async () => {
+    if (!verifyingStaff || !restaurant) return;
+    setStaffOtpLoading(true);
+    setStaffOtpError(null);
+    try {
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'staff_creation',
+          email: verifyingStaff.email,
+          recipientName: verifyingStaff.full_name || 'Staff Member',
+          restaurantName: restaurant.name,
+          userId: verifyingStaff.id,
+          restaurantId: restaurant.id
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to resend OTP.');
+      setStaffOtpSuccess(`OTP resent successfully to ${verifyingStaff.email}`);
+    } catch (err: any) {
+      setStaffOtpError(err.message || 'Could not resend OTP.');
+    } finally {
+      setStaffOtpLoading(false);
+    }
+  };
+
+  const handleOpenStaffVerifyModal = (staffMember: StaffProfile) => {
+    setVerifyingStaff({
+      id: staffMember.id,
+      email: staffMember.email || '',
+      full_name: staffMember.name,
+      role: staffMember.role as any,
+      restaurant_id: staffMember.restaurant_id
+    } as Profile);
+    setStaffOtpInput('');
+    setStaffOtpError(null);
+    setStaffOtpSuccess(null);
+    setStaffOtpModalOpen(true);
+  };
+
+  // --- EMPLOYEE CALENDAR MODAL HANDLER ---
+  const handleOpenEmployeeCalendar = async (staffMember: StaffProfile) => {
+    setCalendarModalStaff(staffMember);
+    setCalendarModalOpen(true);
+    try {
+      const monthAtts = await getMonthlyAttendanceForRestaurant(restaurant.id, selectedYear, selectedMonth);
+      setCalendarModalAttendances(monthAtts);
+    } catch (e) {
+      console.warn('Failed loading month attendances for calendar:', e);
+    }
+  };
+
+  // --- ATTENDANCE APPROVAL CENTER HANDLERS ---
+  const handleOpenAttendanceApproval = async (staffId?: string) => {
+    const targetStaffId = staffId || staffList[0]?.id || '';
+    setApprovalStaffId(targetStaffId);
+    setApprovalSelectedDates([]);
+    setShowRejectNoteInput(false);
+    setApprovalRejectNote('');
+    setApprovalModalOpen(true);
+
+    try {
+      const allMonthAtts = await getMonthlyAttendanceForRestaurant(restaurant.id, selectedYear, selectedMonth);
+      setApprovalMonthAttendances(allMonthAtts);
+    } catch (e) {
+      console.warn('Failed loading month attendances:', e);
+    }
+  };
+
+  const handleSelectApprovalDate = (date: string) => {
+    setApprovalSelectedDates(prev =>
+      prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date]
+    );
+  };
+
+  const handleSelectAllApprovalDates = (allDates: string[]) => {
+    if (approvalSelectedDates.length === allDates.length) {
+      setApprovalSelectedDates([]);
+    } else {
+      setApprovalSelectedDates(allDates);
+    }
+  };
+
+  const handleBatchReviewAttendance = async (action: 'approved' | 'rejected') => {
+    if (approvalSelectedDates.length === 0 || !approvalStaffMember) return;
+    setApprovalSubmitting(true);
+    try {
+      const reviews = approvalSelectedDates.map(date => ({
+        staffId: approvalStaffMember.id,
+        date,
+        action,
+        rejectionReason: action === 'rejected' ? (approvalRejectNote.trim() || 'Rejected by manager') : undefined
+      }));
+
+      await reviewAttendanceDays({
+        restaurantId: restaurant.id,
+        reviews,
+        reviewerId: profile.id,
+        reviewerName: profile.full_name || profile.email
+      });
+
+      const allMonthAtts = await getMonthlyAttendanceForRestaurant(restaurant.id, selectedYear, selectedMonth);
+      setApprovalMonthAttendances(allMonthAtts);
+      setApprovalSelectedDates([]);
+      setShowRejectNoteInput(false);
+      setApprovalRejectNote('');
+
+      await handleCalculatePayrollClick();
+    } catch (e) {
+      console.warn('Failed reviewing attendance days:', e);
+    } finally {
+      setApprovalSubmitting(false);
+    }
+  };
+
+  // --- LEAVE MANAGEMENT HANDLER ---
+  const handleReviewLeave = async (requestId: string, action: 'approved' | 'rejected', reason?: string) => {
+    setLeaveActionLoading(true);
+    try {
+      await reviewLeaveRequest({
+        restaurantId: restaurant.id,
+        requestId,
+        action,
+        reviewerId: profile.id,
+        reviewerName: profile.full_name || profile.email,
+        rejectionReason: reason
+      });
+      const updated = await getRestaurantLeaveRequests(restaurant.id);
+      setLeaveRequests(updated);
+    } catch (e) {
+      console.warn('Failed reviewing leave request:', e);
+    } finally {
+      setLeaveActionLoading(false);
+    }
+  };
+
   const handleSaveSalaryRecord = async (updated: SalaryRecord) => {
     await saveSalaryRecord(updated);
     setSalaryRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
@@ -728,6 +1028,20 @@ export default function AttendanceManagerView({
             }`}
           >
             Payroll & Salary Slips
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('leaves')}
+            className={`px-4 py-2 rounded-xl transition cursor-pointer font-bold flex items-center gap-1.5 ${
+              activeTab === 'leaves' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+            }`}
+          >
+            <span>Leave Requests</span>
+            {pendingLeavesCount > 0 && (
+              <span className="px-1.5 py-0.5 bg-amber-500 text-white font-black text-[10px] rounded-full">
+                {pendingLeavesCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -1136,12 +1450,12 @@ export default function AttendanceManagerView({
               {salaryRecords.length > 0 && (
                 <button
                   type="button"
-                  onClick={handleApproveAllSalaries}
+                  onClick={() => handleOpenAttendanceApproval()}
                   disabled={approvingPayroll}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   <CheckCircle className="w-3.5 h-3.5" />
-                  {approvingPayroll ? 'Approving...' : 'Approve All Attendance'}
+                  <span>Attendance Approval</span>
                 </button>
               )}
             </div>
@@ -1199,7 +1513,20 @@ export default function AttendanceManagerView({
                       return (
                         <tr key={record.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
                           <td className="px-4 py-3.5">
-                            <span className="font-bold text-slate-800 dark:text-slate-100 block">{record.staff_name}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const st = staffList.find(s => s.id === record.staff_id);
+                                if (st) handleOpenEmployeeCalendar(st);
+                              }}
+                              className="text-left group cursor-pointer"
+                              title="Click to view detailed monthly attendance calendar"
+                            >
+                              <span className="font-bold text-slate-800 dark:text-slate-100 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 flex items-center gap-1.5 transition">
+                                <span>{record.staff_name}</span>
+                                <Calendar className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100" />
+                              </span>
+                            </button>
                             <span className="text-[10px] text-slate-400 uppercase font-semibold">{record.staff_role}</span>
                           </td>
                           <td className="px-4 py-3.5">
@@ -1262,6 +1589,27 @@ export default function AttendanceManagerView({
                             <button
                               type="button"
                               onClick={() => {
+                                const st = staffList.find(s => s.id === record.staff_id);
+                                if (st) handleOpenEmployeeCalendar(st);
+                              }}
+                              className="px-2.5 py-1 text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-semibold text-xs bg-slate-100 dark:bg-slate-800 rounded-lg cursor-pointer transition border border-slate-200 dark:border-slate-700 inline-flex items-center gap-1"
+                              title="Open Monthly Attendance Calendar"
+                            >
+                              <Calendar className="w-3 h-3" />
+                              <span>Calendar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAttendanceApproval(record.staff_id)}
+                              className="px-2.5 py-1 text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 font-semibold text-xs bg-emerald-50 dark:bg-emerald-950/40 rounded-lg cursor-pointer transition border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1"
+                              title="Day-by-Day Attendance Approval Center"
+                            >
+                              <CalendarCheck className="w-3 h-3" />
+                              <span>Approval</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
                                 setEditingSalaryRecord(record);
                                 setSalaryEditorOpen(true);
                               }}
@@ -1294,6 +1642,128 @@ export default function AttendanceManagerView({
       )}
 
       {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* TAB: LEAVE REQUESTS & APPROVALS */}
+      {/* ========================================================================= */}
+      {activeTab === 'leaves' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div>
+              <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                Staff Leave Management & Approvals
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Review employee time-off applications, approved leaves, and leave balances
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setLeaveFilter(f)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize cursor-pointer transition ${
+                    leaveFilter === f
+                      ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
+                  }`}
+                >
+                  {f === 'all' ? 'All Requests' : f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            {filteredLeaveRequests.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 space-y-2">
+                <Calendar className="w-10 h-10 mx-auto text-slate-300 dark:text-slate-600" />
+                <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">No leave requests found</p>
+                <p className="text-xs text-slate-500">Employees can submit leave requests from their punch card interface.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="px-4 py-3">Employee</th>
+                      <th className="px-4 py-3">Leave Type</th>
+                      <th className="px-4 py-3">Dates & Duration</th>
+                      <th className="px-4 py-3">Reason</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {filteredLeaveRequests.map(req => (
+                      <tr key={req.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                        <td className="px-4 py-3.5">
+                          <span className="font-bold text-slate-800 dark:text-slate-100 block">{req.staff_name}</span>
+                          <span className="text-[10px] text-slate-400 uppercase font-semibold">{req.staff_role}</span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="capitalize px-2 py-0.5 rounded-full font-bold text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                            {req.leave_type} Leave
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 font-semibold text-slate-800 dark:text-slate-200">
+                          <div>{req.start_date} to {req.end_date}</div>
+                          <span className="text-[10px] text-slate-400 font-normal">({req.total_days} Days)</span>
+                        </td>
+                        <td className="px-4 py-3.5 max-w-xs truncate text-slate-600 dark:text-slate-300">
+                          {req.reason}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {req.status === 'approved' ? (
+                            <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5" /> Approved
+                            </span>
+                          ) : req.status === 'rejected' ? (
+                            <span className="text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400 inline-flex items-center gap-1">
+                              <Ban className="w-3.5 h-3.5" /> Rejected
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> Pending Review
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                          {req.status === 'pending' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleReviewLeave(req.id, 'approved')}
+                                disabled={leaveActionLoading}
+                                className="px-2.5 py-1 text-white font-bold text-xs bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer transition shadow-xs"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const reason = prompt('Optional rejection note:');
+                                  handleReviewLeave(req.id, 'rejected', reason || undefined);
+                                }}
+                                disabled={leaveActionLoading}
+                                className="px-2.5 py-1 text-white font-bold text-xs bg-rose-600 hover:bg-rose-700 rounded-lg cursor-pointer transition shadow-xs"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* TAB 4: GEOFENCE SETTINGS */}
       {/* ========================================================================= */}
       {activeTab === 'settings' && (
@@ -1743,6 +2213,29 @@ export default function AttendanceManagerView({
                       : 'Fixed: Full monthly base pay irrespective of attendance punch.'}
                   </p>
                 </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5 col-span-1 sm:col-span-2">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 text-xs">
+                    Designated Weekly Off Day
+                  </label>
+                  <select
+                    value={staffWeeklyOffInput}
+                    onChange={e => setStaffWeeklyOffInput(e.target.value as any)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold capitalize outline-none"
+                  >
+                    <option value="none">None (No Fixed Weekly Off)</option>
+                    <option value="monday">Monday</option>
+                    <option value="tuesday">Tuesday</option>
+                    <option value="wednesday">Wednesday</option>
+                    <option value="thursday">Thursday</option>
+                    <option value="friday">Friday</option>
+                    <option value="saturday">Saturday</option>
+                    <option value="sunday">Sunday</option>
+                  </select>
+                  <p className="text-[10px] text-slate-500">
+                    Designated day off per week for this staff member (shown on roster and attendance calendar).
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -1786,6 +2279,414 @@ export default function AttendanceManagerView({
         record={selectedSlip}
         restaurant={restaurant}
       />
+
+      {/* Monthly Attendance Calendar Modal */}
+      <StaffAttendanceCalendarModal
+        isOpen={calendarModalOpen}
+        onClose={() => setCalendarModalOpen(false)}
+        staff={calendarModalStaff}
+        restaurant={restaurant}
+        month={selectedMonth}
+        year={selectedYear}
+        attendances={calendarModalAttendances}
+        shifts={shifts}
+        leaveRequests={leaveRequests}
+        currentUserId={profile.id}
+        currentUserName={profile.full_name || profile.email}
+        onAttendanceChanged={async () => {
+          const updatedAtts = await getMonthlyAttendanceForRestaurant(restaurant.id, selectedYear, selectedMonth);
+          setCalendarModalAttendances(updatedAtts);
+          await loadAllData();
+          await handleCalculatePayrollClick();
+        }}
+      />
+
+      {/* IN-PLACE STAFF EMAIL OTP VERIFICATION MODAL */}
+      {staffOtpModalOpen && verifyingStaff && (
+        <div className="fixed inset-0 z-50 overflow-y-auto p-4 bg-slate-950/75 backdrop-blur-sm flex justify-center items-center">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <Shield className="w-5 h-5 text-emerald-600" />
+                <span>Verify Staff Account</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setStaffOtpModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              An 8-digit verification OTP was sent to <strong>{verifyingStaff.email}</strong>. Enter it below to activate <strong>{verifyingStaff.full_name || 'Staff'}</strong>'s account immediately.
+            </p>
+
+            {staffOtpSuccess && (
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{staffOtpSuccess}</span>
+              </div>
+            )}
+
+            {staffOtpError && (
+              <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{staffOtpError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyStaffOtp} className="space-y-4 pt-1">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Enter 8-digit OTP Code
+                </label>
+                <input
+                  type="text"
+                  maxLength={8}
+                  required
+                  value={staffOtpInput}
+                  onChange={e => setStaffOtpInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="• • • • • • • •"
+                  className="block w-full px-3.5 py-3 text-center tracking-widest text-xl font-mono font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-slate-900 dark:focus:ring-white outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={handleResendStaffOtp}
+                  disabled={staffOtpLoading}
+                  className="text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer underline disabled:opacity-50"
+                >
+                  Resend OTP
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStaffOtpModalOpen(false)}
+                    className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={staffOtpLoading || staffOtpInput.length < 6}
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50"
+                  >
+                    {staffOtpLoading ? 'Verifying...' : 'Verify & Activate'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DAY-BY-DAY ATTENDANCE APPROVAL CENTER MODAL */}
+      {approvalModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm flex justify-center items-start">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full my-4 overflow-hidden text-slate-900 dark:text-slate-100 flex flex-col">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60">
+              <div className="flex items-center gap-3">
+                <CalendarCheck className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Attendance Approval Center
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Day-by-day attendance review with real-time salary recalculation • {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <select
+                  value={approvalStaffId}
+                  onChange={e => {
+                    setApprovalStaffId(e.target.value);
+                    setApprovalSelectedDates([]);
+                  }}
+                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
+                >
+                  {staffList.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.role.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={() => setApprovalModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Live Calculation Strip */}
+            {approvalStaffMember && (
+              <div className="p-4 bg-slate-900 text-white dark:bg-slate-950 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Employee</span>
+                  <span className="font-extrabold text-sm">{approvalStaffMember.name}</span>
+                  <span className="text-slate-400 block text-[10px] capitalize">
+                    {approvalStaffMember.role} • Weekly Off: {approvalStaffMember.weekly_off || 'None'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Base Salary</span>
+                  <span className="font-extrabold text-sm">₹{Number(approvalStaffMember.base_salary).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-400 block text-[10px]">
+                    ₹{Math.round(Number(approvalStaffMember.base_salary) / (approvalDaysInMonth || 30))}/day
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Selected Days</span>
+                  <span className="font-extrabold text-sm text-amber-300">
+                    {approvalSelectedDates.length} Days Selected
+                  </span>
+                  <span className="text-slate-400 block text-[10px]">Multi-select checkboxes</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 text-[10px] uppercase font-bold block">Live Earned Salary</span>
+                  <span className="font-black text-base text-emerald-400">
+                    ₹{approvalEarnedSalary.toLocaleString('en-IN')}
+                  </span>
+                  <span className="text-slate-300 block text-[10px]">Based on approved attendance</span>
+                </div>
+              </div>
+            )}
+
+            {/* Batch Actions Toolbar */}
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/40 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allDates = Array.from({ length: approvalDaysInMonth }, (_, i) => {
+                      const d = String(i + 1).padStart(2, '0');
+                      const m = String(selectedMonth).padStart(2, '0');
+                      return `${selectedYear}-${m}-${d}`;
+                    });
+                    handleSelectAllApprovalDates(allDates);
+                  }}
+                  className="px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer"
+                >
+                  {approvalSelectedDates.length === approvalDaysInMonth ? 'Deselect All' : 'Select All Days'}
+                </button>
+
+                {approvalStaffMember && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEmployeeCalendar(approvalStaffMember)}
+                    className="px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer flex items-center gap-1"
+                  >
+                    <Calendar className="w-3 h-3" />
+                    <span>View Calendar Grid</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleBatchReviewAttendance('approved')}
+                  disabled={approvalSelectedDates.length === 0 || approvalSubmitting}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl cursor-pointer transition disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Approve Selected ({approvalSelectedDates.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowRejectNoteInput(prev => !prev)}
+                  disabled={approvalSelectedDates.length === 0 || approvalSubmitting}
+                  className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl cursor-pointer transition disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>Reject Selected ({approvalSelectedDates.length})</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Optional Rejection Reason Bar */}
+            {showRejectNoteInput && (
+              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border-b border-rose-200 dark:border-rose-900 flex items-center gap-3 text-xs">
+                <span className="font-bold text-rose-800 dark:text-rose-300 shrink-0">
+                  Rejection Reason (Optional):
+                </span>
+                <input
+                  type="text"
+                  value={approvalRejectNote}
+                  onChange={e => setApprovalRejectNote(e.target.value)}
+                  placeholder="e.g. Incomplete shift / Did not punch out"
+                  className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-800 rounded-lg text-xs outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleBatchReviewAttendance('rejected')}
+                  disabled={approvalSubmitting}
+                  className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg cursor-pointer"
+                >
+                  Confirm Rejection
+                </button>
+              </div>
+            )}
+
+            {/* Day-by-Day Table */}
+            <div className="max-h-[55vh] overflow-y-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase tracking-wider font-extrabold sticky top-0 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="px-4 py-2.5 w-10">Select</th>
+                    <th className="px-4 py-2.5">Date & Day</th>
+                    <th className="px-4 py-2.5">Punch Times</th>
+                    <th className="px-4 py-2.5">Worked Duration</th>
+                    <th className="px-4 py-2.5">Shift Completion</th>
+                    <th className="px-4 py-2.5">Status</th>
+                    <th className="px-4 py-2.5">Approval</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {Array.from({ length: approvalDaysInMonth }, (_, idx) => {
+                    const dayNum = idx + 1;
+                    const dStr = String(dayNum).padStart(2, '0');
+                    const mStr = String(selectedMonth).padStart(2, '0');
+                    const dateStr = [selectedYear, mStr, dStr].join('-');
+                    const dateObj = new Date(selectedYear, selectedMonth - 1, dayNum);
+                    const dayOfWeek = dateObj.toLocaleDateString([], { weekday: 'short' });
+                    const dayOfWeekFull = dateObj.toLocaleDateString([], { weekday: 'long' }).toLowerCase();
+
+                    const isWeeklyOff = approvalStaffMember?.weekly_off === dayOfWeekFull;
+                    const att = approvalMonthAttendances.find(
+                      a => a.staff_id === approvalStaffMember?.id && a.date === dateStr
+                    );
+
+                    let durationStr = '--';
+                    let timingTag = 'none';
+
+                    if (att?.punch_in_time) {
+                      if (att.punch_out_time) {
+                        const inMs = new Date(att.punch_in_time).getTime();
+                        const outMs = new Date(att.punch_out_time).getTime();
+                        const sec = Math.max(0, Math.floor((outMs - inMs) / 1000));
+                        durationStr = formatWorkingDuration(sec);
+                        timingTag = (sec / 3600 < 4 || att.status === 'half_day') ? 'half' : 'full';
+                      } else {
+                        timingTag = 'missing';
+                      }
+                    }
+
+                    const isChecked = approvalSelectedDates.includes(dateStr);
+                    const isApproved = att?.approval_status === 'approved';
+                    const isRejected = att?.approval_status === 'rejected';
+
+                    return (
+                      <tr
+                        key={dateStr}
+                        className={`hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition ${
+                          isChecked ? 'bg-slate-50 dark:bg-slate-800/50' : ''
+                        }`}
+                      >
+                        <td className="px-4 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleSelectApprovalDate(dateStr)}
+                            className="w-4 h-4 rounded text-slate-900 dark:text-white cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-4 py-2.5 font-semibold text-slate-800 dark:text-slate-200">
+                          <span>{dayNum} {MONTH_NAMES[selectedMonth - 1].slice(0, 3)} ({dayOfWeek})</span>
+                          {isWeeklyOff && (
+                            <span className="ml-2 px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                              Weekly Off
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {att?.punch_in_time ? (
+                            <span>{formatTimeAmPm(att.punch_in_time)} - {formatTimeAmPm(att.punch_out_time)}</span>
+                          ) : (
+                            <span className="text-slate-400">No punch</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 font-mono">
+                          {durationStr}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {timingTag === 'full' && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 px-2 py-0.5 rounded-full">
+                              Full Shift
+                            </span>
+                          )}
+                          {timingTag === 'half' && (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100 dark:bg-amber-950/50 dark:text-amber-300 px-2 py-0.5 rounded-full">
+                              Half Day (&lt;4h)
+                            </span>
+                          )}
+                          {timingTag === 'missing' && (
+                            <span className="text-[10px] font-bold text-rose-700 bg-rose-100 dark:bg-rose-950/50 dark:text-rose-300 px-2 py-0.5 rounded-full">
+                              No Punch Out
+                            </span>
+                          )}
+                          {timingTag === 'none' && !isWeeklyOff && (
+                            <span className="text-[10px] text-slate-400">Absent</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 capitalize font-medium">
+                          {att?.status || (isWeeklyOff ? 'Weekly Off' : 'Absent')}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {isApproved ? (
+                            <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5" /> Approved
+                            </span>
+                          ) : isRejected ? (
+                            <span
+                              className="text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400 inline-flex items-center gap-1"
+                              title={att?.rejection_reason || 'Rejected by manager'}
+                            >
+                              <Ban className="w-3.5 h-3.5" /> Rejected
+                            </span>
+                          ) : att ? (
+                            <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" /> Pending
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">--</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500">
+                Calculations update payroll slips immediately upon approval.
+              </span>
+              <button
+                type="button"
+                onClick={() => setApprovalModalOpen(false)}
+                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl cursor-pointer transition shadow-sm"
+              >
+                Close Approval Center
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
