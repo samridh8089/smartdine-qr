@@ -71,7 +71,11 @@ export default function LoginPage() {
     }
 
     if (err || !data?.user) {
-      setError(err?.message || 'Invalid email or password. Please check your credentials.');
+      const rawMsg = err?.message || (err as any)?.msg || (err as any)?.error_description || '';
+      const displayMsg = (typeof rawMsg === 'string' && rawMsg.trim() && rawMsg !== '{}')
+        ? rawMsg
+        : 'Invalid email or password. Please check your credentials.';
+      setError(displayMsg);
       setLoading(false);
       return;
     }
