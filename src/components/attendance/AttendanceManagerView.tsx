@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   StaffProfile,
   Shift,
@@ -34,7 +35,8 @@ import {
   calculateStaffEarnedSalary,
   reviewAttendanceDays,
   getRestaurantLeaveRequests,
-  reviewLeaveRequest
+  reviewLeaveRequest,
+  submitLeaveRequest
 } from '@/lib/attendoEngine';
 import { supabase } from '@/lib/supabase';
 import { db, Restaurant, Profile } from '@/lib/db';
@@ -67,8 +69,19 @@ import {
   Send,
   Eye,
   Info,
-  XCircle
+  XCircle,
+  Coffee
 } from 'lucide-react';
+
+// Safe portal wrapper ensuring modals render at document body level above headers and sidebars
+function ModalPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  if (!mounted || typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+}
 
 interface AttendanceManagerViewProps {
   restaurant: Restaurant;
@@ -166,6 +179,16 @@ export default function AttendanceManagerView({
   const [leaveRequests, setLeaveRequests] = useState<StaffLeaveRequest[]>([]);
   const [leaveFilter, setLeaveFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [leaveActionLoading, setLeaveActionLoading] = useState(false);
+
+  // Manager / Owner Direct Leave Recording Modal State
+  const [managerLeaveModalOpen, setManagerLeaveModalOpen] = useState(false);
+  const [managerLeaveStaffId, setManagerLeaveStaffId] = useState('');
+  const [managerLeaveType, setManagerLeaveType] = useState<StaffLeaveRequest['leave_type']>('casual');
+  const [managerLeaveStartDate, setManagerLeaveStartDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [managerLeaveEndDate, setManagerLeaveEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [managerLeaveReason, setManagerLeaveReason] = useState('');
+  const [managerLeaveSaving, setManagerLeaveSaving] = useState(false);
+  const [managerLeaveError, setManagerLeaveError] = useState<string | null>(null);
 
   // Employee Attendance Calendar Modal State
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
@@ -395,6 +418,87 @@ export default function AttendanceManagerView({
     await deleteShift(restaurant.id, shiftId);
     const updated = await getShifts(restaurant.id);
     setShifts(updated);
+  };
+
+  // Quick 1-click update of Weekly Off after account creation
+  const handleQuickUpdateWeeklyOff = async (staffMember: StaffProfile, newWeeklyOff: string) => {
+    if (!restaurant) return;
+    try {
+      await saveStaffProfile({
+        id: staffMember.id,
+        profile_id: staffMember.profile_id,
+        restaurant_id: restaurant.id,
+        name: staffMember.name,
+        role: staffMember.role,
+        phone: staffMember.phone,
+        base_salary: staffMember.base_salary,
+        salary_type: staffMember.salary_type,
+        weekly_off: newWeeklyOff as any
+      });
+      await loadAllData();
+    } catch (e) {
+      console.error('Failed updating weekly off:', e);
+    }
+  };
+
+  // Open Manager Leave Submission Modal
+  const handleOpenManagerLeaveModal = (preselectedStaffId?: string) => {
+    const defaultStaffId = preselectedStaffId || staffList[0]?.id || '';
+    setManagerLeaveStaffId(defaultStaffId);
+    setManagerLeaveType('casual');
+    setManagerLeaveStartDate(new Date().toISOString().slice(0, 10));
+    setManagerLeaveEndDate(new Date().toISOString().slice(0, 10));
+    setManagerLeaveReason('');
+    setManagerLeaveError(null);
+    setManagerLeaveModalOpen(true);
+  };
+
+  // Save Pre-Approved Leave directly by Manager/Owner
+  const handleSaveManagerLeave = async () => {
+    if (!managerLeaveStaffId) {
+      setManagerLeaveError('Please select a staff member.');
+      return;
+    }
+    if (!managerLeaveStartDate || !managerLeaveEndDate) {
+      setManagerLeaveError('Please select both start and end dates.');
+      return;
+    }
+    if (managerLeaveStartDate > managerLeaveEndDate) {
+      setManagerLeaveError('Start date cannot be after end date.');
+      return;
+    }
+
+    const staffMember = staffList.find(s => s.id === managerLeaveStaffId);
+    if (!staffMember) {
+      setManagerLeaveError('Staff member not found.');
+      return;
+    }
+
+    setManagerLeaveSaving(true);
+    setManagerLeaveError(null);
+    try {
+      await submitLeaveRequest({
+        restaurantId: restaurant.id,
+        staffId: staffMember.id,
+        staffName: staffMember.name,
+        staffRole: staffMember.role,
+        leaveType: managerLeaveType,
+        startDate: managerLeaveStartDate,
+        endDate: managerLeaveEndDate,
+        reason: managerLeaveReason.trim() || 'Recorded directly by Owner/Manager',
+        status: 'approved',
+        reviewedById: profile.id,
+        reviewedByName: profile.full_name || 'Management',
+        reviewNotes: 'Approved directly by Owner/Manager'
+      });
+      await loadAllData();
+      setManagerLeaveModalOpen(false);
+    } catch (err: any) {
+      console.error('Failed recording leave:', err);
+      setManagerLeaveError(err?.message || 'Failed to record leave.');
+    } finally {
+      setManagerLeaveSaving(false);
+    }
   };
 
   const handleOpenStaffEdit = (staffIdOrMember: string | StaffProfile | null) => {
@@ -1247,6 +1351,29 @@ export default function AttendanceManagerView({
                       )}
                     </div>
 
+                    {/* Weekly Off Quick Selector */}
+                    <div className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/40 px-2.5 py-1.5 rounded-xl border border-slate-100 dark:border-slate-800">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 text-[11px]">
+                        <Coffee className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                        <span>Weekly Off:</span>
+                      </span>
+                      <select
+                        value={staff.weekly_off || 'none'}
+                        onChange={e => handleQuickUpdateWeeklyOff(staff, e.target.value)}
+                        className="px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold capitalize outline-none cursor-pointer text-slate-800 dark:text-slate-200 shadow-xs"
+                        title="Change designated weekly off day anytime"
+                      >
+                        <option value="none">None</option>
+                        <option value="monday">Mon</option>
+                        <option value="tuesday">Tue</option>
+                        <option value="wednesday">Wed</option>
+                        <option value="thursday">Thu</option>
+                        <option value="friday">Fri</option>
+                        <option value="saturday">Sat</option>
+                        <option value="sunday">Sun</option>
+                      </select>
+                    </div>
+
                     {/* Actions Bar */}
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                       <button
@@ -1657,7 +1784,17 @@ export default function AttendanceManagerView({
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleOpenManagerLeaveModal()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer transition mr-1"
+                title="Directly record and approve leave for any employee"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Record Staff Leave</span>
+              </button>
+
               {(['all', 'pending', 'approved', 'rejected'] as const).map(f => (
                 <button
                   key={f}
@@ -1896,372 +2033,502 @@ export default function AttendanceManagerView({
 
       {/* Manual Override Modal */}
       {overrideModalOpen && overrideStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 text-xs">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              Manual Attendance Override
-            </h3>
-            <p className="text-slate-500">
-              Adjust attendance for <strong className="text-slate-800 dark:text-white">{overrideStaff.name}</strong> on {selectedDate}.
-            </p>
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 text-xs my-auto">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Manual Attendance Override
+              </h3>
+              <p className="text-slate-500">
+                Adjust attendance for <strong className="text-slate-800 dark:text-white">{overrideStaff.name}</strong> on {selectedDate}.
+              </p>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>
-                <select
-                  value={overrideStatus}
-                  onChange={e => setOverrideStatus(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Status</label>
+                  <select
+                    value={overrideStatus}
+                    onChange={e => setOverrideStatus(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                  >
+                    <option value="present">Present</option>
+                    <option value="late">Late</option>
+                    <option value="half_day">Half Day</option>
+                    <option value="absent">Absent</option>
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Punch In Time</label>
+                    <input
+                      type="time"
+                      value={overridePunchIn}
+                      onChange={e => setOverridePunchIn(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Punch Out Time</label>
+                    <input
+                      type="time"
+                      value={overridePunchOut}
+                      onChange={e => setOverridePunchOut(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Audit Reason / Note</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Forgot phone, approved by manager"
+                    value={overrideNotes}
+                    onChange={e => setOverrideNotes(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setOverrideModalOpen(false)}
+                  className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
                 >
-                  <option value="present">Present</option>
-                  <option value="late">Late</option>
-                  <option value="half_day">Half Day</option>
-                  <option value="absent">Absent</option>
-                </select>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveOverride}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white font-bold rounded-xl shadow-sm cursor-pointer transition"
+                >
+                  Apply Override
+                </button>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Punch In Time</label>
-                  <input
-                    type="time"
-                    value={overridePunchIn}
-                    onChange={e => setOverridePunchIn(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Punch Out Time</label>
-                  <input
-                    type="time"
-                    value={overridePunchOut}
-                    onChange={e => setOverridePunchOut(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Audit Reason / Note</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Forgot phone, approved by manager"
-                  value={overrideNotes}
-                  onChange={e => setOverrideNotes(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setOverrideModalOpen(false)}
-                className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveOverride}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white font-bold rounded-xl shadow-sm cursor-pointer transition"
-              >
-                Apply Override
-              </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Shift Edit / Create Modal */}
       {shiftModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 text-xs">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              {editingShift?.id ? 'Edit Shift' : 'Create New Shift'}
-            </h3>
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 text-xs my-auto">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                {editingShift?.id ? 'Edit Shift' : 'Create New Shift'}
+              </h3>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Shift Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Morning Rush, Dinner Service"
-                  value={shiftNameInput}
-                  onChange={e => setShiftNameInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Start Time</label>
-                  <input
-                    type="time"
-                    value={shiftStartInput}
-                    onChange={e => setShiftStartInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">End Time</label>
-                  <input
-                    type="time"
-                    value={shiftEndInput}
-                    onChange={e => setShiftEndInput(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Grace Period (Minutes)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="60"
-                  value={shiftGraceInput}
-                  onChange={e => setShiftGraceInput(Number(e.target.value) || 0)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setShiftModalOpen(false)}
-                className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveShiftModal}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white font-bold rounded-xl shadow-sm cursor-pointer transition"
-              >
-                Save Shift
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Staff Profile & Base Salary Edit / Create Modal */}
-      {staffModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  {editingStaffMember?.id ? 'Edit Staff & Base Salary' : 'Register Staff Account & Base Salary'}
-                </h3>
-                <p className="text-slate-500 mt-0.5">
-                  {editingStaffMember?.id
-                    ? 'Update staff details, role permissions, and monthly baseline salary.'
-                    : 'Create a staff login account and set their monthly baseline salary. Attendance and payroll will calculate based on this base salary.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setStaffModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {staffModalError && (
-              <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold">
-                {staffModalError}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Left Column: Account & Credentials */}
               <div className="space-y-3">
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Staff Full Name <span className="text-rose-500">*</span>
-                  </label>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Shift Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. Ramesh Kumar"
-                    value={staffNameInput}
-                    onChange={e => setStaffNameInput(e.target.value)}
+                    placeholder="e.g. Morning Rush, Dinner Service"
+                    value={shiftNameInput}
+                    onChange={e => setShiftNameInput(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
-                    required
                   />
                 </div>
 
-                {!editingStaffMember && (
-                  <>
-                    <div>
-                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Staff Login Email <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="email"
-                        placeholder="e.g. ramesh@restaurant.com"
-                        value={staffEmailInput}
-                        onChange={e => setStaffEmailInput(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                        required
-                      />
-                      <p className="text-[10px] text-slate-400 mt-0.5">Staff uses this email to log in to punch attendance and view orders.</p>
-                    </div>
-
-                    <div>
-                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                        Access Password <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="password"
-                        placeholder="Minimum 6 characters"
-                        value={staffPasswordInput}
-                        onChange={e => setStaffPasswordInput(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                        required
-                      />
-                    </div>
-                  </>
-                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Start Time</label>
+                    <input
+                      type="time"
+                      value={shiftStartInput}
+                      onChange={e => setShiftStartInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">End Time</label>
+                    <input
+                      type="time"
+                      value={shiftEndInput}
+                      onChange={e => setShiftEndInput(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    />
+                  </div>
+                </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Grace Period (Minutes)</label>
                   <input
-                    type="tel"
-                    placeholder="e.g. 9876543210"
-                    value={staffPhoneInput}
-                    onChange={e => setStaffPhoneInput(e.target.value)}
+                    type="number"
+                    min="0"
+                    max="60"
+                    value={shiftGraceInput}
+                    onChange={e => setShiftGraceInput(Number(e.target.value) || 0)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                   />
                 </div>
               </div>
 
-              {/* Right Column: Role Permissions & Base Compensation */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShiftModalOpen(false)}
+                  className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveShiftModal}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white font-bold rounded-xl shadow-sm cursor-pointer transition"
+                >
+                  Save Shift
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Staff Profile & Base Salary Edit / Create Modal (Optimized UI - SS2 Fix) */}
+      {staffModalOpen && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full p-5 sm:p-6 space-y-3.5 text-xs my-auto">
+              <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    {editingStaffMember?.id ? 'Edit Staff Profile & Salary' : 'Register Staff Account & Salary'}
+                  </h3>
+                  <p className="text-slate-500 mt-0.5 text-[11px]">
+                    {editingStaffMember?.id
+                      ? 'Update employee role permissions, weekly off, and monthly baseline salary.'
+                      : 'Create a staff login account and designate their baseline salary and weekly off day.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStaffModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {staffModalError && (
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold">
+                  {staffModalError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Left Column: Account & Credentials */}
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Staff Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Ramesh Kumar"
+                      value={staffNameInput}
+                      onChange={e => setStaffNameInput(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold outline-none"
+                      required
+                    />
+                  </div>
+
+                  {!editingStaffMember && (
+                    <>
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Staff Login Email <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          placeholder="e.g. ramesh@restaurant.com"
+                          value={staffEmailInput}
+                          onChange={e => setStaffEmailInput(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold outline-none"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Access Password <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          placeholder="Minimum 6 characters"
+                          value={staffPasswordInput}
+                          onChange={e => setStaffPasswordInput(e.target.value)}
+                          className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold outline-none"
+                          required
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      placeholder="e.g. 9876543210"
+                      value={staffPhoneInput}
+                      onChange={e => setStaffPhoneInput(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column: Role Permissions & Base Compensation */}
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Staff Role Permissions <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={staffRoleInput}
+                      onChange={e => setStaffRoleInput(e.target.value as any)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold outline-none"
+                    >
+                      <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
+                      <option value="supervisor">Supervisor (Department-Scoped)</option>
+                      <option value="waiter">Waiter (Tables, Orders, Service)</option>
+                      <option value="kitchen">Kitchen Staff (KDS, Chef)</option>
+                      <option value="cashier">Cashier (Billing &amp; Checkout)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Monthly Base Salary (₹)
+                    </label>
+                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span className="font-bold text-slate-500">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="500"
+                        placeholder="e.g. 18000"
+                        value={staffSalaryInput}
+                        onChange={e => setStaffSalaryInput(Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-full text-xs font-black bg-transparent text-slate-900 dark:text-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Salary Calculation Mode
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setStaffSalaryTypeInput('per_day')}
+                        className={`py-1.5 px-2 rounded-lg font-bold text-center border cursor-pointer transition text-[11px] ${
+                          staffSalaryTypeInput === 'per_day'
+                            ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                        }`}
+                      >
+                        Per-Day (Default)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStaffSalaryTypeInput('fixed')}
+                        className={`py-1.5 px-2 rounded-lg font-bold text-center border cursor-pointer transition text-[11px] ${
+                          staffSalaryTypeInput === 'fixed'
+                            ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                        }`}
+                      >
+                        Fixed Monthly
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Designated Weekly Off Day
+                    </label>
+                    <select
+                      value={staffWeeklyOffInput}
+                      onChange={e => setStaffWeeklyOffInput(e.target.value as any)}
+                      className="w-full px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold capitalize outline-none"
+                    >
+                      <option value="none">None (No Fixed Weekly Off)</option>
+                      <option value="monday">Monday</option>
+                      <option value="tuesday">Tuesday</option>
+                      <option value="wednesday">Wednesday</option>
+                      <option value="thursday">Thursday</option>
+                      <option value="friday">Friday</option>
+                      <option value="saturday">Saturday</option>
+                      <option value="sunday">Sunday</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStaffModalOpen(false)}
+                  className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveStaffModal}
+                  disabled={
+                    savingStaff ||
+                    !staffNameInput.trim() ||
+                    (!editingStaffMember && (!staffEmailInput.trim() || !staffPasswordInput.trim()))
+                  }
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white font-bold rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingStaff ? 'Saving...' : editingStaffMember?.id ? 'Update Staff & Salary' : 'Create Account & Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* Manager / Owner Record Leave Modal */}
+      {managerLeaveModalOpen && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-lg w-full p-5 sm:p-6 space-y-4 text-xs my-auto">
+              <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span>Record Employee Leave</span>
+                  </h3>
+                  <p className="text-slate-500 mt-0.5 text-[11px]">
+                    Directly assign and pre-approve leave for any staff member
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setManagerLeaveModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {managerLeaveError && (
+                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold">
+                  {managerLeaveError}
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div>
                   <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                    Staff Role Permissions <span className="text-rose-500">*</span>
+                    Select Staff Member <span className="text-rose-500">*</span>
                   </label>
                   <select
-                    value={staffRoleInput}
-                    onChange={e => setStaffRoleInput(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                    value={managerLeaveStaffId}
+                    onChange={e => setManagerLeaveStaffId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold outline-none text-slate-900 dark:text-white"
                   >
-                    <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
-                    <option value="supervisor">Supervisor (Department-Scoped)</option>
-                    <option value="waiter">Waiter (Tables, Orders, Service)</option>
-                    <option value="kitchen">Kitchen Staff (KDS, Chef)</option>
-                    <option value="cashier">Cashier (Billing &amp; Checkout)</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.role.toUpperCase()})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1">
-                  <label className="block font-bold text-slate-800 dark:text-slate-200">
-                    Monthly Base Salary (₹)
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Leave Type <span className="text-rose-500">*</span>
                   </label>
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600">
-                    <span className="font-bold text-slate-500">₹</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {(['casual', 'sick', 'paid', 'unpaid'] as const).map(type => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setManagerLeaveType(type)}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-bold capitalize border cursor-pointer transition ${
+                          managerLeaveType === type
+                            ? 'border-blue-600 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 shadow-xs'
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Start Date <span className="text-rose-500">*</span>
+                    </label>
                     <input
-                      type="number"
-                      min="0"
-                      step="500"
-                      placeholder="e.g. 18000"
-                      value={staffSalaryInput}
-                      onChange={e => setStaffSalaryInput(Math.max(0, parseFloat(e.target.value) || 0))}
-                      className="w-full text-sm font-black bg-transparent text-slate-900 dark:text-white outline-none"
+                      type="date"
+                      value={managerLeaveStartDate}
+                      onChange={e => setManagerLeaveStartDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold outline-none"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500">
-                    This base salary is used for calculating daily rate and monthly payroll slips.
-                  </p>
-                </div>
-
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
-                  <label className="block font-bold text-slate-700 dark:text-slate-300">
-                    Salary Calculation Mode
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setStaffSalaryTypeInput('per_day')}
-                      className={`p-2 rounded-lg font-bold text-center border cursor-pointer transition ${
-                        staffSalaryTypeInput === 'per_day'
-                          ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                      }`}
-                    >
-                      Per-Day (Default)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStaffSalaryTypeInput('fixed')}
-                      className={`p-2 rounded-lg font-bold text-center border cursor-pointer transition ${
-                        staffSalaryTypeInput === 'fixed'
-                          ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
-                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                      }`}
-                    >
-                      Fixed Monthly
-                    </button>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      End Date <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={managerLeaveEndDate}
+                      onChange={e => setManagerLeaveEndDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold outline-none"
+                    />
                   </div>
-                  <p className="text-[10px] text-slate-500">
-                    {staffSalaryTypeInput === 'per_day'
-                      ? 'Per-Day: Pro-rated by attendance days (daily rate × days worked).'
-                      : 'Fixed: Full monthly base pay irrespective of attendance punch.'}
-                  </p>
                 </div>
 
-                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5 col-span-1 sm:col-span-2">
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 text-xs">
-                    Designated Weekly Off Day
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Reason / Management Notes
                   </label>
-                  <select
-                    value={staffWeeklyOffInput}
-                    onChange={e => setStaffWeeklyOffInput(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold capitalize outline-none"
-                  >
-                    <option value="none">None (No Fixed Weekly Off)</option>
-                    <option value="monday">Monday</option>
-                    <option value="tuesday">Tuesday</option>
-                    <option value="wednesday">Wednesday</option>
-                    <option value="thursday">Thursday</option>
-                    <option value="friday">Friday</option>
-                    <option value="saturday">Saturday</option>
-                    <option value="sunday">Sunday</option>
-                  </select>
-                  <p className="text-[10px] text-slate-500">
-                    Designated day off per week for this staff member (shown on roster and attendance calendar).
-                  </p>
+                  <textarea
+                    rows={2}
+                    value={managerLeaveReason}
+                    onChange={e => setManagerLeaveReason(e.target.value)}
+                    placeholder="e.g. Medical emergency, family function, advance approved..."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium outline-none resize-none"
+                  />
+                </div>
+
+                <div className="p-2.5 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl text-[11px] text-blue-800 dark:text-blue-200 font-medium flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span>This leave will be immediately recorded as <strong>Pre-Approved</strong> by Management.</span>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setStaffModalOpen(false)}
-                className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveStaffModal}
-                disabled={
-                  savingStaff ||
-                  !staffNameInput.trim() ||
-                  (!editingStaffMember && (!staffEmailInput.trim() || !staffPasswordInput.trim()))
-                }
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white font-bold rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {savingStaff ? 'Saving...' : editingStaffMember?.id ? 'Update Staff & Salary' : 'Create Account & Save'}
-              </button>
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setManagerLeaveModalOpen(false)}
+                  className="px-4 py-2 font-bold text-slate-500 hover:text-slate-700 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveManagerLeave}
+                  disabled={managerLeaveSaving || !managerLeaveStaffId || !managerLeaveStartDate || !managerLeaveEndDate}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {managerLeaveSaving ? 'Saving...' : 'Record & Approve Leave'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* Salary Breakdown Editor Modal */}
@@ -2303,131 +2570,134 @@ export default function AttendanceManagerView({
 
       {/* IN-PLACE STAFF EMAIL OTP VERIFICATION MODAL */}
       {staffOtpModalOpen && verifyingStaff && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 bg-slate-950/75 backdrop-blur-sm flex justify-center items-center">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <Shield className="w-5 h-5 text-emerald-600" />
-                <span>Verify Staff Account</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setStaffOtpModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              An 8-digit verification OTP was sent to <strong>{verifyingStaff.email}</strong>. Enter it below to activate <strong>{verifyingStaff.full_name || 'Staff'}</strong>'s account immediately.
-            </p>
-
-            {staffOtpSuccess && (
-              <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{staffOtpSuccess}</span>
-              </div>
-            )}
-
-            {staffOtpError && (
-              <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                <span>{staffOtpError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleVerifyStaffOtp} className="space-y-4 pt-1">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Enter 8-digit OTP Code
-                </label>
-                <input
-                  type="text"
-                  maxLength={8}
-                  required
-                  value={staffOtpInput}
-                  onChange={e => setStaffOtpInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                  placeholder="• • • • • • • •"
-                  className="block w-full px-3.5 py-3 text-center tracking-widest text-xl font-mono font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-slate-900 dark:focus:ring-white outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-between pt-2">
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] overflow-y-auto p-4 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4 my-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-emerald-600" />
+                  <span>Verify Staff Account</span>
+                </h3>
                 <button
                   type="button"
-                  onClick={handleResendStaffOtp}
-                  disabled={staffOtpLoading}
-                  className="text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer underline disabled:opacity-50"
+                  onClick={() => setStaffOtpModalOpen(false)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
                 >
-                  Resend OTP
+                  <X className="w-4 h-4" />
                 </button>
+              </div>
 
-                <div className="flex items-center gap-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                An 8-digit verification OTP was sent to <strong>{verifyingStaff.email}</strong>. Enter it below to activate <strong>{verifyingStaff.full_name || 'Staff'}</strong>'s account immediately.
+              </p>
+
+              {staffOtpSuccess && (
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{staffOtpSuccess}</span>
+                </div>
+              )}
+
+              {staffOtpError && (
+                <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{staffOtpError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleVerifyStaffOtp} className="space-y-4 pt-1">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Enter 8-digit OTP Code
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={8}
+                    required
+                    value={staffOtpInput}
+                    onChange={e => setStaffOtpInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                    placeholder="• • • • • • • •"
+                    className="block w-full px-3.5 py-3 text-center tracking-widest text-xl font-mono font-black text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-slate-900 dark:focus:ring-white outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
                   <button
                     type="button"
-                    onClick={() => setStaffOtpModalOpen(false)}
-                    className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 cursor-pointer"
+                    onClick={handleResendStaffOtp}
+                    disabled={staffOtpLoading}
+                    className="text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer underline disabled:opacity-50"
                   >
-                    Close
+                    Resend OTP
                   </button>
-                  <button
-                    type="submit"
-                    disabled={staffOtpLoading || staffOtpInput.length < 6}
-                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50"
-                  >
-                    {staffOtpLoading ? 'Verifying...' : 'Verify & Activate'}
-                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStaffOtpModalOpen(false)}
+                      className="px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 cursor-pointer"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={staffOtpLoading || staffOtpInput.length < 6}
+                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50"
+                    >
+                      {staffOtpLoading ? 'Verifying...' : 'Verify & Activate'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {/* DAY-BY-DAY ATTENDANCE APPROVAL CENTER MODAL */}
       {approvalModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm flex justify-center items-start">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full my-4 overflow-hidden text-slate-900 dark:text-slate-100 flex flex-col">
-            {/* Header */}
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60">
-              <div className="flex items-center gap-3">
-                <CalendarCheck className="w-5 h-5 text-slate-700 dark:text-slate-300" />
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                    Attendance Approval Center
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Day-by-day attendance review with real-time salary recalculation • {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
-                  </p>
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] overflow-y-auto p-3 sm:p-6 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-4xl w-full my-auto overflow-hidden text-slate-900 dark:text-slate-100 flex flex-col max-h-[92vh]">
+              {/* Header */}
+              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60 shrink-0">
+                <div className="flex items-center gap-3">
+                  <CalendarCheck className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                      Attendance Approval Center
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Day-by-day attendance review with real-time salary recalculation • {MONTH_NAMES[selectedMonth - 1]} {selectedYear}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <select
+                    value={approvalStaffId}
+                    onChange={e => {
+                      setApprovalStaffId(e.target.value);
+                      setApprovalSelectedDates([]);
+                    }}
+                    className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
+                  >
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.role.toUpperCase()})
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => setApprovalModalOpen(false)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
-
-              <div className="flex items-center gap-3">
-                <select
-                  value={approvalStaffId}
-                  onChange={e => {
-                    setApprovalStaffId(e.target.value);
-                    setApprovalSelectedDates([]);
-                  }}
-                  className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
-                >
-                  {staffList.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.role.toUpperCase()})
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  type="button"
-                  onClick={() => setApprovalModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
 
             {/* Live Calculation Strip */}
             {approvalStaffMember && (
@@ -2686,6 +2956,7 @@ export default function AttendanceManagerView({
             </div>
           </div>
         </div>
+        </ModalPortal>
       )}
     </div>
   );

@@ -126,6 +126,7 @@ export interface StaffLeaveRequest {
   reviewed_by_name?: string | null;
   reviewed_at?: string | null;
   rejection_reason?: string | null;
+  review_notes?: string | null;
   created_at: string;
   updated_at?: string;
 }
@@ -1306,7 +1307,7 @@ export async function reviewAttendanceDays(params: {
 }
 
 /**
- * Submit a staff leave request
+ * Submit a staff leave request (by employee or directly pre-approved by manager/owner)
  */
 export async function submitLeaveRequest(params: {
   restaurantId: string;
@@ -1317,12 +1318,18 @@ export async function submitLeaveRequest(params: {
   startDate: string;
   endDate: string;
   reason: string;
+  status?: 'pending' | 'approved';
+  reviewedById?: string;
+  reviewedByName?: string;
+  reviewNotes?: string;
 }): Promise<StaffLeaveRequest> {
-  const { restaurantId, staffId, staffName, staffRole, leaveType, startDate, endDate, reason } = params;
+  const { restaurantId, staffId, staffName, staffRole, leaveType, startDate, endDate, reason, status = 'pending' } = params;
   const start = new Date(startDate);
   const end = new Date(endDate);
   const diffDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
   const now = new Date().toISOString();
+
+  const isApproved = status === 'approved';
 
   const request: StaffLeaveRequest = {
     id: `leave_${staffId}_${Date.now()}`,
@@ -1335,7 +1342,11 @@ export async function submitLeaveRequest(params: {
     end_date: endDate,
     total_days: diffDays,
     reason: reason.trim(),
-    status: 'pending',
+    status: isApproved ? 'approved' : 'pending',
+    reviewed_by_id: isApproved ? params.reviewedById : undefined,
+    reviewed_by_name: isApproved ? params.reviewedByName : undefined,
+    review_notes: isApproved ? (params.reviewNotes || 'Pre-approved by Manager/Owner') : undefined,
+    reviewed_at: isApproved ? now : undefined,
     created_at: now,
     updated_at: now
   };
