@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   StaffProfile,
   StaffAttendance,
@@ -9,7 +10,8 @@ import {
   formatTimeAmPm,
   formatWorkingDuration,
   reviewAttendanceDays,
-  managerApprovePunchOut
+  managerApprovePunchOut,
+  saveStaffProfile
 } from '@/lib/attendoEngine';
 import { Restaurant } from '@/lib/db';
 import {
@@ -47,8 +49,6 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 export default function StaffAttendanceCalendarModal({
   isOpen,
   onClose,
@@ -64,10 +64,13 @@ export default function StaffAttendanceCalendarModal({
   onAttendanceChanged
 }: StaffAttendanceCalendarModalProps) {
   // 1. useState
+  const [mounted, setMounted] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState<string | null>(null);
   const [rejectionModalDate, setRejectionModalDate] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string>('');
   const [actionLoadingDate, setActionLoadingDate] = useState<string | null>(null);
+  const [currentWeeklyOff, setCurrentWeeklyOff] = useState<string>(staff?.weekly_off || 'none');
+  const [isSavingWeeklyOff, setIsSavingWeeklyOff] = useState(false);
 
   // 2. useMemo: Days in selected month
   const daysInMonth = useMemo(() => {
@@ -95,7 +98,7 @@ export default function StaffAttendanceCalendarModal({
       const dayOfWeekIndex = dateObj.getDay();
       const dayOfWeekName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][dayOfWeekIndex];
 
-      const isWeeklyOff = staff.weekly_off && staff.weekly_off.toLowerCase() === dayOfWeekName;
+      const isWeeklyOff = currentWeeklyOff && currentWeeklyOff.toLowerCase() !== 'none' && currentWeeklyOff.toLowerCase() === dayOfWeekName;
 
       // Find attendance for this date
       const att = attendances.find(a => a.staff_id === staff.id && a.date === dateStr);
@@ -143,7 +146,7 @@ export default function StaffAttendanceCalendarModal({
     }
 
     return days;
-  }, [staff, month, year, daysInMonth, attendances, leaveRequests]);
+  }, [staff, month, year, daysInMonth, attendances, leaveRequests, currentWeeklyOff]);
 
   // 5. useMemo: Monthly Summary Counters & Earned Salary
   const summary = useMemo(() => {
@@ -199,8 +202,45 @@ export default function StaffAttendanceCalendarModal({
     };
   }, [calendarDays, dailyRate]);
 
+  // 6. useEffect
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (staff?.weekly_off) {
+      setCurrentWeeklyOff(staff.weekly_off);
+    } else {
+      setCurrentWeeklyOff('none');
+    }
+  }, [staff?.weekly_off]);
+
   // Conditional early return AFTER all hooks
-  if (!isOpen || !staff || !restaurant) return null;
+  if (!isOpen || !staff || !restaurant || !mounted) return null;
+
+  const handleWeeklyOffChange = async (newOff: string) => {
+    if (!staff || !restaurant) return;
+    setCurrentWeeklyOff(newOff);
+    setIsSavingWeeklyOff(true);
+    try {
+      await saveStaffProfile({
+        id: staff.id,
+        profile_id: staff.profile_id,
+        restaurant_id: restaurant.id,
+        name: staff.name,
+        role: staff.role,
+        phone: staff.phone,
+        base_salary: staff.base_salary,
+        salary_type: staff.salary_type,
+        weekly_off: newOff as any
+      });
+      onAttendanceChanged();
+    } catch (err) {
+      console.warn('Failed saving weekly off:', err);
+    } finally {
+      setIsSavingWeeklyOff(false);
+    }
+  };
 
   const handleApproveDay = async (dateStr: string) => {
     setActionLoadingDate(dateStr);
@@ -268,41 +308,67 @@ export default function StaffAttendanceCalendarModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto p-4 sm:p-6 bg-slate-950/80 backdrop-blur-sm flex justify-center items-start">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-5xl w-full my-4 overflow-hidden text-slate-900 dark:text-slate-100 flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60">
-          <div>
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-slate-700 dark:text-slate-300" />
-                <span>Attendance Calendar — {staff.name}</span>
-              </h3>
-              <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                {staff.role}
-              </span>
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] overflow-y-auto p-2 sm:p-4 md:p-6 bg-slate-950/85 backdrop-blur-md flex justify-center items-center">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-5xl w-full my-auto overflow-hidden text-slate-900 dark:text-slate-100 flex flex-col max-h-[92vh]">
+        {/* Header with Post-Account Creation Weekly Off Toggle */}
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-3 mr-3">
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="text-base sm:text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+                  <span>Attendance Calendar — {staff.name}</span>
+                </h3>
+                <span className="text-[10px] sm:text-[11px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  {staff.role}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {MONTH_NAMES[month - 1]} {year} • Base: ₹{Number(staff.base_salary).toLocaleString('en-IN')} (₹{Math.round(dailyRate)}/day)
+              </p>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {MONTH_NAMES[month - 1]} {year} • Base: ₹{Number(staff.base_salary).toLocaleString('en-IN')} (₹{Math.round(dailyRate)}/day)
-              {staff.weekly_off && staff.weekly_off !== 'none' && ` • Designated Off: ${staff.weekly_off.toUpperCase()}`}
-            </p>
+
+            {/* Quick Weekly Off Management */}
+            <div className="flex items-center gap-2 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 px-3 py-1.5 rounded-xl shrink-0 self-start sm:self-auto">
+              <Coffee className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <span className="text-xs font-bold text-purple-900 dark:text-purple-200 whitespace-nowrap">
+                Weekly Off:
+              </span>
+              <select
+                value={currentWeeklyOff}
+                onChange={e => handleWeeklyOffChange(e.target.value)}
+                disabled={isSavingWeeklyOff}
+                className="px-2 py-1 bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-700 rounded-lg text-xs font-black capitalize outline-none cursor-pointer shadow-xs text-slate-800 dark:text-slate-100"
+                title="Change employee weekly off day anytime"
+              >
+                <option value="none">None (No Off)</option>
+                <option value="monday">Monday</option>
+                <option value="tuesday">Tuesday</option>
+                <option value="wednesday">Wednesday</option>
+                <option value="thursday">Thursday</option>
+                <option value="friday">Friday</option>
+                <option value="saturday">Saturday</option>
+                <option value="sunday">Sunday</option>
+              </select>
+            </div>
           </div>
+
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition"
+            className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Live Calculation KPI Summary Strip */}
-        <div className="p-5 bg-slate-900 text-white dark:bg-slate-950 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div className="p-4 sm:p-5 bg-slate-900 text-white dark:bg-slate-950 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-3 shrink-0">
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Approved Days</span>
-            <span className="text-xl font-black text-white">
-              {summary.fullDays} Full <span className="text-sm font-normal text-slate-300">+ {summary.halfDays} Half</span>
+            <span className="text-lg sm:text-xl font-black text-white">
+              {summary.fullDays} Full <span className="text-xs sm:text-sm font-normal text-slate-300">+ {summary.halfDays} Half</span>
             </span>
             <span className="text-[10px] text-emerald-400 block font-semibold">
               = {summary.effectiveDays} Effective Days
@@ -311,7 +377,7 @@ export default function StaffAttendanceCalendarModal({
 
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Calculated Salary</span>
-            <span className="text-xl font-black text-emerald-400">
+            <span className="text-lg sm:text-xl font-black text-emerald-400">
               ₹{summary.earnedSalary.toLocaleString('en-IN')}
             </span>
             <span className="text-[10px] text-slate-300 block">
@@ -321,18 +387,18 @@ export default function StaffAttendanceCalendarModal({
 
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Weekly Offs</span>
-            <span className="text-xl font-black text-purple-300">
+            <span className="text-lg sm:text-xl font-black text-purple-300">
               {summary.weeklyOffDays} Days
             </span>
             <span className="text-[10px] text-slate-400 block capitalize">
-              {staff.weekly_off || 'None Set'}
+              {currentWeeklyOff === 'none' ? 'None Set' : currentWeeklyOff}
             </span>
           </div>
 
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Leaves & Late</span>
-            <span className="text-xl font-black text-blue-300">
-              {summary.approvedLeaveDays} Leaves <span className="text-sm text-amber-300">/ {summary.lateDays} Late</span>
+            <span className="text-lg sm:text-xl font-black text-blue-300">
+              {summary.approvedLeaveDays} Leaves <span className="text-xs text-amber-300">/ {summary.lateDays} Late</span>
             </span>
             <span className="text-[10px] text-slate-400 block">
               Approved Records
@@ -341,7 +407,7 @@ export default function StaffAttendanceCalendarModal({
 
           <div>
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Pending / Missing</span>
-            <span className="text-xl font-black text-amber-400">
+            <span className="text-lg sm:text-xl font-black text-amber-400">
               {summary.pendingApprovalDays + summary.missingPunchOutDays} Days
             </span>
             <span className="text-[10px] text-slate-400 block">
@@ -350,8 +416,8 @@ export default function StaffAttendanceCalendarModal({
           </div>
         </div>
 
-        {/* Calendar View */}
-        <div className="p-6 overflow-x-auto">
+        {/* Calendar View Container */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {/* Weekday Headers */}
           <div className="grid grid-cols-7 gap-2 mb-2 text-center text-xs font-black text-slate-500 uppercase tracking-wider">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
@@ -363,7 +429,7 @@ export default function StaffAttendanceCalendarModal({
           <div className="grid grid-cols-7 gap-2">
             {/* Empty slots for first day offset */}
             {Array.from({ length: new Date(year, month - 1, 1).getDay() }).map((_, idx) => (
-              <div key={`empty-${idx}`} className="h-28 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 border border-dashed border-slate-200 dark:border-slate-800" />
+              <div key={`empty-${idx}`} className="h-24 sm:h-28 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 border border-dashed border-slate-200 dark:border-slate-800" />
             ))}
 
             {/* Actual Calendar Days */}
@@ -376,7 +442,7 @@ export default function StaffAttendanceCalendarModal({
               return (
                 <div
                   key={d.dateStr}
-                  className={`min-h-[120px] rounded-2xl p-2.5 flex flex-col justify-between border transition text-xs relative ${
+                  className={`min-h-[110px] sm:min-h-[120px] rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between border transition text-xs relative ${
                     isRejected
                       ? 'bg-rose-50/70 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60'
                       : isApproved
@@ -392,7 +458,7 @@ export default function StaffAttendanceCalendarModal({
                 >
                   {/* Top Bar: Day Number & Status Pill */}
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-black text-sm text-slate-800 dark:text-slate-200">
+                    <span className="font-mono font-black text-xs sm:text-sm text-slate-800 dark:text-slate-200">
                       {d.day}
                     </span>
 
@@ -405,7 +471,7 @@ export default function StaffAttendanceCalendarModal({
 
                     {d.leave && !hasAtt && (
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 capitalize">
-                        {d.leave.leave_type} Leave
+                        {d.leave.leave_type}
                       </span>
                     )}
 
@@ -530,8 +596,8 @@ export default function StaffAttendanceCalendarModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-between text-xs">
-          <div className="flex items-center gap-4 text-slate-500">
+        <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+          <div className="flex items-center gap-3 sm:gap-4 text-slate-500 flex-wrap">
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Approved
             </span>
@@ -561,7 +627,7 @@ export default function StaffAttendanceCalendarModal({
 
       {/* Reject Reason Dialog */}
       {rejectionModalDate && (
-        <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10000] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
             <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
               Reject Attendance — {rejectionModalDate}
@@ -595,6 +661,7 @@ export default function StaffAttendanceCalendarModal({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
