@@ -13,6 +13,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { name, email, phone, password, role, department, restaurantId } = body;
+    let newUser: any = null;
 
     if (!restaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
@@ -137,23 +138,67 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existingProfile) {
-      if (existingProfile.role === 'owner' || existingProfile.id === restRow?.owner_id) {
+      // Check if this profile belongs to the owner of THIS restaurant
+      const isThisRestaurantOwner = existingProfile.id === restRow?.owner_id || existingProfile.email?.toLowerCase() === ownerEmail;
+      if (isThisRestaurantOwner) {
         return NextResponse.json({
           error: 'The restaurant owner email cannot be registered as a staff account.',
           code: 'OWNER_EMAIL_RESTRICTED'
         }, { status: 400 });
       }
+
+      // Check if already registered in THIS restaurant
       if (existingProfile.restaurant_id === restaurantId) {
         return NextResponse.json({
           error: 'A staff account with this email already exists in this restaurant.',
           code: 'STAFF_EMAIL_ALREADY_EXISTS'
         }, { status: 409 });
       }
+
+      // If registered to another restaurant, check if that restaurant still exists in DB
       if (existingProfile.restaurant_id && existingProfile.restaurant_id !== restaurantId) {
-        return NextResponse.json({
-          error: 'This email is already registered to another restaurant.',
-          code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
-        }, { status: 409 });
+        const { data: otherRest } = await supabaseAdmin
+          .from('restaurants')
+          .select('id, name')
+          .eq('id', existingProfile.restaurant_id)
+          .maybeSingle();
+
+        if (otherRest) {
+          return NextResponse.json({
+            error: `This email is already registered to another restaurant (${otherRest.name}).`,
+            code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
+          }, { status: 409 });
+        }
+      }
+
+      // If previous restaurant was deleted during cleanup or user is unassigned, adopt this profile!
+      newUser = {
+        id: existingProfile.id,
+        email: cleanEmail,
+        user_metadata: {
+          fullName: name,
+          role: role || 'staff',
+          department: resolvedDept,
+          phone: phone || '',
+          restaurant_id: restaurantId,
+          verification_status: 'pending_verification'
+        }
+      };
+
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(existingProfile.id, {
+          password: password || undefined,
+          user_metadata: {
+            fullName: name,
+            role: role || 'staff',
+            department: resolvedDept,
+            phone: phone || '',
+            restaurant_id: restaurantId,
+            verification_status: 'pending_verification'
+          }
+        });
+      } catch (uErr) {
+        console.warn('[create-invite] Could not update auth user on profile adopt:', uErr);
       }
     }
 
@@ -173,7 +218,6 @@ export async function POST(req: Request) {
       }
     }
 
-    let newUser: any = null;
     if (existingAuthUser) {
       if (existingAuthUser.id === restRow?.owner_id || existingAuthUser.email?.toLowerCase() === ownerEmail) {
         return NextResponse.json({
