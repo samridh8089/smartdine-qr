@@ -8,7 +8,6 @@ import { db, Profile, Restaurant, isSubscriptionExpired } from '@/lib/db';
 import { DEFAULT_PLAN_SPECS, parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import MockBanner from '@/components/shared/MockBanner';
-import buildInfo from '@/lib/build-info.json';
 import { dashboardStore } from '@/lib/dashboardStore';
 import { PreviewModeProvider } from '@/context/PreviewModeContext';
 
@@ -733,7 +732,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           `}>
 
             {/* Logo Section */}
-            <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between">
+            <div className="px-4 py-3 h-14 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3 cursor-pointer" onClick={() => {
                 // Phase-19: 5-tap easter egg → Founder Control Center
                 if (logoTapTimerRef.current) clearTimeout(logoTapTimerRef.current);
@@ -769,7 +768,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Navigation Links */}
-            <nav className="flex-1 px-4 py-3 space-y-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {filteredMenuItems.map((item) => {
                 const isActive = pathname === item.href;
                 const itemLockInfo = ROUTE_FEATURE_KEYS[item.href];
@@ -798,7 +797,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       if (sidebarOpen) setSidebarOpen(false);
                     }}
                     className={`
-                      flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all group
+                      flex items-center justify-between px-3 py-1.5 rounded-lg text-xs md:text-[13px] font-medium leading-snug transition-all group
                       ${isActive 
                         ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10 font-bold' 
                         : isLocked
@@ -818,28 +817,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </nav>
 
             {/* User Section / Logout */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950/40">
-              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 mb-3">
+            <div className="p-2.5 border-t border-slate-800 bg-slate-950/40">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-900/90 border border-slate-800/80 mb-2">
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold truncate text-slate-200">{profile?.full_name}</p>
-                  <p className="text-[10px] text-slate-400 truncate capitalize">
+                  <p className="text-xs font-semibold truncate text-slate-200 leading-tight">{profile?.full_name}</p>
+                  <p className="text-[10px] text-slate-400 truncate capitalize mt-0.5">
                     {dbRole} {activeRole !== dbRole && `(as ${activeRole})`} • {restaurant?.name}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-all cursor-pointer"
               >
-                <LogOut className="h-4 w-4 shrink-0" />
+                <LogOut className="h-3.5 w-3.5 shrink-0" />
                 Sign Out
               </button>
-              <div className="mt-4 pt-2 border-t border-slate-800/60 text-center">
-                <Link href="/debug/build-info" className="inline-flex flex-col items-center text-[10px] text-slate-500 hover:text-slate-300 cursor-pointer font-mono gap-0.5">
-                  <span>Build: {buildInfo.commit.slice(0, 7)}</span>
-                  <span>{new Date(buildInfo.buildTime).toLocaleDateString()} {new Date(buildInfo.buildTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                </Link>
-              </div>
             </div>
           </aside>
 
