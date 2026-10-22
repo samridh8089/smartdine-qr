@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     } = body;
 
     // Enforce Staff Authorization & Tenant Isolation
-    const authCheck = await verifyStaffRequest(req, ['waiter', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'], restaurantId);
+    const authCheck = await verifyStaffRequest(req, ['waiter', 'captain', 'cleaner', 'helper', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'], restaurantId);
     if (!authCheck.isAuthorized && authCheck.response) {
       const userAgent = req.headers.get('user-agent') || '';
       const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);

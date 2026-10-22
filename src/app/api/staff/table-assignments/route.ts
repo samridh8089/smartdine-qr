@@ -18,7 +18,7 @@ export async function GET(req: Request) {
 
     const authCheck = await verifyStaffRequest(
       req,
-      ['waiter', 'cashier', 'kitchen', 'supervisor', 'manager', 'owner', 'super_admin'],
+      ['waiter', 'captain', 'cleaner', 'helper', 'cashier', 'kitchen', 'head_chef', 'chef', 'supervisor', 'manager', 'owner', 'super_admin'],
       restaurantId
     );
     if (!authCheck.isAuthorized && authCheck.response) {
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     }
 
     // Enforce authorization: only owner, manager, or super_admin can modify table assignments
-    const authCheck = await verifyStaffRequest(req, ['owner', 'manager', 'super_admin'], restaurantId);
+    const authCheck = await verifyStaffRequest(req, ['owner', 'manager', 'supervisor', 'super_admin'], restaurantId);
     if (!authCheck.isAuthorized && authCheck.response) {
       return authCheck.response;
     }
@@ -77,7 +77,8 @@ export async function POST(req: Request) {
         }
 
         const staffRecord = staffId ? validStaffMap.get(staffId) : null;
-        if (staffRecord && (staffRecord.role === 'kitchen' || item.role === 'kitchen')) {
+        const isKitchenRole = ['kitchen', 'head_chef', 'chef', 'kitchen_helper'].includes(staffRecord?.role || '') || ['kitchen', 'head_chef', 'chef', 'kitchen_helper'].includes(item.role || '');
+        if (staffRecord && isKitchenRole) {
           return NextResponse.json({
             error: 'CROSS_ROLE_ASSIGNMENT_FORBIDDEN',
             message: `Forbidden: Staff member with kitchen role cannot be assigned to front-of-house table service.`

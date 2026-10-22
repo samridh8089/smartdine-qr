@@ -20,7 +20,11 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const targetRestId = body.restaurantId || req.headers.get('x-restaurant-id') || undefined;
-    const authCheck = await verifyStaffRequest(req, ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'], targetRestId);
+    const authCheck = await verifyStaffRequest(req, [
+      'waiter', 'captain', 'cleaner', 'helper',
+      'kitchen', 'head_chef', 'chef', 'kitchen_helper',
+      'cashier', 'supervisor', 'manager', 'owner', 'super_admin'
+    ], targetRestId);
     if (!authCheck.isAuthorized && authCheck.response) {
       const userAgent = req.headers.get('user-agent') || '';
       const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);
@@ -66,12 +70,12 @@ export async function POST(req: Request) {
     // Enforce role-based status transition restrictions
     const callerRole = authCheck.isSuperAdmin ? 'super_admin' : (authCheck.profile?.role || 'owner');
     const statusRoleMap: Record<string, string[]> = {
-      preparing: ['kitchen', 'supervisor', 'manager', 'owner', 'super_admin'],
-      ready: ['kitchen', 'supervisor', 'manager', 'owner', 'super_admin'],
-      served: ['kitchen', 'waiter', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
-      completed: ['cashier', 'waiter', 'supervisor', 'manager', 'owner', 'super_admin'],
-      accepted: ['waiter', 'kitchen', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
-      cancelled: ['kitchen', 'waiter', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
+      preparing: ['kitchen', 'head_chef', 'chef', 'kitchen_helper', 'supervisor', 'manager', 'owner', 'super_admin'],
+      ready: ['kitchen', 'head_chef', 'chef', 'kitchen_helper', 'supervisor', 'manager', 'owner', 'super_admin'],
+      served: ['kitchen', 'head_chef', 'chef', 'kitchen_helper', 'waiter', 'captain', 'cleaner', 'helper', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
+      completed: ['cashier', 'waiter', 'captain', 'supervisor', 'manager', 'owner', 'super_admin'],
+      accepted: ['waiter', 'captain', 'kitchen', 'head_chef', 'chef', 'kitchen_helper', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
+      cancelled: ['kitchen', 'head_chef', 'chef', 'waiter', 'captain', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
     };
 
     const allowedRolesForStatus = statusRoleMap[effectiveStatus];
