@@ -107,7 +107,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [staffPassword, setStaffPassword] = useState('');
   const [staffName, setStaffName] = useState('');
   const [staffPhone, setStaffPhone] = useState('');
-  const [staffRole, setStaffRole] = useState<'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier'>('waiter');
+  const [staffRole, setStaffRole] = useState<Profile['role']>('waiter');
   const [staffDepartment, setStaffDepartment] = useState<'waiter' | 'kitchen' | 'cashier' | 'service' | 'general'>('waiter');
   const [staffBaseSalary, setStaffBaseSalary] = useState(15000);
   const [staffSalaryType, setStaffSalaryType] = useState<'fixed' | 'per_day'>('fixed');
@@ -115,11 +115,19 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
   const [staffLoading, setStaffLoading] = useState(false);
 
   // Edit Staff Modal State
+  const resolveStaffDept = (role: string, dept: string) => {
+  if (role === 'supervisor') return dept || 'general';
+  if (['head_chef', 'chef', 'kitchen', 'kitchen_helper'].includes(role)) return 'kitchen';
+  if (['captain', 'waiter', 'cleaner', 'helper'].includes(role)) return 'waiter';
+  if (role === 'cashier') return 'cashier';
+  return 'general';
+};
+
   const [editStaffModalOpen, setEditStaffModalOpen] = useState(false);
   const [editStaffTarget, setEditStaffTarget] = useState<Profile | null>(null);
   const [editStaffName, setEditStaffName] = useState('');
   const [editStaffPhone, setEditStaffPhone] = useState('');
-  const [editStaffRole, setEditStaffRole] = useState<'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier'>('waiter');
+  const [editStaffRole, setEditStaffRole] = useState<Profile['role']>('waiter');
   const [editStaffDepartment, setEditStaffDepartment] = useState<'waiter' | 'kitchen' | 'cashier' | 'service' | 'general'>('waiter');
   const [editStaffBaseSalary, setEditStaffBaseSalary] = useState(15000);
   const [editStaffSalaryType, setEditStaffSalaryType] = useState<'fixed' | 'per_day'>('fixed');
@@ -541,7 +549,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         staffName,
         staffRole,
         restaurant.id,
-        staffRole === 'supervisor' ? staffDepartment : (staffRole === 'waiter' ? 'waiter' : staffRole === 'kitchen' ? 'kitchen' : 'general'),
+        resolveStaffDept(staffRole, staffDepartment),
         staffPhone
       );
 
@@ -811,7 +819,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
     setEditStaffTarget(st);
     setEditStaffName(st.full_name || '');
     setEditStaffPhone(st.phone || '');
-    setEditStaffRole((['manager', 'supervisor', 'waiter', 'kitchen', 'cashier'].includes(st.role) ? st.role : 'waiter') as any);
+    setEditStaffRole((['manager', 'supervisor', 'head_chef', 'chef', 'kitchen', 'kitchen_helper', 'captain', 'waiter', 'cashier', 'cleaner', 'helper', 'staff'].includes(st.role) ? st.role : 'waiter') as any);
     setEditStaffDepartment((st.department || 'waiter') as any);
     const existingAttendo = attendoStaffMap[st.id] || Object.values(attendoStaffMap).find(s => s.profile_id === st.id);
     setEditStaffBaseSalary(Number(existingAttendo?.base_salary) || 15000);
@@ -837,7 +845,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         fullName: editStaffName.trim(),
         phone: editStaffPhone.trim(),
         role: editStaffRole,
-        department: editStaffRole === 'supervisor' ? editStaffDepartment : (editStaffRole === 'waiter' ? 'waiter' : editStaffRole === 'kitchen' ? 'kitchen' : 'general')
+        department: resolveStaffDept(editStaffRole, editStaffDepartment)
       });
 
       await saveStaffProfile({
@@ -1725,11 +1733,25 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                         onChange={(e) => setStaffRole(e.target.value as any)}
                         className="block w-full px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
                       >
-                        <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
-                        <option value="supervisor">Supervisor (Department-Scoped)</option>
-                        <option value="waiter">Waiter (Tables, Orders, Calls, requests)</option>
-                        <option value="kitchen">Kitchen Staff (KDS, Kitchen settings)</option>
-                        <option value="cashier">Cashier (Orders check, Table checkout)</option>
+                        <optgroup label="Management">
+                          <option value="manager">Manager (Full Ops)</option>
+                          <option value="supervisor">Supervisor (Kitchen & Floor Oversight)</option>
+                        </optgroup>
+                        <optgroup label="Kitchen Wing (KDS & Food Prep)">
+                          <option value="head_chef">Head Chef (KDS, Recipes, Menu)</option>
+                          <option value="chef">Chef / Cook (KDS & Kitchen Ops)</option>
+                          <option value="kitchen_helper">Kitchen Helper (Prep & Assist)</option>
+                          <option value="kitchen">Kitchen Staff</option>
+                        </optgroup>
+                        <optgroup label="Service & Floor Wing">
+                          <option value="captain">Captain (Tables, Floor, Orders)</option>
+                          <option value="waiter">Waiter (Tables, Orders, Service)</option>
+                          <option value="cleaner">Cleaner (Table Busser & Cleanliness)</option>
+                          <option value="helper">Floor Helper</option>
+                        </optgroup>
+                        <optgroup label="Billing & Cashier">
+                          <option value="cashier">Cashier (Billing & Checkout)</option>
+                        </optgroup>
                       </select>
                     </div>
 
@@ -2485,11 +2507,25 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
                 onChange={(e) => setEditStaffRole(e.target.value as any)}
                 className="block w-full px-3.5 py-2.5 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
               >
-                <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
-                <option value="supervisor">Supervisor (Department-Scoped)</option>
-                <option value="waiter">Waiter (Tables, Orders, Calls, requests)</option>
-                <option value="kitchen">Kitchen Staff (KDS, Kitchen settings)</option>
-                <option value="cashier">Cashier (Orders check, Table checkout)</option>
+                <optgroup label="Management">
+                  <option value="manager">Manager (Full Ops)</option>
+                  <option value="supervisor">Supervisor (Kitchen & Floor Oversight)</option>
+                </optgroup>
+                <optgroup label="Kitchen Wing (KDS & Food Prep)">
+                  <option value="head_chef">Head Chef (KDS, Recipes, Menu)</option>
+                  <option value="chef">Chef / Cook (KDS & Kitchen Ops)</option>
+                  <option value="kitchen_helper">Kitchen Helper (Prep & Assist)</option>
+                  <option value="kitchen">Kitchen Staff</option>
+                </optgroup>
+                <optgroup label="Service & Floor Wing">
+                  <option value="captain">Captain (Tables, Floor, Orders)</option>
+                  <option value="waiter">Waiter (Tables, Orders, Service)</option>
+                  <option value="cleaner">Cleaner (Table Busser & Cleanliness)</option>
+                  <option value="helper">Floor Helper</option>
+                </optgroup>
+                <optgroup label="Billing & Cashier">
+                  <option value="cashier">Cashier (Billing & Checkout)</option>
+                </optgroup>
               </select>
             </div>
 

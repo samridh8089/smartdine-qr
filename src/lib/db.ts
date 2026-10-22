@@ -136,7 +136,7 @@ export interface Profile {
   restaurant_id: string | null;
   email: string;
   full_name: string;
-  role: 'owner' | 'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier' | 'super_admin';
+  role: 'owner' | 'manager' | 'supervisor' | 'head_chef' | 'chef' | 'kitchen' | 'kitchen_helper' | 'captain' | 'waiter' | 'cashier' | 'cleaner' | 'helper' | 'staff' | 'super_admin';
   department?: 'waiter' | 'kitchen' | 'cashier' | 'service' | 'general' | string;
   phone?: string;
   is_active?: boolean;

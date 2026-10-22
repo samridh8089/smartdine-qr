@@ -54,19 +54,27 @@ const ALLOWED_PATHS: Record<string, string[]> = {
   owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
   manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
   supervisor: ['/dashboard', '/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
-  waiter: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  head_chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/orders', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
-  cashier: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch']
+  kitchen_helper: ['/dashboard/kds', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  captain: ['/dashboard/orders', '/dashboard/tables', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  waiter: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  cashier: ['/dashboard/orders', '/dashboard/tables', '/dashboard/reports', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  cleaner: ['/dashboard/attendance', '/dashboard/attendance/punch'],
+  helper: ['/dashboard/attendance', '/dashboard/attendance/punch'],
+  staff: ['/dashboard/attendance', '/dashboard/attendance/punch']
 };
 
 const ALL_MENU_ITEMS = [
-  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager'] },
-  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
-  { name: 'Tables', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier'] },
-  { name: 'Smart Menu by Clever Ops', href: '/dashboard/menu', icon: Sparkles, roles: ['owner', 'manager', 'kitchen', 'supervisor'] },
-  { name: 'Attendance & Shifts', href: '/dashboard/attendance', icon: UserCheck, roles: ['owner', 'manager', 'supervisor', 'waiter', 'cashier', 'kitchen'] },
-  { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor'] },
-  { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager', 'supervisor'] },
+  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'captain', 'waiter', 'cashier', 'kitchen'] },
+  { name: 'Kitchen KDS', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen', 'kitchen_helper'] },
+  { name: 'Tables', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'captain', 'waiter', 'cashier'] },
+  { name: 'Smart Menu by Clever Ops', href: '/dashboard/menu', icon: Sparkles, roles: ['owner', 'manager', 'kitchen', 'supervisor', 'head_chef', 'captain'] },
+  { name: 'Attendance & Shifts', href: '/dashboard/attendance', icon: UserCheck, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen', 'kitchen_helper', 'captain', 'waiter', 'cashier', 'cleaner', 'helper', 'staff'] },
+  { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen'] },
+  { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor', 'cashier'] },
   { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
 ];
@@ -425,7 +433,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           if (newOrder && !localOrderIdsRef.current.has(newOrder.id)) {
             localOrderIdsRef.current.add(newOrder.id);
             if (!isGloballyMuted()) {
-              playLoudBell(activeRole === 'kitchen' ? 'kitchen' : activeRole === 'waiter' ? 'waiter' : 'owner');
+              playLoudBell(['kitchen', 'head_chef', 'chef', 'kitchen_helper'].includes(activeRole) ? 'kitchen' : ['waiter', 'captain'].includes(activeRole) ? 'waiter' : 'owner');
             }
           }
           await checkActiveAlarmsGlobal(restId, activeRole);
@@ -480,7 +488,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const allowed = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'];
       const isPathAllowed = allowed.some(p => pathname === p || pathname?.startsWith(p + '/'));
       if (!isPathAllowed) {
-        const defaultRoute = dbRole === 'kitchen' ? '/dashboard/kds' : (dbRole === 'waiter' || dbRole === 'cashier' || dbRole === 'supervisor') ? '/dashboard/orders' : '/dashboard';
+        const isKitchenRole = ['kitchen', 'head_chef', 'chef', 'kitchen_helper'].includes(dbRole);
+        const isSupportRole = ['cleaner', 'helper', 'staff'].includes(dbRole);
+        const isFloorRole = ['waiter', 'captain', 'cashier', 'supervisor'].includes(dbRole);
+        const defaultRoute = isKitchenRole ? '/dashboard/kds' : isSupportRole ? '/dashboard/attendance/punch' : isFloorRole ? '/dashboard/orders' : '/dashboard';
         router.replace(defaultRoute);
       }
     }
@@ -902,7 +913,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       Your current account role (<strong>{dbRole.toUpperCase()}</strong>) does not have permission to access the path <code>{pathname}</code>. Please contact your administrator.
                     </p>
                     <div className="pt-4">
-                      <Link href={dbRole === 'kitchen' ? '/dashboard/kds' : '/dashboard/orders'}>
+                      <Link href={['kitchen', 'head_chef', 'chef', 'kitchen_helper'].includes(dbRole) ? '/dashboard/kds' : ['cleaner', 'helper', 'staff'].includes(dbRole) ? '/dashboard/attendance/punch' : '/dashboard/orders'}>
                         <button className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm transition-all">
                           Return to Portal
                         </button>

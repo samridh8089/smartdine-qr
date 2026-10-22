@@ -13,7 +13,7 @@ export interface StaffProfile {
   restaurant_id: string;
   profile_id?: string | null;
   name: string;
-  role: 'manager' | 'supervisor' | 'waiter' | 'kitchen' | 'cashier';
+  role: Profile['role'];
   phone?: string;
   email?: string;
   base_salary: number;
@@ -266,12 +266,7 @@ export async function getStaffProfiles(restaurantId: string): Promise<StaffProfi
     // 3. Map ONLY genuine registered staff accounts
     const verifiedStaff: StaffProfile[] = nonOwnerStaff.map(p => {
       const saved = salaryMap.get(p.id);
-      const normalizedRole: StaffProfile['role'] = (
-        p.role === 'manager' ? 'manager' :
-        p.role === 'supervisor' ? 'supervisor' :
-        p.role === 'kitchen' ? 'kitchen' :
-        p.role === 'cashier' ? 'cashier' : 'waiter'
-      );
+      const normalizedRole: StaffProfile['role'] = (p.role as Profile['role']) || 'waiter';
 
       return {
         id: p.id,

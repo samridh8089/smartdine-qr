@@ -93,6 +93,14 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
+const getDeptForRole = (role: string) => {
+  if (role === 'supervisor') return 'general';
+  if (['head_chef', 'chef', 'kitchen', 'kitchen_helper'].includes(role)) return 'kitchen';
+  if (['captain', 'waiter', 'cleaner', 'helper'].includes(role)) return 'waiter';
+  if (role === 'cashier') return 'cashier';
+  return 'general';
+};
+
 export default function AttendanceManagerView({
   restaurant,
   profile
@@ -596,7 +604,7 @@ export default function AttendanceManagerView({
           staffNameInput.trim(),
           staffRoleInput,
           restaurant.id,
-          staffRoleInput === 'supervisor' ? 'general' : staffRoleInput,
+          getDeptForRole(staffRoleInput),
           staffPhoneInput.trim()
         );
 
@@ -664,7 +672,7 @@ export default function AttendanceManagerView({
               fullName: staffNameInput.trim(),
               phone: staffPhoneInput.trim(),
               role: staffRoleInput,
-              department: staffRoleInput === 'supervisor' ? 'general' : staffRoleInput
+              department: getDeptForRole(staffRoleInput)
             });
           } catch (e) {
             console.warn('Could not update profiles table directly:', e);
@@ -1279,9 +1287,14 @@ export default function AttendanceManagerView({
                   <option value="all">All Roles</option>
                   <option value="manager">Manager</option>
                   <option value="supervisor">Supervisor</option>
+                  <option value="head_chef">Head Chef</option>
+                  <option value="chef">Chef / Cook</option>
+                  <option value="kitchen_helper">Kitchen Helper</option>
+                  <option value="captain">Captain</option>
                   <option value="waiter">Waiter</option>
-                  <option value="kitchen">Kitchen Staff</option>
+                  <option value="cleaner">Cleaner</option>
                   <option value="cashier">Cashier</option>
+                  <option value="helper">Floor Helper</option>
                 </select>
               </div>
 
@@ -2352,11 +2365,25 @@ export default function AttendanceManagerView({
                       onChange={e => setStaffRoleInput(e.target.value as any)}
                       className="w-full px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold outline-none"
                     >
-                      <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
-                      <option value="supervisor">Supervisor (Department-Scoped)</option>
-                      <option value="waiter">Waiter (Tables, Orders, Service)</option>
-                      <option value="kitchen">Kitchen Staff (KDS, Chef)</option>
-                      <option value="cashier">Cashier (Billing &amp; Checkout)</option>
+                      <optgroup label="Management">
+                        <option value="manager">Manager (Full Ops)</option>
+                        <option value="supervisor">Supervisor (Kitchen & Floor Oversight)</option>
+                      </optgroup>
+                      <optgroup label="Kitchen Wing (KDS & Prep)">
+                        <option value="head_chef">Head Chef (KDS, Recipes, Menu)</option>
+                        <option value="chef">Chef / Cook (KDS & Kitchen Ops)</option>
+                        <option value="kitchen_helper">Kitchen Helper (Prep & Assist)</option>
+                        <option value="kitchen">Kitchen Staff</option>
+                      </optgroup>
+                      <optgroup label="Service & Floor Wing">
+                        <option value="captain">Captain (Tables, Floor, Orders)</option>
+                        <option value="waiter">Waiter (Tables, Orders, Service)</option>
+                        <option value="cleaner">Cleaner (Table Busser & Cleanliness)</option>
+                        <option value="helper">Floor Helper</option>
+                      </optgroup>
+                      <optgroup label="Billing & Cashier">
+                        <option value="cashier">Cashier (Billing & Checkout)</option>
+                      </optgroup>
                     </select>
                   </div>
 
