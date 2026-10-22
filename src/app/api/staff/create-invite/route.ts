@@ -193,10 +193,15 @@ export async function POST(req: Request) {
           code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
         }, { status: 409 });
       }
+      return NextResponse.json({
+        error: 'An account with this email address already exists. Please use a different email or log in.',
+        code: 'EMAIL_ALREADY_REGISTERED'
+      }, { status: 409 });
     }
 
     // 2. User does not exist -> Create user cleanly using admin API or signUp fallback
     let newUser: any = null;
+    let createErrMessage = '';
     try {
       const { data: newAuthData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: cleanEmail,
@@ -213,12 +218,36 @@ export async function POST(req: Request) {
       });
       if (newAuthData?.user) {
         newUser = newAuthData.user;
+      } else if (createErr) {
+        createErrMessage = createErr.message || (typeof createErr === 'string' ? createErr : '');
+        console.warn('[create-invite] admin.createUser returned error:', createErr);
       }
-    } catch (adminErr) {
+    } catch (adminErr: any) {
       console.warn('[create-invite] admin.createUser threw:', adminErr);
+      createErrMessage = adminErr?.message || 'Failed to create user in auth system';
     }
 
     if (!newUser) {
+      if (createErrMessage && createErrMessage.trim() && createErrMessage !== '{}') {
+        const lower = createErrMessage.toLowerCase();
+        if (lower.includes('already') || lower.includes('registered') || lower.includes('exists')) {
+          return NextResponse.json({
+            error: 'An account with this email address already exists. Please use a different email.',
+            code: 'STAFF_EMAIL_ALREADY_EXISTS'
+          }, { status: 409 });
+        }
+        if (lower.includes('password')) {
+          return NextResponse.json({
+            error: 'Staff password does not meet requirements. Please provide at least 6 characters.',
+            code: 'INVALID_PASSWORD'
+          }, { status: 400 });
+        }
+        return NextResponse.json({
+          error: createErrMessage,
+          code: 'USER_CREATION_FAILED'
+        }, { status: 400 });
+      }
+
       const { data: signUpData, error: signUpErr } = await supabaseAdmin.auth.signUp({
         email: cleanEmail,
         password: password || 'SmartDine123!',
@@ -234,7 +263,10 @@ export async function POST(req: Request) {
         }
       });
       if (signUpErr || !signUpData?.user) {
-        return NextResponse.json({ error: signUpErr?.message || 'Failed to create staff account' }, { status: 500 });
+        const fallbackMsg = (signUpErr?.message && signUpErr.message.trim() && signUpErr.message !== '{}')
+          ? signUpErr.message.trim()
+          : 'Failed to create staff account. The email may already be registered or invalid.';
+        return NextResponse.json({ error: fallbackMsg, code: 'SIGNUP_FAILED' }, { status: 400 });
       }
       newUser = signUpData.user;
     }
@@ -320,6 +352,13 @@ export async function POST(req: Request) {
       message: 'Staff account created. Verification OTP sent to email.'
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Server error creating staff invite' }, { status: 500 });
+    console.error('[create-invite] Uncaught error:', err);
+    let errMsg = 'Server error creating staff invite';
+    if (typeof err === 'string' && err.trim() && err !== '{}') {
+      errMsg = err.trim();
+    } else if (err?.message && typeof err.message === 'string' && err.message.trim() && err.message !== '{}') {
+      errMsg = err.message.trim();
+    }
+    return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }

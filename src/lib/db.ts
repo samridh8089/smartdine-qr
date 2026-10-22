@@ -4338,10 +4338,31 @@ export const db = {
     }).then(r => r.json()).catch(() => null);
 
     if (!res || !res.success) {
-      if (res?.code === 'EMAIL_REGISTERED_OTHER_RESTAURANT' || res?.error?.includes('another restaurant')) {
+      const rawError = res?.error || res?.message;
+      let errorText = '';
+      if (typeof rawError === 'string') {
+        errorText = rawError.trim();
+      } else if (rawError && typeof rawError === 'object') {
+        errorText = String(rawError.message || rawError.error || '').trim();
+      }
+
+      if (!errorText || errorText === '{}' || errorText === '[]' || errorText === '[object Object]') {
+        errorText = (typeof res?.message === 'string' && res.message.trim() && res.message !== '{}')
+          ? res.message.trim()
+          : 'Failed to create staff account. Please verify details and try again.';
+      }
+
+      if (res?.code === 'EMAIL_REGISTERED_OTHER_RESTAURANT' || errorText.toLowerCase().includes('another restaurant')) {
         throw new Error('This email is already registered to another restaurant.');
       }
-      throw new Error(res?.error || 'Failed to create staff account.');
+      if (res?.code === 'DUPLICATE_PHONE_NUMBER' || errorText.toLowerCase().includes('mobile number already exists')) {
+        throw new Error('A staff member with this mobile number already exists.');
+      }
+      if (res?.code === 'STAFF_EMAIL_ALREADY_EXISTS' || res?.code === 'EMAIL_ALREADY_REGISTERED' || errorText.toLowerCase().includes('already exists') || errorText.toLowerCase().includes('already registered')) {
+        throw new Error('An account with this email address already exists. Please use a different email.');
+      }
+
+      throw new Error(errorText);
     }
 
     const userId = res.user?.id;

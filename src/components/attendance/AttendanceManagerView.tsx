@@ -613,13 +613,19 @@ export default function AttendanceManagerView({
         });
 
         // Audit log
-        await db.createAuditLog(
-          restaurant.id,
-          profile.id,
-          profile.email,
-          'create_staff',
-          `Created staff account for ${staffNameInput.trim()}`
-        );
+        if (profile?.id) {
+          try {
+            await db.createAuditLog(
+              restaurant.id,
+              profile.id,
+              profile.email || 'manager',
+              'create_staff',
+              `Created staff account for ${staffNameInput.trim()}`
+            );
+          } catch (auditErr) {
+            console.warn('Failed to record staff creation audit log:', auditErr);
+          }
+        }
 
 
         // Dispatch Staff Email OTP directly
@@ -716,7 +722,19 @@ export default function AttendanceManagerView({
       }
     } catch (e: any) {
       console.error('Failed saving staff profile:', e);
-      setStaffModalError(e?.message || 'Failed to save staff profile.');
+      let msg = 'Failed to save staff profile. Please try again.';
+      if (typeof e === 'string' && e.trim() && e !== '{}' && e !== '[object Object]') {
+        msg = e.trim();
+      } else if (e?.message && typeof e.message === 'string' && e.message.trim() && e.message !== '{}' && e.message !== '[object Object]') {
+        msg = e.message.trim();
+      } else if (e?.error) {
+        if (typeof e.error === 'string' && e.error.trim() && e.error !== '{}' && e.error !== '[object Object]') {
+          msg = e.error.trim();
+        } else if (e.error?.message && typeof e.error.message === 'string' && e.error.message.trim() && e.error.message !== '{}') {
+          msg = e.error.message.trim();
+        }
+      }
+      setStaffModalError(msg);
     } finally {
       setSavingStaff(false);
     }
