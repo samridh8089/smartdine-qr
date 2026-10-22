@@ -2269,16 +2269,14 @@ export default function AttendanceManagerView({
                   <div className="flex-1 leading-relaxed">
                     {staffModalError}
                   </div>
-                  {(staffModalError.toLowerCase().includes('already exists') || staffModalError.toLowerCase().includes('different email')) && (
-                    <button
-                      type="button"
-                      disabled={purgingEmail}
-                      onClick={handlePurgeAndRetry}
-                      className="shrink-0 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm text-center"
-                    >
-                      {purgingEmail ? 'Deleting Old Account...' : 'Delete Old Account & Retry'}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    disabled={purgingEmail}
+                    onClick={handlePurgeAndRetry}
+                    className="shrink-0 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm text-center"
+                  >
+                    {purgingEmail ? 'Purging Old Account...' : 'Purge Old Account & Force Register'}
+                  </button>
                 </div>
               )}
 

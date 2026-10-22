@@ -4358,8 +4358,14 @@ export const db = {
       if (res?.code === 'DUPLICATE_PHONE_NUMBER' || errorText.toLowerCase().includes('mobile number already exists')) {
         throw new Error('A staff member with this mobile number already exists.');
       }
-      if (res?.code === 'STAFF_EMAIL_ALREADY_EXISTS' || res?.code === 'EMAIL_ALREADY_REGISTERED' || errorText.toLowerCase().includes('already exists') || errorText.toLowerCase().includes('already registered')) {
-        throw new Error('An account with this email address already exists. Please use a different email.');
+      if (
+        res?.code === 'STAFF_EMAIL_ALREADY_EXISTS' ||
+        res?.code === 'EMAIL_ALREADY_REGISTERED' ||
+        errorText.toLowerCase().includes('already exists') ||
+        errorText.toLowerCase().includes('already registered') ||
+        errorText.toLowerCase().includes('already be registered')
+      ) {
+        throw new Error('An account with this email address already exists. Click "Purge Old Account & Force Register" to overwrite.');
       }
 
       throw new Error(errorText);
