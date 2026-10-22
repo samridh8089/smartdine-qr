@@ -168,7 +168,7 @@ export default function SalaryEditorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full my-6 overflow-hidden flex flex-col text-slate-900 dark:text-slate-100">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full my-4 overflow-hidden flex flex-col text-slate-900 dark:text-slate-100">
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/40">
           <div>
@@ -188,243 +188,254 @@ export default function SalaryEditorModal({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
-          {/* Section 0: EDITABLE BASE MONTHLY SALARY */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  Monthly Base Salary (₹)
-                </label>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Change staff base salary here. Gross earned and net pay will recalculate automatically.
+        <div className="p-6 max-h-[80vh] overflow-y-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+            {/* Left Column: Base Salary, Mode, Summary & Payment Status */}
+            <div className="space-y-3.5">
+              {/* Section 0: EDITABLE BASE MONTHLY SALARY */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      Monthly Base Salary (₹)
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      Baseline monthly rate for payroll calculation.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 shadow-sm">
+                    <span className="text-base font-bold text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={baseSalary}
+                      onChange={e => handleBaseSalaryChange(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-28 text-base font-bold text-right bg-transparent text-slate-900 dark:text-white outline-none"
+                      placeholder="Base Salary"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Salary Calculation Mode: Fixed Monthly vs Per-Day Attendance */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-slate-800 dark:text-slate-100">Calculation Mode:</span>
+                  <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-700/60 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => handleSalaryTypeChange('fixed')}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-xs transition cursor-pointer ${
+                        salaryType === 'fixed'
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Fixed Monthly
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSalaryTypeChange('per_day')}
+                      className={`px-2.5 py-1 rounded-lg font-bold text-xs transition cursor-pointer ${
+                        salaryType === 'per_day'
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      Per-Day Attendance
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {salaryType === 'fixed'
+                    ? `Fixed: Pays full monthly base (₹${baseSalary.toLocaleString('en-IN')}) irrespective of punch records.`
+                    : `Per-Day: Pro-rated strictly by present days (${record.total_present_days} full days × daily rate).`}
                 </p>
               </div>
-              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 shadow-sm">
-                <span className="text-base font-bold text-slate-400">₹</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={baseSalary}
-                  onChange={e => handleBaseSalaryChange(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-32 text-base font-bold text-right bg-transparent text-slate-900 dark:text-white outline-none"
-                  placeholder="Base Salary"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Salary Calculation Mode: Fixed Monthly vs Per-Day Attendance */}
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div>
-              <p className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
-                <span>Calculation Mode:</span>
-                <span className="text-slate-900 dark:text-white font-bold">
-                  {salaryType === 'fixed' ? 'Fixed Monthly Pay' : 'Per-Day Attendance Pro-rated'}
+              {/* Base Summary Calculation Badge */}
+              <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl text-center text-xs border border-slate-200 dark:border-slate-700">
+                <div>
+                  <p className="text-slate-500 text-[11px]">Days Present</p>
+                  <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
+                    {record.total_present_days}F + {record.total_half_days}H
+                  </p>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[11px]">Gross Earned</p>
+                  <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">₹{Number(grossEarned).toLocaleString('en-IN')}</p>
+                  <span className="text-[10px] text-slate-400 block font-normal">
+                    {salaryType === 'fixed' ? 'Fixed Base' : 'Days × Rate'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-slate-500 text-[11px]">Live Net Salary</p>
+                  <p className="font-bold text-slate-900 dark:text-white text-sm">₹{liveTotals.netSalary.toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+
+              {/* Payment Status Toggle */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Payment Status:
                 </span>
-              </p>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                {salaryType === 'fixed'
-                  ? `Fixed Monthly: Pays full monthly base salary (₹${baseSalary.toLocaleString('en-IN')}) irrespective of punch records.`
-                  : `Per-Day Pro-rated: Calculated strictly based on present days (${record.total_present_days} full days × daily rate).`}
-              </p>
-            </div>
-            <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-700/60 p-1 rounded-xl">
-              <button
-                type="button"
-                onClick={() => handleSalaryTypeChange('fixed')}
-                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
-                  salaryType === 'fixed'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Fixed Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSalaryTypeChange('per_day')}
-                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
-                  salaryType === 'per_day'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                Per-Day Attendance
-              </button>
-            </div>
-          </div>
-
-          {/* Base Summary Calculation Badge */}
-          <div className="grid grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl text-center text-xs border border-slate-200 dark:border-slate-700">
-            <div>
-              <p className="text-slate-500">Days Present</p>
-              <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">
-                {record.total_present_days} Full + {record.total_half_days} Half
-              </p>
-            </div>
-            <div>
-              <p className="text-slate-500">Gross Earned</p>
-              <p className="font-bold text-slate-800 dark:text-slate-200 text-sm">₹{Number(grossEarned).toLocaleString('en-IN')}</p>
-              <span className="text-[10px] text-slate-400 block font-normal">
-                {salaryType === 'fixed' ? 'Fixed Base' : 'Days × Rate'}
-              </span>
-            </div>
-            <div>
-              <p className="text-slate-500">Live Net Salary</p>
-              <p className="font-bold text-slate-900 dark:text-white text-sm">₹{liveTotals.netSalary.toLocaleString('en-IN')}</p>
-            </div>
-          </div>
-
-          {/* Section 1: Custom Allowances / Earnings */}
-          <div className="space-y-3">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-              Allowances & Additional Earnings (Uniform, Rent, Bonus, Food)
-            </label>
-
-            {/* List */}
-            <div className="space-y-2">
-              {allowances.map(a => (
-                <div key={a.id} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{a.name}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-slate-800 dark:text-slate-200">+₹{Number(a.amount).toLocaleString('en-IN')}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveAllowance(a.id)}
-                      className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus('pending')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                      paymentStatus === 'pending'
+                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
+                        : 'bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    Pending
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus('paid')}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                      paymentStatus === 'paid'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    Paid
+                  </button>
                 </div>
-              ))}
-            </div>
-
-            {/* Add New Allowance Row */}
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                placeholder="Allowance Name (e.g. Uniform Allowance, Rent)"
-                value={newAllowanceName}
-                onChange={e => setNewAllowanceName(e.target.value)}
-                className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-              />
-              <input
-                type="number"
-                placeholder="Amount (₹)"
-                value={newAllowanceAmount}
-                onChange={e => setNewAllowanceAmount(e.target.value)}
-                className="w-28 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-              />
-              <button
-                type="button"
-                onClick={handleAddAllowance}
-                className="flex items-center gap-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer transition"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add
-              </button>
-            </div>
-          </div>
-
-          {/* Section 2: Deductions & Advances */}
-          <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-              Deductions & Advance Repayments
-            </label>
-
-            {/* Total Advance Repayment Input */}
-            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-              <div>
-                <span className="font-semibold text-slate-800 dark:text-slate-200">Salary Advance Repayment:</span>
-                <p className="text-[10px] text-slate-500">Directly subtracted from net pay</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-500 font-bold">₹</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={totalAdvance}
-                  onChange={e => setTotalAdvance(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-28 px-3 py-1.5 text-xs font-bold text-right rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                />
               </div>
             </div>
 
-            {/* Other Deductions List */}
-            <div className="space-y-2">
-              {deductions.map(d => (
-                <div key={d.id} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{d.name}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="font-bold text-slate-800 dark:text-slate-200">-₹{Number(d.amount).toLocaleString('en-IN')}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveDeduction(d.id)}
-                      className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+            {/* Right Column: Allowances & Deductions */}
+            <div className="space-y-3.5">
+              {/* Section 1: Custom Allowances */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                    Allowances (Uniform, Rent, Bonus)
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                    +₹{allowances.reduce((acc, a) => acc + (Number(a.amount) || 0), 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {allowances.map(a => (
+                    <div key={a.id} className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{a.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">+₹{Number(a.amount).toLocaleString('en-IN')}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAllowance(a.id)}
+                          className="text-slate-400 hover:text-rose-500 p-0.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {allowances.length === 0 && (
+                    <p className="text-[11px] text-slate-400 italic py-1">No custom allowances added</p>
+                  )}
+                </div>
+
+                {/* Add New Allowance Row */}
+                <div className="flex items-center gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    placeholder="Allowance Name"
+                    value={newAllowanceName}
+                    onChange={e => setNewAllowanceName(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  />
+                  <input
+                    type="number"
+                    placeholder="₹"
+                    value={newAllowanceAmount}
+                    onChange={e => setNewAllowanceAmount(e.target.value)}
+                    className="w-20 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddAllowance}
+                    className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white text-xs font-bold rounded-lg cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Section 2: Deductions & Advances */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                    Deductions &amp; Advances
+                  </label>
+                  <span className="text-[11px] font-bold text-rose-500">
+                    -₹{(deductions.reduce((acc, d) => acc + (Number(d.amount) || 0), 0) + Number(totalAdvance)).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* Advance Repayment */}
+                <div className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">Advance Repayment:</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-500 font-bold">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={totalAdvance}
+                      onChange={e => setTotalAdvance(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-20 px-2 py-0.5 text-xs font-bold text-right rounded border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800"
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
 
-            {/* Add New Deduction Row */}
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                placeholder="Deduction Name (e.g. Damage, Late Cut)"
-                value={newDeductionName}
-                onChange={e => setNewDeductionName(e.target.value)}
-                className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-              />
-              <input
-                type="number"
-                placeholder="Amount (₹)"
-                value={newDeductionAmount}
-                onChange={e => setNewDeductionAmount(e.target.value)}
-                className="w-28 px-3 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-              />
-              <button
-                type="button"
-                onClick={handleAddDeduction}
-                className="flex items-center gap-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer transition"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add
-              </button>
-            </div>
-          </div>
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {deductions.map(d => (
+                    <div key={d.id} className="flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{d.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-rose-500">-₹{Number(d.amount).toLocaleString('en-IN')}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDeduction(d.id)}
+                          className="text-slate-400 hover:text-rose-500 p-0.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-          {/* Section 3: Payment Status Toggle */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-              Salary Payment Status:
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setPaymentStatus('pending')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer ${
-                  paymentStatus === 'pending'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Pending
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentStatus('paid')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition cursor-pointer ${
-                  paymentStatus === 'paid'
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                }`}
-              >
-                Paid
-              </button>
+                {/* Add New Deduction Row */}
+                <div className="flex items-center gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    placeholder="Deduction Name"
+                    value={newDeductionName}
+                    onChange={e => setNewDeductionName(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  />
+                  <input
+                    type="number"
+                    placeholder="₹"
+                    value={newDeductionAmount}
+                    onChange={e => setNewDeductionAmount(e.target.value)}
+                    className="w-20 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddDeduction}
+                    className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white text-xs font-bold rounded-lg cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

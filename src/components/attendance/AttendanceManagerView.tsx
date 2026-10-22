@@ -24,7 +24,12 @@ import {
   formatWorkingDuration,
   GeofenceConfig,
   getAttendoSettings,
-  updateAttendoSettings
+  updateAttendoSettings,
+  approveSalaryRecord,
+  approveAllSalaryRecords,
+  isPunchOutMandatory,
+  setPunchOutMandatory,
+  managerApprovePunchOut
 } from '@/lib/attendoEngine';
 import { supabase } from '@/lib/supabase';
 import { db, Restaurant, Profile } from '@/lib/db';
@@ -48,7 +53,8 @@ import {
   UserCheck,
   Shield,
   Search,
-  Filter
+  Filter,
+  X
 } from 'lucide-react';
 
 interface AttendanceManagerViewProps {
@@ -112,7 +118,7 @@ export default function AttendanceManagerView({
   const [staffRoleInput, setStaffRoleInput] = useState<StaffProfile['role']>('waiter');
   const [staffPhoneInput, setStaffPhoneInput] = useState('');
   const [staffSalaryInput, setStaffSalaryInput] = useState<number>(15000);
-  const [staffSalaryTypeInput, setStaffSalaryTypeInput] = useState<'fixed' | 'per_day'>('fixed');
+  const [staffSalaryTypeInput, setStaffSalaryTypeInput] = useState<'fixed' | 'per_day'>('per_day');
   const [staffEmailInput, setStaffEmailInput] = useState('');
   const [staffPasswordInput, setStaffPasswordInput] = useState('');
   const [staffModalError, setStaffModalError] = useState<string | null>(null);
@@ -122,6 +128,8 @@ export default function AttendanceManagerView({
   const [geofenceConfig, setGeofenceConfig] = useState<GeofenceConfig>(() => getAttendoSettings(restaurant));
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsNotice, setSettingsNotice] = useState<string | null>(null);
+  const [punchOutMandatory, setPunchOutMandatoryState] = useState<boolean>(() => isPunchOutMandatory(restaurant));
+  const [approvingPayroll, setApprovingPayroll] = useState(false);
 
   // 2. useMemo: Filtered Staff List
   const filteredStaffList = useMemo(() => {
@@ -314,7 +322,7 @@ export default function AttendanceManagerView({
       setStaffPasswordInput('');
       setStaffRoleInput('waiter');
       setStaffSalaryInput(15000);
-      setStaffSalaryTypeInput('fixed');
+      setStaffSalaryTypeInput('per_day');
       setStaffModalOpen(true);
       return;
     }
@@ -330,7 +338,7 @@ export default function AttendanceManagerView({
       setStaffPasswordInput('');
       setStaffRoleInput(member.role);
       setStaffSalaryInput(Number(member.base_salary) || 15000);
-      setStaffSalaryTypeInput(member.salary_type || 'fixed');
+      setStaffSalaryTypeInput(member.salary_type || 'per_day');
     } else {
       setEditingStaffMember(null);
       setStaffNameInput('');
@@ -537,6 +545,74 @@ export default function AttendanceManagerView({
       setDateRoster(updatedRoster);
     } catch (e) {
       console.error('Failed assigning shift:', e);
+    }
+  };
+
+  const handleTogglePunchOutMandatory = async (mandatory: boolean) => {
+    setPunchOutMandatoryState(mandatory);
+    try {
+      await setPunchOutMandatory(restaurant.id, mandatory);
+      setSettingsNotice(`Punch-out requirement is now ${mandatory ? 'MANDATORY' : 'OPTIONAL'}.`);
+      setTimeout(() => setSettingsNotice(null), 3000);
+    } catch (_) {}
+  };
+
+  const handleApproveSingleSalary = async (rec: SalaryRecord) => {
+    try {
+      const approverName = profile?.full_name ? `${profile.full_name} (${profile.role || 'Manager'})` : 'Manager';
+      const updated = await approveSalaryRecord({
+        restaurantId: restaurant.id,
+        salaryRecordId: rec.id,
+        approverId: profile?.id || 'manager',
+        approverName
+      });
+      if (updated) {
+        setSalaryRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
+      }
+    } catch (err) {
+      console.warn('Failed approving salary:', err);
+    }
+  };
+
+  const handleApproveAllSalaries = async () => {
+    if (!salaryRecords.length) return;
+    setApprovingPayroll(true);
+    try {
+      const approverName = profile?.full_name ? `${profile.full_name} (${profile.role || 'Manager'})` : 'Manager';
+      const updatedList = await approveAllSalaryRecords({
+        restaurantId: restaurant.id,
+        year: selectedYear,
+        month: selectedMonth,
+        approverId: profile?.id || 'manager',
+        approverName
+      });
+      setSalaryRecords(updatedList);
+    } catch (err) {
+      console.warn('Failed approving all salaries:', err);
+    } finally {
+      setApprovingPayroll(false);
+    }
+  };
+
+  const handleManagerDirectPunchOut = async (staffMember: StaffProfile, existingAtt?: StaffAttendance) => {
+    try {
+      const approverName = profile?.full_name ? `${profile.full_name} (${profile.role || 'Manager'})` : 'Manager';
+      const res = await managerApprovePunchOut({
+        restaurantId: restaurant.id,
+        staffId: staffMember.id,
+        date: selectedDate,
+        managerUserId: profile?.id || 'manager',
+        managerName: approverName,
+        status: 'present'
+      });
+      if (res.success && res.attendance) {
+        setTodayAttendances(prev => {
+          const filtered = prev.filter(a => a.staff_id !== staffMember.id);
+          return [...filtered, res.attendance!];
+        });
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -897,9 +973,7 @@ export default function AttendanceManagerView({
               <h3 className="font-bold text-base text-slate-900 dark:text-white">
                 Restaurant Shifts & Working Hours
               </h3>
-              <p className="text-xs text-slate-500">
-                Define standard shifts with start/end time and late arrival grace buffer.
-              </p>
+              
             </div>
             <button
               type="button"
@@ -974,7 +1048,7 @@ export default function AttendanceManagerView({
                 <h4 className="font-bold text-sm text-slate-900 dark:text-white">
                   Staff Shift Assignment for {new Date(selectedDate).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
                 </h4>
-                <p className="text-xs text-slate-500">Assign specific shifts to team members for this date.</p>
+                
               </div>
             </div>
 
@@ -1026,9 +1100,7 @@ export default function AttendanceManagerView({
               <h3 className="font-bold text-base text-slate-900 dark:text-white">
                 Monthly Staff Payroll & Salary Slips
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Automated attendance-based payroll calculation with custom allowances (Uniform, Rent, Food) & deductions.
-              </p>
+              
             </div>
 
             <div className="flex items-center gap-3">
@@ -1060,6 +1132,18 @@ export default function AttendanceManagerView({
               >
                 Calculate Monthly Payroll
               </button>
+
+              {salaryRecords.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleApproveAllSalaries}
+                  disabled={approvingPayroll}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer transition flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {approvingPayroll ? 'Approving...' : 'Approve All Attendance'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -1076,6 +1160,7 @@ export default function AttendanceManagerView({
                     <th className="px-4 py-3">Allowances (Uniform/Rent)</th>
                     <th className="px-4 py-3">Deductions & Advance</th>
                     <th className="px-4 py-3 font-bold text-slate-900 dark:text-white">Net Salary</th>
+                    <th className="px-4 py-3">Approval</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -1217,9 +1302,7 @@ export default function AttendanceManagerView({
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               Restaurant Geofencing & Location Punch Settings
             </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Configure boundary rules for staff punch-in. If enabled, staff must be within the specified radius of the restaurant to punch in.
-            </p>
+            
           </div>
 
           {settingsNotice && (
@@ -1229,6 +1312,24 @@ export default function AttendanceManagerView({
           )}
 
           <div className="space-y-4">
+            {/* Toggle Punch-out Mandatory Setting */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div>
+                <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                  Punch-Out Mandatory Policy
+                </span>
+                <span className="text-xs text-slate-500">
+                  When enabled, employees must punch out at shift end. Missing punch-outs will trigger employee alerts and require manager approval.
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={punchOutMandatory}
+                onChange={e => handleTogglePunchOutMandatory(e.target.checked)}
+                className="w-5 h-5 accent-slate-900 dark:accent-white rounded cursor-pointer"
+              />
+            </div>
+
             {/* Toggle Enable Geofence */}
             <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800">
               <div>
@@ -1479,15 +1580,26 @@ export default function AttendanceManagerView({
       {/* Staff Profile & Base Salary Edit / Create Modal */}
       {staffModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">
-              {editingStaffMember?.id ? 'Edit Staff & Base Salary' : 'Register Staff Account & Base Salary'}
-            </h3>
-            <p className="text-slate-500">
-              {editingStaffMember?.id
-                ? 'Update staff details, role permissions, and monthly baseline salary.'
-                : 'Create a staff login account and set their monthly baseline salary. Attendance and payroll will calculate based on this base salary.'}
-            </p>
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-3xl w-full p-6 space-y-4 text-xs max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  {editingStaffMember?.id ? 'Edit Staff & Base Salary' : 'Register Staff Account & Base Salary'}
+                </h3>
+                <p className="text-slate-500 mt-0.5">
+                  {editingStaffMember?.id
+                    ? 'Update staff details, role permissions, and monthly baseline salary.'
+                    : 'Create a staff login account and set their monthly baseline salary. Attendance and payroll will calculate based on this base salary.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStaffModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             {staffModalError && (
               <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold">
@@ -1495,138 +1607,145 @@ export default function AttendanceManagerView({
               </div>
             )}
 
-            <div className="space-y-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Staff Full Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Ramesh Kumar"
-                  value={staffNameInput}
-                  onChange={e => setStaffNameInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
-                  required
-                />
-              </div>
-
-              {!editingStaffMember && (
-                <>
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Staff Login Email <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      placeholder="e.g. ramesh@restaurant.com"
-                      value={staffEmailInput}
-                      onChange={e => setStaffEmailInput(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                      required
-                    />
-                    <p className="text-[10px] text-slate-400 mt-0.5">Staff uses this email to log in to punch attendance and view orders.</p>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Access Password <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      placeholder="Minimum 6 characters"
-                      value={staffPasswordInput}
-                      onChange={e => setStaffPasswordInput(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                      required
-                    />
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  placeholder="e.g. 9876543210"
-                  value={staffPhoneInput}
-                  onChange={e => setStaffPhoneInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Staff Role Permissions <span className="text-rose-500">*</span>
-                </label>
-                <select
-                  value={staffRoleInput}
-                  onChange={e => setStaffRoleInput(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
-                >
-                  <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
-                  <option value="supervisor">Supervisor (Department-Scoped)</option>
-                  <option value="waiter">Waiter (Tables, Orders, Service)</option>
-                  <option value="kitchen">Kitchen Staff (KDS, Chef)</option>
-                  <option value="cashier">Cashier (Billing &amp; Checkout)</option>
-                </select>
-              </div>
-
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1">
-                <label className="block font-bold text-slate-800 dark:text-slate-200">
-                  Monthly Base Salary (₹)
-                </label>
-                <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600">
-                  <span className="font-bold text-slate-500">₹</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Left Column: Account & Credentials */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Staff Full Name <span className="text-rose-500">*</span>
+                  </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="500"
-                    placeholder="e.g. 18000"
-                    value={staffSalaryInput}
-                    onChange={e => setStaffSalaryInput(Math.max(0, parseFloat(e.target.value) || 0))}
-                    className="w-full text-sm font-black bg-transparent text-slate-900 dark:text-white outline-none"
+                    type="text"
+                    placeholder="e.g. Ramesh Kumar"
+                    value={staffNameInput}
+                    onChange={e => setStaffNameInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    required
                   />
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  This base salary is used for calculating daily rate and monthly payroll slips.
-                </p>
+
+                {!editingStaffMember && (
+                  <>
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Staff Login Email <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        placeholder="e.g. ramesh@restaurant.com"
+                        value={staffEmailInput}
+                        onChange={e => setStaffEmailInput(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                        required
+                      />
+                      <p className="text-[10px] text-slate-400 mt-0.5">Staff uses this email to log in to punch attendance and view orders.</p>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Access Password <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="Minimum 6 characters"
+                        value={staffPasswordInput}
+                        onChange={e => setStaffPasswordInput(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 9876543210"
+                    value={staffPhoneInput}
+                    onChange={e => setStaffPhoneInput(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
+                  />
+                </div>
               </div>
 
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
-                <label className="block font-bold text-slate-700 dark:text-slate-300">
-                  Salary Calculation Mode
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setStaffSalaryTypeInput('fixed')}
-                    className={`p-2 rounded-lg font-bold text-center border cursor-pointer transition ${
-                      staffSalaryTypeInput === 'fixed'
-                        ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                    }`}
+              {/* Right Column: Role Permissions & Base Compensation */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Staff Role Permissions <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={staffRoleInput}
+                    onChange={e => setStaffRoleInput(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-semibold"
                   >
-                    Fixed Monthly
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStaffSalaryTypeInput('per_day')}
-                    className={`p-2 rounded-lg font-bold text-center border cursor-pointer transition ${
-                      staffSalaryTypeInput === 'per_day'
-                        ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                    }`}
-                  >
-                    Per-Day
-                  </button>
+                    <option value="manager">Manager (Menu, Tables, KDS, Orders)</option>
+                    <option value="supervisor">Supervisor (Department-Scoped)</option>
+                    <option value="waiter">Waiter (Tables, Orders, Service)</option>
+                    <option value="kitchen">Kitchen Staff (KDS, Chef)</option>
+                    <option value="cashier">Cashier (Billing &amp; Checkout)</option>
+                  </select>
                 </div>
-                <p className="text-[10px] text-slate-500">
-                  {staffSalaryTypeInput === 'fixed'
-                    ? 'Fixed: Full monthly base pay irrespective of attendance punch.'
-                    : 'Per-Day: Pro-rated by attendance days (daily rate × days).'}
-                </p>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1">
+                  <label className="block font-bold text-slate-800 dark:text-slate-200">
+                    Monthly Base Salary (₹)
+                  </label>
+                  <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600">
+                    <span className="font-bold text-slate-500">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="500"
+                      placeholder="e.g. 18000"
+                      value={staffSalaryInput}
+                      onChange={e => setStaffSalaryInput(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="w-full text-sm font-black bg-transparent text-slate-900 dark:text-white outline-none"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    This base salary is used for calculating daily rate and monthly payroll slips.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1.5">
+                  <label className="block font-bold text-slate-700 dark:text-slate-300">
+                    Salary Calculation Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStaffSalaryTypeInput('per_day')}
+                      className={`p-2 rounded-lg font-bold text-center border cursor-pointer transition ${
+                        staffSalaryTypeInput === 'per_day'
+                          ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                      }`}
+                    >
+                      Per-Day (Default)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStaffSalaryTypeInput('fixed')}
+                      className={`p-2 rounded-lg font-bold text-center border cursor-pointer transition ${
+                        staffSalaryTypeInput === 'fixed'
+                          ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                          : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                      }`}
+                    >
+                      Fixed Monthly
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    {staffSalaryTypeInput === 'per_day'
+                      ? 'Per-Day: Pro-rated by attendance days (daily rate × days worked).'
+                      : 'Fixed: Full monthly base pay irrespective of attendance punch.'}
+                  </p>
+                </div>
               </div>
             </div>
+
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"

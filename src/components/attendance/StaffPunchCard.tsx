@@ -14,7 +14,9 @@ import {
   formatWorkingDuration,
   GeofenceConfig,
   getAttendoSettings,
-  calculateHaversineDistanceMeters
+  calculateHaversineDistanceMeters,
+  isPunchOutMandatory,
+  getMissedPunchOutDates
 } from '@/lib/attendoEngine';
 import { Restaurant, db } from '@/lib/db';
 import SelfieCaptureModal from './SelfieCaptureModal';
@@ -68,6 +70,7 @@ export default function StaffPunchCard({
   const [salarySlips, setSalarySlips] = useState<SalaryRecord[]>([]);
   const [selectedSlip, setSelectedSlip] = useState<SalaryRecord | null>(null);
   const [slipModalOpen, setSlipModalOpen] = useState(false);
+  const [missedDates, setMissedDates] = useState<string[]>([]);
 
   // 2. useRef
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -206,6 +209,22 @@ export default function StaffPunchCard({
     acquireGpsLocation();
   }, []);
 
+  // 6.5 useEffect: Detect missed punch-out dates for staff notice
+  useEffect(() => {
+    if (!restaurant?.id || !staff?.id) return;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const todayStr = now.toISOString().split('T')[0];
+
+    if (isPunchOutMandatory(restaurant)) {
+      getStaffMonthlyAttendance(restaurant.id, staff.id, currentYear, currentMonth).then(atts => {
+        const missed = getMissedPunchOutDates(atts, todayStr);
+        setMissedDates(missed);
+      });
+    }
+  }, [restaurant, staff, todayAttendance]);
+
   // 7. useEffect: Load history & slips when tab selected
   useEffect(() => {
     if (!restaurant?.id || !staff?.id) return;
@@ -314,6 +333,20 @@ export default function StaffPunchCard({
 
   return (
     <div className="w-full max-w-lg mx-auto space-y-4">
+      {/* Notice Banner: Missing Punch-Out Warning */}
+      {missedDates.length > 0 && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-2xl flex items-start gap-3 text-xs text-amber-900 dark:text-amber-200 shadow-sm animate-fade-in">
+          <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-sm text-amber-950 dark:text-amber-100">
+              Notice: Aapne {missedDates.length} din punch-out nahi kiya hai
+            </p>
+            <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">
+              Missed Dates: <strong>{missedDates.join(', ')}</strong>. Kripya apne manager ya owner se sampark karke attendance manually approve karwayen.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Sub-Navigation Tabs */}
       <div className="flex bg-slate-100 dark:bg-slate-800/70 p-1 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300">
         <button
