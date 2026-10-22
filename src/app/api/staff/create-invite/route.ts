@@ -173,6 +173,7 @@ export async function POST(req: Request) {
       }
     }
 
+    let newUser: any = null;
     if (existingAuthUser) {
       if (existingAuthUser.id === restRow?.owner_id || existingAuthUser.email?.toLowerCase() === ownerEmail) {
         return NextResponse.json({
@@ -180,7 +181,7 @@ export async function POST(req: Request) {
           code: 'OWNER_EMAIL_RESTRICTED'
         }, { status: 400 });
       }
-      const existingRestId = existingAuthUser.user_metadata?.restaurant_id;
+      const existingRestId = existingAuthUser.user_metadata?.restaurant_id || existingProfile?.restaurant_id;
       if (existingRestId === restaurantId) {
         return NextResponse.json({
           error: 'A staff account with this email already exists in this restaurant.',
@@ -188,19 +189,42 @@ export async function POST(req: Request) {
         }, { status: 409 });
       }
       if (existingRestId && existingRestId !== restaurantId) {
-        return NextResponse.json({
-          error: 'This email is already registered to another restaurant.',
-          code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
-        }, { status: 409 });
+        // Verify if the other restaurant still exists in DB
+        const { data: otherRest } = await supabaseAdmin
+          .from('restaurants')
+          .select('id, name')
+          .eq('id', existingRestId)
+          .maybeSingle();
+
+        if (otherRest) {
+          return NextResponse.json({
+            error: `This email is already registered to another restaurant (${otherRest.name}).`,
+            code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
+          }, { status: 409 });
+        }
       }
-      return NextResponse.json({
-        error: 'An account with this email address already exists. Please use a different email or log in.',
-        code: 'EMAIL_ALREADY_REGISTERED'
-      }, { status: 409 });
+
+      // If user has no active restaurant in DB (unassigned or leftover from previous restaurant cleanups),
+      // seamlessly adopt this account into this restaurant as a staff member!
+      newUser = existingAuthUser;
+      try {
+        await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
+          password: password || undefined,
+          user_metadata: {
+            fullName: name,
+            role: role || 'staff',
+            department: resolvedDept,
+            phone: phone || '',
+            restaurant_id: restaurantId,
+            verification_status: 'pending_verification'
+          }
+        });
+      } catch (updateErr) {
+        console.warn('[create-invite] Could not update auth user metadata on adopt:', updateErr);
+      }
     }
 
     // 2. User does not exist -> Create user cleanly using admin API or signUp fallback
-    let newUser: any = null;
     let createErrMessage = '';
     try {
       const { data: newAuthData, error: createErr } = await supabaseAdmin.auth.admin.createUser({
@@ -231,21 +255,58 @@ export async function POST(req: Request) {
       if (createErrMessage && createErrMessage.trim() && createErrMessage !== '{}') {
         const lower = createErrMessage.toLowerCase();
         if (lower.includes('already') || lower.includes('registered') || lower.includes('exists')) {
-          return NextResponse.json({
-            error: 'An account with this email address already exists. Please use a different email.',
-            code: 'STAFF_EMAIL_ALREADY_EXISTS'
-          }, { status: 409 });
-        }
-        if (lower.includes('password')) {
+          // Attempt to find user and adopt if unassigned to another active restaurant
+          try {
+            const { data: searchList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+            const foundUser = searchList?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
+            if (foundUser) {
+              const uRestId = foundUser.user_metadata?.restaurant_id;
+              if (uRestId && uRestId !== restaurantId) {
+                const { data: activeOtherRest } = await supabaseAdmin.from('restaurants').select('id, name').eq('id', uRestId).maybeSingle();
+                if (activeOtherRest) {
+                  return NextResponse.json({
+                    error: `This email is already registered to another restaurant (${activeOtherRest.name}).`,
+                    code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
+                  }, { status: 409 });
+                }
+              }
+              // Adopt unassigned user
+              newUser = foundUser;
+              try {
+                await supabaseAdmin.auth.admin.updateUserById(foundUser.id, {
+                  password: password || undefined,
+                  user_metadata: {
+                    fullName: name,
+                    role: role || 'staff',
+                    department: resolvedDept,
+                    phone: phone || '',
+                    restaurant_id: restaurantId,
+                    verification_status: 'pending_verification'
+                  }
+                });
+              } catch (_) {}
+            }
+          } catch (adoptErr) {
+            console.warn('[create-invite] Adoption search error:', adoptErr);
+          }
+
+          if (!newUser) {
+            return NextResponse.json({
+              error: 'An account with this email address already exists. Please use a different email.',
+              code: 'STAFF_EMAIL_ALREADY_EXISTS'
+            }, { status: 409 });
+          }
+        } else if (lower.includes('password')) {
           return NextResponse.json({
             error: 'Staff password does not meet requirements. Please provide at least 6 characters.',
             code: 'INVALID_PASSWORD'
           }, { status: 400 });
+        } else {
+          return NextResponse.json({
+            error: createErrMessage,
+            code: 'USER_CREATION_FAILED'
+          }, { status: 400 });
         }
-        return NextResponse.json({
-          error: createErrMessage,
-          code: 'USER_CREATION_FAILED'
-        }, { status: 400 });
       }
 
       const { data: signUpData, error: signUpErr } = await supabaseAdmin.auth.signUp({
@@ -263,12 +324,59 @@ export async function POST(req: Request) {
         }
       });
       if (signUpErr || !signUpData?.user) {
-        const fallbackMsg = (signUpErr?.message && signUpErr.message.trim() && signUpErr.message !== '{}')
-          ? signUpErr.message.trim()
-          : 'Failed to create staff account. The email may already be registered or invalid.';
-        return NextResponse.json({ error: fallbackMsg, code: 'SIGNUP_FAILED' }, { status: 400 });
+        const signMsg = signUpErr?.message?.toLowerCase() || '';
+        const isAlreadyExists = signMsg.includes('already') || signMsg.includes('exists') || (signUpErr && (signUpErr).code === 'user_already_exists');
+
+        if (isAlreadyExists) {
+          // Check if user has an existing profile in another active restaurant
+          const { data: existingProf } = await supabaseAdmin
+            .from('profiles')
+            .select('*')
+            .eq('email', cleanEmail)
+            .maybeSingle();
+
+          if (existingProf?.restaurant_id && existingProf.restaurant_id !== restaurantId) {
+            const { data: otherRest } = await supabaseAdmin.from('restaurants').select('id, name').eq('id', existingProf.restaurant_id).maybeSingle();
+            if (otherRest) {
+              return NextResponse.json({
+                error: `This email is already registered to another restaurant (${otherRest.name}).`,
+                code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
+              }, { status: 409 });
+            }
+          }
+
+          // User is unassigned to any restaurant: adopt existing auth account!
+          try {
+            const { data: searchList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+            const matchedAuthUser = searchList?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
+            if (matchedAuthUser) {
+              newUser = matchedAuthUser;
+              try {
+                await supabaseAdmin.auth.admin.updateUserById(matchedAuthUser.id, {
+                  password: password || undefined,
+                  user_metadata: {
+                    fullName: name,
+                    role: role || 'staff',
+                    department: resolvedDept,
+                    phone: phone || '',
+                    restaurant_id: restaurantId,
+                    verification_status: 'pending_verification'
+                  }
+                });
+              } catch (_) {}
+            }
+          } catch (_) {}
+        }
+
+        if (!newUser) {
+          const fallbackMsg = (signUpErr?.message && signUpErr.message.trim() && signUpErr.message !== '{}')
+            ? signUpErr.message.trim()
+            : 'Failed to create staff account. The email may already be registered or invalid.';
+          return NextResponse.json({ error: fallbackMsg, code: 'SIGNUP_FAILED' }, { status: 400 });
+        }
+      } else {
+        newUser = signUpData.user;
       }
-      newUser = signUpData.user;
     }
 
     // Create profile row with explicit restaurant_id using valid columns
