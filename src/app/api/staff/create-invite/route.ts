@@ -171,35 +171,12 @@ export async function POST(req: Request) {
         }
       }
 
-      // If previous restaurant was deleted during cleanup or user is unassigned, adopt this profile!
-      newUser = {
-        id: existingProfile.id,
-        email: cleanEmail,
-        user_metadata: {
-          fullName: name,
-          role: role || 'staff',
-          department: resolvedDept,
-          phone: phone || '',
-          restaurant_id: restaurantId,
-          verification_status: 'pending_verification'
-        }
-      };
-
+      // Clean up stale orphan profile from old deleted restaurant
       try {
-        await supabaseAdmin.auth.admin.updateUserById(existingProfile.id, {
-          password: password || undefined,
-          user_metadata: {
-            fullName: name,
-            role: role || 'staff',
-            department: resolvedDept,
-            phone: phone || '',
-            restaurant_id: restaurantId,
-            verification_status: 'pending_verification'
-          }
-        });
-      } catch (uErr) {
-        console.warn('[create-invite] Could not update auth user on profile adopt:', uErr);
-      }
+        await supabaseAdmin.auth.admin.deleteUser(existingProfile.id);
+      } catch (_) {}
+      await supabaseAdmin.from('profiles').delete().eq('email', cleanEmail);
+      console.log(`[create-invite] Purged stale orphan profile ${existingProfile.id} for ${cleanEmail}`);
     }
 
     // 4. Search auth user by email
@@ -248,24 +225,15 @@ export async function POST(req: Request) {
         }
       }
 
-      // If user has no active restaurant in DB (unassigned or leftover from previous restaurant cleanups),
-      // seamlessly adopt this account into this restaurant as a staff member!
-      newUser = existingAuthUser;
+      // User has no active restaurant in DB (stale/orphan from previous cleanup).
+      // Purge old auth record so we can register fresh with the newly specified password and details!
       try {
-        await supabaseAdmin.auth.admin.updateUserById(existingAuthUser.id, {
-          password: password || undefined,
-          user_metadata: {
-            fullName: name,
-            role: role || 'staff',
-            department: resolvedDept,
-            phone: phone || '',
-            restaurant_id: restaurantId,
-            verification_status: 'pending_verification'
-          }
-        });
-      } catch (updateErr) {
-        console.warn('[create-invite] Could not update auth user metadata on adopt:', updateErr);
+        await supabaseAdmin.auth.admin.deleteUser(existingAuthUser.id);
+        console.log(`[create-invite] Purged stale auth user ${existingAuthUser.id} for ${cleanEmail}`);
+      } catch (delErr) {
+        console.warn('[create-invite] Could not delete stale auth user:', delErr);
       }
+      await supabaseAdmin.from('profiles').delete().eq('email', cleanEmail);
     }
 
     // 2. User does not exist -> Create user cleanly using admin API or signUp fallback
@@ -299,26 +267,29 @@ export async function POST(req: Request) {
       if (createErrMessage && createErrMessage.trim() && createErrMessage !== '{}') {
         const lower = createErrMessage.toLowerCase();
         if (lower.includes('already') || lower.includes('registered') || lower.includes('exists')) {
-          // Attempt to find user and adopt if unassigned to another active restaurant
+          // Attempt to find and purge stale unassigned user from auth.users
+          let purgedStale = false;
           try {
             const { data: searchList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
             const foundUser = searchList?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
-            if (foundUser) {
+            if (foundUser && foundUser.id !== restRow?.owner_id) {
               const uRestId = foundUser.user_metadata?.restaurant_id;
+              let isOtherActive = false;
               if (uRestId && uRestId !== restaurantId) {
-                const { data: activeOtherRest } = await supabaseAdmin.from('restaurants').select('id, name').eq('id', uRestId).maybeSingle();
-                if (activeOtherRest) {
-                  return NextResponse.json({
-                    error: `This email is already registered to another restaurant (${activeOtherRest.name}).`,
-                    code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
-                  }, { status: 409 });
-                }
+                const { data: otherRest } = await supabaseAdmin.from('restaurants').select('id').eq('id', uRestId).maybeSingle();
+                if (otherRest) isOtherActive = true;
               }
-              // Adopt unassigned user
-              newUser = foundUser;
-              try {
-                await supabaseAdmin.auth.admin.updateUserById(foundUser.id, {
-                  password: password || undefined,
+              if (!isOtherActive) {
+                await supabaseAdmin.auth.admin.deleteUser(foundUser.id);
+                await supabaseAdmin.from('profiles').delete().eq('email', cleanEmail);
+                console.log(`[create-invite] Purged stale auth user ${foundUser.id} for ${cleanEmail}`);
+                purgedStale = true;
+
+                // Re-create user cleanly with newly specified password!
+                const { data: retryAuth, error: retryErr } = await supabaseAdmin.auth.admin.createUser({
+                  email: cleanEmail,
+                  password: password || 'SmartDine123!',
+                  email_confirm: false,
                   user_metadata: {
                     fullName: name,
                     role: role || 'staff',
@@ -328,15 +299,24 @@ export async function POST(req: Request) {
                     verification_status: 'pending_verification'
                   }
                 });
-              } catch (_) {}
+                if (retryAuth?.user) {
+                  newUser = retryAuth.user;
+                }
+              } else {
+                return NextResponse.json({
+                  error: 'This email is already registered to another restaurant.',
+                  code: 'EMAIL_REGISTERED_OTHER_RESTAURANT'
+                }, { status: 409 });
+              }
             }
-          } catch (adoptErr) {
-            console.warn('[create-invite] Adoption search error:', adoptErr);
+          } catch (purgeErr) {
+            console.warn('[create-invite] Purge and recreate error:', purgeErr);
           }
 
-          if (!newUser) {
+          if (!purgedStale && !newUser) {
+            // If user exists and cannot be purged automatically, return clear instruction
             return NextResponse.json({
-              error: 'An account with this email address already exists. Please use a different email.',
+              error: 'An account with this email address already exists. Please use a different email or delete it first.',
               code: 'STAFF_EMAIL_ALREADY_EXISTS'
             }, { status: 409 });
           }
