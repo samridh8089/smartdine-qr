@@ -78,6 +78,8 @@ export async function POST(req: Request) {
 
     // 5. Update user in auth.users: Confirm email + Set new password
     let updated = false;
+    let adminErrorDetail = null;
+    let rpcErrorDetail = null;
 
     // 5a. Admin API
     try {
@@ -90,17 +92,29 @@ export async function POST(req: Request) {
           verification_status: 'active'
         }
       });
-      if (!adminErr) updated = true;
-    } catch (_) {}
+      if (!adminErr) {
+        updated = true;
+      } else {
+        adminErrorDetail = adminErr;
+      }
+    } catch (e: any) {
+      adminErrorDetail = e?.message || String(e);
+    }
 
     // 5b. Database RPC
     try {
-      await supabaseAdmin.rpc('reset_staff_password', {
+      const { data: rpcData, error: rpcErr } = await supabaseAdmin.rpc('reset_staff_password', {
         target_user_id: targetUserId,
         new_password: password
       });
-      updated = true;
-    } catch (_) {}
+      if (!rpcErr) {
+        updated = true;
+      } else {
+        rpcErrorDetail = rpcErr;
+      }
+    } catch (e: any) {
+      rpcErrorDetail = e?.message || String(e);
+    }
 
     // 5c. Ensure profile has valid role and restaurant_id
     try {
@@ -118,6 +132,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       synced: updated,
+      targetUserId,
+      adminErrorDetail,
+      rpcErrorDetail,
       message: 'Staff credentials and confirmation synced successfully'
     });
   } catch (err: any) {

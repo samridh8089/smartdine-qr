@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
 
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
@@ -62,10 +62,23 @@ export async function POST(req: Request) {
       } catch (e) {}
     }
 
-    // 5. Delete user from auth.users via Supabase Admin API
-    const { error: delAuthErr } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
-    if (delAuthErr) {
-      console.warn('Supabase Admin deleteUser warning:', delAuthErr.message);
+    // 5. Delete user from auth.users via Supabase Admin API + SQL RPC delete_staff_user
+    try {
+      await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+    } catch (_) {}
+
+    // 5b. Direct PostgreSQL delete_staff_user RPC with caller's authenticated session
+    try {
+      const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
+      const token = authHeader.replace('Bearer ', '').trim();
+      if (token) {
+        const callerClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-', {
+          global: { headers: { Authorization: `Bearer ${token}` } }
+        });
+        await callerClient.rpc('delete_staff_user', { target_user_id: targetUserId });
+      }
+    } catch (rpcErr) {
+      console.warn('RPC delete_staff_user error:', rpcErr);
     }
 
     // Broadcast staff-deleted event across Realtime channels
