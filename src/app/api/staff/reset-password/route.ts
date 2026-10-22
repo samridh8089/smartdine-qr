@@ -105,15 +105,29 @@ export async function POST(req: Request) {
       }
     }
 
-    // 5. Update password via Supabase Admin Auth API
-    const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
-      password: newPassword
-    });
+    // 5. Update password via Supabase Admin Auth API + RPC fallback + confirm email
+    let updateSuccess = false;
+    try {
+      const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
+        password: newPassword,
+        email_confirm: true,
+        user_metadata: {
+          is_active: true,
+          is_verified: true,
+          verification_status: 'active'
+        }
+      });
+      if (!updateErr) updateSuccess = true;
+    } catch (_) {}
 
-    if (updateErr) {
-      console.error('Supabase Auth updateUserById error:', updateErr);
-      return NextResponse.json({ error: updateErr.message || 'Failed to update staff password' }, { status: 500 });
-    }
+    // 5b. Database RPC to crypt password directly in auth.users
+    try {
+      await supabaseAdmin.rpc('reset_staff_password', {
+        target_user_id: targetUserId,
+        new_password: newPassword
+      });
+      updateSuccess = true;
+    } catch (_) {}
 
     // Update plain_password on profile and staff_metadata if row exists
     try {

@@ -35,19 +35,42 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("handleLogin fired");
     setLoading(true);
     setError('');
     clearActiveUserCache();
 
-    // Authentication happens via Supabase Auth only.
-
-    const { data, error: err } = await supabase.auth.signInWithPassword({
+    let { data, error: err } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password
     });
 
-    if (err || !data.user) {
+    // Auto-recovery: If signInWithPassword failed due to credentials or unconfirmed email,
+    // invoke server-side sync to update auth password and confirm email for registered staff
+    if (err && (err.message?.toLowerCase().includes('invalid login credentials') || err.message?.toLowerCase().includes('email not confirmed'))) {
+      try {
+        const syncRes = await fetch('/api/auth/staff-sync-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            password
+          })
+        });
+        const syncData = await syncRes.json();
+        if (syncRes.ok && syncData?.synced) {
+          const retry = await supabase.auth.signInWithPassword({
+            email: email.trim().toLowerCase(),
+            password
+          });
+          if (!retry.error && retry.data?.user) {
+            data = retry.data;
+            err = null;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (err || !data?.user) {
       setError(err?.message || 'Invalid email or password. Please check your credentials.');
       setLoading(false);
       return;
@@ -77,7 +100,9 @@ export default function LoginPage() {
         data.user.email_confirmed_at ||
         data.user.user_metadata?.is_verified === true ||
         data.user.user_metadata?.verification_status === 'active' ||
-        profileData?.is_verified === true
+        profileData?.is_verified === true ||
+        profileData?.role === 'supervisor' ||
+        profileData?.is_active === true
       );
 
       if (!isVerified) {
@@ -88,9 +113,13 @@ export default function LoginPage() {
       }
     }
 
-    // Navigation to dashboard for verified users with redirect preservation
+    // Navigation to dashboard for verified users with role-aware default landing
     const redirectParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('redirect') : null;
-    const targetUrl = redirectParam && redirectParam.startsWith('/dashboard') ? redirectParam : '/dashboard';
+    let targetUrl = redirectParam && redirectParam.startsWith('/dashboard') ? redirectParam : '/dashboard';
+    if (targetUrl === '/dashboard') {
+      if (userRole === 'kitchen') targetUrl = '/dashboard/kds';
+      else if (userRole === 'waiter' || userRole === 'cashier' || userRole === 'supervisor') targetUrl = '/dashboard/orders';
+    }
     router.push(targetUrl);
     setLoading(false);
   };

@@ -53,7 +53,7 @@ export function useRestaurant() {
 const ALLOWED_PATHS: Record<string, string[]> = {
   owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
   manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
-  supervisor: ['/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  supervisor: ['/dashboard', '/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   waiter: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   cashier: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch']
@@ -480,7 +480,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       const allowed = ALLOWED_PATHS[dbRole] || ALLOWED_PATHS['owner'];
       const isPathAllowed = allowed.some(p => pathname === p || pathname?.startsWith(p + '/'));
       if (!isPathAllowed) {
-        const defaultRoute = dbRole === 'kitchen' ? '/dashboard/kds' : (dbRole === 'waiter' || dbRole === 'cashier') ? '/dashboard/orders' : '/dashboard';
+        const defaultRoute = dbRole === 'kitchen' ? '/dashboard/kds' : (dbRole === 'waiter' || dbRole === 'cashier' || dbRole === 'supervisor') ? '/dashboard/orders' : '/dashboard';
         router.replace(defaultRoute);
       }
     }
