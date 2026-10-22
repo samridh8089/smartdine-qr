@@ -27,7 +27,20 @@ export async function POST(req: Request) {
 
     // 2. Privilege Escalation Protection: Forbid creating super_admin or owner roles via staff invite
     const requestedRole = (role || 'staff').toLowerCase().trim();
-    const ALLOWED_STAFF_ROLES = ['waiter', 'kitchen', 'cashier', 'manager', 'supervisor', 'staff'];
+    const ALLOWED_STAFF_ROLES = [
+      'manager',
+      'supervisor',
+      'head_chef',
+      'chef',
+      'kitchen',
+      'kitchen_helper',
+      'captain',
+      'waiter',
+      'cashier',
+      'cleaner',
+      'helper',
+      'staff'
+    ];
     if (requestedRole === 'super_admin' || requestedRole === 'owner' || !ALLOWED_STAFF_ROLES.includes(requestedRole)) {
       return NextResponse.json({
         error: 'ROLE_ESCALATION_FORBIDDEN',
@@ -40,7 +53,12 @@ export async function POST(req: Request) {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const resolvedDept = department || (role === 'waiter' ? 'waiter' : role === 'kitchen' ? 'kitchen' : 'general');
+    const resolvedDept = department || (
+      ['head_chef', 'chef', 'kitchen', 'kitchen_helper'].includes(requestedRole) ? 'kitchen' :
+      ['captain', 'waiter', 'cleaner', 'helper'].includes(requestedRole) ? 'service' :
+      requestedRole === 'cashier' ? 'cashier' :
+      'general'
+    );
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
