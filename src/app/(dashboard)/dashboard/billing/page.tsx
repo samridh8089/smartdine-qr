@@ -20,7 +20,8 @@ import { dashboardStore } from '@/lib/dashboardStore';
 export default function BillingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { restaurant, profile, planSpec, refresh } = useRestaurant();
+  const { restaurant, profile, planSpec, refresh, activeRole } = useRestaurant();
+  const isOwner = profile?.role === 'owner' || activeRole === 'owner';
   const restId = restaurant?.id || profile?.restaurant_id;
   const initialCachedBilling = restId ? dashboardStore.getCachedBilling(restId) : null;
   const [tablesCount, setTablesCount] = useState(() => initialCachedBilling?.tablesCount || 0);
@@ -582,41 +583,43 @@ export default function BillingPage() {
         </div>
       </div>
 
-      {/* DANGER ZONE: DELETE RESTAURANT */}
-      <div className="pt-8 border-t border-slate-100 dark:border-slate-800">
-        <Card className="border-rose-100 dark:border-rose-950 bg-rose-50/20 dark:bg-rose-950/5">
-          <CardHeader className="flex items-center gap-2 border-b border-rose-100/50 dark:border-rose-950/20 pb-3">
-            <ShieldAlert className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-            <h3 className="font-extrabold text-rose-700 dark:text-rose-400 text-base">Danger Zone</h3>
-          </CardHeader>
-          <CardContent className="p-6 space-y-4">
-            <div>
-              <h4 className="font-bold text-slate-900 dark:text-white text-sm">Delete Restaurant Profile</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1 leading-relaxed">
-                Permanently deletes the restaurant workspace, digital menus, categories, tables, client orders, and active staff logins. This action is permanent and cannot be undone.
-              </p>
-            </div>
+            {/* DANGER ZONE: DELETE RESTAURANT (ONLY OWNER) */}
+      {isOwner && (
+        <div className="pt-8 border-t border-slate-100 dark:border-slate-800">
+          <Card className="border-rose-100 dark:border-rose-950 bg-rose-50/20 dark:bg-rose-950/5">
+            <CardHeader className="flex items-center gap-2 border-b border-rose-100/50 dark:border-rose-950/20 pb-3">
+              <ShieldAlert className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              <h3 className="font-extrabold text-rose-700 dark:text-rose-400 text-base">Danger Zone</h3>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <div>
+                <h4 className="font-bold text-slate-900 dark:text-white text-sm">Delete Restaurant Profile</h4>
+                <p className="text-slate-500 dark:text-slate-400 text-xs mt-1 leading-relaxed">
+                  Permanently deletes the restaurant workspace, digital menus, categories, tables, client orders, and active staff logins. This action is permanent and cannot be undone.
+                </p>
+              </div>
 
-            <form onSubmit={handleDeleteRestaurant} className="flex flex-col sm:flex-row gap-3 pt-2">
-              <input
-                type="text"
-                placeholder='Type "delete my restaurant" to confirm'
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                className="flex-1 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 border border-rose-200 dark:border-rose-900/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 bg-white dark:bg-slate-900"
-                required
-              />
-              <Button 
-                type="submit" 
-                className="bg-rose-600 hover:bg-rose-700 text-white shrink-0"
-                isLoading={deleteLoading}
-              >
-                <Trash2 className="h-4 w-4 mr-1" /> Permanent Delete Restaurant
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+              <form onSubmit={handleDeleteRestaurant} className="flex flex-col sm:flex-row gap-3 pt-2">
+                <input
+                  type="text"
+                  placeholder='Type "delete my restaurant" to confirm'
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="flex-1 px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 border border-rose-200 dark:border-rose-900/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 bg-white dark:bg-slate-900"
+                  required
+                />
+                <Button 
+                  type="submit" 
+                  className="bg-rose-600 hover:bg-rose-700 text-white shrink-0"
+                  isLoading={deleteLoading}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" /> Permanent Delete Restaurant
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

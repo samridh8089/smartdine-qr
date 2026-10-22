@@ -52,10 +52,10 @@ export function useRestaurant() {
 
 const ALLOWED_PATHS: Record<string, string[]> = {
   owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
-  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
-  supervisor: ['/dashboard', '/dashboard/orders', '/dashboard/tables', '/dashboard/kds', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
+  supervisor: ['/dashboard', '/dashboard/orders', '/dashboard/tables', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   head_chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/orders', '/dashboard/attendance', '/dashboard/attendance/punch'],
-  chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen_helper: ['/dashboard/kds', '/dashboard/attendance', '/dashboard/attendance/punch'],
   captain: ['/dashboard/orders', '/dashboard/tables', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
@@ -69,13 +69,13 @@ const ALLOWED_PATHS: Record<string, string[]> = {
 const ALL_MENU_ITEMS = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager', 'supervisor'] },
   { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'captain', 'waiter', 'cashier', 'kitchen'] },
-  { name: 'Kitchen KDS', href: '/dashboard/kds', icon: ChefHat, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen', 'kitchen_helper'] },
+  { name: 'Kitchen KDS', href: '/dashboard/kds', icon: ChefHat, roles: ['head_chef', 'chef', 'kitchen', 'kitchen_helper'] },
   { name: 'Tables', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'captain', 'waiter', 'cashier'] },
-  { name: 'Smart Menu by Clever Ops', href: '/dashboard/menu', icon: Sparkles, roles: ['owner', 'manager', 'kitchen', 'supervisor', 'head_chef', 'captain'] },
+  { name: 'Smart Menu by Clever Ops', href: '/dashboard/menu', icon: Sparkles, roles: ['owner', 'manager', 'head_chef', 'chef', 'kitchen', 'supervisor', 'captain'] },
   { name: 'Attendance & Shifts', href: '/dashboard/attendance', icon: UserCheck, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen', 'kitchen_helper', 'captain', 'waiter', 'cashier', 'cleaner', 'helper', 'staff'] },
   { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen'] },
   { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor', 'cashier'] },
-  { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner'] },
+  { name: 'Billing & SaaS', href: '/dashboard/billing', icon: CreditCard, roles: ['owner', 'manager'] },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['owner', 'manager'] }
 ];
 
@@ -499,6 +499,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const filteredMenuItems = ALL_MENU_ITEMS.filter(item => {
     if (!item.roles.includes(activeRole)) return false;
+    if (activeRole === 'manager' && item.href === '/dashboard/reports' && (restaurant?.settings as any)?.manager_reports_enabled === false) return false;
     if (activeRole === 'supervisor') {
       const dept = (profile?.department || '').toLowerCase();
       if (dept === 'kitchen' && (item.href === '/dashboard/orders' || item.href === '/dashboard/tables')) return false;
