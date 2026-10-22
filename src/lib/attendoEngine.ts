@@ -93,6 +93,10 @@ export interface SalaryRecord {
   total_advance: number;
   net_salary: number;
   status: 'pending' | 'paid';
+  approval_status?: 'draft' | 'pending' | 'approved';
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
   slip_url?: string | null;
   paid_at?: string | null;
   created_at?: string;
@@ -250,7 +254,7 @@ export async function getStaffProfiles(restaurantId: string): Promise<StaffProfi
         phone: p.phone || saved?.phone || '',
         email: p.email || '',
         base_salary: Number(saved?.base_salary) || 15000,
-        salary_type: saved?.salary_type || 'fixed',
+        salary_type: saved?.salary_type || 'per_day',
         is_active: p.is_active !== false,
         created_at: p.created_at || saved?.created_at,
         updated_at: saved?.updated_at
@@ -276,7 +280,7 @@ export async function saveStaffProfile(profile: Partial<StaffProfile> & { restau
     role: profile.role || 'waiter',
     phone: profile.phone || '',
     base_salary: Number(profile.base_salary) || 0,
-    salary_type: profile.salary_type || 'fixed',
+    salary_type: profile.salary_type || 'per_day',
     is_active: profile.is_active !== false,
     updated_at: new Date().toISOString()
   };
@@ -839,7 +843,7 @@ export async function calculateMonthlyPayroll(
     }
 
     const baseSalary = Number(staff.base_salary) || 0;
-    const salaryType: 'fixed' | 'per_day' = existing?.salary_type || staff.salary_type || 'fixed';
+    const salaryType: 'fixed' | 'per_day' = existing?.salary_type || staff.salary_type || 'per_day';
     const dailyRate = daysInMonth > 0 ? baseSalary / daysInMonth : 0;
 
     // Gross earned: Fixed pays full baseSalary, per_day calculates by attendance days
@@ -886,6 +890,10 @@ export async function calculateMonthlyPayroll(
       total_advance: totalAdvance,
       net_salary: netSalary,
       status: existing?.status || 'pending',
+      approval_status: existing?.approval_status || 'pending',
+      approved_by: existing?.approved_by || null,
+      approved_by_name: existing?.approved_by_name || null,
+      approved_at: existing?.approved_at || null,
       slip_url: existing?.slip_url || null,
       paid_at: existing?.paid_at || null,
       created_at: existing?.created_at || new Date().toISOString(),
@@ -925,4 +933,200 @@ export async function saveSalaryRecord(record: SalaryRecord): Promise<SalaryReco
   }
 
   return record;
+}
+
+
+/**
+ * Approve a single Salary Record with manager/owner audit trail
+ */
+export async function approveSalaryRecord(params: {
+  restaurantId: string;
+  salaryRecordId: string;
+  approverId: string;
+  approverName: string;
+}): Promise<SalaryRecord | null> {
+  const { restaurantId, salaryRecordId, approverId, approverName } = params;
+  const rest = await db.getRestaurantById(restaurantId);
+  if (!rest) return null;
+
+  const list: SalaryRecord[] = (rest.settings as any)?.attendo?.salary_records || [];
+  const idx = list.findIndex(r => r.id === salaryRecordId);
+  if (idx === -1) return null;
+
+  const updated: SalaryRecord = {
+    ...list[idx],
+    approval_status: 'approved',
+    approved_by: approverId,
+    approved_by_name: approverName,
+    approved_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  list[idx] = updated;
+
+  try {
+    await supabase.from('salary_records').upsert(updated, { onConflict: 'staff_id,month,year' });
+  } catch (_) {}
+
+  await supabase.from('restaurants').update({
+    settings: {
+      ...rest.settings,
+      attendo: {
+        ...((rest.settings as any)?.attendo || {}),
+        salary_records: list
+      }
+    }
+  }).eq('id', restaurantId);
+  db.clearRestaurantCache(restaurantId);
+
+  return updated;
+}
+
+/**
+ * Approve all salary records for a given month and year
+ */
+export async function approveAllSalaryRecords(params: {
+  restaurantId: string;
+  year: number;
+  month: number;
+  approverId: string;
+  approverName: string;
+}): Promise<SalaryRecord[]> {
+  const { restaurantId, year, month, approverId, approverName } = params;
+  const rest = await db.getRestaurantById(restaurantId);
+  if (!rest) return [];
+
+  const list: SalaryRecord[] = (rest.settings as any)?.attendo?.salary_records || [];
+  const nowIso = new Date().toISOString();
+
+  const updatedList = list.map(r => {
+    if (r.year === year && r.month === month) {
+      return {
+        ...r,
+        approval_status: 'approved' as const,
+        approved_by: approverId,
+        approved_by_name: approverName,
+        approved_at: nowIso,
+        updated_at: nowIso
+      };
+    }
+    return r;
+  });
+
+  try {
+    const toUpsert = updatedList.filter(r => r.year === year && r.month === month);
+    for (const rec of toUpsert) {
+      await supabase.from('salary_records').upsert(rec, { onConflict: 'staff_id,month,year' });
+    }
+  } catch (_) {}
+
+  await supabase.from('restaurants').update({
+    settings: {
+      ...rest.settings,
+      attendo: {
+        ...((rest.settings as any)?.attendo || {}),
+        salary_records: updatedList
+      }
+    }
+  }).eq('id', restaurantId);
+  db.clearRestaurantCache(restaurantId);
+
+  return updatedList.filter(r => r.year === year && r.month === month);
+}
+
+/**
+ * Manager / Owner Manual Approval & Override for Missing Punch-Out
+ */
+export async function managerApprovePunchOut(params: {
+  restaurantId: string;
+  staffId: string;
+  date: string;
+  managerUserId: string;
+  managerName: string;
+  status?: StaffAttendance['status'];
+  punchOutTime?: string;
+  notes?: string;
+}): Promise<{ success: boolean; attendance?: StaffAttendance; error?: string }> {
+  const { restaurantId, staffId, date, managerUserId, managerName, status = 'present', punchOutTime, notes } = params;
+
+  const now = new Date();
+  const rest = await db.getRestaurantById(restaurantId);
+  const list: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
+  const existing = list.find(a => a.staff_id === staffId && a.date === date);
+
+  const updated: StaffAttendance = {
+    id: existing?.id || `att_${staffId}_${date}`,
+    restaurant_id: restaurantId,
+    staff_id: staffId,
+    staff_name: existing?.staff_name,
+    staff_role: existing?.staff_role,
+    date,
+    punch_in_time: existing?.punch_in_time || `${date}T09:00:00.000Z`,
+    punch_out_time: punchOutTime || existing?.punch_out_time || now.toISOString(),
+    status,
+    marked_by_type: 'manager_override',
+    marked_by_user_id: managerUserId,
+    notes: notes || `Approved by ${managerName}`,
+    created_at: existing?.created_at || now.toISOString(),
+    updated_at: now.toISOString()
+  };
+
+  try {
+    await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
+  } catch (_) {}
+
+  if (rest) {
+    const filtered = list.filter(a => !(a.staff_id === staffId && a.date === date));
+    filtered.push(updated);
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        attendo: {
+          ...((rest.settings as any)?.attendo || {}),
+          attendance: filtered
+        }
+      }
+    }).eq('id', restaurantId);
+    db.clearRestaurantCache(restaurantId);
+  }
+
+  return { success: true, attendance: updated };
+}
+
+/**
+ * Check if punch out is mandatory for restaurant
+ */
+export function isPunchOutMandatory(restaurant: Restaurant | null): boolean {
+  if (!restaurant) return true;
+  const val = (restaurant.settings as any)?.attendo?.punch_out_mandatory;
+  return val !== undefined ? Boolean(val) : true;
+}
+
+/**
+ * Toggle punch-out mandatory policy
+ */
+export async function setPunchOutMandatory(restaurantId: string, mandatory: boolean): Promise<void> {
+  const rest = await db.getRestaurantById(restaurantId);
+  if (!rest) return;
+  await supabase.from('restaurants').update({
+    settings: {
+      ...rest.settings,
+      attendo: {
+        ...((rest.settings as any)?.attendo || {}),
+        punch_out_mandatory: mandatory
+      }
+    }
+  }).eq('id', restaurantId);
+  db.clearRestaurantCache(restaurantId);
+}
+
+/**
+ * Get dates where employee punched in but forgot to punch out (past dates)
+ */
+export function getMissedPunchOutDates(attendances: StaffAttendance[], todayDateStr: string): string[] {
+  return attendances
+    .filter(a => a.date < todayDateStr && a.punch_in_time && !a.punch_out_time && a.marked_by_type !== 'manager_override')
+    .map(a => a.date)
+    .sort();
 }

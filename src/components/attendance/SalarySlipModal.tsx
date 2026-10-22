@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { SalaryRecord } from '@/lib/attendoEngine';
 import { Restaurant } from '@/lib/db';
-import { Printer, X, CheckCircle, Clock } from 'lucide-react';
+import { Printer, X, CheckCircle, Clock, ShieldCheck } from 'lucide-react';
 
 interface SalarySlipModalProps {
   isOpen: boolean;
@@ -273,6 +273,44 @@ export default function SalarySlipModal({
                 Payment Status: {record.status}
               </p>
             </div>
+          </div>
+
+          {/* Approval & Audit Trail */}
+          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-2">
+            <div className="flex items-center gap-2.5">
+              {record.approval_status === 'approved' || record.approved_by_name ? (
+                <>
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-slate-900 block">
+                      Attendance &amp; Payroll Approved
+                    </span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Approved by <strong className="text-slate-800">{record.approved_by_name || 'Owner/Manager'}</strong> on {record.approved_at ? new Date(record.approved_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleDateString('en-IN')}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-5 h-5 text-amber-500 shrink-0" />
+                  <div>
+                    <span className="font-extrabold text-slate-900 block">
+                      Attendance &amp; Payroll Approval Pending
+                    </span>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      This payroll draft requires manual review and sign-off by Owner or Manager.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+            <span className={`self-start sm:self-auto px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+              record.approval_status === 'approved' || record.approved_by_name
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : 'bg-amber-100 text-amber-800 border border-amber-300'
+            }`}>
+              {record.approval_status === 'approved' || record.approved_by_name ? 'Verified & Approved' : 'Pending Approval'}
+            </span>
           </div>
 
           {/* Digital Verification Notice (No Physical Signatures Required) */}
