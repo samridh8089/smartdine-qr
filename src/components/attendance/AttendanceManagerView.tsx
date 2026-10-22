@@ -150,6 +150,7 @@ export default function AttendanceManagerView({
   const [staffPasswordInput, setStaffPasswordInput] = useState('');
   const [staffModalError, setStaffModalError] = useState<string | null>(null);
   const [savingStaff, setSavingStaff] = useState(false);
+  const [purgingEmail, setPurgingEmail] = useState(false);
 
   // Geofence Settings State
   const [geofenceConfig, setGeofenceConfig] = useState<GeofenceConfig>(() => getAttendoSettings(restaurant));
@@ -737,6 +738,38 @@ export default function AttendanceManagerView({
       setStaffModalError(msg);
     } finally {
       setSavingStaff(false);
+    }
+  };
+
+  const handlePurgeAndRetry = async () => {
+    if (!staffEmailInput.trim()) return;
+    setPurgingEmail(true);
+    setStaffModalError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch('/api/staff/delete-by-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          email: staffEmailInput.trim().toLowerCase(),
+          restaurantId: restaurant.id
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStaffModalError(data.error || 'Failed to delete old account.');
+        return;
+      }
+      // Stale account deleted from Supabase Auth! Automatically retry creation now!
+      await handleSaveStaffModal();
+    } catch (err: any) {
+      setStaffModalError(err.message || 'Error deleting old account.');
+    } finally {
+      setPurgingEmail(false);
     }
   };
 
@@ -2232,8 +2265,20 @@ export default function AttendanceManagerView({
               </div>
 
               {staffModalError && (
-                <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold">
-                  {staffModalError}
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                  <div className="flex-1 leading-relaxed">
+                    {staffModalError}
+                  </div>
+                  {(staffModalError.toLowerCase().includes('already exists') || staffModalError.toLowerCase().includes('different email')) && (
+                    <button
+                      type="button"
+                      disabled={purgingEmail}
+                      onClick={handlePurgeAndRetry}
+                      className="shrink-0 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm text-center"
+                    >
+                      {purgingEmail ? 'Deleting Old Account...' : 'Delete Old Account & Retry'}
+                    </button>
+                  )}
                 </div>
               )}
 
