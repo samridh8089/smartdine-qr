@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       preparing: ['kitchen', 'head_chef', 'chef', 'kitchen_helper', 'supervisor', 'manager', 'owner', 'super_admin'],
       ready: ['kitchen', 'head_chef', 'chef', 'kitchen_helper', 'supervisor', 'manager', 'owner', 'super_admin'],
       served: ['kitchen', 'head_chef', 'chef', 'kitchen_helper', 'waiter', 'captain', 'cleaner', 'helper', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
-      completed: ['cashier', 'waiter', 'captain', 'supervisor', 'manager', 'owner', 'super_admin'],
+      completed: ['cashier', 'manager', 'owner', 'super_admin'],
       accepted: ['waiter', 'captain', 'kitchen', 'head_chef', 'chef', 'kitchen_helper', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
       cancelled: ['kitchen', 'head_chef', 'chef', 'waiter', 'captain', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'],
     };
@@ -82,7 +82,9 @@ export async function POST(req: Request) {
     if (allowedRolesForStatus && !authCheck.isSuperAdmin && !allowedRolesForStatus.includes(callerRole)) {
       return NextResponse.json({
         error: 'FORBIDDEN',
-        message: `Role "${callerRole}" is not authorized to update order status to "${effectiveStatus}".`
+        message: effectiveStatus === 'completed'
+          ? 'You are not authorized to complete orders or collect payment.'
+          : `Role "${callerRole}" is not authorized to update order status to "${effectiveStatus}".`
       }, { status: 403 });
     }
 

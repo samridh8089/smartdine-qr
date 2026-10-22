@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useRestaurant } from '../../layout';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { db, Profile, AuditLog, getPlanFeatures } from '@/lib/db';
@@ -15,7 +16,8 @@ import {
   Settings, Users, History, Download, Upload, 
   Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard, Volume2, Copy, RefreshCw,
   Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil, QrCode,
-  Bell, BellOff, Tag, Archive, Printer
+  Bell, BellOff, Tag, Archive, Printer,
+  ArrowLeft, Search, UtensilsCrossed, Percent, Database, ShieldAlert, LayoutGrid, Store, Receipt
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -28,21 +30,123 @@ import { useQRDesign } from '@/components/qr-studio/storage';
 import { getCanonicalTableQRUrl } from '@/lib/qr';
 import { saveStaffProfile, getStaffProfiles, StaffProfile } from '@/lib/attendoEngine';
 
-export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' | 'offers' } = {}) {
-  const { restaurant, profile, planSpec, refresh } = useRestaurant();
+interface HubModuleItem {
+  id: 'profile' | 'staff' | 'qr_design' | 'charges' | 'payments' | 'devices' | 'notifications' | 'backup' | 'logs' | 'offers';
+  title: string;
+  desc: string;
+  badge?: string;
+  badgeColor?: string;
+  icon: any;
+  iconBg: string;
+  tags: string[];
+  ownerOnly?: boolean;
+}
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' | 'offers'>(() => {
-    if (initialTab && initialTab !== 'profile') return initialTab;
+const HUB_MODULES: HubModuleItem[] = [
+  {
+    id: 'profile',
+    title: 'Restaurant Profile',
+    desc: 'Name, logo, address, phone number & operating hours',
+    icon: Store,
+    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/40',
+    tags: ['restaurant', 'profile', 'name', 'logo', 'contact', 'timings', 'address', 'theme', 'cover']
+  },
+  {
+    id: 'staff',
+    title: 'Staff & Permissions',
+    desc: 'Managers, supervisors, chefs, waiters & salaries',
+    badge: '10 Roles',
+    badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+    icon: Users,
+    iconBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/40',
+    tags: ['staff', 'team', 'managers', 'supervisors', 'chefs', 'waiters', 'salary', 'permissions', 'roles', 'pin', 'wages']
+  },
+  {
+    id: 'qr_design',
+    title: 'Tables & QR Design',
+    desc: 'Table capacity, custom QR themes & standee PDF downloads',
+    icon: QrCode,
+    iconBg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-800/40',
+    tags: ['qr', 'tables', 'table layout', 'badges', 'qr codes', 'floor', 'download', 'standees', 'studio']
+  },
+  {
+    id: 'charges',
+    title: 'Taxes & Extra Charges',
+    desc: 'GST slabs (5%, 12%, 18%), service charge & container fee',
+    icon: Percent,
+    iconBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/40',
+    tags: ['taxes', 'extra charges', 'gst', 'service charge', 'packaging fee', 'delivery', 'tax']
+  },
+  {
+    id: 'payments',
+    title: 'Payment Gateways',
+    desc: 'UPI QR codes, cash desk & Razorpay payment gateway',
+    icon: CreditCard,
+    iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/40',
+    tags: ['payment methods', 'upi', 'cash', 'qr', 'razorpay', 'gateway', 'checkout', 'online']
+  },
+  {
+    id: 'devices',
+    title: 'Printers & Devices',
+    desc: 'Thermal KOT printers, Bluetooth auto-print & soundbox',
+    icon: Printer,
+    iconBg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/40',
+    tags: ['printers', 'hardware', 'bluetooth', 'kot', 'thermal', 'pos', 'receipt', 'kitchen printer', 'devices', 'sessions']
+  },
+  {
+    id: 'notifications',
+    title: 'Sound & Notifications',
+    desc: 'Kitchen bell audio, floor buzzer & WhatsApp alerts',
+    icon: Bell,
+    iconBg: 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 border border-teal-100 dark:border-teal-800/40',
+    tags: ['sound', 'alerts', 'bell', 'chime', 'notification', 'whatsapp', 'audio', 'buzzer']
+  },
+  {
+    id: 'backup',
+    title: 'Data & Backup',
+    desc: 'Export Excel sales, menu templates & database backup',
+    icon: Database,
+    iconBg: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-800/40',
+    tags: ['data', 'backup', 'export', 'csv', 'excel', 'snapshot', 'cloud', 'restore', 'menu import', 'download']
+  },
+  {
+    id: 'logs',
+    title: 'Activity Audit Logs',
+    desc: 'Track staff updates, price edits, deletes & login history',
+    badge: 'Owner Only',
+    badgeColor: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300',
+    icon: ShieldCheck,
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
+    tags: ['audit logs', 'security', 'owner', 'activity trail', 'history', 'who did what', 'audit', 'logs'],
+    ownerOnly: true
+  },
+  {
+    id: 'offers',
+    title: 'Offers & Discounts',
+    desc: 'Promo codes, festive coupons & banner announcements',
+    icon: Tag,
+    iconBg: 'bg-fuchsia-50 dark:bg-fuchsia-950/40 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-100 dark:border-fuchsia-800/40',
+    tags: ['offers', 'discounts', 'coupons', 'promo', 'codes', 'marketing']
+  }
+];
+
+export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub' | 'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' | 'offers' } = {}) {
+  const { restaurant, profile, planSpec, refresh, activeRole } = useRestaurant();
+  const isOwner = profile?.role === 'owner' || activeRole === 'owner';
+
+  const [activeTab, setActiveTab] = useState<'hub' | 'profile' | 'qr_design' | 'staff' | 'devices' | 'backup' | 'logs' | 'charges' | 'payments' | 'notifications' | 'offers'>(() => {
+    if (initialTab && initialTab !== 'hub') return initialTab;
     if (typeof window !== 'undefined') {
       if (window.location.pathname.includes('/staff')) return 'staff';
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam && ['profile', 'qr_design', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications', 'offers'].includes(tabParam)) {
+      if (tabParam && ['hub', 'profile', 'qr_design', 'staff', 'devices', 'backup', 'logs', 'charges', 'payments', 'notifications', 'offers'].includes(tabParam)) {
         return tabParam as any;
       }
     }
-    return 'profile';
+    return 'hub';
   });
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Staff OTP Verification Modal State
@@ -146,6 +250,32 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
 
   // Audit Logs State
   const [logs, setLogs] = useState<AuditLog[]>([]);
+
+  // Staff Password Reset Modal state
+  const [resetPassTarget, setResetPassTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [newPassVal, setNewPassVal] = useState('');
+  const [confirmPassVal, setConfirmPassVal] = useState('');
+  const [showPassToggle, setShowPassToggle] = useState(false);
+  const [resetPassSubmitting, setResetPassSubmitting] = useState(false);
+
+  // Owner Self-Password Change state
+  const [ownerCurrPass, setOwnerCurrPass] = useState('');
+  const [ownerNewPass, setOwnerNewPass] = useState('');
+  const [ownerConfirmPass, setOwnerConfirmPass] = useState('');
+  const [ownerShowPassToggle, setOwnerShowPassToggle] = useState(false);
+  const [ownerPassSubmitting, setOwnerPassSubmitting] = useState(false);
+
+
+  // Filtered Windows 10 Settings Hub Modules
+  const filteredHubModules = useMemo(() => {
+    if (!searchQuery.trim()) return HUB_MODULES;
+    const q = searchQuery.toLowerCase().trim();
+    return HUB_MODULES.filter((m) =>
+      m.title.toLowerCase().includes(q) ||
+      m.desc.toLowerCase().includes(q) ||
+      m.tags.some((t: string) => t.toLowerCase().includes(q))
+    );
+  }, [searchQuery]);
 
   useEffect(() => {
     if (restaurant) {
@@ -878,19 +1008,6 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
     }
   };
 
-  // Staff Password Reset Modal state
-  const [resetPassTarget, setResetPassTarget] = useState<{ id: string; name: string; email: string } | null>(null);
-  const [newPassVal, setNewPassVal] = useState('');
-  const [confirmPassVal, setConfirmPassVal] = useState('');
-  const [showPassToggle, setShowPassToggle] = useState(false);
-  const [resetPassSubmitting, setResetPassSubmitting] = useState(false);
-
-  // Owner Self-Password Change state
-  const [ownerCurrPass, setOwnerCurrPass] = useState('');
-  const [ownerNewPass, setOwnerNewPass] = useState('');
-  const [ownerConfirmPass, setOwnerConfirmPass] = useState('');
-  const [ownerShowPassToggle, setOwnerShowPassToggle] = useState(false);
-  const [ownerPassSubmitting, setOwnerPassSubmitting] = useState(false);
 
   const handleOpenResetModal = (st: Profile) => {
     if (st.role === 'owner' || (profile?.role === 'owner' && st.id === profile.id)) {
@@ -1060,16 +1177,178 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
 
   return (
     <div className="space-y-8">
-      {/* Settings Header */}
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Settings & Brand Control</h2>
-        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Configure profile settings, register staff, download menu templates, and review logs.</p>
-      </div>
+      {activeTab === 'hub' ? (
+        <div className="space-y-8 max-w-5xl mx-auto">
+          {/* Windows 10 Style Profile Header */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            {/* User Profile Left */}
+            <div className="flex items-center gap-5">
+              <div className="relative">
+                <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center text-2xl sm:text-3xl font-black shadow-md border-4 border-white dark:border-slate-800">
+                  {((profile?.full_name || restaurant?.name || 'CO')[0] || 'O').toUpperCase()}
+                </div>
+                <span className="absolute bottom-1 right-1 h-4 w-4 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-800 shadow-xs" />
+              </div>
 
-      {/* Tabs list */}
-      <div className="flex border-b border-slate-100 dark:border-slate-800 gap-6 overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('profile')}
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {profile?.full_name || restaurant?.name || 'Restaurant Admin'}
+                  </h2>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-400 rounded-md tracking-wider">
+                    {isOwner ? 'Owner' : 'Manager'}
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  {profile?.email || 'admin@cleverops.in'} • {restaurant?.name || 'CleverOps Cloud'}
+                </p>
+                <Link 
+                  href="/dashboard/billing" 
+                  className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 hover:underline inline-flex items-center gap-1 cursor-pointer pt-0.5"
+                >
+                  Manage Subscription &amp; SaaS Plans &rarr;
+                </Link>
+              </div>
+            </div>
+
+            {/* Right Side Info Box */}
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 rounded-2xl p-4 sm:p-5 max-w-sm w-full">
+              <div className="flex items-start justify-between gap-2 mb-1.5">
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-200 truncate">
+                  {restaurant?.name || 'CleverOps Restaurant'}
+                </h3>
+                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/50 shrink-0">
+                  Cloud Sync Active
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
+                Configure restaurant hardware, staff roles, menu pricing, and digital QR codes in one place.
+              </p>
+              <div className="flex items-center gap-2">
+                {restaurant?.slug ? (
+                  <a
+                    href={`/menu/${restaurant.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    View Live Menu
+                  </a>
+                ) : null}
+                <span className="text-[11px] text-slate-400 font-medium">Table QR: Active</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Center Search Bar (Windows 10 Style "Find a setting") */}
+          <div className="max-w-xl mx-auto text-center w-full">
+            <div className="relative">
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Find a setting (e.g. staff, gst, printer, qr)..." 
+                className="w-full pl-11 pr-14 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3.5 top-2.5 px-2 py-1 text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-2">
+              Type to search across 10 configuration modules
+            </p>
+          </div>
+
+          {/* Section 3: Settings Grid Cards (Windows 10 3-Column Hub Grid) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredHubModules.map((mod) => (
+              <div
+                key={mod.id}
+                onClick={() => {
+                  if (mod.ownerOnly && !isOwner) {
+                    alert('Access Restricted: Activity Audit Logs are strictly reserved for the Restaurant Owner.');
+                    return;
+                  }
+                  setActiveTab(mod.id);
+                }}
+                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-emerald-500/50 hover:-translate-y-0.5 transition-all cursor-pointer flex items-start gap-4"
+              >
+                <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${mod.iconBg}`}>
+                  <mod.icon className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                      {mod.title}
+                    </h3>
+                    {mod.badge && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${mod.badgeColor}`}>
+                        {mod.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
+                    {mod.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+            {filteredHubModules.length === 0 && (
+              <div className="col-span-full text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No settings found matching "{searchQuery}"</p>
+                <p className="text-xs text-slate-400 mt-1">Try searching for 'staff', 'gst', 'qr', 'printer', or 'payments'</p>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="mt-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                >
+                  Clear search query
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Top Breadcrumb Back Button */}
+          <div className="flex items-center justify-between pb-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab('hub')}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-xs transition-all cursor-pointer group"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-0.5 transition-transform" />
+              <span>All Settings Hub</span>
+            </button>
+          </div>
+
+          {/* Settings Header */}
+          <div>
+            <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Settings & Brand Control</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Configure profile settings, register staff, download menu templates, and review logs.</p>
+          </div>
+
+          {/* Tabs list */}
+          <div className="flex border-b border-slate-100 dark:border-slate-800 gap-6 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('hub')}
+              className="pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 border-transparent text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400"
+              title="Return to Settings Hub Grid"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Hub
+            </button>
+            <button
+              onClick={() => setActiveTab('profile')}
           className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'profile'
               ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
@@ -2345,7 +2624,7 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         )}
 
         {/* AUDIT LOGS */}
-        {activeTab === 'logs' && (
+        {activeTab === 'logs' && isOwner && (
           <Card>
             <CardHeader>
               <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Restaurant Activity Audit Trail</h3>
@@ -2799,6 +3078,8 @@ export default function SettingsPage({ initialTab = 'profile' }: { initialTab?: 
         </Dialog>
 
       </div>
+    </div>
+      )}
     </div>
   );
 }
