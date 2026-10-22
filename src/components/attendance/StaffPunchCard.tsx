@@ -6,6 +6,10 @@ import {
   Shift,
   StaffAttendance,
   SalaryRecord,
+  StaffLeaveRequest,
+  requestPastAttendance,
+  submitLeaveRequest,
+  getStaffLeaveRequests,
   punchIn,
   punchOut,
   getStaffMonthlyAttendance,
@@ -34,7 +38,8 @@ import {
   ShieldCheck,
   User,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  X
 } from 'lucide-react';
 
 interface StaffPunchCardProps {
@@ -55,7 +60,26 @@ export default function StaffPunchCard({
   // 1. useState
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
   const [workingSeconds, setWorkingSeconds] = useState<number>(0);
-  const [activeSubTab, setActiveSubTab] = useState<'punch' | 'history' | 'slips'>('punch');
+  const [activeSubTab, setActiveSubTab] = useState<'punch' | 'history' | 'leaves' | 'slips'>('punch');
+  
+  // Past Attendance Request State
+  const [pastReqModalOpen, setPastReqModalOpen] = useState(false);
+  const [pastReqDate, setPastReqDate] = useState(() => new Date(Date.now() - 86400000).toISOString().split('T')[0]);
+  const [pastReqInTime, setPastReqInTime] = useState('09:00');
+  const [pastReqOutTime, setPastReqOutTime] = useState('18:00');
+  const [pastReqNotes, setPastReqNotes] = useState('');
+  const [pastReqLoading, setPastReqLoading] = useState(false);
+  const [pastReqSuccess, setPastReqSuccess] = useState<string | null>(null);
+
+  // Leave Request State
+  const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+  const [leaveType, setLeaveType] = useState<StaffLeaveRequest['leave_type']>('casual');
+  const [leaveStartDate, setLeaveStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [leaveEndDate, setLeaveEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [leaveReason, setLeaveReason] = useState('');
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
+  const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null);
+  const [myLeaves, setMyLeaves] = useState<StaffLeaveRequest[]>([]);
   const [selfieModalOpen, setSelfieModalOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -619,6 +643,75 @@ export default function StaffPunchCard({
                       {att.status}
                     </span>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2.5: MY LEAVES */}
+      {activeSubTab === 'leaves' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl space-y-4 text-xs">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">
+                My Leave Applications
+              </h4>
+              <span className="text-[11px] text-slate-500">
+                Track status of applied time-off & submit new leave requests
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setLeaveSuccess(null);
+                setLeaveModalOpen(true);
+              }}
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl cursor-pointer transition shadow-sm"
+            >
+              + Apply for Leave
+            </button>
+          </div>
+
+          {myLeaves.length === 0 ? (
+            <div className="py-8 text-center text-slate-400">
+              No leave requests applied yet. Click "+ Apply for Leave" if you need time off.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {myLeaves.map(l => (
+                <div
+                  key={l.id}
+                  className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 dark:text-white capitalize">
+                      {l.leave_type} Leave ({l.total_days} Days)
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                        l.status === 'approved'
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                          : l.status === 'rejected'
+                          ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                      }`}
+                    >
+                      {l.status}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Duration: <strong>{l.start_date}</strong> to <strong>{l.end_date}</strong>
+                  </div>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300">
+                    Reason: {l.reason}
+                  </div>
+                  {l.rejection_reason && (
+                    <div className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold">
+                      Note from manager: {l.rejection_reason}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

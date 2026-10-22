@@ -18,6 +18,7 @@ export interface StaffProfile {
   email?: string;
   base_salary: number;
   salary_type?: 'fixed' | 'per_day';
+  weekly_off?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday' | 'none';
   is_active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -63,6 +64,11 @@ export interface StaffAttendance {
   is_within_geofence?: boolean;
   selfie_url?: string | null;
   notes?: string | null;
+  approval_status?: 'pending_approval' | 'approved' | 'rejected';
+  rejection_reason?: string | null;
+  approved_by_id?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -87,6 +93,7 @@ export interface SalaryRecord {
   total_late_days: number;
   base_salary: number;
   salary_type?: 'fixed' | 'per_day';
+  weekly_off?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday' | 'none';
   gross_earned: number;
   allowances: SalaryItem[]; // e.g. Uniform Allowance, Rent Allowance, Bonus
   deductions: SalaryItem[]; // e.g. Uniform Cut, Late Penalty, Damage
@@ -100,6 +107,26 @@ export interface SalaryRecord {
   slip_url?: string | null;
   paid_at?: string | null;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface StaffLeaveRequest {
+  id: string;
+  restaurant_id: string;
+  staff_id: string;
+  staff_name: string;
+  staff_role?: string;
+  leave_type: 'casual' | 'sick' | 'paid' | 'unpaid';
+  start_date: string; // YYYY-MM-DD
+  end_date: string;   // YYYY-MM-DD
+  total_days: number;
+  reason: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewed_by_id?: string | null;
+  reviewed_by_name?: string | null;
+  reviewed_at?: string | null;
+  rejection_reason?: string | null;
+  created_at: string;
   updated_at?: string;
 }
 
@@ -255,6 +282,7 @@ export async function getStaffProfiles(restaurantId: string): Promise<StaffProfi
         email: p.email || '',
         base_salary: Number(saved?.base_salary) || 15000,
         salary_type: saved?.salary_type || 'per_day',
+        weekly_off: saved?.weekly_off || 'none',
         is_active: p.is_active !== false,
         created_at: p.created_at || saved?.created_at,
         updated_at: saved?.updated_at
@@ -281,6 +309,7 @@ export async function saveStaffProfile(profile: Partial<StaffProfile> & { restau
     phone: profile.phone || '',
     base_salary: Number(profile.base_salary) || 0,
     salary_type: profile.salary_type || 'per_day',
+    weekly_off: profile.weekly_off || 'none',
     is_active: profile.is_active !== false,
     updated_at: new Date().toISOString()
   };
@@ -834,6 +863,7 @@ export async function calculateMonthlyPayroll(
     let lateCount = 0;
 
     for (const a of staffAtts) {
+      if (a.approval_status === 'rejected') continue;
       if (a.status === 'present') presentCount += 1;
       else if (a.status === 'half_day') halfDayCount += 1;
       else if (a.status === 'late') {
@@ -848,9 +878,10 @@ export async function calculateMonthlyPayroll(
 
     // Gross earned: Fixed pays full baseSalary, per_day calculates by attendance days
     const effectiveDays = presentCount + halfDayCount * 0.5;
-    const grossEarned = salaryType === 'per_day'
-      ? Math.round(effectiveDays * dailyRate)
-      : baseSalary;
+    const grossEarned = Math.round(effectiveDays * dailyRate); // Attendance-based
+
+
+
 
     // Existing or default dynamic allowances (Uniform, Rent, etc.)
     const allowances: SalaryItem[] = existing?.allowances || [
@@ -897,6 +928,7 @@ export async function calculateMonthlyPayroll(
       slip_url: existing?.slip_url || null,
       paid_at: existing?.paid_at || null,
       created_at: existing?.created_at || new Date().toISOString(),
+      weekly_off: staff.weekly_off || 'none',
       updated_at: new Date().toISOString()
     };
 
@@ -1124,6 +1156,280 @@ export async function setPunchOutMandatory(restaurantId: string, mandatory: bool
 /**
  * Get dates where employee punched in but forgot to punch out (past dates)
  */
+/**
+ * Calculate earned salary dynamically for a given number of approved days
+ */
+export function calculateStaffEarnedSalary(
+  baseSalary: number,
+  salaryType: 'fixed' | 'per_day',
+  daysInMonth: number,
+  approvedDays: number,
+  halfDays: number = 0
+): number {
+  const dailyRate = daysInMonth > 0 ? baseSalary / daysInMonth : 0;
+  const effectiveDays = approvedDays + halfDays * 0.5;
+  return Math.round(effectiveDays * dailyRate);
+}
+
+/**
+ * Employee submits past missed attendance for manager approval
+ */
+export async function requestPastAttendance(params: {
+  restaurantId: string;
+  staffId: string;
+  staffName: string;
+  date: string;
+  punchInTime: string;
+  punchOutTime?: string;
+  notes?: string;
+}): Promise<StaffAttendance> {
+  const { restaurantId, staffId, staffName, date, punchInTime, punchOutTime, notes } = params;
+  const now = new Date().toISOString();
+  const record: StaffAttendance = {
+    id: `att_${staffId}_${date}`,
+    restaurant_id: restaurantId,
+    staff_id: staffId,
+    staff_name: staffName,
+    date,
+    punch_in_time: punchInTime,
+    punch_out_time: punchOutTime || null,
+    status: 'present',
+    marked_by_type: 'self',
+    approval_status: 'pending_approval',
+    notes: notes || 'Past attendance approval requested by employee',
+    created_at: now,
+    updated_at: now
+  };
+
+  try {
+    await supabase.from('staff_attendance').upsert(record, { onConflict: 'staff_id,date' });
+  } catch (_) {}
+
+  const rest = await db.getRestaurantById(restaurantId);
+  if (rest) {
+    const list: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
+    const filtered = list.filter(a => !(a.staff_id === staffId && a.date === date));
+    filtered.push(record);
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        attendo: {
+          ...((rest.settings as any)?.attendo || {}),
+          attendance: filtered
+        }
+      }
+    }).eq('id', restaurantId);
+    db.clearRestaurantCache(restaurantId);
+  }
+
+  return record;
+}
+
+/**
+ * Manager / Owner reviews attendance days (Approve or Reject individual/selected days)
+ */
+export async function reviewAttendanceDays(params: {
+  restaurantId: string;
+  reviews: Array<{
+    staffId: string;
+    date: string;
+    action: 'approved' | 'rejected';
+    rejectionReason?: string;
+    punchInTime?: string;
+    punchOutTime?: string;
+    status?: StaffAttendance['status'];
+  }>;
+  reviewerId: string;
+  reviewerName: string;
+}): Promise<void> {
+  const { restaurantId, reviews, reviewerId, reviewerName } = params;
+  const rest = await db.getRestaurantById(restaurantId);
+  if (!rest) return;
+
+  const list: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
+  const now = new Date().toISOString();
+
+  for (const rev of reviews) {
+    const existingIdx = list.findIndex(a => a.staff_id === rev.staffId && a.date === rev.date);
+    if (existingIdx >= 0) {
+      list[existingIdx] = {
+        ...list[existingIdx],
+        approval_status: rev.action,
+        rejection_reason: rev.action === 'rejected' ? (rev.rejectionReason || 'Rejected by manager') : null,
+        approved_by_id: reviewerId,
+        approved_by_name: reviewerName,
+        approved_at: now,
+        status: rev.status || list[existingIdx].status,
+        punch_in_time: rev.punchInTime || list[existingIdx].punch_in_time,
+        punch_out_time: rev.punchOutTime || list[existingIdx].punch_out_time,
+        updated_at: now
+      };
+      try {
+        await supabase.from('staff_attendance').upsert(list[existingIdx], { onConflict: 'staff_id,date' });
+      } catch (_) {}
+    } else {
+      const newRec: StaffAttendance = {
+        id: `att_${rev.staffId}_${rev.date}`,
+        restaurant_id: restaurantId,
+        staff_id: rev.staffId,
+        date: rev.date,
+        punch_in_time: rev.punchInTime || `${rev.date}T09:00:00.000Z`,
+        punch_out_time: rev.punchOutTime || `${rev.date}T18:00:00.000Z`,
+        status: rev.status || 'present',
+        marked_by_type: 'manager_override',
+        approval_status: rev.action,
+        rejection_reason: rev.action === 'rejected' ? (rev.rejectionReason || 'Rejected by manager') : null,
+        approved_by_id: reviewerId,
+        approved_by_name: reviewerName,
+        approved_at: now,
+        created_at: now,
+        updated_at: now
+      };
+      list.push(newRec);
+      try {
+        await supabase.from('staff_attendance').upsert(newRec, { onConflict: 'staff_id,date' });
+      } catch (_) {}
+    }
+  }
+
+  await supabase.from('restaurants').update({
+    settings: {
+      ...rest.settings,
+      attendo: {
+        ...((rest.settings as any)?.attendo || {}),
+        attendance: list
+      }
+    }
+  }).eq('id', restaurantId);
+  db.clearRestaurantCache(restaurantId);
+}
+
+/**
+ * Submit a staff leave request
+ */
+export async function submitLeaveRequest(params: {
+  restaurantId: string;
+  staffId: string;
+  staffName: string;
+  staffRole?: string;
+  leaveType: StaffLeaveRequest['leave_type'];
+  startDate: string;
+  endDate: string;
+  reason: string;
+}): Promise<StaffLeaveRequest> {
+  const { restaurantId, staffId, staffName, staffRole, leaveType, startDate, endDate, reason } = params;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  const now = new Date().toISOString();
+
+  const request: StaffLeaveRequest = {
+    id: `leave_${staffId}_${Date.now()}`,
+    restaurant_id: restaurantId,
+    staff_id: staffId,
+    staff_name: staffName,
+    staff_role: staffRole,
+    leave_type: leaveType,
+    start_date: startDate,
+    end_date: endDate,
+    total_days: diffDays,
+    reason: reason.trim(),
+    status: 'pending',
+    created_at: now,
+    updated_at: now
+  };
+
+  const rest = await db.getRestaurantById(restaurantId);
+  if (rest) {
+    const leaves: StaffLeaveRequest[] = (rest.settings as any)?.attendo?.leave_requests || [];
+    leaves.unshift(request);
+
+    await supabase.from('restaurants').update({
+      settings: {
+        ...rest.settings,
+        attendo: {
+          ...((rest.settings as any)?.attendo || {}),
+          leave_requests: leaves
+        }
+      }
+    }).eq('id', restaurantId);
+    db.clearRestaurantCache(restaurantId);
+  }
+
+  return request;
+}
+
+/**
+ * Get leave requests for a single staff member
+ */
+export async function getStaffLeaveRequests(restaurantId: string, staffId: string): Promise<StaffLeaveRequest[]> {
+  try {
+    const rest = await db.getRestaurantById(restaurantId);
+    const leaves: StaffLeaveRequest[] = (rest?.settings as any)?.attendo?.leave_requests || [];
+    return leaves.filter(l => l.staff_id === staffId);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get all leave requests for a restaurant
+ */
+export async function getRestaurantLeaveRequests(restaurantId: string): Promise<StaffLeaveRequest[]> {
+  try {
+    const rest = await db.getRestaurantById(restaurantId);
+    const leaves: StaffLeaveRequest[] = (rest?.settings as any)?.attendo?.leave_requests || [];
+    return leaves;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Manager reviews (Approve / Reject) a staff leave request
+ */
+export async function reviewLeaveRequest(params: {
+  restaurantId: string;
+  requestId: string;
+  action: 'approved' | 'rejected';
+  reviewerId: string;
+  reviewerName: string;
+  rejectionReason?: string;
+}): Promise<StaffLeaveRequest | null> {
+  const { restaurantId, requestId, action, reviewerId, reviewerName, rejectionReason } = params;
+  const rest = await db.getRestaurantById(restaurantId);
+  if (!rest) return null;
+
+  const leaves: StaffLeaveRequest[] = (rest.settings as any)?.attendo?.leave_requests || [];
+  const idx = leaves.findIndex(l => l.id === requestId);
+  if (idx === -1) return null;
+
+  const now = new Date().toISOString();
+  leaves[idx] = {
+    ...leaves[idx],
+    status: action,
+    reviewed_by_id: reviewerId,
+    reviewed_by_name: reviewerName,
+    reviewed_at: now,
+    rejection_reason: action === 'rejected' ? (rejectionReason || null) : null,
+    updated_at: now
+  };
+
+  await supabase.from('restaurants').update({
+    settings: {
+      ...rest.settings,
+      attendo: {
+        ...((rest.settings as any)?.attendo || {}),
+        leave_requests: leaves
+      }
+    }
+  }).eq('id', restaurantId);
+  db.clearRestaurantCache(restaurantId);
+
+  return leaves[idx];
+}
+
 export function getMissedPunchOutDates(attendances: StaffAttendance[], todayDateStr: string): string[] {
   return attendances
     .filter(a => a.date < todayDateStr && a.punch_in_time && !a.punch_out_time && a.marked_by_type !== 'manager_override')
