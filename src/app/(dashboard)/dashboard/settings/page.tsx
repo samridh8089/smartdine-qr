@@ -1371,83 +1371,130 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
           <OffersSettings restaurant={restaurant} />
         )}
 
-        {/* PROFILE BRANDING SETTINGS */}
+        {/* PROFILE BRANDING & SECURITY SETTINGS */}
         {activeTab === 'profile' && (
-          <form onSubmit={handleUpdateProfile} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
               <Card>
                 <CardHeader>
-                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Restaurant Branding Details</h3>
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Restaurant Profile &amp; Password Settings</h3>
                 </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
-                      label="Restaurant Name"
-                      value={restName}
-                      onChange={(e) => setRestName(e.target.value)}
-                      required
-                    />
-                    <Input
-                      label="Contact Phone"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <Input
-                    label="Address"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    required
-                  />
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
-                      label="GST Identification Number (GSTIN)"
-                      value={gst}
-                      onChange={(e) => setGst(e.target.value)}
-                      placeholder="e.g. 07AAAAA1111A1Z1"
-                    />
-
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Branding Theme Color</label>
-                      <select
-                        value={themeColor}
-                        onChange={(e) => setThemeColor(e.target.value)}
-                        className="block w-full px-3.5 py-2 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
-                      >
-                        <option value="emerald">Emerald Green (Fresh, Organic)</option>
-                        <option value="indigo">Indigo Blue (Premium, Modern)</option>
-                        <option value="rose">Rose Red (Elegant, Grill)</option>
-                        <option value="amber">Amber Gold (Comfort, Bakery)</option>
-                        <option value="purple">Royal Purple (Luxury, Lounge)</option>
-                      </select>
+                <CardContent className="space-y-6">
+                  {/* Profile Details Form */}
+                  <form onSubmit={handleUpdateProfile} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Input
+                        label="Restaurant Name"
+                        value={restName}
+                        onChange={(e) => setRestName(e.target.value)}
+                        required
+                      />
+                      <Input
+                        label="Contact Phone"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        required
+                      />
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <ImageUpload
-                      label="Restaurant Logo"
-                      value={logoUrl}
-                      onChange={(url) => setLogoUrl(url)}
-                      restaurantId={restaurant?.id || ''}
-                      pathPrefix="logo"
+                    <Input
+                      label="Address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      required
                     />
-                    <ImageUpload
-                      label="Cover Hero Image"
-                      value={coverUrl}
-                      onChange={(url) => setCoverUrl(url)}
-                      restaurantId={restaurant?.id || ''}
-                      pathPrefix="cover"
-                    />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+                      <Input
+                        label="GST Identification Number (GSTIN)"
+                        value={gst}
+                        onChange={(e) => setGst(e.target.value)}
+                        placeholder="e.g. 07AAAAA1111A1Z1"
+                      />
+                      <ImageUpload
+                        label="Restaurant Logo"
+                        value={logoUrl}
+                        onChange={(url) => setLogoUrl(url)}
+                        restaurantId={restaurant?.id || ''}
+                        pathPrefix="logo"
+                      />
+                    </div>
+
+                    <div className="flex justify-end pt-1">
+                      <Button type="submit" isLoading={loading}>Save Restaurant Details</Button>
+                    </div>
+                  </form>
+
+                  {/* Security & Password Change (Moved here as requested) */}
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-5">
+                    <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-2">
+                      <KeyRound className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Security &amp; Change Owner Password</span>
+                    </h4>
+                    <form onSubmit={handleChangeOwnerPassword} className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Current Password</label>
+                          <input
+                            type={ownerShowPassToggle ? 'text' : 'password'}
+                            value={ownerCurrPass}
+                            onChange={(e) => setOwnerCurrPass(e.target.value)}
+                            required
+                            placeholder="Current password"
+                            className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">New Password (min 6)</label>
+                          <input
+                            type={ownerShowPassToggle ? 'text' : 'password'}
+                            value={ownerNewPass}
+                            onChange={(e) => setOwnerNewPass(e.target.value)}
+                            required
+                            minLength={6}
+                            placeholder="New password"
+                            className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Confirm New Password</label>
+                          <input
+                            type={ownerShowPassToggle ? 'text' : 'password'}
+                            value={ownerConfirmPass}
+                            onChange={(e) => setOwnerConfirmPass(e.target.value)}
+                            required
+                            minLength={6}
+                            placeholder="Confirm password"
+                            className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={ownerShowPassToggle}
+                            onChange={(e) => setOwnerShowPassToggle(e.target.checked)}
+                            className="rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span>Show Passwords</span>
+                        </label>
+
+                        <button
+                          type="submit"
+                          disabled={ownerPassSubmitting}
+                          className="bg-slate-900 hover:bg-black dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 text-white font-extrabold px-4 py-1.5 rounded-xl text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {ownerPassSubmitting ? 'Updating...' : 'Update Password'}
+                        </button>
+                      </div>
+                    </form>
                   </div>
                 </CardContent>
               </Card>
-
-              <div className="flex justify-end">
-                <Button type="submit" isLoading={loading}>Save Brand Customizations</Button>
-              </div>
             </div>
 
             {/* PREVIEW PANEL */}
@@ -1457,47 +1504,32 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Live Branding Preview</h3>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Mock banner */}
-                  <div className="w-full h-24 rounded-xl relative overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center">
-                    {coverUrl ? (
-                      <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+                  {/* Clean Logo Box */}
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-3.5">
+                    {logoUrl ? (
+                      <img src={logoUrl} alt={restName} className="h-14 w-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-sm shrink-0" />
                     ) : (
-                      <div className="text-xs text-slate-400 font-semibold uppercase flex items-center gap-1.5"><Eye className="h-4 w-4" /> Hero Banner</div>
+                      <div className="h-14 w-14 rounded-xl bg-emerald-600 text-white font-black text-xl flex items-center justify-center shadow-inner shrink-0">
+                        {restName.charAt(0) || 'R'}
+                      </div>
                     )}
-                    
-                    {/* Floating Logo preview */}
-                    <div className="absolute left-4 bottom-2 h-12 w-12 rounded-xl border-2 border-white dark:border-slate-800 bg-white dark:bg-slate-900 shadow-md flex items-center justify-center overflow-hidden">
-                      {logoUrl ? (
-                        <img src={logoUrl} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="font-extrabold text-sm text-slate-400">{restName.charAt(0) || 'R'}</span>
-                      )}
+                    <div className="min-w-0">
+                      <h4 className="font-extrabold text-base text-slate-900 dark:text-white truncate">{restName || 'Restaurant Name'}</h4>
+                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">
+                        Verified Brand
+                      </span>
                     </div>
                   </div>
 
-                  <div className="pt-2">
-                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">{restName || 'Restaurant Name'}</h4>
-                    <p className="text-xs text-slate-400 mt-1">{phone || 'Phone Number'}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{address || 'Restaurant Address'}</p>
-                    {gst && <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider mt-2">GSTIN: {gst}</p>}
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Theme Color:</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`h-4.5 w-4.5 rounded-full inline-block border border-white dark:border-slate-800 shadow-sm ${
-                        themeColor === 'indigo' ? 'bg-indigo-600' :
-                        themeColor === 'rose' ? 'bg-rose-600' :
-                        themeColor === 'amber' ? 'bg-amber-500' :
-                        themeColor === 'purple' ? 'bg-purple-600' : 'bg-emerald-600'
-                      }`} />
-                      <span className="text-xs capitalize font-semibold text-slate-600 dark:text-slate-400">{themeColor}</span>
-                    </div>
+                  <div className="space-y-1.5 text-xs text-slate-500 dark:text-slate-400 pt-1">
+                    <p><strong className="text-slate-700 dark:text-slate-300">Phone:</strong> {phone || 'Not provided'}</p>
+                    <p><strong className="text-slate-700 dark:text-slate-300">Address:</strong> {address || 'Not provided'}</p>
+                    {gst && <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">GSTIN: {gst}</p>}
                   </div>
                 </CardContent>
               </Card>
             </div>
-          </form>
+          </div>
         )}
 
         {/* TAXES & CHARGES SETTINGS */}
@@ -2548,75 +2580,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
           </Card>
         )}
 
-        {/* OWNER SECURITY & SELF PASSWORD CHANGE */}
-        {activeTab === 'profile' && (
-          <Card className="mt-8">
-            <CardHeader>
-              <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Security & Owner Password</h3>
-            </CardHeader>
-            <CardContent className="p-6">
-              <form onSubmit={handleChangeOwnerPassword} className="max-w-md space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Current Password</label>
-                  <input
-                    type={ownerShowPassToggle ? 'text' : 'password'}
-                    value={ownerCurrPass}
-                    onChange={(e) => setOwnerCurrPass(e.target.value)}
-                    required
-                    placeholder="Enter current password"
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">New Password (min 6 chars)</label>
-                  <input
-                    type={ownerShowPassToggle ? 'text' : 'password'}
-                    value={ownerNewPass}
-                    onChange={(e) => setOwnerNewPass(e.target.value)}
-                    required
-                    minLength={6}
-                    placeholder="Enter new password"
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Confirm New Password</label>
-                  <input
-                    type={ownerShowPassToggle ? 'text' : 'password'}
-                    value={ownerConfirmPass}
-                    onChange={(e) => setOwnerConfirmPass(e.target.value)}
-                    required
-                    minLength={6}
-                    placeholder="Confirm new password"
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={ownerShowPassToggle}
-                      onChange={(e) => setOwnerShowPassToggle(e.target.checked)}
-                      className="rounded text-emerald-600 focus:ring-emerald-500"
-                    />
-                    Show Passwords
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={ownerPassSubmitting}
-                    className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold px-5 py-2 rounded-xl text-xs shadow-md transition-all cursor-pointer"
-                  >
-                    {ownerPassSubmitting ? 'Updating...' : 'Update My Password'}
-                  </button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
 
         {/* EDIT STAFF MODAL */}
         <Dialog
