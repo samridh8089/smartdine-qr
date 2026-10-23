@@ -23,8 +23,8 @@ export default function AttendancePage() {
   const [todayRoster, setTodayRoster] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'manager' | 'punch'>(() => {
-    // If waiter, kitchen, cashier -> default to personal punch card
-    if (activeRole && ['waiter', 'kitchen', 'cashier', 'supervisor'].includes(activeRole)) {
+    // If waiter, kitchen, cashier, cleaner, helper -> default to personal punch card
+    if (activeRole && ['waiter', 'kitchen', 'cashier', 'kitchen_helper', 'cleaner', 'helper'].includes(activeRole)) {
       return 'punch';
     }
     return 'manager';
@@ -96,7 +96,7 @@ export default function AttendancePage() {
     );
   }
 
-  const isManagementRole = activeRole === 'owner' || activeRole === 'manager';
+  const isManagementRole = activeRole === 'owner' || activeRole === 'manager' || activeRole === 'supervisor' || profile?.role === 'owner' || profile?.role === 'manager' || profile?.role === 'supervisor';
 
   const handleRefreshAttendance = async () => {
     const restId = restaurant?.id;
@@ -115,7 +115,7 @@ export default function AttendancePage() {
           </h1>
         </div>
 
-        {/* View Switcher for Owners/Managers */}
+        {/* View Switcher for Owners/Managers/Supervisors */}
         {isManagementRole && (
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
             <button
@@ -127,7 +127,7 @@ export default function AttendancePage() {
                   : 'text-slate-500 hover:text-slate-900 dark:hover:text-white font-medium'
               }`}
             >
-              Manager Board
+              Team Management Board
             </button>
             <button
               type="button"
@@ -150,7 +150,7 @@ export default function AttendancePage() {
           <p className="text-xs font-semibold text-slate-400">Loading attendance records...</p>
         </div>
       ) : viewMode === 'manager' && isManagementRole ? (
-        <AttendanceManagerView restaurant={restaurant} profile={profile} />
+        <AttendanceManagerView restaurant={restaurant} profile={profile} activeRole={activeRole} />
       ) : (
         currentStaffProfile ? (
           <StaffPunchCard
