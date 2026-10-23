@@ -11,7 +11,8 @@ import {
   getStaffProfiles,
   getShifts,
   getAttendanceForDate,
-  getStaffShiftsForDate
+  getStaffShiftsForDate,
+  cleanupOldAttendanceSelfies
 } from '@/lib/attendoEngine';
 
 export default function AttendancePage() {
@@ -77,6 +78,26 @@ export default function AttendancePage() {
         setShifts(shiftList);
         setTodayAttendances(attendances);
         setTodayRoster(roster);
+
+        // Silent background sweep: auto-purge selfies older than 30 days
+        if (typeof window !== 'undefined') {
+          const storageKey = `attendo_selfie_cleanup_${restId}`;
+          const lastCleaned = localStorage.getItem(storageKey);
+          const now = Date.now();
+          const isFirstDayOfMonth = new Date().getDate() === 1;
+          const daysSinceLast = lastCleaned ? (now - parseInt(lastCleaned, 10)) / 86400000 : 999;
+
+          if (isFirstDayOfMonth || daysSinceLast >= 7) {
+            cleanupOldAttendanceSelfies(restId, 30)
+              .then(res => {
+                if (res.cleanedCount > 0) {
+                  console.log(`[Attendo] Auto-purged ${res.cleanedCount} selfie(s) older than 30 days.`);
+                }
+                localStorage.setItem(storageKey, now.toString());
+              })
+              .catch(() => {});
+          }
+        }
       } catch (e) {
         console.warn('Error loading attendance page data:', e);
       } finally {
