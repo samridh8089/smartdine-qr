@@ -86,6 +86,7 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
 interface AttendanceManagerViewProps {
   restaurant: Restaurant;
   profile: Profile;
+  activeRole?: string;
 }
 
 const MONTH_NAMES = [
@@ -103,8 +104,12 @@ const getDeptForRole = (role: string) => {
 
 export default function AttendanceManagerView({
   restaurant,
-  profile
+  profile,
+  activeRole
 }: AttendanceManagerViewProps) {
+  const currentRole = activeRole || profile?.role || 'owner';
+  const isSupervisor = currentRole === 'supervisor';
+  const canManagePayroll = currentRole === 'owner' || currentRole === 'manager';
   // 1. useState
   const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'logs' | 'payroll' | 'leaves' | 'settings'>('live');
   const [loading, setLoading] = useState(true);
@@ -1183,15 +1188,17 @@ export default function AttendanceManagerView({
           >
             Shift Roster
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('payroll')}
-            className={`px-4 py-2 rounded-xl transition cursor-pointer font-bold ${
-              activeTab === 'payroll' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
-            }`}
-          >
-            Payroll & Salary Slips
-          </button>
+          {canManagePayroll && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('payroll')}
+              className={`px-4 py-2 rounded-xl transition cursor-pointer font-bold ${
+                activeTab === 'payroll' ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'
+              }`}
+            >
+              Payroll & Salary Slips
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setActiveTab('leaves')}
@@ -2387,53 +2394,61 @@ export default function AttendanceManagerView({
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Monthly Base Salary (₹)
-                    </label>
-                    <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <span className="font-bold text-slate-500">₹</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="500"
-                        placeholder="e.g. 18000"
-                        value={staffSalaryInput}
-                        onChange={e => setStaffSalaryInput(Math.max(0, parseFloat(e.target.value) || 0))}
-                        className="w-full text-xs font-black bg-transparent text-slate-900 dark:text-white outline-none"
-                      />
-                    </div>
-                  </div>
+                  {canManagePayroll ? (
+                    <>
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Monthly Base Salary (₹)
+                        </label>
+                        <div className="flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                          <span className="font-bold text-slate-500">₹</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="500"
+                            placeholder="e.g. 18000"
+                            value={staffSalaryInput}
+                            onChange={e => setStaffSalaryInput(Math.max(0, parseFloat(e.target.value) || 0))}
+                            className="w-full text-xs font-black bg-transparent text-slate-900 dark:text-white outline-none"
+                          />
+                        </div>
+                      </div>
 
-                  <div>
-                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                      Salary Calculation Mode
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setStaffSalaryTypeInput('per_day')}
-                        className={`py-1.5 px-2 rounded-lg font-bold text-center border cursor-pointer transition text-[11px] ${
-                          staffSalaryTypeInput === 'per_day'
-                            ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                        }`}
-                      >
-                        Per-Day (Default)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setStaffSalaryTypeInput('fixed')}
-                        className={`py-1.5 px-2 rounded-lg font-bold text-center border cursor-pointer transition text-[11px] ${
-                          staffSalaryTypeInput === 'fixed'
-                            ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                        }`}
-                      >
-                        Fixed Monthly
-                      </button>
+                      <div>
+                        <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Salary Calculation Mode
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setStaffSalaryTypeInput('per_day')}
+                            className={`py-1.5 px-2 rounded-lg font-bold text-center border cursor-pointer transition text-[11px] ${
+                              staffSalaryTypeInput === 'per_day'
+                                ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                            }`}
+                          >
+                            Per-Day (Default)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStaffSalaryTypeInput('fixed')}
+                            className={`py-1.5 px-2 rounded-lg font-bold text-center border cursor-pointer transition text-[11px] ${
+                              staffSalaryTypeInput === 'fixed'
+                                ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                            }`}
+                          >
+                            Fixed Monthly
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 font-medium">
+                      🔒 Base Salary &amp; Wages are managed exclusively by the Restaurant Owner &amp; Manager.
                     </div>
-                  </div>
+                  )}
 
                   <div>
                     <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">

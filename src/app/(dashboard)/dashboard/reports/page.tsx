@@ -13,7 +13,8 @@ import {
   Sparkles, DollarSign, ArrowUpRight, Award, CreditCard, Clock, AlertCircle,
   ShoppingBag, ClipboardList, Lock, Banknote, Download, FileText, Filter, ArrowUpDown,
   Tag, Calculator, Receipt, Wallet, Flame, Zap, Users, Printer, X, Activity, CheckCircle2, ChevronRight,
-  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers, Search, Phone, MessageSquare
+  Trophy, UtensilsCrossed, AlertTriangle, Lightbulb, Layers, Search, Phone, MessageSquare,
+  QrCode, History
 } from 'lucide-react';
 import { isRevenueOrder, parseOrderRefundDetails, getOrderRevenueAmount } from '@/lib/billingEngine';
 
@@ -80,7 +81,12 @@ function getISTHour(d: Date | string): number {
 }
 
 export default function ReportsPage() {
-  const { restaurant } = useRestaurant();
+  const { restaurant, profile, activeRole } = useRestaurant();
+  const currentRole = activeRole || profile?.role || 'owner';
+  const isOwner = currentRole === 'owner';
+  const isManager = currentRole === 'manager';
+  const isSupervisor = currentRole === 'supervisor';
+  const isCashier = currentRole === 'cashier';
   const [orders, setOrders] = useState<Order[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -1643,7 +1649,7 @@ export default function ReportsPage() {
   }).slice(0, itemLimit);
 
   // Clean, Subtle KPI Component Data (Stripe/Toast POS Aesthetic)
-  const kpiCards = [
+  const financialKpiCards = [
     {
       id: 'valid-orders',
       label: 'VALID ORDERS',
@@ -1721,6 +1727,74 @@ export default function ReportsPage() {
       valueColor: 'text-gray-950 dark:text-white',
     },
   ];
+
+  const supervisorKpiCards = [
+    {
+      id: 'valid-orders',
+      label: 'VALID ORDERS',
+      value: salesSummary.totalOrders.toString(),
+      desc: 'Excludes cancelled',
+      icon: ShoppingBag,
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
+    },
+    {
+      id: 'kitchen-sla',
+      label: 'KITCHEN ON-TIME SLA',
+      value: kitchenSlaSuccessPct,
+      desc: `${kitchenSlaStats.avgAcceptTimeSec}s accept speed`,
+      icon: Clock,
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+      valueColor: 'text-emerald-600 dark:text-emerald-400',
+    },
+    {
+      id: 'avg-prep',
+      label: 'AVG PREP TIME',
+      value: `${kitchenSlaStats.avgPrepTimeMin}m`,
+      desc: 'Cooking turnaround',
+      icon: Sparkles,
+      iconColor: 'text-blue-600 dark:text-blue-400',
+      valueColor: 'text-blue-600 dark:text-blue-400',
+    },
+    {
+      id: 'table-occupancy',
+      label: 'TABLE OCCUPANCY',
+      value: `${tableUtilization.occupancyPct}%`,
+      desc: `${liveOccupancyMerge.occupied} active dining tables`,
+      icon: QrCode,
+      iconColor: 'text-purple-600 dark:text-purple-400',
+      valueColor: 'text-purple-600 dark:text-purple-400',
+    },
+    {
+      id: 'avg-turnover',
+      label: 'AVG DWELL TIME',
+      value: `${tableUtilization.avgDiningDurationMin}m`,
+      desc: 'Table service duration',
+      icon: History,
+      iconColor: 'text-amber-600 dark:text-amber-400',
+      valueColor: 'text-amber-600 dark:text-amber-400',
+    },
+    {
+      id: 'cancelled-orders',
+      label: 'CANCELLATIONS',
+      value: cancellationStats.cancelledCount.toString(),
+      desc: 'Kitchen & Floor returns',
+      icon: AlertTriangle,
+      iconColor: 'text-rose-600 dark:text-rose-400',
+      valueColor: 'text-rose-600 dark:text-rose-400',
+    },
+    {
+      id: 'guest-count',
+      label: 'GUEST PROFILES',
+      value: customerSummary.totalCustomers.toString(),
+      desc: 'Floor customer count',
+      icon: Users,
+      iconColor: 'text-gray-700 dark:text-gray-300',
+      valueColor: 'text-gray-950 dark:text-white',
+    },
+  ];
+
+  const kpiCards = isSupervisor ? supervisorKpiCards : financialKpiCards;
 
   return (
     <div className="space-y-6 print:space-y-4 print:p-0">
@@ -1812,21 +1886,27 @@ export default function ReportsPage() {
 
           {/* EXPORT ACTION GROUP */}
           <div className="flex flex-wrap items-center gap-1 bg-slate-100 dark:bg-slate-800/40 p-1 rounded-xl border border-slate-200 dark:border-slate-700/50">
-            <Button onClick={handleExportOrdersSummaryCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
-              <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Orders CSV
-            </Button>
-            <Button onClick={handleExportOrderItemsCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
-              <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Items CSV
-            </Button>
-            <Button onClick={handleExportCombinedCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
-              <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Accounting CSV
-            </Button>
+            {!isCashier && !isSupervisor && (
+              <>
+                <Button onClick={handleExportOrdersSummaryCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
+                  <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Orders CSV
+                </Button>
+                <Button onClick={handleExportOrderItemsCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
+                  <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Items CSV
+                </Button>
+                <Button onClick={handleExportCombinedCSV} variant="ghost" size="sm" className="gap-1 text-xs font-bold bg-white dark:bg-slate-900 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 px-2.5 py-1 h-7">
+                  <Download className="h-3 w-3 text-gray-700 dark:text-gray-300" /> Accounting CSV
+                </Button>
+              </>
+            )}
             <Button onClick={handleExportPDF} variant="primary" size="sm" className="gap-1 text-xs font-bold shadow-2xs px-2.5 py-1 h-7">
               <FileText className="h-3 w-3" /> Print / PDF
             </Button>
-            <Button onClick={() => setClosingReportModalOpen(true)} variant="primary" size="sm" className="gap-1 text-xs font-bold shadow-2xs px-2.5 py-1 h-7 bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white">
-              <ClipboardList className="h-3 w-3" /> Closing Report
-            </Button>
+            {!isSupervisor && (
+              <Button onClick={() => setClosingReportModalOpen(true)} variant="primary" size="sm" className="gap-1 text-xs font-bold shadow-2xs px-2.5 py-1 h-7 bg-gray-900 hover:bg-black dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900 text-white">
+                <ClipboardList className="h-3 w-3" /> Closing Report
+              </Button>
+            )}
           </div>
         </div>
       </div>
@@ -1893,71 +1973,74 @@ export default function ReportsPage() {
       </div>
 
       {/* 2. TAX SUMMARY TABLE (GST SNAPSHOTS) */}
-      <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">GST Tax Summary</h3>
-          </div>
-          <Badge variant="success" className="font-bold text-xs">
-            Stored Snapshots Active
-          </Badge>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
-                  <th className="py-3 px-4">Tax Metric</th>
-                  <th className="py-3 px-4 text-right">Taxable Sales</th>
-                  <th className="py-3 px-4 text-right">CGST</th>
-                  <th className="py-3 px-4 text-right">SGST</th>
-                  <th className="py-3 px-4 text-right">IGST</th>
-                  <th className="py-3 px-4 text-right">Total GST Collected</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
-                <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
-                  <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Intrastate (CGST + SGST)</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
-                    {formatPrice(salesSummary.cgstCollected + salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}
-                  </td>
-                </tr>
-                <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
-                  <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Interstate (IGST)</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.igstCollected > 0 ? salesSummary.taxableSales : 0, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
-                    {formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}
-                  </td>
-                </tr>
-                <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-black text-xs border-t-2 border-slate-200 dark:border-slate-700">
-                  <td className="py-4 px-4 text-slate-900 dark:text-white font-black">Total GST Collected</td>
-                  <td className="py-4 px-4 text-right font-extrabold text-slate-900 dark:text-white">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
-                  <td className="py-4 px-4 text-right font-bold text-slate-950 dark:text-white">
-                    {formatPrice(salesSummary.totalGstCollected, restaurant?.settings?.currency || 'INR', 2)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {!isSupervisor && (
+        <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">GST Tax Summary</h3>
+            </div>
+            <Badge variant="success" className="font-bold text-xs">
+              Stored Snapshots Active
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto border border-slate-100 dark:border-slate-800 rounded-xl">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 dark:bg-slate-900 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-800">
+                    <th className="py-3 px-4">Tax Metric</th>
+                    <th className="py-3 px-4 text-right">Taxable Sales</th>
+                    <th className="py-3 px-4 text-right">CGST</th>
+                    <th className="py-3 px-4 text-right">SGST</th>
+                    <th className="py-3 px-4 text-right">IGST</th>
+                    <th className="py-3 px-4 text-right">Total GST Collected</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs font-semibold">
+                  <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
+                    <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Intrastate (CGST + SGST)</td>
+                    <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
+                      {formatPrice(salesSummary.cgstCollected + salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all">
+                    <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">Interstate (IGST)</td>
+                    <td className="py-3.5 px-4 text-right font-extrabold text-slate-700 dark:text-slate-300">{formatPrice(salesSummary.igstCollected > 0 ? salesSummary.taxableSales : 0, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-semibold text-slate-400">{formatPrice(0, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-extrabold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-3.5 px-4 text-right font-bold text-slate-950 dark:text-white">
+                      {formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}
+                    </td>
+                  </tr>
+                  <tr className="bg-slate-100/70 dark:bg-slate-800/60 font-black text-xs border-t-2 border-slate-200 dark:border-slate-700">
+                    <td className="py-4 px-4 text-slate-900 dark:text-white font-black">Total GST Collected</td>
+                    <td className="py-4 px-4 text-right font-extrabold text-slate-900 dark:text-white">{formatPrice(salesSummary.taxableSales, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.cgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.sgstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-4 px-4 text-right font-bold text-slate-900 dark:text-slate-100">{formatPrice(salesSummary.igstCollected, restaurant?.settings?.currency || 'INR', 2)}</td>
+                    <td className="py-4 px-4 text-right font-bold text-slate-950 dark:text-white">
+                      {formatPrice(salesSummary.totalGstCollected, restaurant?.settings?.currency || 'INR', 2)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ========================================== */}
       {/* OPERATIONS INTELLIGENCE SUITE (PHASE-19)   */}
       {/* ========================================== */}
-
-      {/* 2.1 KITCHEN SLA INTELLIGENCE */}
-      <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
+      {!isCashier && (
+        <>
+          {/* 2.1 KITCHEN SLA INTELLIGENCE */}
+          <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 flex items-center justify-center font-bold">
@@ -2390,9 +2473,12 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+        </>
+      )}
 
       {/* 5. CUSTOMER ANALYTICS & INSIGHTS */}
-      <div className="space-y-4">
+      {!isCashier && !isSupervisor && (
+        <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Customer Analytics & Retention</h3>
@@ -2631,6 +2717,7 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* 6. ORDER CANCELLATIONS & LOSS ANALYSIS */}
       <Card className="border border-red-200/80 dark:border-red-950/60 bg-red-50/10 dark:bg-red-950/10 shadow-2xs rounded-xl">
@@ -2685,7 +2772,8 @@ export default function ReportsPage() {
       {/* ========================================== */}
       {/* PHASE 4: SYSTEM AUDIT TRAIL & COMPLIANCE LOG (OWNER ONLY) */}
       {/* ========================================== */}
-      <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden mt-6 print:hidden">
+      {isOwner && (
+        <Card className="border border-slate-200/80 dark:border-slate-800 shadow-2xs rounded-xl overflow-hidden mt-6 print:hidden">
         <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
@@ -2844,6 +2932,7 @@ export default function ReportsPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* ========================================== */}
       {/* 2.5 IN-APP DAILY CLOSING REPORT MODAL (PRIORITY 7) */}
