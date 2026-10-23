@@ -20,8 +20,8 @@ export function Badge({ children, variant = 'neutral', className = '' }: BadgePr
     occupied: 'bg-[#FEF2F2] text-rose-800 border border-[#FCA5A5]',
     reserved: 'bg-[#F5F5F4] text-[#78716C] border border-[#D6D3D1]',
     running: 'bg-[#EFF6FF] text-blue-800 border border-[#BFDBFE]',
-    veg: 'bg-[#ECFDF5] text-emerald-800 border border-[#BBF7D0] flex items-center gap-1 before:content-[""] before:inline-block before:w-2 before:h-2 before:bg-emerald-600 before:rounded-full dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
-    'non-veg': 'bg-[#FEF2F2] text-rose-800 border border-[#FCA5A5] flex items-center gap-1 before:content-[""] before:inline-block before:w-0 before:h-0 before:border-l-[4px] before:border-l-transparent before:border-r-[4px] before:border-r-transparent before:border-b-[8px] before:border-b-rose-600 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
+    veg: 'bg-[#ECFDF5] text-emerald-800 border border-[#BBF7D0] flex items-center gap-1.5 before:content-[""] before:inline-block before:w-2 before:h-2 before:bg-emerald-600 before:rounded-full dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+    'non-veg': 'bg-[#FEF2F2] text-rose-800 border border-[#FCA5A5] flex items-center gap-1.5 before:content-[""] before:inline-block before:w-2 before:h-2 before:bg-rose-600 before:rounded-full dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800'
   };
 
   return (

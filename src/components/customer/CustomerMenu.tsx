@@ -1481,9 +1481,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
             {activeOrderId && planSpec?.features.live_order_tracking !== false && (
               <Link href={`/order-tracking/${activeOrderId}`}>
-                <button className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Track Order</span>
+                <button className="px-2.5 sm:px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0">
+                  <ClipboardList className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span className="whitespace-nowrap">Track Order</span>
                 </button>
               </Link>
             )}
@@ -1884,9 +1884,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                         {item.is_veg ? 'Veg' : 'Non-Veg'}
                       </Badge>
                       {isTopSelling && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 inline-flex items-center gap-1 shadow-2xs">
-                          <Sparkles className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
-                          <span>Top Selling</span>
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs">
+                          TOP SELLING
                         </span>
                       )}
                       {isOutOfStock && (
@@ -2138,9 +2137,16 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Badge variant={detailedItem?.is_veg ? 'veg' : 'non-veg'}>
-                {detailedItem?.is_veg ? 'Veg' : 'Non-Veg'}
-              </Badge>
+              <div className="flex items-center gap-1.5">
+                <Badge variant={detailedItem?.is_veg ? 'veg' : 'non-veg'}>
+                  {detailedItem?.is_veg ? 'Veg' : 'Non-Veg'}
+                </Badge>
+                {detailedItem && (topSellingItems.some(t => t.id === detailedItem.id) || (detailedItem as any).is_top_selling || (detailedItem as any).is_popular) && (
+                  <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs">
+                    TOP SELLING
+                  </span>
+                )}
+              </div>
               <span className="font-extrabold text-slate-950 dark:text-white text-base">
                 {detailedItem ? formatPrice(selectedVariant ? selectedVariant.price : detailedItem.price, restaurant.settings.currency) : ''}
               </span>
