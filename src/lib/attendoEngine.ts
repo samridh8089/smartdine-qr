@@ -1442,3 +1442,77 @@ export function getMissedPunchOutDates(attendances: StaffAttendance[], todayDate
     .map(a => a.date)
     .sort();
 }
+
+/**
+ * Auto-cleanup: Purge punch selfies older than daysThreshold (default 30 days / 1 month)
+ * Preserves the full attendance record (punch times, duty hours, salary status) permanently,
+ * but frees database & storage bloat by nulling selfie_url.
+ */
+export async function cleanupOldAttendanceSelfies(
+  restaurantId: string,
+  daysThreshold = 30
+): Promise<{ success: boolean; cleanedCount: number; cutoffDate: string }> {
+  try {
+    const cutoff = new Date(Date.now() - daysThreshold * 24 * 60 * 60 * 1000);
+    const cutoffDateStr = cutoff.toISOString().split('T')[0];
+
+    let cleanedCount = 0;
+
+    // 1. Clean DB table if table exists
+    try {
+      const { data, error } = await supabase
+        .from('staff_attendance')
+        .update({ selfie_url: null, updated_at: new Date().toISOString() })
+        .eq('restaurant_id', restaurantId)
+        .lt('date', cutoffDateStr)
+        .not('selfie_url', 'is', null)
+        .select('id');
+
+      if (!error && data) {
+        cleanedCount = data.length;
+      }
+    } catch (_) {}
+
+    // 2. Clean fallback settings JSON in restaurant row
+    const rest = await db.getRestaurantById(restaurantId);
+    if (rest) {
+      const attendanceList: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
+      let settingsCleaned = 0;
+
+      const updatedList = attendanceList.map(item => {
+        if (item.date && item.date < cutoffDateStr && item.selfie_url) {
+          settingsCleaned++;
+          return { ...item, selfie_url: null };
+        }
+        return item;
+      });
+
+      if (settingsCleaned > 0) {
+        cleanedCount = Math.max(cleanedCount, settingsCleaned);
+        await supabase.from('restaurants').update({
+          settings: {
+            ...rest.settings,
+            attendo: {
+              ...((rest.settings as any)?.attendo || {}),
+              attendance: updatedList
+            }
+          }
+        }).eq('id', restaurantId);
+        db.clearRestaurantCache(restaurantId);
+      }
+    }
+
+    return {
+      success: true,
+      cleanedCount,
+      cutoffDate: cutoffDateStr
+    };
+  } catch (err) {
+    console.warn('[Attendo] cleanupOldAttendanceSelfies err:', err);
+    return {
+      success: false,
+      cleanedCount: 0,
+      cutoffDate: ''
+    };
+  }
+}

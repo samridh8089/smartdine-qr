@@ -17,6 +17,7 @@ export default function SelfieCaptureModal({
   // STRICT HOOK DECLARATION ORDER: useState
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedSizeKb, setCapturedSizeKb] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraLoading, setCameraLoading] = useState(false);
 
@@ -82,6 +83,7 @@ export default function SelfieCaptureModal({
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
       setCapturedImage(null);
+      setCapturedSizeKb(null);
       setCameraError(null);
     }
   }, [isOpen, stream]);
@@ -94,21 +96,30 @@ export default function SelfieCaptureModal({
     const video = videoRef.current;
     const canvas = canvasRef.current || document.createElement('canvas');
 
-    const width = video.videoWidth || 480;
-    const height = video.videoHeight || 480;
-    canvas.width = width;
-    canvas.height = height;
+    const srcWidth = video.videoWidth || 480;
+    const srcHeight = video.videoHeight || 480;
+
+    // Center-crop to 1:1 square & downscale to 240x240 for ultra-low KB storage
+    const TARGET_SIZE = 240;
+    canvas.width = TARGET_SIZE;
+    canvas.height = TARGET_SIZE;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Draw and mirror image horizontally so it looks natural like a mirror
-    ctx.translate(width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, width, height);
+    const minDim = Math.min(srcWidth, srcHeight);
+    const sx = (srcWidth - minDim) / 2;
+    const sy = (srcHeight - minDim) / 2;
 
-    // High quality JPEG
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    // Draw and mirror image horizontally so it looks natural like a mirror
+    ctx.translate(TARGET_SIZE, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, TARGET_SIZE, TARGET_SIZE);
+
+    // Highly compressed JPEG at 0.55 quality (< 15-20 KB)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.55);
+    const sizeKb = Math.round(((dataUrl.length * 0.75) / 1024) * 10) / 10;
+    setCapturedSizeKb(sizeKb);
     setCapturedImage(dataUrl);
 
     // Stop active camera stream
@@ -120,6 +131,7 @@ export default function SelfieCaptureModal({
 
   const handleRetake = () => {
     setCapturedImage(null);
+    setCapturedSizeKb(null);
   };
 
   const handleConfirm = () => {
@@ -136,7 +148,26 @@ export default function SelfieCaptureModal({
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setCapturedImage(reader.result);
+        const img = new Image();
+        img.onload = () => {
+          const canvas = canvasRef.current || document.createElement('canvas');
+          const TARGET_SIZE = 240;
+          canvas.width = TARGET_SIZE;
+          canvas.height = TARGET_SIZE;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+
+          const minDim = Math.min(img.width, img.height);
+          const sx = (img.width - minDim) / 2;
+          const sy = (img.height - minDim) / 2;
+
+          ctx.drawImage(img, sx, sy, minDim, minDim, 0, 0, TARGET_SIZE, TARGET_SIZE);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.55);
+          const sizeKb = Math.round(((compressedDataUrl.length * 0.75) / 1024) * 10) / 10;
+          setCapturedSizeKb(sizeKb);
+          setCapturedImage(compressedDataUrl);
+        };
+        img.src = reader.result;
       }
     };
     reader.readAsDataURL(file);
@@ -199,6 +230,14 @@ export default function SelfieCaptureModal({
               ? 'Selfie captured! Click Confirm to punch in.'
               : 'Fit your face inside the circle and click Capture.'}
           </p>
+
+          {capturedImage && capturedSizeKb !== null && (
+            <div className="mt-1.5 flex items-center justify-center">
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60 shadow-2xs">
+                ⚡ Ultra-Light Selfie: {capturedSizeKb} KB
+              </span>
+            </div>
+          )}
 
           <canvas ref={canvasRef} className="hidden" />
           <input

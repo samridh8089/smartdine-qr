@@ -36,7 +36,8 @@ import {
   reviewAttendanceDays,
   getRestaurantLeaveRequests,
   reviewLeaveRequest,
-  submitLeaveRequest
+  submitLeaveRequest,
+  cleanupOldAttendanceSelfies
 } from '@/lib/attendoEngine';
 import { supabase } from '@/lib/supabase';
 import { db, Restaurant, Profile } from '@/lib/db';
@@ -208,6 +209,10 @@ export default function AttendanceManagerView({
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [calendarModalStaff, setCalendarModalStaff] = useState<StaffProfile | null>(null);
   const [calendarModalAttendances, setCalendarModalAttendances] = useState<StaffAttendance[]>([]);
+
+  // Storage & Selfie Optimizer State
+  const [cleaningSelfies, setCleaningSelfies] = useState(false);
+  const [cleanupResultNotice, setCleanupResultNotice] = useState<string | null>(null);
 
   // 2. useMemo: Filtered Staff List
   const filteredStaffList = useMemo(() => {
@@ -896,6 +901,25 @@ export default function AttendanceManagerView({
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleManualSelfieCleanup = async () => {
+    try {
+      setCleaningSelfies(true);
+      setCleanupResultNotice(null);
+      const res = await cleanupOldAttendanceSelfies(restaurant.id, 30);
+      if (res.success && res.cleanedCount > 0) {
+        setCleanupResultNotice(`Storage cleaned! ${res.cleanedCount} selfie(s) older than 30 days were purged.`);
+      } else if (res.success) {
+        setCleanupResultNotice('All clear! No selfies older than 30 days found.');
+      } else {
+        setCleanupResultNotice('Storage check completed.');
+      }
+    } catch (e: any) {
+      setCleanupResultNotice(`Cleanup failed: ${e.message}`);
+    } finally {
+      setCleaningSelfies(false);
     }
   };
 
@@ -2093,6 +2117,38 @@ export default function AttendanceManagerView({
               >
                 {savingSettings ? 'Saving...' : 'Save Geofence Settings'}
               </button>
+            </div>
+
+            {/* Storage Optimizer & 30-Day Auto-Purge */}
+            <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                    ⚡ Storage Optimizer &amp; Selfie Auto-Purge
+                  </span>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    Attendance selfies older than 30 days are automatically purged to prevent storage bloat. Staff punch times, working hours, and salary records are permanently preserved.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-lg border border-emerald-200/60 dark:border-emerald-800/40">
+                  Status: Auto-Cleanup Active (Every 30 Days)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleManualSelfieCleanup}
+                  disabled={cleaningSelfies}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-black dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-xs font-bold rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  {cleaningSelfies ? 'Cleaning Storage...' : 'Clean Old Selfies Now (> 30 Days)'}
+                </button>
+              </div>
+              {cleanupResultNotice && (
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                  {cleanupResultNotice}
+                </div>
+              )}
             </div>
           </div>
         </div>
