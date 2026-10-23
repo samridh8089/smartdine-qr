@@ -1425,88 +1425,74 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         </div>
       )}
 
-      {/* Cover Banner Image if present */}
-      {restaurant.cover_image_url && (
-        <div className="w-full h-32 md:h-44 relative shrink-0">
-          <img 
-            src={restaurant.cover_image_url} 
-            alt="" 
-            className="w-full h-full object-cover" 
-            onError={(e) => { e.currentTarget.parentElement?.classList.add('hidden'); }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        </div>
-      )}
-
-      {/* Restaurant Header */}
+      {/* Restaurant Header with integrated Call Waiter */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm shrink-0 sticky top-0 z-30 transition-colors">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-3xl mx-auto px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
+          {/* Left: Logo + Restaurant Name + Table */}
+          <div className="flex items-center gap-3 min-w-0">
             {restaurant.logo_url ? (
               <img 
                 src={restaurant.logo_url} 
                 alt={restaurant.name} 
-                className="h-11 w-11 rounded-xl object-cover border border-slate-100 dark:border-slate-800 shadow-sm" 
+                className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl object-cover border border-slate-100 dark:border-slate-800 shadow-sm shrink-0" 
               />
             ) : (
-              <div className={`h-11 w-11 rounded-xl ${theme.lightBg} ${theme.text} font-extrabold text-lg flex items-center justify-center shadow-inner`}>
+              <div className={`h-10 w-10 sm:h-11 sm:w-11 rounded-xl ${theme.lightBg} ${theme.text} font-extrabold text-base sm:text-lg flex items-center justify-center shadow-inner shrink-0`}>
                 {restaurant.name.charAt(0)}
               </div>
             )}
-            <div>
-              <h1 className="font-extrabold text-slate-900 dark:text-white text-base md:text-lg leading-tight">{restaurant.name}</h1>
-              {isReservation ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 uppercase">
-                  Table Reservation
-                </span>
-              ) : isTakeaway ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
-                  Takeaway
-                </span>
-              ) : table ? (
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${theme.lightBg} ${theme.lightText} border ${theme.border} uppercase`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {table.name}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase">
-                  View-Only Menu
-                </span>
-              )}
+            <div className="min-w-0">
+              <h1 className="font-extrabold text-slate-900 dark:text-white text-base md:text-lg leading-tight truncate">{restaurant.name}</h1>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {isReservation ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 uppercase">
+                    Table Reservation
+                  </span>
+                ) : isTakeaway ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
+                    Takeaway
+                  </span>
+                ) : table ? (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${theme.lightBg} ${theme.lightText} border ${theme.border} uppercase`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    {table.name}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase">
+                    View-Only Menu
+                  </span>
+                )}
+              </div>
             </div>
+          </div>
+
+          {/* Right: Call Waiter & Track Order Action */}
+          <div className="flex items-center gap-2 shrink-0">
+            {table && !isTakeaway && !isReservation && planSpec?.features.call_waiter !== false && (
+              <button
+                onClick={() => handleCallStaff('call_waiter')}
+                disabled={callLoading}
+                className="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                <span>Call Waiter</span>
+              </button>
+            )}
+
+            {activeOrderId && planSpec?.features.live_order_tracking !== false && (
+              <Link href={`/order-tracking/${activeOrderId}`}>
+                <button className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Track Order</span>
+                </button>
+              </Link>
+            )}
           </div>
         </div>
       </header>
 
       {/* Main Body content */}
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-5 space-y-4">
-
-        {/* Action Bar (Call Waiter & Track Order) below restaurant header & above offer banner */}
-        {((table && !isTakeaway && !isReservation && planSpec?.features.call_waiter !== false) || (activeOrderId && planSpec?.features.live_order_tracking !== false)) && (
-          <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-2.5 px-3.5 rounded-2xl border border-slate-200/70 dark:border-slate-800 shadow-xs">
-            <div className="flex items-center gap-2">
-              {table && !isTakeaway && !isReservation && planSpec?.features.call_waiter !== false && (
-                <button
-                  onClick={() => handleCallStaff('call_waiter')}
-                  disabled={callLoading}
-                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
-                >
-                  <Bell className="h-3.5 w-3.5" />
-                  <span>Call Waiter</span>
-                </button>
-              )}
-            </div>
-
-            {activeOrderId && planSpec?.features.live_order_tracking !== false && (
-              <Link href={`/order-tracking/${activeOrderId}`}>
-                <button className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer">
-                  <ClipboardList className="h-3.5 w-3.5" />
-                  <span>Track Order</span>
-                </button>
-              </Link>
-            )}
-          </div>
-        )}
         
         {/* Single, Clean Table Unavailable Notice */}
         {isTableDisabled && (
@@ -1802,127 +1788,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           </div>
         )}
 
-        {/* Top Selling Items Section (Appears FIRST, above categories, open by default) */}
-        {topSellingItems.length > 0 && !cleanSearch && (
-          <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-5 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-amber-500" />
-                <div>
-                  <h2 className="font-extrabold text-slate-900 dark:text-white text-base">Top Selling & Popular Choices</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">Most loved dishes ordered by customers</p>
-                </div>
-              </div>
-              <Badge variant="warning" className="font-extrabold text-[10px] uppercase tracking-wider py-1 px-2.5">
-                Popular
-              </Badge>
-            </div>
-
-            <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none shrink-0 -mx-1 px-1">
-              {topSellingItems.map((item) => {
-                const inCartQty = cart
-                  .filter(c => c.menuItem.id === item.id)
-                  .reduce((sum, c) => sum + c.quantity, 0);
-
-                return (
-                  <div 
-                    key={item.id}
-                    className="w-48 shrink-0 bg-slate-50/70 dark:bg-slate-950/60 border border-slate-200/70 dark:border-slate-800/80 rounded-2xl overflow-hidden hover:shadow-md transition-all flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="w-full h-28 relative overflow-hidden bg-slate-100 dark:bg-slate-800">
-                        <img 
-                          src={item.image_url || '/dish-placeholder.svg'} 
-                          alt={item.name} 
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            if (!target.src.endsWith('/dish-placeholder.svg')) {
-                              target.onerror = null;
-                              target.src = '/dish-placeholder.svg';
-                            }
-                          }}
-                        />
-                        <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] font-black uppercase text-white shadow-md ${item.is_veg ? 'bg-emerald-600' : 'bg-rose-600'}`}>
-                          {item.is_veg ? 'VEG' : 'NON-VEG'}
-                        </span>
-                      </div>
-                      <div className="p-3">
-                        <h4 className="font-extrabold text-slate-900 dark:text-white text-xs line-clamp-1">{item.name}</h4>
-                        <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-1">
-                          {formatPrice(item.price, restaurant?.settings?.currency)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="p-3 pt-0">
-                      {table && (() => {
-                        const hasPortions = Boolean(item.has_variants && item.variants && item.variants.length > 0);
-                        if (hasPortions) {
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => setDetailedItem(item)}
-                              className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                            >
-                              <span>Customize</span>
-                            </button>
-                          );
-                        }
-                        if (inCartQty > 0) {
-                          return (
-                            <div className="flex items-center justify-between bg-emerald-600 text-white rounded-xl p-1 px-2 font-bold text-xs">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const idx = cart.findIndex(c => c.menuItem.id === item.id);
-                                  if (idx > -1) updateCartQty(idx, -1);
-                                }}
-                                className="p-1 hover:bg-white/20 rounded-lg cursor-pointer"
-                              >
-                                <Minus className="h-3.5 w-3.5" />
-                              </button>
-                              <span>{inCartQty}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleAddToCart(item, 1)}
-                                className="p-1 hover:bg-white/20 rounded-lg cursor-pointer"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          );
-                        }
-                        if (isTableDisabled) {
-                          return (
-                            <button
-                              type="button"
-                              disabled
-                              className="w-full py-2 bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-xl text-xs font-bold cursor-not-allowed"
-                            >
-                              Unavailable
-                            </button>
-                          );
-                        }
-
-                        return (
-                          <button
-                            type="button"
-                            onClick={() => handleAddToCart(item, 1)}
-                            className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                          >
-                            <Plus className="h-3.5 w-3.5" />
-                            <span>ADD</span>
-                          </button>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Search & Veg Toggle - Contrast fixed */}
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-3">
@@ -2001,6 +1866,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
               const sInfo = stockMap[item.id];
               const isOutOfStock = (sInfo && (!sInfo.isAvailable || sInfo.maxServings <= 0)) || item.is_available === false;
               const isLowStock = sInfo && sInfo.isLowStock && !isOutOfStock;
+              const isTopSelling = topSellingItems.some(t => t.id === item.id) || (item as any).is_top_selling || (item as any).is_popular;
 
               return (
               <Card 
@@ -2017,6 +1883,12 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       <Badge variant={item.is_veg ? 'veg' : 'non-veg'}>
                         {item.is_veg ? 'Veg' : 'Non-Veg'}
                       </Badge>
+                      {isTopSelling && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/60 inline-flex items-center gap-1 shadow-2xs">
+                          <Sparkles className="h-2.5 w-2.5 text-amber-500 fill-amber-500" />
+                          <span>Top Selling</span>
+                        </span>
+                      )}
                       {isOutOfStock && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/30">
                           Out of Stock
