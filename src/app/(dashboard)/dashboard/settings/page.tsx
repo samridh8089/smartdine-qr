@@ -48,7 +48,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Restaurant Profile',
     desc: 'Name, logo, address, phone number & operating hours',
     icon: Store,
-    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['restaurant', 'profile', 'name', 'logo', 'contact', 'timings', 'address', 'theme', 'cover']
   },
   {
@@ -56,9 +56,9 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Staff & Permissions',
     desc: 'Managers, supervisors, chefs, waiters & salaries',
     badge: '10 Roles',
-    badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: Users,
-    iconBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['staff', 'team', 'managers', 'supervisors', 'chefs', 'waiters', 'salary', 'permissions', 'roles', 'pin', 'wages']
   },
   {
@@ -66,7 +66,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Tables & QR Design',
     desc: 'Table capacity, custom QR themes & standee PDF downloads',
     icon: QrCode,
-    iconBg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['qr', 'tables', 'table layout', 'badges', 'qr codes', 'floor', 'download', 'standees', 'studio']
   },
   {
@@ -74,7 +74,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Taxes & Extra Charges',
     desc: 'GST slabs (5%, 12%, 18%), service charge & container fee',
     icon: Percent,
-    iconBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['taxes', 'extra charges', 'gst', 'service charge', 'packaging fee', 'delivery', 'tax']
   },
   {
@@ -82,7 +82,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Payment Gateways',
     desc: 'UPI QR codes, cash desk & Razorpay payment gateway',
     icon: CreditCard,
-    iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['payment methods', 'upi', 'cash', 'qr', 'razorpay', 'gateway', 'checkout', 'online']
   },
   {
@@ -90,7 +90,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Printers & Devices',
     desc: 'Thermal KOT printers, Bluetooth auto-print & soundbox',
     icon: Printer,
-    iconBg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['printers', 'hardware', 'bluetooth', 'kot', 'thermal', 'pos', 'receipt', 'kitchen printer', 'devices', 'sessions']
   },
   {
@@ -98,7 +98,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Sound & Notifications',
     desc: 'Kitchen bell audio, floor buzzer & WhatsApp alerts',
     icon: Bell,
-    iconBg: 'bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 border border-teal-100 dark:border-teal-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['sound', 'alerts', 'bell', 'chime', 'notification', 'whatsapp', 'audio', 'buzzer']
   },
   {
@@ -106,7 +106,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Data & Backup',
     desc: 'Export Excel sales, menu templates & database backup',
     icon: Database,
-    iconBg: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border border-cyan-100 dark:border-cyan-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['data', 'backup', 'export', 'csv', 'excel', 'snapshot', 'cloud', 'restore', 'menu import', 'download']
   },
   {
@@ -114,7 +114,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Activity Audit Logs',
     desc: 'Track staff updates, price edits, deletes & login history',
     badge: 'Owner Only',
-    badgeColor: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: ShieldCheck,
     iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['audit logs', 'security', 'owner', 'activity trail', 'history', 'who did what', 'audit', 'logs'],
@@ -125,7 +125,7 @@ const HUB_MODULES: HubModuleItem[] = [
     title: 'Offers & Discounts',
     desc: 'Promo codes, festive coupons & banner announcements',
     icon: Tag,
-    iconBg: 'bg-fuchsia-50 dark:bg-fuchsia-950/40 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-100 dark:border-fuchsia-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['offers', 'discounts', 'coupons', 'promo', 'codes', 'marketing']
   }
 ];
@@ -1267,7 +1267,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
           </div>
 
           {/* Section 3: Settings Grid Cards (Windows 10 3-Column Hub Grid) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {filteredHubModules.map((mod) => (
               <div
                 key={mod.id}
@@ -1278,26 +1278,21 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   }
                   setActiveTab(mod.id);
                 }}
-                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-emerald-500/50 hover:-translate-y-0.5 transition-all cursor-pointer flex items-start gap-4"
+                className="group bg-white dark:bg-slate-900 px-4 py-3.5 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
               >
-                <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${mod.iconBg}`}>
-                  <mod.icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                      {mod.title}
-                    </h3>
-                    {mod.badge && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${mod.badgeColor}`}>
-                        {mod.badge}
-                      </span>
-                    )}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${mod.iconBg}`}>
+                    <mod.icon className="w-4 h-4" />
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
-                    {mod.desc}
-                  </p>
+                  <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                    {mod.title}
+                  </h3>
                 </div>
+                {mod.badge && (
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 ${mod.badgeColor}`}>
+                    {mod.badge}
+                  </span>
+                )}
               </div>
             ))}
 
@@ -1318,142 +1313,37 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Top Breadcrumb Back Button */}
-          <div className="flex items-center justify-between pb-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab('hub')}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-xs transition-all cursor-pointer group"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-0.5 transition-transform" />
-              <span>All Settings Hub</span>
-            </button>
+        <div className="space-y-5">
+          {/* Dedicated Clean Workspace Header */}
+          <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveTab('hub')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer group"
+                title="Return to Settings Hub Grid"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-white group-hover:-translate-x-0.5 transition-transform" />
+                <span>Back to Hub</span>
+              </button>
+              <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+              <h2 className="text-base font-black text-slate-900 dark:text-white tracking-tight">
+                {activeTab === 'profile' && 'Restaurant Profile'}
+                {activeTab === 'qr_design' && 'Tables & QR Design Studio'}
+                {activeTab === 'staff' && 'Staff Accounts & Permissions'}
+                {activeTab === 'devices' && 'Printers & Hardware Devices'}
+                {activeTab === 'charges' && 'Taxes & Extra Charges'}
+                {activeTab === 'payments' && 'Payment Gateways & UPI'}
+                {activeTab === 'notifications' && 'Sound & Kitchen Notifications'}
+                {activeTab === 'backup' && 'Data & Cloud Backup'}
+                {activeTab === 'logs' && 'Activity Audit Logs (Owner)'}
+                {activeTab === 'offers' && 'Offers & Discounts'}
+              </h2>
+            </div>
           </div>
 
-          {/* Settings Header */}
-          <div>
-            <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Settings & Brand Control</h2>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Configure profile settings, register staff, download menu templates, and review logs.</p>
-          </div>
-
-          {/* Tabs list */}
-          <div className="flex border-b border-slate-100 dark:border-slate-800 gap-6 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('hub')}
-              className="pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 border-transparent text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400"
-              title="Return to Settings Hub Grid"
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Hub
-            </button>
-            <button
-              onClick={() => setActiveTab('profile')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'profile'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          Restaurant Profile
-        </button>
-        <button
-          onClick={() => setActiveTab('qr_design')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'qr_design'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <QrCode className="h-4 w-4" />
-          QR Design Studio
-        </button>
-        <button
-          onClick={() => setActiveTab('staff')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'staff'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          Staff Accounts
-        </button>
-        <button
-          onClick={() => setActiveTab('devices')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'devices'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <Smartphone className="h-4 w-4" />
-          Active Devices & Security
-        </button>
-        <button
-          onClick={() => setActiveTab('backup')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'backup'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          Backup & Restore
-        </button>
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'logs'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          Audit History Logs
-        </button>
-        <button
-          onClick={() => setActiveTab('charges')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'charges'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          Taxes & Charges
-        </button>
-        <button
-          onClick={() => setActiveTab('payments')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'payments'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          Payments Settings
-        </button>
-        <button
-          onClick={() => setActiveTab('notifications')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'notifications'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          Notification Sounds
-        </button>
-        <button
-          onClick={() => setActiveTab('offers')}
-          className={`pb-3 text-sm font-bold tracking-wide transition-all border-b-2 cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'offers'
-              ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
-              : 'border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <Tag className="h-4 w-4" />
-          Offers & Discounts
-        </button>
-      </div>
-
-      {/* Tab Panels */}
-      <div className="space-y-6">
+          {/* Tab Panels */}
+          <div className="space-y-6">
         
         {/* QR DESIGN STUDIO TAB */}
         {activeTab === 'qr_design' && (

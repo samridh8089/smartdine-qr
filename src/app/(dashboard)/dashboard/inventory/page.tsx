@@ -164,9 +164,9 @@ const INVENTORY_HUB_MODULES = [
     title: 'Raw Materials & Stock',
     desc: 'Manage ingredients, unit conversions, stock levels & reorder triggers',
     badge: 'Stock Master',
-    badgeColor: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: Boxes,
-    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['raw', 'materials', 'stock', 'ingredients', 'items', 'inventory', 'physical', 'reorder', 'units', 'kg', 'gram', 'litre']
   },
   {
@@ -174,9 +174,9 @@ const INVENTORY_HUB_MODULES = [
     title: 'Recipes & Food Costing',
     desc: 'BOM portion mapping, plate cost calculations, gross margins & AI Chef',
     badge: 'AI Chef',
-    badgeColor: 'bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: BookOpen,
-    iconBg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['recipes', 'costing', 'bom', 'plate cost', 'margins', 'ai chef', 'portions', 'dish', 'ingredients', 'recipe', 'food cost']
   },
   {
@@ -184,9 +184,9 @@ const INVENTORY_HUB_MODULES = [
     title: 'Purchases & Stock In',
     desc: 'Record vendor purchase invoices, bulk stock arrivals & unit rate changes',
     badge: 'Bills',
-    badgeColor: 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: ShoppingCart,
-    iconBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['purchases', 'stock in', 'vendor', 'bills', 'invoice', 'supplier', 'restock', 'goods received', 'purchase order']
   },
   {
@@ -194,9 +194,9 @@ const INVENTORY_HUB_MODULES = [
     title: 'Food Waste & Dispositions',
     desc: 'Kitchen spoilage, expired stock, staff meal logs & food loss prevention',
     badge: 'Loss Audit',
-    badgeColor: 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: UtensilsCrossed,
-    iconBg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['waste', 'dispositions', 'spoilage', 'shrinkage', 'burnt', 'staff meal', 'loss', 'expired', 'discard']
   },
   {
@@ -204,9 +204,9 @@ const INVENTORY_HUB_MODULES = [
     title: 'Stock Transaction Ledger',
     desc: 'Real-time KOT order deductions, manual stock corrections & complete audit trail',
     badge: 'Live Audit',
-    badgeColor: 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: History,
-    iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['transactions', 'ledger', 'consumption', 'history', 'audit log', 'kot deductions', 'trail', 'deductions', 'logs']
   },
   {
@@ -214,9 +214,9 @@ const INVENTORY_HUB_MODULES = [
     title: 'Usage Analytics & Alerts',
     desc: 'Hourly ingredient burn rates, low stock alerts & dish consumption breakdown',
     badge: 'Burn Rate',
-    badgeColor: 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300',
+    badgeColor: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700',
     icon: PieChart,
-    iconBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/40',
+    iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700',
     tags: ['usage', 'analytics', 'alerts', 'low stock', 'hourly', 'consumption', 'charts', 'burn rate', 'warning', 'reports']
   }
 ];
@@ -1647,36 +1647,31 @@ export default function InventoryDashboardPage() {
             </p>
           </div>
 
-          {/* Section 3: 6-Card Windows 10 Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* Section 3: 6-Card Windows 10 Grid (Clean, Neutral, No Subtitle Text) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {filteredHubModules.map((mod) => (
               <div
                 key={mod.id}
                 onClick={() => setActiveTab(mod.id as any)}
-                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-emerald-500/50 hover:-translate-y-0.5 transition-all cursor-pointer flex items-start gap-4"
+                className="group bg-white dark:bg-slate-900 px-4 py-3.5 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
               >
-                <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${mod.iconBg}`}>
-                  <mod.icon className="w-5 h-5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                      {mod.title}
-                    </h3>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${mod.badgeColor}`}>
-                      {mod.id === 'items' ? `${activeItems.length} Items` :
-                       mod.id === 'recipes' ? `${recipes.length} Recipes` :
-                       mod.id === 'purchases' ? `${effectivePurchases.length} Bills` :
-                       mod.id === 'dispositions' ? `${dispositions.length} Dispositions` :
-                       mod.id === 'transactions' ? `${effectiveTransactions.length} Entries` :
-                       mod.id === 'analytics' ? (lowStockCount > 0 ? `${lowStockCount} Low Stock` : 'Active') :
-                       mod.badge}
-                    </span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${mod.iconBg}`}>
+                    <mod.icon className="w-4 h-4" />
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
-                    {mod.desc}
-                  </p>
+                  <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                    {mod.title}
+                  </h3>
                 </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 ${mod.badgeColor}`}>
+                  {mod.id === 'items' ? `${activeItems.length} Items` :
+                   mod.id === 'recipes' ? `${recipes.length} Recipes` :
+                   mod.id === 'purchases' ? `${effectivePurchases.length} Bills` :
+                   mod.id === 'dispositions' ? `${dispositions.length} Dispositions` :
+                   mod.id === 'transactions' ? `${effectiveTransactions.length} Entries` :
+                   mod.id === 'analytics' ? (lowStockCount > 0 ? `${lowStockCount} Low Stock` : 'Active') :
+                   mod.badge}
+                </span>
               </div>
             ))}
 
@@ -1697,219 +1692,97 @@ export default function InventoryDashboardPage() {
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Top Breadcrumb Back to Hub Bar */}
-          <div className="flex items-center justify-between pb-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab('hub')}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-xs transition-all cursor-pointer group"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-0.5 transition-transform" />
-              <span>&larr; Back to Inventory Hub</span>
-            </button>
-          </div>
+        <div className="space-y-5">
+          {/* Dedicated Clean Workspace Header */}
+          <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-5 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setActiveTab('hub')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition cursor-pointer group"
+                title="Return to Inventory Hub Grid"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-white group-hover:-translate-x-0.5 transition-transform" />
+                <span>Back to Hub</span>
+              </button>
+              <div className="h-4 w-px bg-slate-200 dark:bg-slate-700" />
+              <h2 className="text-base font-black text-slate-900 dark:text-white tracking-tight">
+                {activeTab === 'items' && 'Raw Materials & Stock Master'}
+                {activeTab === 'recipes' && 'Recipes & Food Costing'}
+                {activeTab === 'purchases' && 'Purchases & Stock In'}
+                {activeTab === 'dispositions' && 'Food Waste & Dispositions'}
+                {activeTab === 'transactions' && 'Stock Transaction Ledger'}
+                {activeTab === 'waste' && 'Kitchen Waste Management'}
+                {activeTab === 'alerts' && 'Low Stock Alerts'}
+                {activeTab === 'analytics' && 'Usage Analytics & Consumption'}
+              </h2>
+            </div>
 
-          {/* Header & Title */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 text-white p-5 rounded-2xl shadow-xl">
-        <div className="space-y-1">
-          <div>
-            <h1 className="text-2xl font-extrabold tracking-tight">Inventory & Recipe ERP</h1>
-          </div>
-          <p className="text-xs md:text-sm text-slate-300">
-            Manage stock levels, recipe ingredients, purchase orders, and food costings.
-          </p>
-        </div>
+            {/* Contextual Action Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {activeTab === 'items' && (
+                <>
+                  <button
+                    onClick={() => {
+                      setCsvRawText('');
+                      setParsedRows([]);
+                      setShowImportModal(true);
+                    }}
+                    className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>Import CSV</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingItem(null);
+                      setItemUnitType('gram');
+                      setCustomUnitName('');
+                      setShowItemModal(true);
+                    }}
+                    className="flex items-center gap-1.5 bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Add Item</span>
+                  </button>
+                </>
+              )}
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
-            onClick={() => {
-              setCsvRawText('');
-              setParsedRows([]);
-              setShowImportModal(true);
-            }}
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
-          >
-            <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
-            <span>Import CSV</span>
-          </button>
+              {activeTab === 'recipes' && (
+                <button
+                  onClick={() => {
+                    setAiDishInput('');
+                    setAiDraftRecipe(null);
+                    setShowAiModal(true);
+                  }}
+                  className="flex items-center gap-1.5 bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-purple-400 dark:text-purple-600" />
+                  <span>AI Recipe Generator</span>
+                </button>
+              )}
 
-          <button
-            onClick={() => {
-              setAiDishInput('');
-              setAiDraftRecipe(null);
-              setShowAiModal(true);
-            }}
-            className="flex items-center gap-1.5 bg-gray-900 hover:bg-black text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span>Generate AI Recipe</span>
-          </button>
+              {activeTab === 'purchases' && (
+                <button
+                  onClick={() => setShowPurchaseModal(true)}
+                  className="flex items-center gap-1.5 bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Record Purchase Bill</span>
+                </button>
+              )}
 
-          <button
-            onClick={() => {
-              setEditingItem(null);
-              setItemUnitType('gram');
-              setCustomUnitName('');
-              setShowItemModal(true);
-            }}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add Item</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Plan Entitlement & Usage Counters Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <ResourceUsageCard
-          title="Inventory Items"
-          used={activeItems.length}
-          limit={planSpec?.limits?.inventory_items ?? 100}
-          unitLabel="used"
-        />
-        <ResourceUsageCard
-          title="Recipes & Costing"
-          used={recipes.length}
-          limit={planSpec?.limits?.recipes ?? 100}
-          unitLabel="used"
-        />
-        <ResourceUsageCard
-          title="AI Recipe Item Credits"
-          used={aiRecipeUsage.used}
-          limit={aiRecipeUsage.limit}
-          unitLabel="credits used"
-          isLocked={planSpec?.features?.ai_recipe === false || aiRecipeUsage.limit === 0}
-          lockedMessage="Available on PRO and PREMIUM"
-          resetNote="1 generated recipe = 1 AI Recipe credit. Resets monthly."
-        />
-      </div>
-
-      {/* Real-time ERP Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3.5">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-xl shadow-xs space-y-1 min-w-0 flex flex-col justify-between">
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Stock Value</p>
-          <p className="text-base sm:text-lg 2xl:text-xl font-black text-slate-900 dark:text-white whitespace-nowrap leading-tight">
-            ₹{totalStockValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-xl shadow-xs space-y-1 min-w-0 flex flex-col justify-between">
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Low Stock</p>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p className="text-base sm:text-lg 2xl:text-xl font-black text-slate-900 dark:text-white whitespace-nowrap leading-tight">{lowStockCount}</p>
-            {lowStockCount > 0 && <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />}
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-xl shadow-xs space-y-1 min-w-0 flex flex-col justify-between">
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Out of Stock</p>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p className="text-base sm:text-lg 2xl:text-xl font-black text-slate-900 dark:text-white whitespace-nowrap leading-tight">{outOfStockCount}</p>
-            {outOfStockCount > 0 && <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />}
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-xl shadow-xs space-y-1 min-w-0 flex flex-col justify-between">
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Today Consumed</p>
-          <p className="text-base sm:text-lg 2xl:text-xl font-black text-slate-900 dark:text-white whitespace-nowrap leading-tight">
-            ₹{todayConsumptionValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-xl shadow-xs space-y-1 min-w-0 flex flex-col justify-between">
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Today Waste</p>
-          <p className="text-base sm:text-lg 2xl:text-xl font-black text-slate-900 dark:text-white whitespace-nowrap leading-tight">
-            ₹{todayWasteValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-xl shadow-xs space-y-1 min-w-0 flex flex-col justify-between">
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Today Stock In</p>
-          <p className="text-base sm:text-lg 2xl:text-xl font-black text-slate-900 dark:text-white whitespace-nowrap leading-tight">
-            ₹{todayPurchaseValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 rounded-xl shadow-xs space-y-1 min-w-0 flex flex-col justify-between">
-          <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Unack Alerts</p>
-          <div className="flex items-center gap-1.5 min-w-0">
-            <p className="text-base sm:text-lg 2xl:text-xl font-black text-slate-900 dark:text-white whitespace-nowrap leading-tight">{alerts.length}</p>
-            {alerts.length > 0 && <span className="h-2 w-2 rounded-full bg-purple-500 shrink-0" />}
-          </div>
-        </div>
-      </div>
-
-      {/* Hourly Stock Shortage Cancellation Impact Notification Banner */}
-      {hourlyImpact && hourlyImpact.affectedOrdersCount > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 p-4 rounded-2xl flex items-start justify-between gap-4 shadow-sm">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h4 className="font-extrabold text-xs text-amber-900 dark:text-amber-200 uppercase tracking-wide">
-                Hourly Inventory Cancellation Impact Report (Last 1 Hour)
-              </h4>
-              <p className="text-xs text-amber-800 dark:text-amber-300">
-                <span className="font-black">{hourlyImpact.affectedOrdersCount} orders</span> were affected by raw material shortages (Estimated lost order revenue: <span className="font-black">₹{hourlyImpact.estimatedLostRevenue}</span>).
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {hourlyImpact.itemBreakdown.map((b: any, idx: number) => (
-                  <span key={idx} className="bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-md text-[11px] font-bold">
-                    {b.itemName}: {b.affectedOrders} affected (₹{b.lostRevenue})
-                  </span>
-                ))}
-              </div>
+              {(activeTab === 'dispositions' || activeTab === 'waste') && (
+                <button
+                  onClick={() => setShowWasteModal(true)}
+                  className="flex items-center gap-1.5 bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Record Waste Entry</span>
+                </button>
+              )}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ERP Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto pb-2 scrollbar-none">
-        <button
-          onClick={() => setActiveTab('hub')}
-          className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-          title="Return to Inventory Hub Grid"
-        >
-          <LayoutGrid className="h-4 w-4" />
-          <span>Hub</span>
-        </button>
-        {[
-          { id: 'items', label: 'Inventory Items', icon: Boxes, badge: activeItems.length },
-          { id: 'recipes', label: 'Recipes & Costing', icon: BookOpen, badge: recipes.length },
-          { id: 'dispositions', label: 'Food Dispositions', icon: UtensilsCrossed, badge: dispositions.length },
-          { id: 'transactions', label: 'Transaction Ledger', icon: History, badge: transactions.length },
-          { id: 'purchases', label: 'Purchases (Stock In)', icon: ShoppingCart, badge: purchases.length },
-          { id: 'waste', label: 'Waste Management', icon: Trash2, badge: wasteLogs.length },
-          { id: 'alerts', label: 'Low Stock Alerts', icon: AlertTriangle, badge: alerts.length },
-          { id: 'analytics', label: 'Dish Usage Analytics', icon: PieChart, badge: null }
-        ].map(tab => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${
-                isActive
-                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span>{tab.label}</span>
-              {tab.badge !== null && (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                  isActive ? 'bg-white/20 dark:bg-slate-900/20 text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                }`}>
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
 
       {/* TAB 1: INVENTORY ITEMS */}
       {activeTab === 'items' && (
