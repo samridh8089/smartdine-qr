@@ -1462,12 +1462,12 @@ export default function InventoryDashboardPage() {
   }
 
   return (
-    <div className="p-3 sm:p-4 space-y-3 max-w-7xl mx-auto min-h-screen">
+    <div className="space-y-3 max-w-7xl mx-auto">
       {activeTab === 'hub' ? (
         <div className="space-y-3 max-w-6xl mx-auto">
           {/* Compact Top Header & 4 KPI Cards */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-3">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-3 sm:p-3.5 border border-slate-200/90 dark:border-slate-800 shadow-xs space-y-2.5">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-2.5">
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center shadow-xs shrink-0">
                   <Boxes className="w-4 h-4" />
@@ -1495,7 +1495,7 @@ export default function InventoryDashboardPage() {
                     setCustomUnitName('');
                     setShowItemModal(true);
                   }}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add Material</span>
@@ -1513,7 +1513,7 @@ export default function InventoryDashboardPage() {
                     setAiDraftRecipe(null);
                     setShowAiModal(true);
                   }}
-                  className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  className="px-3 py-1.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   <span>AI Recipe</span>
@@ -1534,7 +1534,7 @@ export default function InventoryDashboardPage() {
 
             {/* 4 Compact KPI Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-3">
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-2.5 sm:p-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Total Stock Value</span>
                 <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
                   ₹{totalStockValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
@@ -1544,7 +1544,7 @@ export default function InventoryDashboardPage() {
                 </p>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-3">
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-2.5 sm:p-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Low Stock Alerts</span>
                 <div className="flex items-center gap-1.5">
                   <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
@@ -1557,7 +1557,7 @@ export default function InventoryDashboardPage() {
                 </p>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-3">
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-2.5 sm:p-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Today Consumed</span>
                 <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
                   ₹{todayConsumptionValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
@@ -1565,7 +1565,7 @@ export default function InventoryDashboardPage() {
                 <p className="text-[11px] text-slate-500 font-medium mt-0.5">From order KOTs</p>
               </div>
 
-              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-3">
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-2.5 sm:p-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">AI Recipe Credits</span>
                 <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
                   {aiRecipeUsage.remaining ?? (aiRecipeUsage.limit ? aiRecipeUsage.limit - aiRecipeUsage.used : '∞')} / {aiRecipeUsage.limit ?? '∞'}
@@ -1603,9 +1603,9 @@ export default function InventoryDashboardPage() {
                 value={hubSearchQuery}
                 onChange={(e) => setHubSearchQuery(e.target.value)}
                 placeholder="Find an ingredient, recipe, or inventory module..."
-                className="w-full pl-9 pr-14 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
+                className="w-full pl-9 pr-14 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
               />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2" />
               {hubSearchQuery && (
                 <button
                   type="button"
@@ -1619,14 +1619,14 @@ export default function InventoryDashboardPage() {
           </div>
 
           {/* Section 3: 6-Card Grid (Spacious, Roomy Cards matching Top Inventory Cards) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-3.5">
             {filteredHubModules.map((mod) => (
               <div
                 key={mod.id}
                 onClick={() => setActiveTab(mod.id as any)}
-                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[110px]"
+                className="group bg-white dark:bg-slate-900 p-4 sm:p-4.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[96px] sm:min-h-[102px]"
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-2.5">
                   <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
                     <mod.icon className="w-5 h-5" />
                   </div>
