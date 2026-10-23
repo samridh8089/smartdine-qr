@@ -1266,8 +1266,8 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
             </p>
           </div>
 
-          {/* Section 3: Settings Grid Cards (Windows 10 3-Column Hub Grid) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {/* Section 3: Settings Grid Cards (Spacious, Roomy Cards matching Top Inventory Cards) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredHubModules.map((mod) => (
               <div
                 key={mod.id}
@@ -1278,21 +1278,23 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   }
                   setActiveTab(mod.id);
                 }}
-                className="group bg-white dark:bg-slate-900 px-4 py-3.5 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs hover:shadow-xs hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-between"
+                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[110px]"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${mod.iconBg}`}>
-                    <mod.icon className="w-4 h-4" />
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
+                    <mod.icon className="w-5 h-5" />
                   </div>
-                  <h3 className="text-xs sm:text-sm font-black text-slate-900 dark:text-white truncate">
+                  {mod.badge && (
+                    <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
+                      {mod.badge}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                     {mod.title}
                   </h3>
                 </div>
-                {mod.badge && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 ${mod.badgeColor}`}>
-                    {mod.badge}
-                  </span>
-                )}
               </div>
             ))}
 
