@@ -1178,16 +1178,16 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   return (
     <div className="space-y-4">
       {activeTab === 'hub' ? (
-        <div className="space-y-3 max-w-6xl mx-auto">
+        <div className="space-y-4 max-w-6xl mx-auto">
           {/* Windows 10 Style Sleek Profile Header */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-3 sm:p-3.5 border border-slate-200/90 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             {/* User Profile Left */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3.5">
               <div className="relative shrink-0">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center text-base font-black shadow-xs border-2 border-white dark:border-slate-800">
+                <div className="h-11 w-11 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center text-base font-black shadow-xs border-2 border-white dark:border-slate-800">
                   {((profile?.full_name || restaurant?.name || 'CO')[0] || 'O').toUpperCase()}
                 </div>
-                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-800" />
+                <span className="absolute bottom-0 right-0 h-3 w-3 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-800" />
               </div>
 
               <div>
@@ -1195,11 +1195,11 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
                     {profile?.full_name || restaurant?.name || 'Restaurant Admin'}
                   </h2>
-                  <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-400 rounded-md tracking-wider">
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-400 rounded-md tracking-wider">
                     {isOwner ? 'Owner' : 'Manager'}
                   </span>
                 </div>
-                <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   {profile?.email || 'admin@cleverops.in'} • {restaurant?.name || 'CleverOps Cloud'}
                 </p>
               </div>
@@ -1209,7 +1209,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
             <div className="flex items-center gap-2 shrink-0 flex-wrap">
               <Link 
                 href="/dashboard/billing" 
-                className="px-2.5 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition inline-flex items-center gap-1 cursor-pointer"
+                className="px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition inline-flex items-center gap-1 cursor-pointer"
               >
                 Billing &amp; Plans &rarr;
               </Link>
@@ -1218,7 +1218,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   href={`/menu/${restaurant.slug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1 cursor-pointer"
                 >
                   Live Menu
                 </a>
@@ -1234,14 +1234,14 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Find a setting (e.g. staff, gst, printer, qr)..." 
-                className="w-full pl-9 pr-14 py-1.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
+                className="w-full pl-9 pr-14 py-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs sm:text-sm font-semibold rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
               />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1 px-1.5 py-0.5 text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-md cursor-pointer"
+                  className="absolute right-2.5 top-1.5 px-2 py-0.5 text-[10px] font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-md cursor-pointer"
                 >
                   Clear
                 </button>
@@ -1249,8 +1249,8 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
             </div>
           </div>
 
-          {/* Section 3: Settings Grid Cards (10 Cards balanced in 2 rows of 5) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+          {/* Section 3: Settings Grid Cards (10 Roomy, Balanced Cards in 2 rows of 5) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 sm:gap-4">
             {filteredHubModules.map((mod) => (
               <div
                 key={mod.id}
@@ -1261,20 +1261,20 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   }
                   setActiveTab(mod.id);
                 }}
-                className="group bg-white dark:bg-slate-900 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[96px]"
+                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-slate-400 dark:hover:border-slate-600 hover:-translate-y-0.5 transition-all cursor-pointer flex flex-col justify-between min-h-[140px] sm:min-h-[148px]"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
-                    <mod.icon className="w-4 h-4" />
+                <div className="flex items-center justify-between mb-3">
+                  <div className="h-11 w-11 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center border border-slate-200/80 dark:border-slate-700">
+                    <mod.icon className="w-5 h-5" />
                   </div>
                   {mod.badge && (
-                    <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
+                    <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
                       {mod.badge}
                     </span>
                   )}
                 </div>
                 <div>
-                  <h3 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors leading-snug">
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors leading-snug">
                     {mod.title}
                   </h3>
                 </div>
