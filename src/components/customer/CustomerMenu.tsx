@@ -1426,62 +1426,69 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       )}
 
       {/* Restaurant Header with integrated Call Waiter */}
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm shrink-0 sticky top-0 z-30 transition-colors">
-        <div className="max-w-3xl mx-auto px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
-          {/* Left: Logo + Restaurant Name + Table */}
-          <div className="flex items-center gap-3 min-w-0">
-            {restaurant.logo_url ? (
-              <img 
-                src={restaurant.logo_url} 
-                alt={restaurant.name} 
-                className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl object-cover border border-slate-100 dark:border-slate-800 shadow-sm shrink-0" 
-              />
-            ) : (
-              <div className={`h-10 w-10 sm:h-11 sm:w-11 rounded-xl ${theme.lightBg} ${theme.text} font-extrabold text-base sm:text-lg flex items-center justify-center shadow-inner shrink-0`}>
-                {restaurant.name.charAt(0)}
-              </div>
-            )}
-            <div className="min-w-0">
-              <h1 className="font-extrabold text-slate-900 dark:text-white text-base md:text-lg leading-tight truncate">{restaurant.name}</h1>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                {isReservation ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 uppercase">
-                    Table Reservation
-                  </span>
-                ) : isTakeaway ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase">
-                    Takeaway
-                  </span>
-                ) : table ? (
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${theme.lightBg} ${theme.lightText} border ${theme.border} uppercase`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {table.name}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase">
-                    View-Only Menu
-                  </span>
-                )}
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-xs shrink-0 sticky top-0 z-30 transition-colors">
+        <div className="max-w-3xl mx-auto px-4 py-3 sm:py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
+          {/* Row 1 on mobile / Left on desktop: Logo + Restaurant Name + Table */}
+          <div className="flex items-center justify-between sm:justify-start gap-3 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
+              {restaurant.logo_url ? (
+                <img 
+                  src={restaurant.logo_url} 
+                  alt={restaurant.name} 
+                  className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 shadow-xs shrink-0" 
+                />
+              ) : (
+                <div className={`h-11 w-11 sm:h-12 sm:w-12 rounded-xl ${theme.lightBg} ${theme.text} font-black text-base sm:text-lg flex items-center justify-center shadow-inner shrink-0`}>
+                  {restaurant.name.charAt(0)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="font-black text-slate-900 dark:text-white text-base sm:text-lg leading-tight">
+                    {restaurant.name}
+                  </h1>
+                  {table && !isTakeaway && !isReservation && (
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${theme.lightBg} ${theme.lightText} border ${theme.border} uppercase tracking-wider shrink-0`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      {table.name}
+                    </span>
+                  )}
+                  {isTakeaway && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase shrink-0">
+                      Takeaway
+                    </span>
+                  )}
+                  {isReservation && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-50 dark:bg-indigo-950/20 text-indigo-700 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900/30 uppercase shrink-0">
+                      Table Reservation
+                    </span>
+                  )}
+                  {!table && !isTakeaway && !isReservation && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase shrink-0">
+                      View-Only Menu
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Right: Call Waiter & Track Order Action */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Row 2 on mobile / Right on desktop: Call Waiter & Track Order Action */}
+          <div className="flex items-center gap-2 sm:shrink-0 pt-1.5 sm:pt-0 border-t border-slate-100 dark:border-slate-800/80 sm:border-t-0">
             {table && !isTakeaway && !isReservation && planSpec?.features.call_waiter !== false && (
               <button
                 onClick={() => handleCallStaff('call_waiter')}
                 disabled={callLoading}
-                className="px-3.5 py-1.5 bg-slate-900 hover:bg-black text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
+                className="flex-1 sm:flex-initial px-4 py-2 sm:py-1.5 bg-slate-900 hover:bg-black text-white dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95"
               >
-                <Bell className="h-3.5 w-3.5" />
+                <Bell className="h-3.5 w-3.5 text-amber-400" />
                 <span>Call Waiter</span>
               </button>
             )}
 
             {activeOrderId && planSpec?.features.live_order_tracking !== false && (
-              <Link href={`/order-tracking/${activeOrderId}`}>
-                <button className="px-2.5 sm:px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0">
+              <Link href={`/order-tracking/${activeOrderId}`} className="flex-1 sm:flex-initial">
+                <button className="w-full sm:w-auto px-4 py-2 sm:py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200/70 dark:border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
                   <ClipboardList className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                   <span className="whitespace-nowrap">Track Order</span>
                 </button>
@@ -1880,9 +1887,15 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 <div className="flex-1 p-4 flex flex-col justify-between space-y-2">
                   <div className="space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge variant={item.is_veg ? 'veg' : 'non-veg'}>
-                        {item.is_veg ? 'Veg' : 'Non-Veg'}
-                      </Badge>
+                      {item.is_veg ? (
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs border border-emerald-600 bg-white dark:bg-slate-900 shrink-0" title="Vegetarian">
+                          <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs border border-rose-600 bg-white dark:bg-slate-900 shrink-0" title="Non-Vegetarian">
+                          <span className="w-2 h-2 rounded-full bg-rose-600" />
+                        </span>
+                      )}
                       {isTopSelling && (
                         <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs">
                           TOP SELLING
@@ -2138,9 +2151,15 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <Badge variant={detailedItem?.is_veg ? 'veg' : 'non-veg'}>
-                  {detailedItem?.is_veg ? 'Veg' : 'Non-Veg'}
-                </Badge>
+                {detailedItem?.is_veg ? (
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs border border-emerald-600 bg-white dark:bg-slate-900 shrink-0" title="Vegetarian">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-xs border border-rose-600 bg-white dark:bg-slate-900 shrink-0" title="Non-Vegetarian">
+                    <span className="w-2 h-2 rounded-full bg-rose-600" />
+                  </span>
+                )}
                 {detailedItem && (topSellingItems.some(t => t.id === detailedItem.id) || (detailedItem as any).is_top_selling || (detailedItem as any).is_popular) && (
                   <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-2xs">
                     TOP SELLING
