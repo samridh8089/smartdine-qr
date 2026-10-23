@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRestaurant } from '../../layout';
 import { supabase } from '@/lib/supabase';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
@@ -31,7 +31,7 @@ import {
   CheckCircle2, XCircle, ChevronRight, Edit3, ArrowUpRight, 
   ArrowDownRight, RefreshCw, AlertCircle, PieChart, Layers,
   FileSpreadsheet, Upload, Download, Check, AlertOctagon,
-  Clock, DollarSign, X, UtensilsCrossed
+  Clock, DollarSign, X, UtensilsCrossed, ArrowLeft, LayoutGrid
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -158,6 +158,69 @@ function formatTransactionMeta(tx: any) {
   return { label, badgeClass, isNegative, effectiveQty, orderId };
 }
 
+const INVENTORY_HUB_MODULES = [
+  {
+    id: 'items',
+    title: 'Raw Materials & Stock',
+    desc: 'Manage ingredients, unit conversions, stock levels & reorder triggers',
+    badge: 'Stock Master',
+    badgeColor: 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300',
+    icon: Boxes,
+    iconBg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/40',
+    tags: ['raw', 'materials', 'stock', 'ingredients', 'items', 'inventory', 'physical', 'reorder', 'units', 'kg', 'gram', 'litre']
+  },
+  {
+    id: 'recipes',
+    title: 'Recipes & Food Costing',
+    desc: 'BOM portion mapping, plate cost calculations, gross margins & AI Chef',
+    badge: 'AI Chef',
+    badgeColor: 'bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300',
+    icon: BookOpen,
+    iconBg: 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-100 dark:border-purple-800/40',
+    tags: ['recipes', 'costing', 'bom', 'plate cost', 'margins', 'ai chef', 'portions', 'dish', 'ingredients', 'recipe', 'food cost']
+  },
+  {
+    id: 'purchases',
+    title: 'Purchases & Stock In',
+    desc: 'Record vendor purchase invoices, bulk stock arrivals & unit rate changes',
+    badge: 'Bills',
+    badgeColor: 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300',
+    icon: ShoppingCart,
+    iconBg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/40',
+    tags: ['purchases', 'stock in', 'vendor', 'bills', 'invoice', 'supplier', 'restock', 'goods received', 'purchase order']
+  },
+  {
+    id: 'dispositions',
+    title: 'Food Waste & Dispositions',
+    desc: 'Kitchen spoilage, expired stock, staff meal logs & food loss prevention',
+    badge: 'Loss Audit',
+    badgeColor: 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300',
+    icon: UtensilsCrossed,
+    iconBg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-800/40',
+    tags: ['waste', 'dispositions', 'spoilage', 'shrinkage', 'burnt', 'staff meal', 'loss', 'expired', 'discard']
+  },
+  {
+    id: 'transactions',
+    title: 'Stock Transaction Ledger',
+    desc: 'Real-time KOT order deductions, manual stock corrections & complete audit trail',
+    badge: 'Live Audit',
+    badgeColor: 'bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300',
+    icon: History,
+    iconBg: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800/40',
+    tags: ['transactions', 'ledger', 'consumption', 'history', 'audit log', 'kot deductions', 'trail', 'deductions', 'logs']
+  },
+  {
+    id: 'analytics',
+    title: 'Usage Analytics & Alerts',
+    desc: 'Hourly ingredient burn rates, low stock alerts & dish consumption breakdown',
+    badge: 'Burn Rate',
+    badgeColor: 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300',
+    icon: PieChart,
+    iconBg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/40',
+    tags: ['usage', 'analytics', 'alerts', 'low stock', 'hourly', 'consumption', 'charts', 'burn rate', 'warning', 'reports']
+  }
+];
+
 export default function InventoryDashboardPage() {
   const { restaurant, activeRole, planSpec } = useRestaurant();
   const restaurantId = restaurant?.id || '';
@@ -167,7 +230,17 @@ export default function InventoryDashboardPage() {
     remaining: planSpec?.ai_limits?.ai_recipe_generation ?? null
   });
 
-  const [activeTab, setActiveTab] = useState<'items' | 'recipes' | 'dispositions' | 'transactions' | 'purchases' | 'waste' | 'alerts' | 'analytics'>('items');
+  const [activeTab, setActiveTab] = useState<'hub' | 'items' | 'recipes' | 'dispositions' | 'transactions' | 'purchases' | 'waste' | 'alerts' | 'analytics'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['hub', 'items', 'recipes', 'dispositions', 'transactions', 'purchases', 'waste', 'alerts', 'analytics'].includes(tabParam)) {
+        return tabParam as any;
+      }
+    }
+    return 'hub';
+  });
+  const [hubSearchQuery, setHubSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Data States
@@ -271,6 +344,17 @@ export default function InventoryDashboardPage() {
   const purchaseIdempotencyRef = useRef<string | null>(null);
   const importingAiDraftRef = useRef(false);
   const savingItemRef = useRef(false);
+
+  // Filtered Windows 10 Hub Modules
+  const filteredHubModules = useMemo(() => {
+    if (!hubSearchQuery.trim()) return INVENTORY_HUB_MODULES;
+    const q = hubSearchQuery.toLowerCase().trim();
+    return INVENTORY_HUB_MODULES.filter(m =>
+      m.title.toLowerCase().includes(q) ||
+      m.desc.toLowerCase().includes(q) ||
+      m.tags.some((t: string) => t.toLowerCase().includes(q))
+    );
+  }, [hubSearchQuery]);
 
   // Prevent background page shift when Recipe Modal is open
   useEffect(() => {
@@ -1379,7 +1463,254 @@ export default function InventoryDashboardPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto min-h-screen">
-      {/* Header & Title */}
+      {activeTab === 'hub' ? (
+        <div className="space-y-8 max-w-6xl mx-auto">
+          {/* Windows 10 Style Header Banner */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md">
+                  <Boxes className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">Inventory &amp; Recipe Hub</h2>
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-md">Live Realtime</span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                    {restaurant?.name || 'Restaurant'} • Automated Stock Deductions &amp; AI Recipe Costing
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    setEditingItem(null);
+                    setItemUnitType('gram');
+                    setCustomUnitName('');
+                    setShowItemModal(true);
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Raw Material</span>
+                </button>
+                <button
+                  onClick={() => setShowPurchaseModal(true)}
+                  className="px-3.5 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  <span>Record Purchase</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setAiDishInput('');
+                    setAiDraftRecipe(null);
+                    setShowAiModal(true);
+                  }}
+                  className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  <span>AI Recipe</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setCsvRawText('');
+                    setParsedRows([]);
+                    setShowImportModal(true);
+                  }}
+                  className="px-3 py-2 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Import CSV</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Plan Entitlement & Usage Counters Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <ResourceUsageCard
+                title="Inventory Items"
+                used={activeItems.length}
+                limit={planSpec?.limits?.inventory_items ?? 100}
+                unitLabel="used"
+              />
+              <ResourceUsageCard
+                title="Recipes & Costing"
+                used={recipes.length}
+                limit={planSpec?.limits?.recipes ?? 100}
+                unitLabel="used"
+              />
+              <ResourceUsageCard
+                title="AI Recipe Item Credits"
+                used={aiRecipeUsage.used}
+                limit={aiRecipeUsage.limit}
+                unitLabel="credits used"
+                isLocked={planSpec?.features?.ai_recipe === false || aiRecipeUsage.limit === 0}
+                lockedMessage="Available on PRO and PREMIUM"
+                resetNote="1 generated recipe = 1 AI Recipe credit. Resets monthly."
+              />
+            </div>
+
+            {/* 4 Quick KPI Summary Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Total Stock Value</span>
+                <span className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                  ₹{totalStockValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </span>
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold mt-1">{activeItems.length} Active Items</p>
+              </div>
+
+              <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-800/50 rounded-2xl p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 dark:text-amber-400 block mb-1">Low Stock Alerts</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-lg sm:text-xl font-black text-amber-700 dark:text-amber-300">
+                    {lowStockCount + outOfStockCount} {lowStockCount + outOfStockCount === 1 ? 'Item' : 'Items'} Alert
+                  </span>
+                  {(lowStockCount + outOfStockCount) > 0 && <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />}
+                </div>
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 font-bold mt-1">
+                  {outOfStockCount > 0 ? `${outOfStockCount} Out of stock` : `${lowStockCount} Need restock`}
+                </p>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-2xl p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 block mb-1">Today Consumed</span>
+                <span className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+                  ₹{todayConsumptionValue.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                </span>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-1">From order KOTs</p>
+              </div>
+
+              <div className="bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/70 dark:border-purple-800/50 rounded-2xl p-4">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-600 dark:text-purple-400 block mb-1">AI Recipe Credits</span>
+                <span className="text-lg sm:text-xl font-black text-purple-700 dark:text-purple-300">
+                  {aiRecipeUsage.remaining ?? (aiRecipeUsage.limit ? aiRecipeUsage.limit - aiRecipeUsage.used : '∞')} / {aiRecipeUsage.limit ?? '∞'}
+                </span>
+                <p className="text-[11px] text-purple-600 dark:text-purple-400 font-bold mt-1">
+                  {aiRecipeUsage.used} recipes generated
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Hourly Stock Shortage Cancellation Impact Notification Banner */}
+          {hourlyImpact && hourlyImpact.affectedOrdersCount > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 p-4 rounded-2xl flex items-start justify-between gap-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-xs text-amber-900 dark:text-amber-200 uppercase tracking-wide">
+                    Hourly Inventory Cancellation Impact Report (Last 1 Hour)
+                  </h4>
+                  <p className="text-xs text-amber-800 dark:text-amber-300">
+                    <span className="font-black">{hourlyImpact.affectedOrdersCount} orders</span> were affected by raw material shortages (Estimated lost order revenue: <span className="font-black">₹{hourlyImpact.estimatedLostRevenue}</span>).
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {hourlyImpact.itemBreakdown.map((b: any, idx: number) => (
+                      <span key={idx} className="bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 px-2 py-0.5 rounded-md text-[11px] font-bold">
+                        {b.itemName}: {b.affectedOrders} affected (₹{b.lostRevenue})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section 2: Windows 10 Center Search Bar */}
+          <div className="max-w-xl mx-auto text-center">
+            <div className="relative">
+              <input 
+                id="hubSearch"
+                type="text" 
+                value={hubSearchQuery}
+                onChange={(e) => setHubSearchQuery(e.target.value)}
+                placeholder="Find an ingredient, recipe, or inventory module..." 
+                className="w-full pl-11 pr-14 py-3 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-semibold rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition"
+              />
+              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+              {hubSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setHubSearchQuery('')}
+                  className="absolute right-3.5 top-2.5 px-2 py-1 text-xs font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 rounded-lg cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-2">
+              Click any card to open the workspace or search across modules
+            </p>
+          </div>
+
+          {/* Section 3: 6-Card Windows 10 Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {filteredHubModules.map((mod) => (
+              <div
+                key={mod.id}
+                onClick={() => setActiveTab(mod.id as any)}
+                className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs hover:shadow-md hover:border-emerald-500/50 hover:-translate-y-0.5 transition-all cursor-pointer flex items-start gap-4"
+              >
+                <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${mod.iconBg}`}>
+                  <mod.icon className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                      {mod.title}
+                    </h3>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${mod.badgeColor}`}>
+                      {mod.id === 'items' ? `${activeItems.length} Items` :
+                       mod.id === 'recipes' ? `${recipes.length} Recipes` :
+                       mod.id === 'purchases' ? `${effectivePurchases.length} Bills` :
+                       mod.id === 'dispositions' ? `${dispositions.length} Dispositions` :
+                       mod.id === 'transactions' ? `${effectiveTransactions.length} Entries` :
+                       mod.id === 'analytics' ? (lowStockCount > 0 ? `${lowStockCount} Low Stock` : 'Active') :
+                       mod.badge}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
+                    {mod.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+
+            {filteredHubModules.length === 0 && (
+              <div className="col-span-full text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                <Search className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No inventory modules found matching "{hubSearchQuery}"</p>
+                <p className="text-xs text-slate-400 mt-1">Try searching for 'stock', 'recipes', 'purchases', 'ledger', or 'waste'</p>
+                <button
+                  type="button"
+                  onClick={() => setHubSearchQuery('')}
+                  className="mt-3 px-3.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl transition cursor-pointer"
+                >
+                  Clear Search
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Top Breadcrumb Back to Hub Bar */}
+          <div className="flex items-center justify-between pb-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('hub')}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-xs transition-all cursor-pointer group"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-0.5 transition-transform" />
+              <span>&larr; Back to Inventory Hub</span>
+            </button>
+          </div>
+
+          {/* Header & Title */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 text-white p-5 rounded-2xl shadow-xl">
         <div className="space-y-1">
           <div>
@@ -1536,6 +1867,14 @@ export default function InventoryDashboardPage() {
 
       {/* ERP Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 overflow-x-auto pb-2 scrollbar-none">
+        <button
+          onClick={() => setActiveTab('hub')}
+          className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+          title="Return to Inventory Hub Grid"
+        >
+          <LayoutGrid className="h-4 w-4" />
+          <span>Hub</span>
+        </button>
         {[
           { id: 'items', label: 'Inventory Items', icon: Boxes, badge: activeItems.length },
           { id: 'recipes', label: 'Recipes & Costing', icon: BookOpen, badge: recipes.length },
@@ -2276,6 +2615,9 @@ export default function InventoryDashboardPage() {
                 })}
             </div>
           </div>
+        </div>
+      )}
+
         </div>
       )}
 
