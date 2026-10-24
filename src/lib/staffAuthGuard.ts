@@ -6,8 +6,8 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const rawKey = (serviceKey && serviceKey !== '[SENSITIVE]')
   ? serviceKey
   : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://placeholder.supabase.co';
-const supabaseServiceKey = rawKey || 'placeholder-service-key';
+const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
+const supabaseServiceKey = rawKey || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 const STAFF_AUTH_CACHE = new Map<string, { result: StaffAuthResult; expiresAt: number }>();

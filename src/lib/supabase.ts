@@ -9,8 +9,11 @@ const rawKey = (isServer && serviceKey && serviceKey !== '[SENSITIVE]')
   ? serviceKey
   : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
-const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : (process.env.NODE_ENV === 'production' ? '' : 'https://placeholder.supabase.co');
-const supabaseAnonKey = rawKey || (process.env.NODE_ENV === 'production' ? '' : 'placeholder-anon-key');
+const DEFAULT_SUPABASE_URL = 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+
+const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = rawKey || DEFAULT_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -361,4 +364,6 @@ export const storage = {
     }
   }
 };
+
+export const storageHelper = storage;
 
