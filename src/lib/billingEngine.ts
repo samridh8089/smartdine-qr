@@ -16,11 +16,13 @@ export interface BillingBatch {
 }
 
 export interface CustomCharge {
+  id?: string;
   name: string;
   type: 'percentage' | 'flat' | 'fixed';
   value: number;
   enabled?: boolean;
   taxable?: boolean;
+  applies_to?: 'all' | 'takeaway_only' | 'dine_in_only';
 }
 
 export interface BillingInput {
@@ -37,6 +39,7 @@ export interface BillingInput {
   customCharges?: CustomCharge[];
   settings?: RestaurantTaxSettings | any;
   gstNumber?: string;
+  orderType?: 'dine_in' | 'takeaway' | 'reservation' | 'counter' | string;
 }
 
 export interface BillingResult {
@@ -240,12 +243,38 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
   const finalDiscountAmount = parseFloat(totalDiscountAmount.toFixed(2));
   const discountedSubtotal = Math.max(0, parseFloat((validSubtotal - finalDiscountAmount).toFixed(2)));
 
-  // 4. Custom charges (Separating Taxable vs Non-Taxable charges)
+  // 4. Custom charges (Separating Taxable vs Non-Taxable charges & orderType filtering)
+  const orderType = (input.orderType || 'dine_in').toLowerCase();
   let taxableCustomChargesTotal = 0;
   let nonTaxableCustomChargesTotal = 0;
 
+  const isChargeApplicable = (c: CustomCharge) => {
+    if (c.enabled === false) return false;
+
+    // Determine applicability: check explicit setting or auto-detect packaging terms
+    let appliesTo = c.applies_to;
+    if (!appliesTo) {
+      const lowerName = (c.name || '').toLowerCase();
+      if (lowerName.includes('pack') || lowerName.includes('parcel') || lowerName.includes('box') || lowerName.includes('takeaway')) {
+        appliesTo = 'takeaway_only';
+      } else {
+        appliesTo = 'all';
+      }
+    }
+
+    // Never apply takeaway_only charges on Dine-In or Table Reservations
+    if (appliesTo === 'takeaway_only' && (orderType === 'dine_in' || orderType === 'reservation')) {
+      return false;
+    }
+    // Never apply dine_in_only charges on Takeaway
+    if (appliesTo === 'dine_in_only' && orderType === 'takeaway') {
+      return false;
+    }
+    return true;
+  };
+
   const customChargesSnapshot = customCharges
-    .filter(c => c.enabled !== false)
+    .filter(isChargeApplicable)
     .map(c => {
       const calculatedAmount = c.type === 'percentage'
         ? parseFloat(((discountedSubtotal * Number(c.value)) / 100).toFixed(2))

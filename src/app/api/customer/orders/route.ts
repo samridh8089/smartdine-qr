@@ -7,7 +7,7 @@ import { reserveInventoryForOrderBatch } from '@/lib/inventoryEngine';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { isSubscriptionExpired } from '@/lib/db';
 import { logSystemEvent, getOrderCorrelationId } from '@/lib/systemEventLogger';
-import { checkBookingOverlap } from '@/lib/utils';
+import { checkBookingOverlap, calculateHaversineDistanceMeters } from '@/lib/utils';
 import { dispatchFCMNotification } from '@/lib/pushDispatcher';
 import { validateIndianMobileNumber } from '@/lib/validation';
 
@@ -78,6 +78,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: phoneCheck.error || 'A valid 10-digit Indian mobile number is required for Table Reservations.' }, { status: 400 });
       }
       finalCustomerPhone = phoneCheck.cleaned;
+    } else if (orderType === 'counter') {
+      if (!finalCustomerName) {
+        timer.end('auth');
+        return NextResponse.json({ error: 'Customer Name is required for Express Counter / Bar orders.' }, { status: 400 });
+      }
     } else if (finalCustomerPhone) {
       const phoneCheck = validateIndianMobileNumber(finalCustomerPhone);
       if (!phoneCheck.valid) {
@@ -109,7 +114,7 @@ export async function POST(req: Request) {
         ? supabase.from('order_batches').select('*, order:orders(*)').eq('idempotency_key', cleanKey).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       supabase.from('restaurants').select('*').eq('id', restaurantId).maybeSingle(),
-      (tableId && tableId !== 'takeaway' && tableId !== 'reservation') 
+      (tableId && tableId !== 'takeaway' && tableId !== 'reservation' && tableId !== 'counter') 
         ? supabase.from('tables').select('*').eq('id', tableId).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       cartItemIds.length > 0
@@ -118,7 +123,7 @@ export async function POST(req: Request) {
       cartItemIds.length > 0
         ? supabase.from('menu_item_variants').select('id, menu_item_id, name, price, is_available').in('menu_item_id', cartItemIds)
         : Promise.resolve({ data: [], error: null }),
-      (orderType === 'dine_in' && tableId && tableId !== 'takeaway' && tableId !== 'reservation')
+      (orderType === 'dine_in' && tableId && tableId !== 'takeaway' && tableId !== 'reservation' && tableId !== 'counter')
         ? supabase.from('orders').select('*').eq('table_id', tableId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).neq('payment_status', 'paid').order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [], error: null })
     ]);
@@ -164,6 +169,29 @@ export async function POST(req: Request) {
         error: 'This restaurant subscription is expired or suspended. Live QR ordering is temporarily unavailable.',
         code: 'SUBSCRIPTION_EXPIRED'
       }, { status: 403 });
+    }
+
+    // Anti-Prank Geofence Restriction: Dine-in table orders must be placed within restaurant premises
+    if (orderType === 'dine_in' && restaurant.settings?.geofence?.enabled && restaurant.settings?.geofence?.latitude && restaurant.settings?.geofence?.longitude) {
+      const custLat = body.customerLat !== undefined ? Number(body.customerLat) : null;
+      const custLng = body.customerLng !== undefined ? Number(body.customerLng) : null;
+      const maxRadius = Number(restaurant.settings.geofence.radius_meters) || 100;
+      
+      if (custLat !== null && custLng !== null && !isNaN(custLat) && !isNaN(custLng)) {
+        const distance = calculateHaversineDistanceMeters(
+          restaurant.settings.geofence.latitude,
+          restaurant.settings.geofence.longitude,
+          custLat,
+          custLng
+        );
+        if (distance > maxRadius) {
+          timer.end('inventory');
+          return NextResponse.json({
+            error: `Dine-in orders are restricted to the restaurant premises. Detected distance is ~${distance}m (allowed radius is ${maxRadius}m). If you wish to order from elsewhere, please choose Takeaway.`,
+            code: 'GEOFENCE_RESTRICTION'
+          }, { status: 403 });
+        }
+      }
     }
 
     // P1-03: Robust Booking Conflict Detection (Reject overlapping reservations for same table)
@@ -228,7 +256,7 @@ export async function POST(req: Request) {
     const table = tRes.data || {
       id: tableId || 'takeaway',
       restaurant_id: restaurantId,
-      name: orderType === 'reservation' ? 'Reservation' : 'Takeaway Counter'
+      name: orderType === 'reservation' ? 'Reservation' : orderType === 'counter' ? 'Express Counter' : 'Takeaway Counter'
     };
 
     const allMenuItems = mRes.data || [];
@@ -327,10 +355,24 @@ export async function POST(req: Request) {
     const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
 
     let customChargesTotal = 0;
-    (restaurant.settings?.custom_charges || []).forEach((c: any) => {
-      if (c.enabled) {
-        customChargesTotal += c.type === 'percentage' ? (taxCalc.taxableAmount * c.value) / 100 : c.value;
+    const isChargeApplicable = (c: any) => {
+      if (c.enabled === false) return false;
+      let appliesTo = c.applies_to;
+      if (!appliesTo) {
+        const lowerName = (c.name || '').toLowerCase();
+        if (lowerName.includes('pack') || lowerName.includes('parcel') || lowerName.includes('box') || lowerName.includes('takeaway')) {
+          appliesTo = 'takeaway_only';
+        } else {
+          appliesTo = 'all';
+        }
       }
+      if (appliesTo === 'takeaway_only' && (orderType === 'dine_in' || orderType === 'reservation')) return false;
+      if (appliesTo === 'dine_in_only' && orderType === 'takeaway') return false;
+      return true;
+    };
+
+    (restaurant.settings?.custom_charges || []).filter(isChargeApplicable).forEach((c: any) => {
+      customChargesTotal += c.type === 'percentage' ? (taxCalc.taxableAmount * c.value) / 100 : c.value;
     });
 
     const grandTotal = parseFloat((taxCalc.grandTotal + serviceCharge + customChargesTotal).toFixed(2));
@@ -478,10 +520,12 @@ export async function POST(req: Request) {
 
       const orderPayload = {
         restaurant_id: restaurantId,
-        table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
-        table_name: (orderType === 'reservation' || tableId === 'reservation') ? 'Reservation' : (table.name || 'Table 1'),
+        table_id: (tableId === 'takeaway' || tableId === 'reservation' || tableId === 'counter' || !tableId) ? null : tableId,
+        table_name: (orderType === 'reservation' || tableId === 'reservation') ? 'Reservation' : (orderType === 'counter' || tableId === 'counter') ? 'Express Counter' : (table.name || 'Table 1'),
         status: 'new',
         order_type: (orderType === 'reservation') ? 'dine_in' : orderType,
+        customer_name: finalCustomerName || null,
+        customer_phone: finalCustomerPhone || null,
         payment_status: paymentStatus,
         special_instructions: [
           specialInstructions,

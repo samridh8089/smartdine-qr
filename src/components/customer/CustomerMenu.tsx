@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { db, Restaurant, Category, MenuItem, Table, CustomerRequest, Offer, isSubscriptionExpired } from '@/lib/db';
 import { parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
-import { formatPrice, validateIndianMobileNumber, cleanIndianMobileNumber } from '@/lib/utils';
+import { formatPrice, validateIndianMobileNumber, cleanIndianMobileNumber, calculateHaversineDistanceMeters } from '@/lib/utils';
 import { calculateOrderTax } from '@/lib/tax';
 import { calculateBillingTotals } from '@/lib/billingEngine';
 import { supabase } from '@/lib/supabase';
@@ -18,7 +18,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { 
   ShoppingBag, Search, Compass, Info, X, Plus, 
   Minus, AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, ChevronLeft, HelpCircle,
-  Bell, CreditCard, Sparkles, ClipboardList, Calendar, UtensilsCrossed, Loader2
+  Bell, CreditCard, Sparkles, ClipboardList, Calendar, UtensilsCrossed, Loader2, MapPin, ShieldAlert, Zap
 } from 'lucide-react';
 
 interface CustomerMenuProps {
@@ -26,6 +26,7 @@ interface CustomerMenuProps {
   tableId?: string;
   isTakeaway?: boolean;
   isReservation?: boolean;
+  isCounter?: boolean;
 }
 
 interface CartItem {
@@ -86,7 +87,7 @@ const THEME_MAP = {
   }
 };
 
-export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTakeawayProp = false, isReservation: isReservationProp = false }: CustomerMenuProps) {
+export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTakeawayProp = false, isReservation: isReservationProp = false, isCounter: isCounterProp = false }: CustomerMenuProps) {
   const router = useRouter();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -97,9 +98,10 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
-  // Computed flags for reservation & takeaway (works either via route prop OR scanning table named Reservation/Takeaway)
+  // Computed flags for reservation, takeaway & express counter
   const isReservation = isReservationProp || (table?.name?.toLowerCase() === 'reservation');
   const isTakeaway = isTakeawayProp || (table?.name?.toLowerCase() === 'takeaway');
+  const isCounter = isCounterProp || (table?.name?.toLowerCase() === 'counter' || table?.name?.toLowerCase() === 'bar');
   
   // Takeaway States
   const [arrivalMinutes, setArrivalMinutes] = useState<number>(10);
@@ -115,6 +117,14 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   const [reservationName, setReservationName] = useState<string>('');
   const [reservationPhone, setReservationPhone] = useState<string>('');
   const [reservationPaymentCompleted, setReservationPaymentCompleted] = useState<boolean>(false);
+
+  // Counter / Bar States
+  const [counterCustomerName, setCounterCustomerName] = useState<string>('');
+
+  // Anti-Prank Geofence States
+  const [geofenceModalOpen, setGeofenceModalOpen] = useState<boolean>(false);
+  const [geofenceDistance, setGeofenceDistance] = useState<number>(0);
+  const [geofenceChecking, setGeofenceChecking] = useState<boolean>(false);
   
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -493,6 +503,18 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
               id: 'takeaway',
               restaurant_id: rest.id,
               name: 'Takeaway Counter',
+              qr_enabled: true
+            } as Table;
+          }
+          setTable(tbl);
+          setIsInvalidTable(false);
+        } else if (isCounter) {
+          let tbl = tbls.find((t: Table) => t.name?.toLowerCase() === 'counter' || t.name?.toLowerCase() === 'bar');
+          if (!tbl) {
+            tbl = {
+              id: 'counter',
+              restaurant_id: rest.id,
+              name: 'Express Counter / Bar',
               qr_enabled: true
             } as Table;
           }
@@ -910,6 +932,61 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         return;
       }
     }
+    if (isCounter) {
+      if (!counterCustomerName.trim()) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please enter your name for express order pickup.');
+        return;
+      }
+    }
+
+    // Geofencing Premises Check for Dine-in Table Orders
+    let detectedCustomerLat: number | null = null;
+    let detectedCustomerLng: number | null = null;
+    if (!isTakeaway && !isReservation && !isCounter && restaurant?.settings?.geofence?.enabled && restaurant?.settings?.geofence?.latitude && restaurant?.settings?.geofence?.longitude) {
+      setGeofenceChecking(true);
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          if (!navigator.geolocation) {
+            return reject(new Error('GEOLOCATION_UNSUPPORTED'));
+          }
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 6000,
+            maximumAge: 15000
+          });
+        });
+        detectedCustomerLat = position.coords.latitude;
+        detectedCustomerLng = position.coords.longitude;
+        const distMeters = calculateHaversineDistanceMeters(
+          restaurant.settings.geofence.latitude,
+          restaurant.settings.geofence.longitude,
+          detectedCustomerLat,
+          detectedCustomerLng
+        );
+        const allowedRadius = Number(restaurant.settings.geofence.radius_meters) || 100;
+        if (distMeters > allowedRadius) {
+          setGeofenceDistance(distMeters);
+          setGeofenceModalOpen(true);
+          isSubmittingRef.current = false;
+          setOrderPlacing(false);
+          setGeofenceChecking(false);
+          return;
+        }
+      } catch (geoErr: any) {
+        console.warn('[Geofence] Geolocation check warning:', geoErr);
+        if (geoErr?.code === 1) { // PERMISSION_DENIED
+          isSubmittingRef.current = false;
+          setOrderPlacing(false);
+          setGeofenceChecking(false);
+          showToast('Location permission is required for table dining orders to verify you are at the restaurant.');
+          return;
+        }
+      } finally {
+        setGeofenceChecking(false);
+      }
+    }
 
     // High-speed pre-checkout cart validation against memory cache (<1ms instead of 1000ms+ network lag)
     const currentAvailableItems = (menuItems && menuItems.length > 0 ? menuItems : await db.getMenuItems(restaurant.id)).filter(i => i.is_available);
@@ -1002,6 +1079,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         finalInstructions = `TABLE RESERVATION | Name: ${reservationName.trim()} | Contact: ${reservationPhone.trim()} | Guests: ${reservationGuests} | Date: ${reservationDate} | Time: ${reservationTime}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
       } else if (isTakeaway) {
         finalInstructions = `TAKEAWAY | CUSTOMER: ${takeawayName.trim()} | PHONE: ${takeawayPhone.trim()} | ARRIVAL: ${arrivalMinutes} mins${takeawayNotes ? ` | NOTES: ${takeawayNotes}` : ''}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
+      } else if (isCounter) {
+        finalInstructions = `EXPRESS COUNTER / BAR | Customer: ${counterCustomerName.trim()}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
       }
 
       let newOrder: any;
@@ -1018,12 +1097,14 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             tableId: table.id,
             items: orderPayload,
             specialInstructions: finalInstructions,
-            orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
+            orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
             customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
             takeawayNotes: isTakeaway ? takeawayNotes : undefined,
-            customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : undefined,
+            customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : isCounter ? counterCustomerName.trim() : undefined,
             customerPhone: isTakeaway ? takeawayPhone.trim() : isReservation ? reservationPhone.trim() : undefined,
             paymentStatus: isTakeaway ? 'customer_marked_paid' : (isReservation && cartTotal > 0 && reservationPaymentCompleted) ? 'customer_marked_paid' : 'pending',
+            customerLat: detectedCustomerLat || undefined,
+            customerLng: detectedCustomerLng || undefined,
             idempotencyKey,
             offerCode: appliedOffer?.code,
             discountAmount,
@@ -1061,7 +1142,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 tableId: table.id,
                 items: orderPayload,
                 specialInstructions: finalInstructions,
-                orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
+                orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
                 customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
                 takeawayNotes: isTakeaway ? takeawayNotes : undefined,
                 customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : undefined,
@@ -1386,7 +1467,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     gstPercentage: restaurant?.settings?.gst_percentage,
     serviceChargeEnabled: restaurant?.settings?.service_charge_enabled,
     serviceChargePercentage: restaurant?.settings?.service_charge_percentage,
-    customCharges: restaurant?.settings?.custom_charges || []
+    customCharges: restaurant?.settings?.custom_charges || [],
+    orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in'
   });
 
   const taxCalc = {
@@ -1447,10 +1529,16 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                   <h1 className="font-black text-slate-900 dark:text-white text-base sm:text-lg leading-tight">
                     {restaurant.name}
                   </h1>
-                  {table && !isTakeaway && !isReservation && (
+                  {table && !isTakeaway && !isReservation && !isCounter && (
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${theme.lightBg} ${theme.lightText} border ${theme.border} uppercase tracking-wider shrink-0`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       {table.name}
+                    </span>
+                  )}
+                  {isCounter && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40 uppercase shrink-0">
+                      <Zap className="h-3 w-3 fill-amber-500 text-amber-600" />
+                      Express Counter / Bar
                     </span>
                   )}
                   {isTakeaway && (
@@ -1463,7 +1551,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       Table Reservation
                     </span>
                   )}
-                  {!table && !isTakeaway && !isReservation && (
+                  {!table && !isTakeaway && !isReservation && !isCounter && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 uppercase shrink-0">
                       View-Only Menu
                     </span>
@@ -1475,7 +1563,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
           {/* Row 2 on mobile / Right on desktop: Call Waiter & Track Order Action */}
           <div className="flex items-center gap-2 sm:shrink-0 pt-1.5 sm:pt-0 border-t border-slate-100 dark:border-slate-800/80 sm:border-t-0">
-            {table && !isTakeaway && !isReservation && planSpec?.features.call_waiter !== false && (
+            {table && !isTakeaway && !isReservation && !isCounter && planSpec?.features.call_waiter !== false && (
               <button
                 onClick={() => handleCallStaff('call_waiter')}
                 disabled={callLoading}
@@ -1795,6 +1883,23 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           </div>
         )}
 
+
+        {/* Express Counter / Bar Banner */}
+        {isCounter && (
+          <div className="bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/60 rounded-2xl p-4 shadow-sm flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+              <Zap className="h-5 w-5 fill-white" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-amber-950 dark:text-amber-200 text-sm md:text-base flex items-center gap-1.5">
+                Express Counter / Bar Quick-Order
+              </h3>
+              <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5 leading-relaxed">
+                Add dishes to your basket, enter your name, and place your order. Pick up directly at the counter when called!
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Search & Veg Toggle - Contrast fixed */}
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-3">
@@ -2231,6 +2336,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             const isQRDisabled = Boolean(
               !isTakeaway &&
               !isReservation &&
+              !isCounter &&
               table &&
               (table.qr_enabled === false || (table as any).occupancy_status === 'inactive' || restaurant?.settings?.table_states?.[table.id]?.qr_enabled === false) &&
               !activeOrderId
@@ -2263,17 +2369,21 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       : theme.bg + ' ' + theme.hoverBg + ' text-white'
                   }`}
                   onClick={handlePlaceOrder}
-                  isLoading={orderPlacing}
-                  disabled={orderPlacing || isSubmittingRef.current || isQRDisabled || (isTakeaway && !takeawayPaymentCompleted) || (isReservation && cartTotal > 0 && !reservationPaymentCompleted)}
+                  isLoading={orderPlacing || geofenceChecking}
+                  disabled={orderPlacing || geofenceChecking || isSubmittingRef.current || isQRDisabled || (isTakeaway && !takeawayPaymentCompleted) || (isReservation && cartTotal > 0 && !reservationPaymentCompleted)}
                 >
                   {isQRDisabled
                     ? 'Table Temporarily Unavailable'
+                    : geofenceChecking
+                    ? 'Checking restaurant premises...'
                     : orderPlacing
                     ? 'Submitting Order...'
                     : isReservation
                     ? `Confirm Table Reservation • ${formatPrice(cartTotal, restaurant.settings.currency)}`
                     : isTakeaway
                     ? `Pay ${formatPrice(cartTotal, restaurant.settings.currency)} & Place Order`
+                    : isCounter
+                    ? `Place Counter Order • ${formatPrice(cartTotal, restaurant.settings.currency)}`
                     : `Place Order • ${formatPrice(cartTotal, restaurant.settings.currency)}`}
                 </Button>
               </div>
@@ -2341,6 +2451,34 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             );
           })}
           </div>
+
+          {/* Express Counter / Bar Customer Details */}
+          {isCounter && (
+            <div className="space-y-3 pt-3.5 border-t border-slate-100 dark:border-slate-800">
+              <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/80 rounded-xl space-y-2">
+                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
+                  <Zap className="h-4 w-4 text-amber-600 fill-amber-500 shrink-0" />
+                  <span className="text-xs font-black uppercase tracking-wider">Express Counter / Bar Pickup</span>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Your Name (Staff will call your name when ready) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rahul, Sneha, Vikram"
+                    value={counterCustomerName}
+                    onChange={(e) => setCounterCustomerName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-amber-200 dark:border-amber-800 rounded-xl text-xs md:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                    required
+                  />
+                  <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                    Multiple customers can order simultaneously. Your dishes will be prepared under your name.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Cooking Instructions */}
           <div className="space-y-1.5">
@@ -2643,6 +2781,49 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
               <span>{formatPrice(cartTotal, restaurant.settings.currency)}</span>
             </div>
           </div>
+        </div>
+      </Dialog>
+
+      {/* --- Geofence Anti-Prank Security Modal --- */}
+      <Dialog
+        isOpen={geofenceModalOpen}
+        onClose={() => setGeofenceModalOpen(false)}
+        title="Premises Ordering Only"
+      >
+        <div className="p-4 space-y-4 text-center">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 flex items-center justify-center text-rose-600 dark:text-rose-400">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+              Restaurant Premises Only
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+              Dine-In table ordering is restricted to guests physically present inside the restaurant premises to ensure authentic orders.
+            </p>
+          </div>
+          <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300 space-y-1 text-left">
+            <div className="flex justify-between font-semibold">
+              <span>Allowed Radius:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{restaurant?.settings?.geofence?.radius_meters || 100} meters</span>
+            </div>
+            {geofenceDistance > 0 && (
+              <div className="flex justify-between font-semibold text-rose-600 dark:text-rose-400">
+                <span>Detected Distance:</span>
+                <span className="font-bold">~{geofenceDistance} meters away</span>
+              </div>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-normal">
+            Ordering takeaway or parcel? Please scan the <strong>Takeaway QR Code</strong> instead, which can be ordered from anywhere.
+          </p>
+          <Button
+            className="w-full font-bold"
+            variant="secondary"
+            onClick={() => setGeofenceModalOpen(false)}
+          >
+            I Understand
+          </Button>
         </div>
       </Dialog>
     </div>

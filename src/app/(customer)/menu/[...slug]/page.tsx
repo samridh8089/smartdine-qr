@@ -23,6 +23,7 @@ export default async function CustomerMenuCatchAllPage({ params, searchParams }:
   let tableId = resolvedSearchParams?.table;
   let isTakeaway = false;
   let isReservation = false;
+  let isCounter = false;
 
   if ((slugParts[1] === 'table' || slugParts[1] === 'tbl') && slugParts[2]) {
     tableId = slugParts[2];
@@ -30,6 +31,8 @@ export default async function CustomerMenuCatchAllPage({ params, searchParams }:
     isTakeaway = true;
   } else if (slugParts[1] === 'reservation') {
     isReservation = true;
+  } else if (slugParts[1] === 'counter' || slugParts[1] === 'bar') {
+    isCounter = true;
   } else if (slugParts[1]) {
     tableId = slugParts[1];
   }
@@ -40,6 +43,7 @@ export default async function CustomerMenuCatchAllPage({ params, searchParams }:
       tableId={tableId}
       isTakeaway={isTakeaway}
       isReservation={isReservation}
+      isCounter={isCounter}
     />
   );
 }

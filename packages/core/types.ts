@@ -19,7 +19,8 @@ export type OrderType =
   | 'takeaway'
   | 'delivery'
   | 'reservation'
-  | 'punch';
+  | 'punch'
+  | 'counter';
 
 export type PaymentStatus =
   | 'pending'
