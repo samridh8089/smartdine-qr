@@ -2104,7 +2104,7 @@ export default function OrdersPage() {
             <head>
               <title>Receipt - ${formattedId}</title>
               <style>
-                body { font-family: monospace; width: 80mm; margin: 0 auto; padding: 10px; color: #000; font-size: 12px; }
+                body { font-family: monospace; width: ${restaurant.settings?.thermal_paper_width === '58mm' ? '58mm' : '80mm'}; margin: 0 auto; padding: 8px; color: #000; font-size: ${restaurant.settings?.thermal_paper_width === '58mm' ? '11px' : '12px'}; }
                 .text-center { text-align: center; }
                 .text-right { text-align: right; }
                 .bold { font-weight: bold; }
@@ -2150,6 +2150,7 @@ export default function OrdersPage() {
                   <p class="bold text-right" style="font-size:14px;color:#047857;">Net Paid: ${formatPrice(net, restaurant.settings?.currency)}</p>
                 `;
               })()}
+            <p class="text-center" style="font-size:11px;margin-top:10px;">${restaurant.settings?.thermal_footer_note || 'Thank you! Visit again.'}</p>
             </body>
           </html>
         `);

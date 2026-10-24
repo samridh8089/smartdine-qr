@@ -2328,12 +2328,153 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
         </div>
       )}
 
-        {/* ACTIVE DEVICES & SECURITY (PART G) */}
+        {/* PRINTERS & HARDWARE DEVICES (PART G) */}
         {activeTab === 'devices' && (
           <div className="space-y-6 animate-fade-in">
+            {/* --- Section 1: Thermal POS Printers Setup --- */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Active Devices & Security Sessions</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Thermal Receipt & KOT Printers</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                    Plug & Play
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Configure paper roll sizing, receipt notes, and test any Bluetooth, USB, or Network Thermal Printer directly.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTestThermalPrint}
+                  className="text-xs font-bold text-slate-700 dark:text-slate-250 border-slate-300 dark:border-slate-700"
+                >
+                  <Printer className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Test Thermal Print
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSavePrinterSettings}
+                  isLoading={savingPrinterSettings}
+                  className="text-xs font-bold"
+                >
+                  <Save className="h-3.5 w-3.5 mr-1" /> Save Printer Settings
+                </Button>
+              </div>
+            </div>
+
+            <Card className="dark:bg-slate-900 dark:border-slate-800">
+              <CardContent className="p-5 space-y-6">
+                {/* Paper Roll Size Selector */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                    Thermal Paper Roll Width
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setThermalPaperWidth('80mm')}
+                      className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                        thermalPaperWidth === '80mm'
+                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-lg ${thermalPaperWidth === '80mm' ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                        <Printer className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 font-bold text-sm text-slate-900 dark:text-white">
+                          <span>80mm (3-Inch Standard)</span>
+                          <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-semibold">Recommended</span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Standard commercial POS format. Ideal for full item descriptions, GST breakdown, and table details.
+                        </p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setThermalPaperWidth('58mm')}
+                      className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                        thermalPaperWidth === '58mm'
+                          ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
+                      }`}
+                    >
+                      <div className={`p-2.5 rounded-lg ${thermalPaperWidth === '58mm' ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                        <Printer className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-slate-900 dark:text-white">
+                          58mm (2-Inch Mini Roll)
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          Compact roll width for portable handheld Bluetooth printers, fast takeaway slips, and mini counters.
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                {/* Thermal Receipt Customizations */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Print GSTIN on Bill</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">Include restaurant GST number in receipt header</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={thermalShowGstin}
+                        onChange={(e) => setThermalShowGstin(e.target.checked)}
+                        className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Print Customer Details</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">Print customer name & mobile number when available</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={showCustomerDetailsOnBill}
+                        onChange={(e) => setShowCustomerDetailsOnBill(e.target.checked)}
+                        className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      Receipt Footer Note / Greeting
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={thermalFooterNote}
+                      onChange={(e) => setThermalFooterNote(e.target.value)}
+                      placeholder="e.g. Thank you for dining with us! Please visit again. • Wi-Fi: BistroCafe"
+                      className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      This greeting is printed at the very bottom of every customer bill and receipt.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* --- Section 2: Active Security Sessions & Logged In Hardware --- */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4">
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Active Devices & Security Sessions</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Manage logged in devices, revoke trusted access, or sign out active sessions across Android and Desktop browsers.
                 </p>
@@ -2361,79 +2502,73 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
 
             <Card className="dark:bg-slate-900 dark:border-slate-800">
               <CardContent className="p-0">
-                {devicesList.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-xs">
-                    Loading registered devices...
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {devicesList.map((dev, idx) => {
-                      const isMobile = dev.platform === 'Android' || dev.platform === 'iOS';
-                      return (
-                        <div key={idx} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
-                          <div className="flex items-start sm:items-center gap-3.5">
-                            <div className={`h-11 w-11 rounded-xl flex items-center justify-center text-lg ${
-                              dev.is_current 
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                            }`}>
-                              {isMobile ? <Smartphone className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
-                            </div>
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-extrabold text-slate-900 dark:text-white text-sm">
-                                  {dev.device_name}
-                                </span>
-                                {dev.is_current && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                                    THIS DEVICE (CURRENT)
-                                  </span>
-                                )}
-                                {dev.is_trusted && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
-                                    <ShieldCheck className="h-3 w-3" /> Trusted Device
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">
-                                Platform: {dev.platform} • Session: {dev.device_session_id?.slice(0, 16)}...
-                              </p>
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                                Last Active: {dev.last_active_at ? new Date(dev.last_active_at).toLocaleString() : 'Just now'}
-                              </p>
-                            </div>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {devicesList.map((dev, idx) => {
+                    const isMobile = dev.platform === 'Mobile' || dev.platform === 'Android' || dev.platform === 'iOS';
+                    return (
+                      <div key={idx} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                        <div className="flex items-start sm:items-center gap-3.5">
+                          <div className={`h-11 w-11 rounded-xl flex items-center justify-center text-lg ${
+                            dev.is_current 
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                          }`}>
+                            {isMobile ? <Smartphone className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
                           </div>
-
-                          <div className="flex items-center gap-2 self-end sm:self-auto">
-                            {dev.is_trusted && !dev.is_current && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleRemoveTrustedDevice(dev.device_session_id)}
-                                className="text-xs text-rose-600 hover:text-rose-700 border-rose-200 dark:border-rose-900/60 font-semibold"
-                              >
-                                Remove Trust
-                              </Button>
-                            )}
-                            {dev.is_current ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={async () => {
-                                  await supabase.auth.signOut();
-                                  window.location.href = '/login';
-                                }}
-                                className="text-xs font-semibold"
-                              >
-                                <LogOut className="h-3 w-3 mr-1" /> Logout Current Device
-                              </Button>
-                            ) : null}
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                                {dev.device_name}
+                              </span>
+                              {dev.is_current && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                  THIS DEVICE (ACTIVE NOW)
+                                </span>
+                              )}
+                              {dev.is_trusted && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                                  <ShieldCheck className="h-3 w-3" /> Trusted Device
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">
+                              Platform: {dev.platform} • Status: Active Secure Session
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Last Activity: {dev.last_active_at ? new Date(dev.last_active_at).toLocaleString() : 'Active Now'}
+                            </p>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          {dev.is_trusted && !dev.is_current && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRemoveTrustedDevice(dev.device_session_id)}
+                              className="text-xs text-rose-600 hover:text-rose-700 border-rose-200 dark:border-rose-900/60 font-semibold"
+                            >
+                              Remove Trust
+                            </Button>
+                          )}
+                          {dev.is_current ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                await supabase.auth.signOut();
+                                window.location.href = '/login';
+                              }}
+                              className="text-xs font-semibold"
+                            >
+                              <LogOut className="h-3 w-3 mr-1" /> Logout Current Device
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </div>
