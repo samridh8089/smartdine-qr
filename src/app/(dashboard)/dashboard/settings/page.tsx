@@ -195,7 +195,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   const [gstPercentage, setGstPercentage] = useState(restaurant?.settings?.gst_percentage ?? 5.0);
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(restaurant?.settings?.service_charge_enabled !== false);
   const [serviceChargePercentage, setServiceChargePercentage] = useState(restaurant?.settings?.service_charge_percentage ?? 5.0);
-  const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' }[]>(restaurant?.settings?.custom_charges || []);
+  const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' | 'counter_only' | 'takeaway_and_counter' }[]>(restaurant?.settings?.custom_charges || []);
   const [showCustomerDetailsOnBill, setShowCustomerDetailsOnBill] = useState<boolean>(restaurant?.settings?.show_customer_details_on_bill !== false);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
@@ -204,7 +204,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   const [newChargeName, setNewChargeName] = useState('');
   const [newChargeType, setNewChargeType] = useState<'fixed' | 'percentage'>('fixed');
   const [newChargeValue, setNewChargeValue] = useState(0);
-  const [newChargeAppliesTo, setNewChargeAppliesTo] = useState<'all' | 'takeaway_only' | 'dine_in_only'>('takeaway_only');
+  const [newChargeAppliesTo, setNewChargeAppliesTo] = useState<'all' | 'takeaway_only' | 'dine_in_only' | 'counter_only' | 'takeaway_and_counter'>('takeaway_only');
 
   // Anti-Prank Geofence State
   const [geofenceEnabled, setGeofenceEnabled] = useState<boolean>(restaurant?.settings?.geofence?.enabled ?? false);
@@ -460,7 +460,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
     setCustomCharges(prev => prev.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
   };
 
-  const handleUpdateChargeAppliesTo = (id: string, applies_to: 'all' | 'takeaway_only' | 'dine_in_only') => {
+  const handleUpdateChargeAppliesTo = (id: string, applies_to: 'all' | 'takeaway_only' | 'dine_in_only' | 'counter_only' | 'takeaway_and_counter') => {
     setCustomCharges(prev => prev.map(c => c.id === id ? { ...c, applies_to } : c));
   };
 
@@ -1721,9 +1721,11 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                           onChange={(e) => setNewChargeAppliesTo(e.target.value as any)}
                           className="block w-full px-3 py-2 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
                         >
-                          <option value="takeaway_only">Takeaway & Parcel Only (Packaging)</option>
+                          <option value="takeaway_only">Takeaway Only (Packaging)</option>
+                          <option value="takeaway_and_counter">Takeaway & Counter</option>
+                          <option value="counter_only">Counter Only</option>
                           <option value="dine_in_only">Dine-In Only</option>
-                          <option value="all">All Orders (Dine-In + Takeaway)</option>
+                          <option value="all">All Orders</option>
                         </select>
                       </div>
                       <div className="flex gap-2">
@@ -1765,11 +1767,15 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
                                   effectiveAppliesTo === 'takeaway_only'
                                     ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300/40'
+                                    : effectiveAppliesTo === 'takeaway_and_counter'
+                                    ? 'bg-orange-100 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-300/40'
+                                    : effectiveAppliesTo === 'counter_only'
+                                    ? 'bg-yellow-100 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-300 border border-yellow-300/40'
                                     : effectiveAppliesTo === 'dine_in_only'
                                     ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-300/40'
                                     : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40'
                                 }`}>
-                                  {effectiveAppliesTo === 'takeaway_only' ? '📦 Takeaway Only' : effectiveAppliesTo === 'dine_in_only' ? '🍽️ Dine-In Only' : '🌐 All Orders'}
+                                  {effectiveAppliesTo === 'takeaway_only' ? '📦 Takeaway Only' : effectiveAppliesTo === 'takeaway_and_counter' ? '📦⚡ Takeaway & Counter' : effectiveAppliesTo === 'counter_only' ? '⚡ Counter Only' : effectiveAppliesTo === 'dine_in_only' ? '🍽️ Dine-In Only' : '🌐 All Orders'}
                                 </span>
                               </div>
                               <div className="flex items-center gap-3 mt-1.5 flex-wrap">
@@ -1785,6 +1791,8 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                                     className="text-[11px] font-semibold py-0.5 px-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer"
                                   >
                                     <option value="takeaway_only">Takeaway Only</option>
+                                    <option value="takeaway_and_counter">Takeaway & Counter</option>
+                                    <option value="counter_only">Counter Only</option>
                                     <option value="dine_in_only">Dine-In Only</option>
                                     <option value="all">All Orders</option>
                                   </select>

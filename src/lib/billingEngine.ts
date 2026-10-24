@@ -22,7 +22,7 @@ export interface CustomCharge {
   value: number;
   enabled?: boolean;
   taxable?: boolean;
-  applies_to?: 'all' | 'takeaway_only' | 'dine_in_only';
+  applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' | 'counter_only' | 'takeaway_and_counter';
 }
 
 export interface BillingInput {
@@ -262,13 +262,17 @@ export function calculateBillingTotals(input: BillingInput): BillingResult {
       }
     }
 
-    // Never apply takeaway_only charges on Dine-In or Table Reservations
-    if (appliesTo === 'takeaway_only' && (orderType === 'dine_in' || orderType === 'reservation')) {
-      return false;
+    if (appliesTo === 'takeaway_only') {
+      return orderType === 'takeaway';
     }
-    // Never apply dine_in_only charges on Takeaway
-    if (appliesTo === 'dine_in_only' && orderType === 'takeaway') {
-      return false;
+    if (appliesTo === 'dine_in_only') {
+      return orderType === 'dine_in';
+    }
+    if (appliesTo === 'counter_only') {
+      return orderType === 'counter';
+    }
+    if (appliesTo === 'takeaway_and_counter') {
+      return orderType === 'takeaway' || orderType === 'counter';
     }
     return true;
   };
