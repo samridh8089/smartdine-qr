@@ -41,7 +41,7 @@ export interface Restaurant {
     sgst_percentage?: number;
     igst_percentage?: number;
     service_charge_enabled?: boolean;
-    custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[];
+    custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' }[];
     payment_enabled?: boolean;
     upi_id?: string;
     upi_name?: string;
@@ -92,6 +92,12 @@ export interface Restaurant {
       verification_status?: string;
       plain_password?: string;
     }>;
+    geofence?: {
+      enabled?: boolean;
+      latitude?: number | null;
+      longitude?: number | null;
+      radius_meters?: number;
+    };
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';
@@ -404,7 +410,7 @@ export interface Order {
   payment_reference?: string;
   paid_at?: string;
   marked_paid_by?: string;
-  order_type?: 'dine_in' | 'takeaway' | 'reservation';
+  order_type?: 'dine_in' | 'takeaway' | 'reservation' | 'counter';
   customer_arrival_minutes?: number;
   takeaway_notes?: string;
   offer_code?: string;
@@ -2300,9 +2306,25 @@ export const db = {
 
     // Calculate custom charges
     let customChargesTotal = 0;
+    const isChargeApplicable = (c: any) => {
+      if (c.enabled === false) return false;
+      let appliesTo = c.applies_to;
+      if (!appliesTo) {
+        const lowerName = (c.name || '').toLowerCase();
+        if (lowerName.includes('pack') || lowerName.includes('parcel') || lowerName.includes('box') || lowerName.includes('takeaway')) {
+          appliesTo = 'takeaway_only';
+        } else {
+          appliesTo = 'all';
+        }
+      }
+      if (appliesTo === 'takeaway_only' && (orderType === 'dine_in' || orderType === 'reservation')) return false;
+      if (appliesTo === 'dine_in_only' && orderType === 'takeaway') return false;
+      return true;
+    };
+
     const customChargesSnapshot = (restaurant.settings.custom_charges || [])
-      .filter((c: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }) => c.enabled === true)
-      .map((c: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }) => {
+      .filter(isChargeApplicable)
+      .map((c: any) => {
         const val = c.type === 'percentage' 
           ? parseFloat(((taxCalc.taxableAmount * c.value) / 100).toFixed(2))
           : c.value;
@@ -2752,9 +2774,26 @@ export const db = {
     const serviceCharge = parseFloat(((taxCalc.taxableAmount * serviceChargePercentage) / 100).toFixed(2));
 
     let customChargesTotal = 0;
+    const currentOrderType = activeOrder?.order_type || 'dine_in';
+    const isBatchChargeApplicable = (c: any) => {
+      if (c.enabled === false) return false;
+      let appliesTo = c.applies_to;
+      if (!appliesTo) {
+        const lowerName = (c.name || '').toLowerCase();
+        if (lowerName.includes('pack') || lowerName.includes('parcel') || lowerName.includes('box') || lowerName.includes('takeaway')) {
+          appliesTo = 'takeaway_only';
+        } else {
+          appliesTo = 'all';
+        }
+      }
+      if (appliesTo === 'takeaway_only' && (currentOrderType === 'dine_in' || currentOrderType === 'reservation')) return false;
+      if (appliesTo === 'dine_in_only' && currentOrderType === 'takeaway') return false;
+      return true;
+    };
+
     const customChargesSnapshot = (rest?.settings?.custom_charges || [])
-      .filter((c: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }) => c.enabled === true)
-      .map((c: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }) => {
+      .filter(isBatchChargeApplicable)
+      .map((c: any) => {
         const val = c.type === 'percentage' 
           ? parseFloat(((taxCalc.taxableAmount * c.value) / 100).toFixed(2))
           : c.value;
@@ -3361,7 +3400,8 @@ export const db = {
         gstPercentage: restaurant.settings.gst_percentage || 0,
         serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
         serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-        customCharges: restaurant.settings.custom_charges || []
+        customCharges: restaurant.settings.custom_charges || [],
+        orderType: currentOrder?.order_type || 'dine_in'
       });
 
       let updatePayload: any = { 

@@ -17,7 +17,7 @@ import {
   Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard, Volume2, Copy, RefreshCw,
   Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil, QrCode,
   Bell, BellOff, Tag, Archive, Printer,
-  ArrowLeft, Search, UtensilsCrossed, Percent, Database, ShieldAlert, LayoutGrid, Store, Receipt
+  ArrowLeft, Search, UtensilsCrossed, Percent, Database, ShieldAlert, LayoutGrid, Store, Receipt, Navigation
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -195,7 +195,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   const [gstPercentage, setGstPercentage] = useState(restaurant?.settings?.gst_percentage ?? 5.0);
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(restaurant?.settings?.service_charge_enabled !== false);
   const [serviceChargePercentage, setServiceChargePercentage] = useState(restaurant?.settings?.service_charge_percentage ?? 5.0);
-  const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean }[]>(restaurant?.settings?.custom_charges || []);
+  const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' }[]>(restaurant?.settings?.custom_charges || []);
   const [showCustomerDetailsOnBill, setShowCustomerDetailsOnBill] = useState<boolean>(restaurant?.settings?.show_customer_details_on_bill !== false);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
@@ -204,6 +204,14 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   const [newChargeName, setNewChargeName] = useState('');
   const [newChargeType, setNewChargeType] = useState<'fixed' | 'percentage'>('fixed');
   const [newChargeValue, setNewChargeValue] = useState(0);
+  const [newChargeAppliesTo, setNewChargeAppliesTo] = useState<'all' | 'takeaway_only' | 'dine_in_only'>('takeaway_only');
+
+  // Anti-Prank Geofence State
+  const [geofenceEnabled, setGeofenceEnabled] = useState<boolean>(restaurant?.settings?.geofence?.enabled ?? false);
+  const [geofenceLat, setGeofenceLat] = useState<number | null>(restaurant?.settings?.geofence?.latitude ?? null);
+  const [geofenceLng, setGeofenceLng] = useState<number | null>(restaurant?.settings?.geofence?.longitude ?? null);
+  const [geofenceRadius, setGeofenceRadius] = useState<number>(restaurant?.settings?.geofence?.radius_meters ?? 100);
+  const [isDetectingLocation, setIsDetectingLocation] = useState<boolean>(false);
 
   // Staff Management State
   const [staffList, setStaffList] = useState<Profile[]>([]);
@@ -296,6 +304,10 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
       setServiceChargePercentage(restaurant.settings?.service_charge_percentage ?? 5.0);
       setCustomCharges(restaurant.settings?.custom_charges || []);
       setShowCustomerDetailsOnBill(restaurant.settings?.show_customer_details_on_bill !== false);
+      setGeofenceEnabled(restaurant.settings?.geofence?.enabled === true);
+      setGeofenceLat(restaurant.settings?.geofence?.latitude ?? null);
+      setGeofenceLng(restaurant.settings?.geofence?.longitude ?? null);
+      setGeofenceRadius(restaurant.settings?.geofence?.radius_meters ?? 100);
       setPaymentEnabled(restaurant.settings?.payment_enabled === true);
       setUpiId(restaurant.settings?.upi_id || '');
       setUpiName(restaurant.settings?.upi_name || '');
@@ -431,11 +443,13 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
       name: newChargeName.trim(),
       type: newChargeType,
       value: Number(newChargeValue) || 0,
-      enabled: true
+      enabled: true,
+      applies_to: newChargeAppliesTo
     };
     setCustomCharges(prev => [...prev, newCharge]);
     setNewChargeName('');
     setNewChargeValue(0);
+    setNewChargeAppliesTo('takeaway_only');
   };
 
   const handleRemoveCustomCharge = (id: string) => {
@@ -444,6 +458,30 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
 
   const handleToggleCustomCharge = (id: string) => {
     setCustomCharges(prev => prev.map(c => c.id === id ? { ...c, enabled: !c.enabled } : c));
+  };
+
+  const handleUpdateChargeAppliesTo = (id: string, applies_to: 'all' | 'takeaway_only' | 'dine_in_only') => {
+    setCustomCharges(prev => prev.map(c => c.id === id ? { ...c, applies_to } : c));
+  };
+
+  const handleDetectCurrentLocation = () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeofenceLat(parseFloat(pos.coords.latitude.toFixed(6)));
+        setGeofenceLng(parseFloat(pos.coords.longitude.toFixed(6)));
+        setIsDetectingLocation(false);
+      },
+      (err) => {
+        setIsDetectingLocation(false);
+        alert('Could not detect location: ' + err.message + '. Please ensure browser GPS permissions are allowed.');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleDownloadAllQRZip = async () => {
@@ -511,7 +549,13 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
           service_charge_enabled: serviceChargeEnabled,
           service_charge_percentage: Number(serviceChargePercentage) || 0,
           custom_charges: customCharges,
-          show_customer_details_on_bill: showCustomerDetailsOnBill
+          show_customer_details_on_bill: showCustomerDetailsOnBill,
+          geofence: {
+            enabled: geofenceEnabled,
+            latitude: geofenceLat,
+            longitude: geofenceLng,
+            radius_meters: Number(geofenceRadius) || 100
+          }
         }
       });
 
@@ -1652,7 +1696,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                 <CardContent className="space-y-4">
                   <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl space-y-3">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Add New Custom Charge</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
                       <Input
                         label="Charge Name"
                         placeholder="e.g. Packaging Fee"
@@ -1668,6 +1712,18 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                         >
                           <option value="fixed">Fixed Amount (Flat Fee)</option>
                           <option value="percentage">Percentage (Percent of Subtotal)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-1.5">Applies To</label>
+                        <select
+                          value={newChargeAppliesTo}
+                          onChange={(e) => setNewChargeAppliesTo(e.target.value as any)}
+                          className="block w-full px-3 py-2 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
+                        >
+                          <option value="takeaway_only">Takeaway & Parcel Only (Packaging)</option>
+                          <option value="dine_in_only">Dine-In Only</option>
+                          <option value="all">All Orders (Dine-In + Takeaway)</option>
                         </select>
                       </div>
                       <div className="flex gap-2">
@@ -1699,15 +1755,43 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                       <p className="text-xs text-slate-400 italic">No custom charges added yet. Click above to add packaging fees, delivery fees, dynamic tips, etc.</p>
                     ) : (
                       <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                        {customCharges.map(charge => (
-                          <div key={charge.id} className="p-3.5 flex items-center justify-between gap-4 bg-white dark:bg-slate-900">
+                        {customCharges.map(charge => {
+                          const effectiveAppliesTo = charge.applies_to || ((charge.name || '').toLowerCase().includes('pack') ? 'takeaway_only' : 'all');
+                          return (
+                          <div key={charge.id} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900">
                             <div>
-                              <p className="font-semibold text-sm text-slate-800 dark:text-slate-250">{charge.name}</p>
-                              <p className="text-xs text-slate-400 capitalize">
-                                {charge.type === 'percentage' ? `${charge.value}% of Subtotal` : `${formatPrice(charge.value, restaurant?.settings?.currency || 'INR')} Flat Fee`}
-                              </p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-semibold text-sm text-slate-800 dark:text-slate-250">{charge.name}</p>
+                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                  effectiveAppliesTo === 'takeaway_only'
+                                    ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300/40'
+                                    : effectiveAppliesTo === 'dine_in_only'
+                                    ? 'bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border border-blue-300/40'
+                                    : 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300/40'
+                                }`}>
+                                  {effectiveAppliesTo === 'takeaway_only' ? '📦 Takeaway Only' : effectiveAppliesTo === 'dine_in_only' ? '🍽️ Dine-In Only' : '🌐 All Orders'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                                <p className="text-xs text-slate-400 capitalize">
+                                  {charge.type === 'percentage' ? `${charge.value}% of Subtotal` : `${formatPrice(charge.value, restaurant?.settings?.currency || 'INR')} Flat Fee`}
+                                </p>
+                                <span className="text-slate-300 dark:text-slate-700">•</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase">Change Target:</span>
+                                  <select
+                                    value={effectiveAppliesTo}
+                                    onChange={(e) => handleUpdateChargeAppliesTo(charge.id, e.target.value as any)}
+                                    className="text-[11px] font-semibold py-0.5 px-2 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer"
+                                  >
+                                    <option value="takeaway_only">Takeaway Only</option>
+                                    <option value="dine_in_only">Dine-In Only</option>
+                                    <option value="all">All Orders</option>
+                                  </select>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 self-end sm:self-center">
                               <label className="relative inline-flex items-center cursor-pointer">
                                 <input 
                                   type="checkbox" 
@@ -1726,7 +1810,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                               </button>
                             </div>
                           </div>
-                        ))}
+                        )})}
                       </div>
                     )}
                   </div>
@@ -1754,6 +1838,86 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                       <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
                     </label>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Dine-In QR Premises Security & Anti-Prank Geofence */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Dine-In QR Premises Security & Geofence</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Protect against remote prank orders. When enabled, Dine-In QR table orders can only be placed within the restaurant premises.</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                      <input 
+                        type="checkbox" 
+                        checked={geofenceEnabled} 
+                        onChange={(e) => setGeofenceEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {geofenceEnabled && (
+                    <div className="p-4 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-200/60 dark:border-emerald-800/60">
+                        <div>
+                          <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider block">Restaurant GPS Location</span>
+                          <span className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 block">Auto-detect from this device or enter restaurant coordinates manually.</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={handleDetectCurrentLocation}
+                          isLoading={isDetectingLocation}
+                          className="shrink-0 text-xs font-bold flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
+                        >
+                          <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Detect Location</span>
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <Input
+                          label="Latitude"
+                          type="number"
+                          step="0.000001"
+                          placeholder="e.g. 28.613939"
+                          value={geofenceLat !== null ? geofenceLat : ''}
+                          onChange={(e) => setGeofenceLat(e.target.value ? parseFloat(e.target.value) : null)}
+                        />
+                        <Input
+                          label="Longitude"
+                          type="number"
+                          step="0.000001"
+                          placeholder="e.g. 77.209021"
+                          value={geofenceLng !== null ? geofenceLng : ''}
+                          onChange={(e) => setGeofenceLng(e.target.value ? parseFloat(e.target.value) : null)}
+                        />
+                        <div>
+                          <label className="block text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider mb-1.5">Allowed Radius</label>
+                          <select
+                            value={geofenceRadius}
+                            onChange={(e) => setGeofenceRadius(Number(e.target.value))}
+                            className="block w-full px-3 py-2 text-sm text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 bg-white dark:bg-slate-800"
+                          >
+                            <option value={50}>50 meters (Small cafe / kiosk)</option>
+                            <option value={100}>100 meters (Recommended)</option>
+                            <option value={150}>150 meters (Large restaurant / lawn)</option>
+                            <option value={200}>200 meters (Resort / Rooftop)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-emerald-200/50 dark:border-emerald-800/50 flex items-start gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span><strong>Protection Active:</strong> If someone takes a picture of a table QR and tries to order from home, order placement will be blocked. Takeaway and Table Reservations are never blocked by this rule.</span>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { 
   Plus, QrCode, Download, ExternalLink, Trash2, 
   AlertTriangle, Printer, HelpCircle, Calendar, ShoppingBag,
-  Sparkles, FileText, Archive, UserCheck, UserPlus, Users, Check, X
+  Sparkles, FileText, Archive, UserCheck, UserPlus, Users, Check, X, Zap
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -49,6 +49,7 @@ export default function TablesPage() {
   const [qrCodes, setQrCodes] = useState<Record<string, string>>(() => dashboardStore.getCachedTableQRs());
   const [takeawayQR, setTakeawayQR] = useState<string>(() => (restaurant?.slug ? dashboardStore.getCachedQR(`takeaway:${restaurant.slug}`) : '') || '');
   const [reservationQR, setReservationQR] = useState<string>(() => (restaurant?.slug ? dashboardStore.getCachedQR(`reservation:${restaurant.slug}`) : '') || '');
+  const [counterQR, setCounterQR] = useState<string>(() => (restaurant?.slug ? dashboardStore.getCachedQR(`counter:${restaurant.slug}`) : '') || '');
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   // Modal State
@@ -229,6 +230,16 @@ export default function TablesPage() {
         dashboardStore.setCachedQR(reservationKey, resDataUrl);
       }
       if (isMounted) setReservationQR(resDataUrl);
+
+      // 3. Generate Express Counter / Bar QR Code (fast 256px thumbnail)
+      const counterKey = `counter:${restaurantSlug}`;
+      let countDataUrl = dashboardStore.getCachedQR(counterKey);
+      if (!countDataUrl) {
+        const counterUrl = `${origin}/menu/${restaurantSlug}/counter`;
+        countDataUrl = await generateQRDataURL(counterUrl, { width: 256, errorCorrectionLevel: 'M' });
+        dashboardStore.setCachedQR(counterKey, countDataUrl);
+      }
+      if (isMounted) setCounterQR(countDataUrl);
 
       if (tables.length === 0) return;
       
@@ -642,6 +653,50 @@ export default function TablesPage() {
     printWindow.document.close();
   };
 
+  const printCounterQR = () => {
+    if (!counterQR) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const counterUrl = `${origin}/menu/${restaurantSlug}/counter`;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print QR - Express Counter & Bar</title>
+          <style>
+            body { font-family: system-ui, -apple-system, sans-serif; text-align: center; padding: 40px; color: #0f172a; }
+            .container { border: 4px double #e2e8f0; border-radius: 24px; padding: 40px; max-width: 450px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05); }
+            .logo { font-size: 24px; font-weight: 800; color: #d97706; margin-bottom: 5px; }
+            .sub { font-size: 14px; color: #64748b; margin-bottom: 30px; font-weight: 500; }
+            .qr-img { width: 300px; height: 300px; margin-bottom: 20px; }
+            .table-number { font-size: 32px; font-weight: 900; margin: 10px 0; color: #d97706; }
+            .instructions { font-size: 16px; font-weight: 600; color: #d97706; background-color: #fef3c7; padding: 10px 20px; border-radius: 9999px; display: inline-block; margin-top: 15px; }
+            .footer-link { margin-top: 20px; font-size: 10px; color: #94a3b8; }
+            @media print { body { padding: 0; margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; } .container { border: none; box-shadow: none; margin: auto; } }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="logo">CleverOps</div>
+            <div class="sub">EXPRESS COUNTER / BAR QR</div>
+            <img class="qr-img" src="${counterQR}" alt="Counter QR Code" />
+            <div class="table-number">ORDER AT COUNTER</div>
+            <div class="instructions">Scan, Enter Name & Order Instantly</div>
+            <div class="footer-link">${counterUrl}</div>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   if (loading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -1004,7 +1059,91 @@ export default function TablesPage() {
         </div>
       </div>
 
-      {/* Tables Grid */}
+      {/* Express Counter / Bar QR Section */}
+      <div className="bg-white border border-slate-100 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center font-bold text-lg">
+              <Zap className="h-5 w-5 fill-amber-500 text-amber-600" />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                Express Counter & Bar QR
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-400 uppercase border border-amber-200 dark:border-amber-900/30">
+                  Counter / Bar
+                </span>
+              </h3>
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
+                Single QR for billing counters and bar tables. Multiple customers scan independently with their own names. Complete orders in 1-click on the dashboard!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center gap-6">
+          <div className="relative p-3 border border-slate-100 dark:border-slate-800 rounded-2xl bg-slate-50 dark:bg-slate-950/20 flex items-center justify-center w-40 h-40 shadow-inner shrink-0">
+            {counterQR ? (
+              <img 
+                src={counterQR} 
+                alt="Counter QR Code" 
+                className="w-full h-full object-contain rounded-lg"
+              />
+            ) : (
+              <div className="h-8 w-8 border-4 border-slate-300 border-t-transparent rounded-full animate-spin" />
+            )}
+          </div>
+
+          <div className="flex-1 space-y-4 w-full">
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Counter QR Link</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${restaurantSlug}/counter`}
+                  className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-mono font-semibold text-slate-600 dark:text-slate-400 select-all focus:outline-none"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/menu/${restaurantSlug}/counter`;
+                    navigator.clipboard.writeText(url);
+                    setCopyFeedback('Counter link copied!');
+                    setTimeout(() => setCopyFeedback(null), 2500);
+                  }}
+                >
+                  {copyFeedback === 'Counter link copied!' ? 'Copied!' : 'Copy Link'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = counterQR;
+                  link.download = `express-counter-qr.png`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
+              >
+                <Download className="h-4 w-4 text-slate-400" />
+                <span>Download QR</span>
+              </button>
+
+              <button
+                onClick={printCounterQR}
+                className="inline-flex items-center justify-center gap-1.5 py-2 px-3 border border-slate-100 dark:border-slate-800 rounded-xl text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-bold"
+              >
+                <Printer className="h-4 w-4 text-slate-400" />
+                <span>Print Standee</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
       {tables.length === 0 ? (
         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-3">
           <QrCode className="h-10 w-10 text-slate-300" />

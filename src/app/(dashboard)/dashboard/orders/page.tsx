@@ -13,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
-import { Search, Printer, Check, X, AlertCircle, AlertTriangle, ShoppingBag, Bell, BellOff, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus, User, Smartphone, Split, Share2, Download, Scissors, RotateCcw } from 'lucide-react';
+import { Search, Printer, Check, X, AlertCircle, AlertTriangle, ShoppingBag, Bell, BellOff, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus, User, Smartphone, Split, Share2, Download, Scissors, RotateCcw, Zap } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
 import { playLoudBell, unlockAudio, stopLoudBell, isGloballyMuted, isBellRinging } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
@@ -138,6 +138,8 @@ export function getOrderDisplayInfo(order: Order, restaurantName = '', allOrders
     tableDisplay = 'TAKEAWAY';
   } else if (order.order_type === 'reservation') {
     tableDisplay = 'RESERVATION';
+  } else if (order.order_type === 'counter' || order.table_name?.toLowerCase().includes('counter') || order.table_name?.toLowerCase().includes('bar')) {
+    tableDisplay = 'COUNTER / BAR';
   } else if (order.table_name) {
     const cleanName = order.table_name.trim();
     const numMatch = cleanName.match(/\d+/);
@@ -354,7 +356,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(() => !initialCachedOrders);
   const [activeTab, setActiveTab] = useState<'orders' | 'requests'>('orders');
   const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
-  const [orderQueue, setOrderQueue] = useState<'dine_in' | 'takeaway' | 'reservations'>('dine_in');
+  const [orderQueue, setOrderQueue] = useState<'dine_in' | 'takeaway' | 'reservations' | 'counter'>('dine_in');
   const [seatGuestModalOpen, setSeatGuestModalOpen] = useState(false);
   const [reservationToSeat, setReservationToSeat] = useState<Order | null>(null);
   const [selectedTableForSeat, setSelectedTableForSeat] = useState<string>('');
@@ -444,15 +446,19 @@ export default function OrdersPage() {
   const filteredOrders = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return effectiveOrders.filter(order => {
+      const isCounterOrder = order.order_type === 'counter' || order.table_name?.toLowerCase().includes('counter') || order.table_name?.toLowerCase().includes('bar');
       // Isolate by active order queue (BUG-RES-002 & BUG-TAKE-002)
       if (orderQueue === 'dine_in') {
         if (order.order_type === 'takeaway') return false;
+        if (isCounterOrder) return false;
         // Unseated reservations that do not have a physical table assigned yet stay in the Booking queue
         if (order.order_type === 'reservation' && !order.table_id) return false;
       } else if (orderQueue === 'takeaway') {
         if (order.order_type !== 'takeaway') return false;
       } else if (orderQueue === 'reservations') {
         if (!isOrderReservation(order)) return false;
+      } else if (orderQueue === 'counter') {
+        if (!isCounterOrder) return false;
       }
 
       const matchesSearch = matchesOrderSearchQuery(order, q, restaurant?.name || '', effectiveOrders);
@@ -492,8 +498,10 @@ export default function OrdersPage() {
 
   const activeDineInCount = useMemo(() => {
     return effectiveOrders.filter(o => {
+      const isCounter = o.order_type === 'counter' || o.table_name?.toLowerCase().includes('counter') || o.table_name?.toLowerCase().includes('bar');
       if (o.status === 'cancelled' || o.status === 'completed') return false;
       if (o.order_type === 'takeaway') return false;
+      if (isCounter) return false;
       if (o.order_type === 'reservation' && !o.table_id) return false;
       return true;
     }).length;
@@ -509,10 +517,19 @@ export default function OrdersPage() {
     }).length;
   }, [effectiveOrders]);
 
+  const activeCounterCount = useMemo(() => {
+    return effectiveOrders.filter(o => {
+      const isCounter = o.order_type === 'counter' || o.table_name?.toLowerCase().includes('counter') || o.table_name?.toLowerCase().includes('bar');
+      return isCounter && o.status !== 'cancelled' && o.status !== 'completed';
+    }).length;
+  }, [effectiveOrders]);
+
   const hasNewDineIn = useMemo(() => {
     return effectiveOrders.some(o => {
+      const isCounter = o.order_type === 'counter' || o.table_name?.toLowerCase().includes('counter') || o.table_name?.toLowerCase().includes('bar');
       if (o.status !== 'new') return false;
       if (o.order_type === 'takeaway') return false;
+      if (isCounter) return false;
       if (o.order_type === 'reservation' && !o.table_id) return false;
       return true;
     });
@@ -524,6 +541,13 @@ export default function OrdersPage() {
 
   const hasNewReservation = useMemo(() => {
     return effectiveOrders.some(o => isOrderReservation(o) && (o.status === 'new' || (!o.table_id && o.status !== 'cancelled' && o.status !== 'completed')));
+  }, [effectiveOrders]);
+
+  const hasNewCounter = useMemo(() => {
+    return effectiveOrders.some(o => {
+      const isCounter = o.order_type === 'counter' || o.table_name?.toLowerCase().includes('counter') || o.table_name?.toLowerCase().includes('bar');
+      return isCounter && o.status === 'new';
+    });
   }, [effectiveOrders]);
 
   const selectedOrderRefundInfo = useMemo(() => {
@@ -856,6 +880,8 @@ export default function OrdersPage() {
           setOrderQueue('reservations');
         } else if (matched.order_type === 'takeaway') {
           setOrderQueue('takeaway');
+        } else if (matched.order_type === 'counter' || matched.table_name?.toLowerCase().includes('counter') || matched.table_name?.toLowerCase().includes('bar')) {
+          setOrderQueue('counter');
         } else {
           setOrderQueue('dine_in');
         }
@@ -956,6 +982,8 @@ export default function OrdersPage() {
         setOrderQueue('reservations');
       } else if (targetOrder.order_type === 'takeaway') {
         setOrderQueue('takeaway');
+      } else if (targetOrder.order_type === 'counter' || targetOrder.table_name?.toLowerCase().includes('counter') || targetOrder.table_name?.toLowerCase().includes('bar')) {
+        setOrderQueue('counter');
       } else {
         setOrderQueue('dine_in');
       }
@@ -2572,8 +2600,8 @@ export default function OrdersPage() {
             ref={orderListContainerRef}
             className={`${selectedOrderId ? 'hidden md:flex' : 'flex'} w-full md:w-5/12 lg:w-4/12 flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:sticky md:top-6 md:max-h-[calc(100vh-140px)] md:overflow-y-auto`}
           >
-            {/* 3 Dedicated Queues Tabs (BUG-RES-002 & BUG-TAKE-002) */}
-            <div className="grid grid-cols-3 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
+            {/* 4 Dedicated Queues Tabs (Dine-In, Takeaway, Reservations, Express Counter) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
               <button
                 type="button"
                 onClick={() => {
@@ -2675,6 +2703,40 @@ export default function OrdersPage() {
                   </span>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderQueue('counter');
+                  const nextOrders = effectiveOrders.filter(o => o.order_type === 'counter' || o.table_name?.toLowerCase().includes('counter') || o.table_name?.toLowerCase().includes('bar'));
+                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                    setSelectedOrderId(nextOrders[0].id);
+                  }
+                }}
+                className={`relative flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap ${
+                  orderQueue === 'counter'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+                }`}
+              >
+                {hasNewCounter && (
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500 ring-2 ring-white dark:ring-slate-900"></span>
+                  </span>
+                )}
+                <Zap className={`h-3.5 w-3.5 shrink-0 ${hasNewCounter ? 'text-amber-600 dark:text-amber-400 fill-amber-500' : 'text-slate-600 dark:text-slate-300'}`} />
+                <span className="truncate">Counter</span>
+                {activeCounterCount > 0 && (
+                  <span className={`px-1.5 py-0.5 text-[10px] font-black rounded-full shrink-0 ${
+                    hasNewCounter 
+                      ? 'bg-amber-500 text-white animate-pulse' 
+                      : 'bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                  }`}>
+                    {activeCounterCount}
+                  </span>
+                )}
+              </button>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -2747,7 +2809,7 @@ export default function OrdersPage() {
               {filteredOrders.length === 0 ? (
                 <div className="flex items-center justify-center text-center text-slate-400 text-sm py-12 flex-col gap-2">
                   <ClipboardList className="h-8 w-8 text-slate-300" />
-                  <span>No {orderQueue === 'takeaway' ? 'takeaway orders' : orderQueue === 'reservations' ? 'reservations' : 'dine-in orders'} match this query.</span>
+                  <span>No {orderQueue === 'takeaway' ? 'takeaway orders' : orderQueue === 'reservations' ? 'reservations' : orderQueue === 'counter' ? 'counter/bar orders' : 'dine-in orders'} match this query.</span>
                 </div>
               ) : (
                 filteredOrders.map((order) => {
@@ -2759,6 +2821,7 @@ export default function OrdersPage() {
                   // Takeaway ETA calculations
                   const isTakeaway = order.order_type === 'takeaway';
                   const isReservation = isOrderReservation(order);
+                  const isCounter = order.order_type === 'counter' || order.table_name?.toLowerCase().includes('counter') || order.table_name?.toLowerCase().includes('bar');
                   const createdMs = new Date(order.created_at).getTime();
                   const elapsedMins = Math.floor((currentTime - createdMs) / 60000);
                   const arrivalMins = order.customer_arrival_minutes || 20;
@@ -2800,17 +2863,19 @@ export default function OrdersPage() {
                             </span>
                           )}
                           <span 
-                            title={isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RES: ${parsedRes.name}` : 'RESERVATION') : tableDisplay}
+                            title={isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RES: ${parsedRes.name}` : 'RESERVATION') : isCounter ? (order.customer_name ? `BAR: ${order.customer_name}` : 'COUNTER') : tableDisplay}
                             className={`text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wider truncate max-w-[120px] shrink-0 ${
                             isTakeaway
                               ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
                               : isReservation
-                              ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300'
+                              : isCounter
+                              ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 font-extrabold'
                               : isSelected
                               ? 'bg-white/90 text-emerald-900 border-emerald-200 dark:bg-slate-800 dark:text-emerald-300 dark:border-emerald-800'
                               : 'bg-slate-100 text-slate-800 border-slate-200 dark:bg-slate-800 dark:text-slate-200'
                           }`}>
-                            {isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RES: ${parsedRes.name}` : 'RESERVATION') : tableDisplay}
+                            {isTakeaway ? 'TAKEAWAY' : isReservation ? (parsedRes?.name ? `RES: ${parsedRes.name}` : 'RESERVATION') : isCounter ? (order.customer_name ? `⚡ ${order.customer_name}` : '⚡ COUNTER') : tableDisplay}
                           </span>
                         </div>
                         <span 
@@ -3113,6 +3178,11 @@ export default function OrdersPage() {
                           <Calendar className="h-3 w-3" /> Reservation
                         </span>
                       )}
+                      {Boolean(selectedOrder.order_type === 'counter' || selectedOrder.table_name?.toLowerCase().includes('counter') || selectedOrder.table_name?.toLowerCase().includes('bar')) && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 uppercase tracking-wide">
+                          <Zap className="h-3 w-3 fill-amber-500 text-amber-600" /> Express Counter / Bar
+                        </span>
+                      )}
                       {getStatusBadge(effectiveStatus || selectedOrder.status, selectedOrder.order_type)}
                       {selectedOrderRefundInfo.isRefunded ? (
                         selectedOrderRefundInfo.isPartial ? (
@@ -3135,6 +3205,8 @@ export default function OrdersPage() {
                         <span className="text-gray-900 dark:text-gray-100 font-bold">Pickup Counter (ETA: {selectedOrder.customer_arrival_minutes || 20} mins)</span>
                       ) : isOrderReservation(selectedOrder) ? (
                         <span className="text-gray-900 dark:text-gray-100 font-bold">Table Booking ({selectedOrder.table_name || 'Unassigned'})</span>
+                      ) : Boolean(selectedOrder.order_type === 'counter' || selectedOrder.table_name?.toLowerCase().includes('counter') || selectedOrder.table_name?.toLowerCase().includes('bar')) ? (
+                        <span className="text-amber-800 dark:text-amber-300 font-bold">⚡ Express Counter / Bar Order</span>
                       ) : (
                         <span>{selectedOrder.table_name || 'N/A'}</span>
                       )}
@@ -3562,10 +3634,46 @@ export default function OrdersPage() {
                       (!selectedOrder.items || selectedOrder.items.length === 0);
                     if (isUnseatedEmptyReservation && (effectiveStatus || selectedOrder.status) !== 'new') return null;
 
+                    const isCounterOrder = Boolean(selectedOrder.order_type === 'counter' || selectedOrder.table_name?.toLowerCase().includes('counter') || selectedOrder.table_name?.toLowerCase().includes('bar'));
+
                     return (
                       <div className="sticky bottom-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-t border-slate-200 dark:border-slate-800 p-4 -mx-6 -mb-6 mt-4 shadow-lg md:static md:bg-slate-50 md:dark:bg-slate-950/20 md:border md:border-slate-100 md:dark:border-slate-800 md:rounded-xl md:p-4 md:m-0 md:shadow-none flex flex-col gap-3">
                         <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
                         <div className="flex flex-wrap gap-2">
+                          {isCounterOrder ? (
+                            effectiveStatus !== 'completed' && effectiveStatus !== 'cancelled' ? (
+                              <Button
+                                size="sm"
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold cursor-pointer shadow-md w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-sm"
+                                isLoading={processingOrderIds.includes(`${selectedOrder.id}:completed`)}
+                                disabled={processingOrderIds.includes(`${selectedOrder.id}:completed`)}
+                                onClick={async () => {
+                                  try {
+                                    setProcessingOrderIds(prev => [...prev, `${selectedOrder.id}:completed`]);
+                                    await callUpdateOrderStatusApi({
+                                      orderId: selectedOrder.id,
+                                      newStatus: 'completed',
+                                      paymentStatus: 'paid',
+                                      paymentMethod: 'cash',
+                                      staffName: profile?.full_name || activeRole || 'Counter Staff'
+                                    });
+                                    showToast('⚡ Express counter order completed & payment verified!', 'Success', 'success');
+                                    if (restaurant?.id) {
+                                      await safeReloadOrders(restaurant.id);
+                                    }
+                                  } catch (err: any) {
+                                    showToast(err.message || 'Failed to complete order', 'Error', 'error');
+                                  } finally {
+                                    setProcessingOrderIds(prev => prev.filter(id => id !== `${selectedOrder.id}:completed`));
+                                  }
+                                }}
+                              >
+                                <Zap className="h-4 w-4 fill-white text-emerald-200 shrink-0" />
+                                <span>Verify Payment & Complete Order</span>
+                              </Button>
+                            ) : null
+                          ) : (
+                            <>
                           {activeRole !== 'waiter' && effectiveStatus === 'new' && (
                             <Button 
                               size="sm" 
@@ -3706,6 +3814,8 @@ export default function OrdersPage() {
                           <span>{selectedOrderRefundInfo.isPartial ? 'Additional Refund' : 'Issue Refund'}</span>
                         </Button>
                       )}
+                            </>
+                          )}
 
       {/* Payment Method Selection Modal */}
       {paymentModalOpen && selectedOrder && restaurant && (
