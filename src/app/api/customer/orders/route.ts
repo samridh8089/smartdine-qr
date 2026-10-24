@@ -520,14 +520,15 @@ export async function POST(req: Request) {
     } else {
       const cleanKey = idempotencyKey ? String(idempotencyKey).trim() : null;
 
+      const isValidUuid = (val?: any): boolean =>
+        typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
+
       const orderPayload = {
         restaurant_id: restaurantId,
-        table_id: (tableId === 'takeaway' || tableId === 'reservation' || tableId === 'counter' || !tableId) ? null : tableId,
+        table_id: (isValidUuid(tableId) && orderType !== 'takeaway' && orderType !== 'reservation' && orderType !== 'counter') ? tableId : null,
         table_name: (orderType === 'reservation' || tableId === 'reservation') ? 'Reservation' : (orderType === 'counter' || tableId === 'counter') ? 'Express Counter' : (table.name || 'Table 1'),
         status: 'new',
         order_type: (orderType === 'reservation' || orderType === 'counter') ? 'dine_in' : orderType,
-        customer_name: finalCustomerName || null,
-        customer_phone: finalCustomerPhone || null,
         payment_status: paymentStatus,
         special_instructions: [
           specialInstructions,
@@ -584,7 +585,9 @@ export async function POST(req: Request) {
 
       createdOrder = {
         ...newOrderData,
-        order_type: orderType
+        order_type: orderType,
+        customer_name: finalCustomerName || undefined,
+        customer_phone: finalCustomerPhone || undefined
       };
 
       // Insert initial batch (only if order has items)
@@ -678,17 +681,17 @@ export async function POST(req: Request) {
       ['kitchen', 'waiter', 'owner', 'manager'],
       {
         orderId: createdOrder.id,
-        tableId: tableId || null,
+        tableId: isValidUuid(tableId) ? tableId : null,
         orderType,
         notificationType: 'NEW_ORDER'
       },
-      tableId || undefined
+      isValidUuid(tableId) ? tableId : undefined
     ).catch(pushErr => {
       console.warn('[CustomerOrder] Push dispatch error:', pushErr);
     });
 
     // P1-07: Table Status Sync — automatically occupy table on dine-in order creation
-    const isDiningOrder = orderType !== 'takeaway' && tableId && tableId !== 'takeaway' && tableId !== 'reservation';
+    const isDiningOrder = orderType === 'dine_in' && isValidUuid(tableId);
     if (isDiningOrder && restaurantId && restaurantId !== 'demo-rest') {
       try {
         const tableStates = { ...(restaurant.settings?.table_states || {}) };
@@ -746,7 +749,7 @@ export async function POST(req: Request) {
         restaurantId,
         correlationId,
         orderId: createdOrder.id,
-        tableUuid: tableId && tableId !== 'takeaway' && tableId !== 'reservation' ? tableId : undefined,
+        tableUuid: isValidUuid(tableId) ? tableId : undefined,
         actorType: 'customer',
         eventType: 'checkout_started',
         sourceNode: 'cart',
@@ -763,7 +766,7 @@ export async function POST(req: Request) {
         restaurantId,
         correlationId,
         orderId: createdOrder.id,
-        tableUuid: tableId && tableId !== 'takeaway' && tableId !== 'reservation' ? tableId : undefined,
+        tableUuid: isValidUuid(tableId) ? tableId : undefined,
         actorType: 'customer',
         eventType: 'order_created',
         sourceNode: 'checkout',
