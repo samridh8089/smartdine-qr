@@ -16,7 +16,7 @@ import {
   Settings, Users, History, Download, Upload, 
   Sparkles, Check, AlertCircle, Plus, Trash2, Eye, DollarSign, CreditCard, Volume2, Copy, RefreshCw,
   Smartphone, Laptop, ShieldCheck, LogOut, CheckCircle2, XCircle, KeyRound, Monitor, Pencil, QrCode,
-  Bell, BellOff, Tag, Archive, Printer,
+  Bell, BellOff, Tag, Archive, Printer, Save,
   ArrowLeft, Search, UtensilsCrossed, Percent, Database, ShieldAlert, LayoutGrid, Store, Receipt, Navigation
 } from 'lucide-react';
 
@@ -160,6 +160,13 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   // Active Devices State
   const [devicesList, setDevicesList] = useState<any[]>([]);
   const [devicesLoading, setDevicesLoading] = useState(false);
+
+  // Thermal Printer & Hardware Settings
+  const [thermalPaperWidth, setThermalPaperWidth] = useState<'80mm' | '58mm'>(restaurant?.settings?.thermal_paper_width || '80mm');
+  const [thermalFooterNote, setThermalFooterNote] = useState<string>(restaurant?.settings?.thermal_footer_note || 'Thank you for dining with us! Please visit again.');
+  const [thermalShowGstin, setThermalShowGstin] = useState<boolean>(restaurant?.settings?.thermal_show_gstin !== false);
+  const [thermalAutoPrint, setThermalAutoPrint] = useState<boolean>(restaurant?.settings?.thermal_auto_print === true);
+  const [savingPrinterSettings, setSavingPrinterSettings] = useState(false);
 
   // Bell/Notification Sound settings state
   const [ownerBellEnabled, setOwnerBellEnabled] = useState<boolean>(restaurant?.settings?.owner_bell_enabled !== false);
@@ -872,15 +879,111 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   };
 
   const loadDevices = async () => {
-    if (!profile?.id) return;
     setDevicesLoading(true);
     try {
-      const devs = await getActiveDevices(profile.id);
-      setDevicesList(devs);
+      let devs: any[] = [];
+      if (profile?.id) {
+        devs = await getActiveDevices(profile.id);
+      }
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const isMobile = /Android|iPhone|iPad|Mobile/i.test(ua);
+      const osName = ua.includes('Windows') ? 'Windows PC' : ua.includes('Mac') ? 'macOS Device' : ua.includes('Android') ? 'Android Mobile' : ua.includes('iPhone') ? 'iPhone' : isMobile ? 'Mobile Device' : 'Desktop Browser';
+      const browserName = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : ua.includes('Edg') ? 'Edge' : 'Browser';
+
+      const currentDev = {
+        device_name: `${osName} (${browserName})`,
+        platform: isMobile ? 'Mobile' : 'Desktop',
+        is_current: true,
+        is_trusted: true,
+        device_session_id: 'active_current_session',
+        last_active_at: new Date().toISOString()
+      };
+
+      if (!devs || devs.length === 0) {
+        setDevicesList([currentDev]);
+      } else {
+        const hasCurrent = devs.some((d: any) => d.is_current);
+        setDevicesList(hasCurrent ? devs : [currentDev, ...devs]);
+      }
     } catch (e) {
       console.warn('Load devices warning:', e);
     } finally {
       setDevicesLoading(false);
+    }
+  };
+
+  const handleTestThermalPrint = () => {
+    try {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        const is58 = thermalPaperWidth === '58mm';
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Test Receipt - ${restaurant?.name || 'Restaurant'}</title>
+              <style>
+                body { font-family: monospace; width: ${is58 ? '58mm' : '80mm'}; margin: 0 auto; padding: 8px; color: #000; font-size: ${is58 ? '11px' : '12px'}; }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                .bold { font-weight: bold; }
+                .divider { border-top: 1px dashed #000; margin: 8px 0; }
+                table { width: 100%; border-collapse: collapse; }
+                td, th { padding: 3px 0; }
+              </style>
+            </head>
+            <body>
+              <div class="text-center">
+                <h2 style="margin:0 0 4px 0;font-size:16px;">${restaurant?.name || 'The Bistro Cafe'}</h2>
+                <p style="margin:0;font-size:11px;">${restaurant?.address || 'Restaurant Premises'}</p>
+                ${restaurant?.phone ? `<p style="margin:2px 0;font-size:11px;">Tel: ${restaurant.phone}</p>` : ''}
+                ${(thermalShowGstin && restaurant?.gst_number) ? `<p style="margin:2px 0;font-size:11px;">GSTIN: ${restaurant.gst_number}</p>` : ''}
+              </div>
+              <div class="divider"></div>
+              <p style="margin:2px 0;"><span class="bold">SAMPLE TEST RECEIPT</span></p>
+              <p style="margin:2px 0;"><span class="bold">Paper Size:</span> ${thermalPaperWidth} Thermal Roll</p>
+              <p style="margin:2px 0;"><span class="bold">Date:</span> ${new Date().toLocaleString()}</p>
+              <div class="divider"></div>
+              <table>
+                <tr><td>1x Filter Coffee</td><td class="text-right">₹60.00</td></tr>
+                <tr><td>1x Club Sandwich</td><td class="text-right">₹140.00</td></tr>
+              </table>
+              <div class="divider"></div>
+              <p class="text-right" style="margin:2px 0;">Subtotal: ₹200.00</p>
+              <p class="text-right" style="margin:2px 0;">GST (5%): ₹10.00</p>
+              <div class="divider"></div>
+              <p class="bold text-right" style="font-size:14px;margin:4px 0;">Total: ₹210.00</p>
+              <div class="divider"></div>
+              <p class="text-center" style="font-size:11px;margin-top:8px;">${thermalFooterNote || 'Thank you! Visit again.'}</p>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    } catch (e) {
+      console.warn('Test print error:', e);
+    }
+  };
+
+  const handleSavePrinterSettings = async () => {
+    if (!restaurant?.id) return;
+    setSavingPrinterSettings(true);
+    try {
+      await db.updateRestaurant(restaurant.id, {
+        settings: {
+          ...restaurant.settings,
+          thermal_paper_width: thermalPaperWidth,
+          thermal_footer_note: thermalFooterNote,
+          thermal_show_gstin: thermalShowGstin,
+          thermal_auto_print: thermalAutoPrint
+        }
+      });
+      alert('Thermal printer settings saved successfully!');
+      await refresh();
+    } catch (err: any) {
+      alert(`Failed to save printer settings: ${err.message}`);
+    } finally {
+      setSavingPrinterSettings(false);
     }
   };
 
