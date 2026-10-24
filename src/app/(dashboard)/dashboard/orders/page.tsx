@@ -2601,7 +2601,7 @@ export default function OrdersPage() {
             className={`${selectedOrderId ? 'hidden md:flex' : 'flex'} w-full md:w-5/12 lg:w-4/12 flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:sticky md:top-6 md:max-h-[calc(100vh-140px)] md:overflow-y-auto`}
           >
             {/* 4 Dedicated Queues Tabs (Dine-In, Takeaway, Reservations, Express Counter) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80">
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 overflow-x-auto scrollbar-none">
               <button
                 type="button"
                 onClick={() => {
@@ -2611,7 +2611,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap ${
+                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   orderQueue === 'dine_in'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -2624,7 +2624,7 @@ export default function OrdersPage() {
                   </span>
                 )}
                 <ChefHat className={`h-3.5 w-3.5 shrink-0 ${hasNewDineIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`} />
-                <span className="truncate">Dine-In</span>
+                <span>Dine-In</span>
                 {activeDineInCount > 0 && (
                   <span className={`px-1.5 py-0.5 text-[10px] font-black rounded-full shrink-0 ${
                     hasNewDineIn 
@@ -2645,7 +2645,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap ${
+                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   orderQueue === 'takeaway'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -2658,7 +2658,7 @@ export default function OrdersPage() {
                   </span>
                 )}
                 <ShoppingBag className={`h-3.5 w-3.5 shrink-0 ${hasNewTakeaway ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`} />
-                <span className="truncate">Takeaway</span>
+                <span>Takeaway</span>
                 {activeTakeawayCount > 0 && (
                   <span className={`px-1.5 py-0.5 text-[10px] font-black rounded-full shrink-0 ${
                     hasNewTakeaway 
@@ -2679,7 +2679,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap ${
+                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   orderQueue === 'reservations'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -2692,7 +2692,7 @@ export default function OrdersPage() {
                   </span>
                 )}
                 <Calendar className={`h-3.5 w-3.5 shrink-0 ${hasNewReservation ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`} />
-                <span className="truncate">Booking</span>
+                <span>Booking</span>
                 {activeReservationsCount > 0 && (
                   <span className={`px-1.5 py-0.5 text-[10px] font-black rounded-full shrink-0 ${
                     hasNewReservation 
@@ -2713,7 +2713,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap ${
+                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   orderQueue === 'counter'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -2726,7 +2726,7 @@ export default function OrdersPage() {
                   </span>
                 )}
                 <Zap className={`h-3.5 w-3.5 shrink-0 ${hasNewCounter ? 'text-amber-600 dark:text-amber-400 fill-amber-500' : 'text-slate-600 dark:text-slate-300'}`} />
-                <span className="truncate">Counter</span>
+                <span>Counter</span>
                 {activeCounterCount > 0 && (
                   <span className={`px-1.5 py-0.5 text-[10px] font-black rounded-full shrink-0 ${
                     hasNewCounter 

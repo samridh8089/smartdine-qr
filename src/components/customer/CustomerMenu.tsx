@@ -1094,7 +1094,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             restaurantId: restaurant.id,
-            tableId: table.id,
+            tableId: isCounter ? 'counter' : table?.id,
             items: orderPayload,
             specialInstructions: finalInstructions,
             orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
@@ -1165,10 +1165,10 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         console.warn('Fast API order placement fallback to db.createOrder:', apiErr);
         newOrder = await db.createOrder(
           restaurant.id,
-          table.id,
+          isCounter ? 'counter' : (table?.id || 'counter'),
           orderPayload,
           finalInstructions,
-          isReservation ? 'reservation' : isTakeaway ? 'takeaway' : 'dine_in',
+          isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
           isTakeaway ? arrivalMinutes : undefined,
           isTakeaway ? takeawayNotes : undefined,
           (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
@@ -1535,12 +1535,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       {table.name}
                     </span>
                   )}
-                  {isCounter && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40 uppercase shrink-0">
-                      <Zap className="h-3 w-3 fill-amber-500 text-amber-600" />
-                      Express Counter / Bar
-                    </span>
-                  )}
                   {isTakeaway && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 border border-purple-100 dark:border-purple-900/30 uppercase shrink-0">
                       Takeaway
@@ -1883,23 +1877,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           </div>
         )}
 
-
-        {/* Express Counter / Bar Banner */}
-        {isCounter && (
-          <div className="bg-amber-500/10 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/60 rounded-2xl p-4 shadow-sm flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center text-white shrink-0 shadow-sm">
-              <Zap className="h-5 w-5 fill-white" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-amber-950 dark:text-amber-200 text-sm md:text-base flex items-center gap-1.5">
-                Express Counter / Bar Quick-Order
-              </h3>
-              <p className="text-xs text-amber-800/90 dark:text-amber-300/90 mt-0.5 leading-relaxed">
-                Add dishes to your basket, enter your name, and place your order. Pick up directly at the counter when called!
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* Search & Veg Toggle - Contrast fixed */}
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row gap-3">
@@ -2452,31 +2429,20 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           })}
           </div>
 
-          {/* Express Counter / Bar Customer Details */}
+          {/* Express Counter Customer Details */}
           {isCounter && (
-            <div className="space-y-3 pt-3.5 border-t border-slate-100 dark:border-slate-800">
-              <div className="p-3.5 bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/80 rounded-xl space-y-2">
-                <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
-                  <Zap className="h-4 w-4 text-amber-600 fill-amber-500 shrink-0" />
-                  <span className="text-xs font-black uppercase tracking-wider">Express Counter / Bar Pickup</span>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                    Your Name (Staff will call your name when ready) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Rahul, Sneha, Vikram"
-                    value={counterCustomerName}
-                    onChange={(e) => setCounterCustomerName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-amber-200 dark:border-amber-800 rounded-xl text-xs md:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                    required
-                  />
-                  <p className="text-[11px] text-amber-800 dark:text-amber-300">
-                    Multiple customers can order simultaneously. Your dishes will be prepared under your name.
-                  </p>
-                </div>
-              </div>
+            <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Your Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Enter your name"
+                value={counterCustomerName}
+                onChange={(e) => setCounterCustomerName(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                required
+              />
             </div>
           )}
 

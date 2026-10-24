@@ -366,8 +366,10 @@ export async function POST(req: Request) {
           appliesTo = 'all';
         }
       }
-      if (appliesTo === 'takeaway_only' && (orderType === 'dine_in' || orderType === 'reservation')) return false;
-      if (appliesTo === 'dine_in_only' && orderType === 'takeaway') return false;
+      if (appliesTo === 'takeaway_only') return orderType === 'takeaway';
+      if (appliesTo === 'dine_in_only') return orderType === 'dine_in';
+      if (appliesTo === 'counter_only') return orderType === 'counter';
+      if (appliesTo === 'takeaway_and_counter') return orderType === 'takeaway' || orderType === 'counter';
       return true;
     };
 
@@ -523,7 +525,7 @@ export async function POST(req: Request) {
         table_id: (tableId === 'takeaway' || tableId === 'reservation' || tableId === 'counter' || !tableId) ? null : tableId,
         table_name: (orderType === 'reservation' || tableId === 'reservation') ? 'Reservation' : (orderType === 'counter' || tableId === 'counter') ? 'Express Counter' : (table.name || 'Table 1'),
         status: 'new',
-        order_type: (orderType === 'reservation') ? 'dine_in' : orderType,
+        order_type: (orderType === 'reservation' || orderType === 'counter') ? 'dine_in' : orderType,
         customer_name: finalCustomerName || null,
         customer_phone: finalCustomerPhone || null,
         payment_status: paymentStatus,

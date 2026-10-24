@@ -41,7 +41,7 @@ export interface Restaurant {
     sgst_percentage?: number;
     igst_percentage?: number;
     service_charge_enabled?: boolean;
-    custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' }[];
+    custom_charges?: { id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' | 'counter_only' | 'takeaway_and_counter' }[];
     payment_enabled?: boolean;
     upi_id?: string;
     upi_name?: string;
@@ -2144,7 +2144,7 @@ export const db = {
     tableId: string | null,
     items: { menuItemId: string; quantity: number; notes?: string; variantId?: string; variantName?: string; price?: number }[],
     specialInstructions?: string,
-    orderType: 'dine_in' | 'takeaway' | 'reservation' = 'dine_in',
+    orderType: 'dine_in' | 'takeaway' | 'reservation' | 'counter' = 'dine_in',
     customerArrivalMinutes?: number,
     takeawayNotes?: string,
     paymentStatus: 'pending' | 'customer_marked_paid' | 'paid' = 'pending',
@@ -2176,11 +2176,11 @@ export const db = {
     const tables = await db.getTables(restaurantId);
     let table = tableId ? tables.find(t => t.id === tableId) : null;
     if (!table) {
-      if (orderType === 'takeaway' || orderType === 'reservation' || tableId === 'takeaway' || tableId === 'reservation' || !tableId) {
+      if (orderType === 'takeaway' || orderType === 'reservation' || orderType === 'counter' || tableId === 'takeaway' || tableId === 'reservation' || tableId === 'counter' || tableId === 'bar' || !tableId) {
         table = {
-          id: tableId || 'takeaway',
+          id: tableId || (orderType === 'counter' ? 'counter' : 'takeaway'),
           restaurant_id: restaurantId,
-          name: orderType === 'reservation' ? 'Reservation' : 'Takeaway Counter'
+          name: orderType === 'reservation' ? 'Reservation' : orderType === 'counter' ? 'Express Counter' : 'Takeaway Counter'
         };
       } else {
         throw new Error('Table not found');
@@ -2317,8 +2317,10 @@ export const db = {
           appliesTo = 'all';
         }
       }
-      if (appliesTo === 'takeaway_only' && (orderType === 'dine_in' || orderType === 'reservation')) return false;
-      if (appliesTo === 'dine_in_only' && orderType === 'takeaway') return false;
+      if (appliesTo === 'takeaway_only') return orderType === 'takeaway';
+      if (appliesTo === 'dine_in_only') return orderType === 'dine_in';
+      if (appliesTo === 'counter_only') return orderType === 'counter';
+      if (appliesTo === 'takeaway_and_counter') return orderType === 'takeaway' || orderType === 'counter';
       return true;
     };
 
