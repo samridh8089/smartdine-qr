@@ -98,6 +98,10 @@ export interface Restaurant {
       longitude?: number | null;
       radius_meters?: number;
     };
+    thermal_paper_width?: '80mm' | '58mm';
+    thermal_footer_note?: string;
+    thermal_show_gstin?: boolean;
+    thermal_auto_print?: boolean;
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';
