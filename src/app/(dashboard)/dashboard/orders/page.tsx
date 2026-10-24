@@ -2600,8 +2600,8 @@ export default function OrdersPage() {
             ref={orderListContainerRef}
             className={`${selectedOrderId ? 'hidden md:flex' : 'flex'} w-full md:w-5/12 lg:w-4/12 flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:sticky md:top-6 md:max-h-[calc(100vh-140px)] md:overflow-y-auto`}
           >
-            {/* 4 Dedicated Queues Tabs (Dine-In, Takeaway, Reservations, Express Counter) */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200 dark:border-slate-700/80 overflow-x-auto scrollbar-none">
+            {/* 4 Dedicated Queues Tabs (2 on top, 2 on bottom: Dine-In, Takeaway, Booking, Counter) */}
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700/80">
               <button
                 type="button"
                 onClick={() => {
@@ -2611,7 +2611,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
                   orderQueue === 'dine_in'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -2645,7 +2645,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
                   orderQueue === 'takeaway'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -2679,7 +2679,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
                   orderQueue === 'reservations'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -2713,7 +2713,7 @@ export default function OrdersPage() {
                     setSelectedOrderId(nextOrders[0].id);
                   }
                 }}
-                className={`relative flex-1 min-w-fit flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
                   orderQueue === 'counter'
                     ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'

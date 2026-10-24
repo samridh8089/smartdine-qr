@@ -1094,7 +1094,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             restaurantId: restaurant.id,
-            tableId: isCounter ? 'counter' : table?.id,
+            tableId: isCounter ? null : table?.id,
             items: orderPayload,
             specialInstructions: finalInstructions,
             orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
@@ -1165,7 +1165,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         console.warn('Fast API order placement fallback to db.createOrder:', apiErr);
         newOrder = await db.createOrder(
           restaurant.id,
-          isCounter ? 'counter' : (table?.id || 'counter'),
+          isCounter ? null : table?.id,
           orderPayload,
           finalInstructions,
           isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',

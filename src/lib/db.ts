@@ -2346,8 +2346,11 @@ export const db = {
 
     let activeMergeGroupId: string | null = null;
     let activeMergeSessionId: string | null = null;
-    if (tableId && orderType === 'dine_in') {
-      const activeMerge = await this.getActiveMergeGroupForTable(restaurantId, tableId);
+    const isValidUuid = (val?: any): boolean =>
+      typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
+
+    if (isValidUuid(tableId) && orderType === 'dine_in') {
+      const activeMerge = await this.getActiveMergeGroupForTable(restaurantId, tableId!);
       if (activeMerge) {
         activeMergeGroupId = activeMerge.group.id;
         activeMergeSessionId = activeMerge.session?.id || activeMerge.group.active_session_id || null;
@@ -2356,8 +2359,8 @@ export const db = {
 
     let orderInsertPayload: any = {
       restaurant_id: restaurantId,
-      table_id: (tableId === 'takeaway' || tableId === 'reservation' || !tableId) ? null : tableId,
-      table_name: table.name,
+      table_id: (isValidUuid(tableId) && orderType !== 'takeaway' && orderType !== 'counter' && orderType !== 'reservation') ? tableId : null,
+      table_name: (orderType === 'counter' || tableId === 'counter') ? 'Express Counter' : table.name,
       merge_group_id: activeMergeGroupId,
       merge_session_id: activeMergeSessionId,
       status: 'new',
@@ -2375,7 +2378,7 @@ export const db = {
       service_charge: serviceCharge,
       total,
       custom_charges: customChargesSnapshot,
-        order_type: orderType,
+      order_type: (orderType === 'reservation' || orderType === 'counter') ? 'dine_in' : orderType,
         customer_arrival_minutes: customerArrivalMinutes,
         takeaway_notes: takeawayNotes,
         payment_status: paymentStatus,
