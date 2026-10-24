@@ -2398,10 +2398,61 @@ export const QRDesignStudio: React.FC<QRDesignStudioProps> = ({ restaurant, onSa
                   </div>
                 </div>
 
-                {/* Free Offsets for Rectangular Boxes (Header & Footer) (ss2) */}
-                <div className="space-y-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="text-xs font-bold text-slate-800 block">Header & Footer Box Positioning (Y)</span>
+                {/* Free Offsets & Sizing for Rectangular Boxes (Header & Footer) */}
+                <div className="space-y-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 block">Header & Footer Size & Positioning</span>
+                    <button
+                      type="button"
+                      onClick={() => setConfig(prev => ({ ...prev, headerScale: 100, footerScale: 100, headerOffsetY: 0, footerOffsetY: 0 }))}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold"
+                    >
+                      Reset
+                    </button>
+                  </div>
+
+                  {/* Size Scaling Sliders */}
                   <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] text-slate-600 font-semibold">Header Size</span>
+                        <span className="text-[10px] font-mono text-slate-800 font-bold">{config.headerScale ?? 100}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="60"
+                        max="150"
+                        step="5"
+                        value={config.headerScale ?? 100}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setConfig((prev) => ({ ...prev, headerScale: val }));
+                        }}
+                        className="w-full accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] text-slate-600 font-semibold">Footer Size</span>
+                        <span className="text-[10px] font-mono text-slate-800 font-bold">{config.footerScale ?? 100}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="60"
+                        max="150"
+                        step="5"
+                        value={config.footerScale ?? 100}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setConfig((prev) => ({ ...prev, footerScale: val }));
+                        }}
+                        className="w-full accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Y-Position Sliders */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60">
                     <div>
                       <span className="text-[10px] text-slate-500 font-medium block mb-1">Header Y: {config.headerOffsetY || 0}px</span>
                       <input

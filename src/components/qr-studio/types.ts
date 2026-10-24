@@ -304,6 +304,8 @@ export interface QRDesignConfig {
   cardBgOpacity?: number; // 0 - 100 (for frosted glass vs solid)
   headerOffsetY?: number; // -60 to 60
   footerOffsetY?: number; // -60 to 60
+  headerScale?: number; // 60 to 150 (%)
+  footerScale?: number; // 60 to 150 (%)
   orbitDish1X?: number; // -100 to 100
   orbitDish1Y?: number; // -100 to 100
   orbitDish2X?: number; // -100 to 100

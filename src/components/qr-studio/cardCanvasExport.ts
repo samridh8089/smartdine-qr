@@ -267,6 +267,10 @@ export async function renderQRCardToCanvas(
   const qrOffX = (config.qrOffsetX || 0) * scale;
   const qrOffY = (config.qrOffsetY || 0) * scale;
   const cardOpacity = (config.cardBgOpacity ?? 80) / 100;
+  const hScale = (config.headerScale ?? 100) / 100;
+  const fScale = (config.footerScale ?? 100) / 100;
+  const hOffY = (config.headerOffsetY || 0) * scale;
+  const fOffY = (config.footerOffsetY || 0) * scale;
 
   const layout = config.studioLayout || 'table_tent_classic';
 
@@ -275,36 +279,36 @@ export async function renderQRCardToCanvas(
   // =========================================================================
   if (layout === 'corner_bowls') {
     // Top Arched High-Contrast Restaurant Banner (Guarantees 100% Readability)
-    const bannerW = targetWidth * 0.9;
-    const bannerH = 68 * scale;
+    const bannerW = Math.min(targetWidth * 0.96, targetWidth * 0.9 * hScale);
+    const bannerH = 68 * scale * hScale;
     const bannerX = (targetWidth - bannerW) / 2;
-    const bannerY = (20 + (config.headerOffsetY || 0)) * scale;
+    const bannerY = 20 * scale + hOffY;
 
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.2)';
     ctx.shadowBlur = 14 * scale;
     ctx.shadowOffsetY = 6 * scale;
     ctx.fillStyle = `rgba(255, 255, 255, ${cardOpacity})`;
-    drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 24 * scale);
+    drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 24 * scale * hScale);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
     ctx.strokeStyle = '#F59E0B';
     ctx.lineWidth = 1.5 * scale;
-    drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 24 * scale);
+    drawRoundedRect(ctx, bannerX, bannerY, bannerW, bannerH, 24 * scale * hScale);
     ctx.stroke();
 
     // Restaurant Name
     ctx.fillStyle = '#0F172A';
-    ctx.font = `900 ${Math.round(18 * scale)}px ${activeTheme.typography.headingFont || 'sans-serif'}`;
+    ctx.font = `900 ${Math.round(18 * scale * hScale)}px ${activeTheme.typography.headingFont || 'sans-serif'}`;
     ctx.textAlign = 'center';
-    ctx.fillText(config.text.restaurantName || 'SmartDine Restaurant', targetWidth / 2, bannerY + 28 * scale);
+    ctx.fillText(config.text.restaurantName || 'SmartDine Restaurant', targetWidth / 2, bannerY + bannerH * 0.42);
 
     // Tagline / Subtitle
     ctx.fillStyle = '#D97706';
-    ctx.font = `800 ${Math.round(10 * scale)}px sans-serif`;
-    ctx.fillText((config.tagline || 'Hot & Fresh • Fast Order').toUpperCase(), targetWidth / 2, bannerY + 48 * scale);
+    ctx.font = `800 ${Math.round(10 * scale * hScale)}px sans-serif`;
+    ctx.fillText((config.tagline || 'Hot & Fresh • Fast Order').toUpperCase(), targetWidth / 2, bannerY + bannerH * 0.72);
     ctx.restore();
 
     // Starburst "SCAN MENU" Callout (Top-Left - Editable & Deletable SS2)
@@ -371,10 +375,10 @@ export async function renderQRCardToCanvas(
 
     // Bottom Table Badge Pill (Editable & Deletable SS2)
     if (!config.hideFooterBadge) {
-      const botPillW = targetWidth * 0.88;
+      const botPillW = Math.min(targetWidth * 0.96, targetWidth * 0.88 * fScale);
       const hasSub = !!config.footerSubText;
-      const botPillH = (hasSub ? 28 : 24) * scale;
-      const botPillY = height - botPillH - (14 - (config.footerOffsetY || 0)) * scale;
+      const botPillH = (hasSub ? 28 : 24) * scale * fScale;
+      const botPillY = height - botPillH - (14 * scale - fOffY);
       ctx.save();
       ctx.fillStyle = `rgba(255, 255, 255, ${cardOpacity})`;
       drawRoundedRect(ctx, (targetWidth - botPillW) / 2, botPillY, botPillW, botPillH, botPillH / 2);
@@ -385,14 +389,14 @@ export async function renderQRCardToCanvas(
       ctx.stroke();
 
       ctx.fillStyle = '#1E293B';
-      ctx.font = `800 ${Math.round(9.5 * scale)}px sans-serif`;
+      ctx.font = `800 ${Math.round(9.5 * scale * fScale)}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const fBrand = config.text.footerText ? `• ${config.text.footerText}` : '';
       if (hasSub) {
         ctx.fillText(`${resolvedTable.toUpperCase()} ${fBrand}`, targetWidth / 2, botPillY + botPillH * 0.38);
         ctx.fillStyle = '#64748B';
-        ctx.font = `700 ${Math.round(7 * scale)}px sans-serif`;
+        ctx.font = `700 ${Math.round(7 * scale * fScale)}px sans-serif`;
         ctx.fillText(config.footerSubText!.toUpperCase(), targetWidth / 2, botPillY + botPillH * 0.72);
       } else {
         ctx.fillText(`${resolvedTable.toUpperCase()} ${fBrand}`, targetWidth / 2, botPillY + botPillH / 2 + 1);
@@ -435,9 +439,9 @@ export async function renderQRCardToCanvas(
 
       // Restaurant Name in top banner
       ctx.fillStyle = '#FBBF24';
-      ctx.font = `900 ${Math.round(11 * scale)}px sans-serif`;
+      ctx.font = `900 ${Math.round(11 * scale * hScale)}px sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText((config.text.restaurantName || 'SmartDine').toUpperCase(), 20 * scale, 24 * scale);
+      ctx.fillText((config.text.restaurantName || 'SmartDine').toUpperCase(), 20 * scale, 24 * scale + hOffY);
       ctx.restore();
     }
 
@@ -460,9 +464,9 @@ export async function renderQRCardToCanvas(
 
       // Bottom Table footer text
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = `800 ${Math.round(10 * scale)}px sans-serif`;
+      ctx.font = `800 ${Math.round(10 * scale * fScale)}px sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(`${resolvedTable.toUpperCase()} • ${config.text.footerText || 'Instant Kitchen Order'}`, targetWidth / 2, height - 16 * scale);
+      ctx.fillText(`${resolvedTable.toUpperCase()} • ${config.text.footerText || 'Instant Kitchen Order'}`, targetWidth / 2, height - (16 * scale - fOffY));
       ctx.restore();
     }
 
@@ -530,9 +534,9 @@ export async function renderQRCardToCanvas(
 
       // White Brand Name Top Left
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = `900 ${Math.round(12 * scale)}px sans-serif`;
+      ctx.font = `900 ${Math.round(12 * scale * hScale)}px sans-serif`;
       ctx.textAlign = 'left';
-      ctx.fillText((config.text.restaurantName || 'SmartDine').toUpperCase(), 20 * scale, 26 * scale);
+      ctx.fillText((config.text.restaurantName || 'SmartDine').toUpperCase(), 20 * scale, 26 * scale + hOffY);
       ctx.restore();
     }
 
@@ -564,8 +568,8 @@ export async function renderQRCardToCanvas(
 
     // Footer info
     ctx.fillStyle = '#64748B';
-    ctx.font = `600 ${Math.round(8.5 * scale)}px sans-serif`;
-    ctx.fillText(config.openingHours ? `Open: ${config.openingHours}` : (config.text.footerText || 'Contactless Mobile Ordering'), targetWidth / 2, height - 14 * scale);
+    ctx.font = `600 ${Math.round(8.5 * scale * fScale)}px sans-serif`;
+    ctx.fillText(config.openingHours ? `Open: ${config.openingHours}` : (config.text.footerText || 'Contactless Mobile Ordering'), targetWidth / 2, height - (14 * scale - fOffY));
     ctx.restore();
   }
 
@@ -580,30 +584,30 @@ export async function renderQRCardToCanvas(
     ctx.restore();
 
     // Top Header: Elegant Script "Menu" or Restaurant Name
-    let currentY = 28 * scale;
+    let currentY = 28 * scale + hOffY;
     if (logoImg) {
-      const lSize = 34 * scale;
+      const lSize = 34 * scale * hScale;
       ctx.save();
       ctx.beginPath();
       ctx.arc(targetWidth / 2, currentY + lSize / 2, lSize / 2, 0, Math.PI * 2);
       ctx.clip();
       ctx.drawImage(logoImg, targetWidth / 2 - lSize / 2, currentY, lSize, lSize);
       ctx.restore();
-      currentY += lSize + 8 * scale;
+      currentY += lSize + 8 * scale * hScale;
     }
 
     ctx.save();
     ctx.fillStyle = '#451A03';
-    ctx.font = `italic 900 ${Math.round(22 * scale)}px Georgia, serif`;
+    ctx.font = `italic 900 ${Math.round(22 * scale * hScale)}px Georgia, serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(config.text.restaurantName || 'Menu', targetWidth / 2, currentY + 16 * scale);
+    ctx.fillText(config.text.restaurantName || 'Menu', targetWidth / 2, currentY + 16 * scale * hScale);
 
     // Table Name with Dietary Badge (SS2)
     ctx.fillStyle = '#78350F';
-    ctx.font = `800 ${Math.round(10 * scale)}px sans-serif`;
+    ctx.font = `800 ${Math.round(10 * scale * hScale)}px sans-serif`;
     const tableText = resolvedTable.toUpperCase();
     const tableTextW = ctx.measureText(tableText).width;
-    const badgeSize = 12 * scale;
+    const badgeSize = 12 * scale * hScale;
     const hasDietary = config.dietaryBadge && config.dietaryBadge !== 'none';
 
     if (hasDietary) {
@@ -626,19 +630,19 @@ export async function renderQRCardToCanvas(
     // Bottom Artisan Sketch Callout
     ctx.save();
     ctx.fillStyle = '#451A03';
-    ctx.font = `800 ${Math.round(11 * scale)}px sans-serif`;
+    ctx.font = `800 ${Math.round(11 * scale * fScale)}px sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText('Scan Now', 24 * scale, height - 32 * scale);
+    ctx.fillText('Scan Now', 24 * scale, height - (32 * scale - fOffY));
 
     ctx.fillStyle = '#78350F';
-    ctx.font = `600 ${Math.round(8.5 * scale)}px sans-serif`;
-    ctx.fillText('Contactless Dining', 24 * scale, height - 18 * scale);
+    ctx.font = `600 ${Math.round(8.5 * scale * fScale)}px sans-serif`;
+    ctx.fillText('Contactless Dining', 24 * scale, height - (18 * scale - fOffY));
 
     // Coffee vignette at bottom-right
     ctx.fillStyle = '#78350F';
-    ctx.font = `800 ${Math.round(10 * scale)}px sans-serif`;
+    ctx.font = `800 ${Math.round(10 * scale * fScale)}px sans-serif`;
     ctx.textAlign = 'right';
-    ctx.fillText('••• BEANS', targetWidth - 24 * scale, height - 20 * scale);
+    ctx.fillText('••• BEANS', targetWidth - 24 * scale, height - (20 * scale - fOffY));
     ctx.restore();
   }
 
@@ -657,12 +661,12 @@ export async function renderQRCardToCanvas(
     // Top Brand Header
     ctx.save();
     ctx.fillStyle = '#FDE68A';
-    ctx.font = `900 ${Math.round(18 * scale)}px Georgia, serif`;
+    ctx.font = `900 ${Math.round(18 * scale * hScale)}px Georgia, serif`;
     ctx.textAlign = 'center';
-    ctx.fillText((config.text.restaurantName || 'Royal Heritage').toUpperCase(), targetWidth / 2, 42 * scale);
-    ctx.font = `700 ${Math.round(8.5 * scale)}px sans-serif`;
+    ctx.fillText((config.text.restaurantName || 'Royal Heritage').toUpperCase(), targetWidth / 2, 42 * scale + hOffY);
+    ctx.font = `700 ${Math.round(8.5 * scale * hScale)}px sans-serif`;
     ctx.fillStyle = '#FBBF24';
-    ctx.fillText((config.tagline || 'Padharo Mhare Des').toUpperCase(), targetWidth / 2, 58 * scale);
+    ctx.fillText((config.tagline || 'Padharo Mhare Des').toUpperCase(), targetWidth / 2, 58 * scale + hOffY);
     ctx.restore();
 
     // Floating Dish 1 - Left
@@ -701,10 +705,10 @@ export async function renderQRCardToCanvas(
 
     // Bottom Table Banner
     ctx.save();
-    const bW = targetWidth * 0.88;
-    const bH = 28 * scale;
+    const bW = Math.min(targetWidth * 0.96, targetWidth * 0.88 * fScale);
+    const bH = 28 * scale * fScale;
     const bX = (targetWidth - bW) / 2;
-    const bY = height - 42 * scale;
+    const bY = height - bH - (14 * scale - fOffY);
     ctx.fillStyle = 'rgba(212,175,55,0.2)';
     ctx.strokeStyle = '#D4AF37';
     ctx.lineWidth = 1.5 * scale;
@@ -713,12 +717,12 @@ export async function renderQRCardToCanvas(
     ctx.stroke();
 
     ctx.fillStyle = '#FDE68A';
-    ctx.font = `800 ${Math.round(10 * scale)}px Georgia, serif`;
+    ctx.font = `800 ${Math.round(10 * scale * fScale)}px Georgia, serif`;
     ctx.textAlign = 'left';
-    ctx.fillText(resolvedTable.toUpperCase(), bX + 12 * scale, bY + 18 * scale);
+    ctx.fillText(resolvedTable.toUpperCase(), bX + 12 * scale, bY + bH * 0.65);
     ctx.textAlign = 'right';
-    ctx.font = `700 ${Math.round(8.5 * scale)}px sans-serif`;
-    ctx.fillText((config.ctaBadgeText || 'Scan & Feast').toUpperCase(), bX + bW - 12 * scale, bY + 18 * scale);
+    ctx.font = `700 ${Math.round(8.5 * scale * fScale)}px sans-serif`;
+    ctx.fillText((config.ctaBadgeText || 'Scan & Feast').toUpperCase(), bX + bW - 12 * scale, bY + bH * 0.65);
     ctx.restore();
   }
 
@@ -733,14 +737,14 @@ export async function renderQRCardToCanvas(
 
     // Top Header Bar
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `900 ${Math.round(13 * scale)}px sans-serif`;
+    ctx.font = `900 ${Math.round(13 * scale * hScale)}px sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText(config.text.restaurantName || 'SmartDine', 18 * scale, 30 * scale);
+    ctx.fillText(config.text.restaurantName || 'SmartDine', 18 * scale, 30 * scale + hOffY);
 
     ctx.fillStyle = '#34D399';
-    ctx.font = `800 ${Math.round(9 * scale)}px monospace`;
+    ctx.font = `800 ${Math.round(9 * scale * hScale)}px monospace`;
     ctx.textAlign = 'right';
-    ctx.fillText(resolvedTable.toUpperCase(), targetWidth - 18 * scale, 30 * scale);
+    ctx.fillText(resolvedTable.toUpperCase(), targetWidth - 18 * scale, 30 * scale + hOffY);
     ctx.restore();
 
     // 2x2 Bento Box Grid
@@ -857,13 +861,13 @@ export async function renderQRCardToCanvas(
     // Top Header & Bottom Banner
     ctx.save();
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `900 ${Math.round(13 * scale)}px sans-serif`;
+    ctx.font = `900 ${Math.round(13 * scale * hScale)}px sans-serif`;
     ctx.textAlign = 'left';
-    ctx.fillText(config.text.restaurantName || 'SmartDine', 18 * scale, 28 * scale);
+    ctx.fillText(config.text.restaurantName || 'SmartDine', 18 * scale, 28 * scale + hOffY);
 
     ctx.fillStyle = '#F97316';
-    ctx.font = `800 ${Math.round(9 * scale)}px sans-serif`;
-    ctx.fillText(resolvedTable.toUpperCase(), 18 * scale, 42 * scale);
+    ctx.font = `800 ${Math.round(9 * scale * hScale)}px sans-serif`;
+    ctx.fillText(resolvedTable.toUpperCase(), 18 * scale, 42 * scale + hOffY);
     ctx.restore();
   }
 
@@ -888,14 +892,14 @@ export async function renderQRCardToCanvas(
     // Top Neon Header
     ctx.save();
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `900 ${Math.round(18 * scale)}px sans-serif`;
+    ctx.font = `900 ${Math.round(18 * scale * hScale)}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.shadowColor = '#06B6D4';
     ctx.shadowBlur = 12 * scale;
-    ctx.fillText((config.text.restaurantName || 'Night Lounge').toUpperCase(), targetWidth / 2, 42 * scale);
-    ctx.font = `700 ${Math.round(8.5 * scale)}px monospace`;
+    ctx.fillText((config.text.restaurantName || 'Night Lounge').toUpperCase(), targetWidth / 2, 42 * scale + hOffY);
+    ctx.font = `700 ${Math.round(8.5 * scale * hScale)}px monospace`;
     ctx.fillStyle = '#67E8F9';
-    ctx.fillText(`${resolvedTable.toUpperCase()} • BAR & DINING`, targetWidth / 2, 58 * scale);
+    ctx.fillText(`${resolvedTable.toUpperCase()} • BAR & DINING`, targetWidth / 2, 58 * scale + hOffY);
     ctx.restore();
 
     // Floating Glassware Dish
@@ -932,12 +936,12 @@ export async function renderQRCardToCanvas(
     // Top Arch Header
     ctx.save();
     ctx.fillStyle = '#1C2E24';
-    ctx.font = `italic 900 ${Math.round(19 * scale)}px Georgia, serif`;
+    ctx.font = `italic 900 ${Math.round(19 * scale * hScale)}px Georgia, serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(config.text.restaurantName || 'Garden Bistro', targetWidth / 2, 40 * scale);
-    ctx.font = `800 ${Math.round(9 * scale)}px sans-serif`;
+    ctx.fillText(config.text.restaurantName || 'Garden Bistro', targetWidth / 2, 40 * scale + hOffY);
+    ctx.font = `800 ${Math.round(9 * scale * hScale)}px sans-serif`;
     ctx.fillStyle = '#C2410C';
-    ctx.fillText(resolvedTable.toUpperCase(), targetWidth / 2, 56 * scale);
+    ctx.fillText(resolvedTable.toUpperCase(), targetWidth / 2, 56 * scale + hOffY);
     ctx.restore();
 
     // Centered Dish
@@ -982,30 +986,30 @@ export async function renderQRCardToCanvas(
     }
 
     // Top Header: Logo, Restaurant Name, Table Pill
-    let currentY = 22 * scale;
+    let currentY = 22 * scale + hOffY;
     if (logoImg) {
-      const lSize = 34 * scale;
+      const lSize = 34 * scale * hScale;
       ctx.save();
       ctx.beginPath();
       ctx.arc(targetWidth / 2, currentY + lSize / 2, lSize / 2, 0, Math.PI * 2);
       ctx.clip();
       ctx.drawImage(logoImg, targetWidth / 2 - lSize / 2, currentY, lSize, lSize);
       ctx.restore();
-      currentY += lSize + 8 * scale;
+      currentY += lSize + 8 * scale * hScale;
     }
 
     ctx.save();
     ctx.fillStyle = config.text.restaurantTypography.textColor || activeTheme.colors.text || '#FFFFFF';
-    ctx.font = `bold ${Math.round(17 * scale)}px ${activeTheme.typography.headingFont || 'sans-serif'}`;
+    ctx.font = `bold ${Math.round(17 * scale * hScale)}px ${activeTheme.typography.headingFont || 'sans-serif'}`;
     ctx.textAlign = 'center';
-    ctx.fillText(config.text.restaurantName || 'SmartDine Restaurant', targetWidth / 2, currentY + 14 * scale);
-    currentY += 24 * scale;
+    ctx.fillText(config.text.restaurantName || 'SmartDine Restaurant', targetWidth / 2, currentY + 14 * scale * hScale);
+    currentY += 24 * scale * hScale;
 
     // Table Pill
-    ctx.font = `800 ${Math.round(11 * scale)}px sans-serif`;
+    ctx.font = `800 ${Math.round(11 * scale * hScale)}px sans-serif`;
     const tableTextMetrics = ctx.measureText(resolvedTable);
-    const pillW = tableTextMetrics.width + 24 * scale;
-    const pillH = 20 * scale;
+    const pillW = (tableTextMetrics.width + 24 * scale) * hScale;
+    const pillH = 20 * scale * hScale;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     drawRoundedRect(ctx, (targetWidth - pillW) / 2, currentY, pillW, pillH, pillH / 2);
     ctx.fill();
@@ -1150,9 +1154,9 @@ export async function renderQRCardToCanvas(
     // Footer text
     ctx.save();
     ctx.fillStyle = config.text.footerTypography.textColor || activeTheme.colors.text || '#94A3B8';
-    ctx.font = `600 ${Math.round(8.5 * scale)}px sans-serif`;
+    ctx.font = `600 ${Math.round(8.5 * scale * fScale)}px sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(config.text.footerText || 'Powered by SmartDine', targetWidth / 2, height - 12 * scale);
+    ctx.fillText(config.text.footerText || 'Powered by SmartDine', targetWidth / 2, height - (12 * scale - fOffY));
     ctx.restore();
   }
 

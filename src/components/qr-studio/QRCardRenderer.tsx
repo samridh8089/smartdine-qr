@@ -176,6 +176,10 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
   const widthPx = effectiveAspectRatio.baseWidth * previewScale;
   const heightPx = effectiveAspectRatio.baseHeight * previewScale;
   const isSticker = effectiveAspectRatio.id === '3x3';
+  const hScale = (config.headerScale ?? 100) / 100;
+  const fScale = (config.footerScale ?? 100) / 100;
+  const headerShiftY = (config.headerOffsetY || 0) * previewScale;
+  const footerShiftY = (config.footerOffsetY || 0) * previewScale;
 
   // Smart QR auto-shift positioning
   const qrPositionClass = useMemo(() => {
@@ -499,7 +503,14 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
 
         // 1. Header Section
         const renderHeader = () => (
-          <div key="header" className="w-full flex flex-col items-center text-center pt-1 px-3 shrink-0">
+          <div 
+            key="header" 
+            className="w-full flex flex-col items-center text-center pt-1 px-3 shrink-0 transition-transform origin-top"
+            style={{
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center'
+            }}
+          >
             <div className="flex items-center justify-center gap-2 mb-1">
               {config.logo.enabled && config.logo.url && (
                 <div
@@ -701,8 +712,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
         const renderFooter = () => (
           <div 
             key="footer"
-            className="w-full text-center mt-1 shrink-0 flex items-center justify-center gap-2 opacity-80"
-            style={{ color: activeTheme.colors.text, fontSize: `${8.5 * previewScale}px` }}
+            className="w-full text-center mt-1 shrink-0 flex items-center justify-center gap-2 opacity-80 transition-transform origin-bottom"
+            style={{ 
+              color: activeTheme.colors.text, 
+              fontSize: `${8.5 * previewScale}px`,
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
+            }}
           >
             {config.openingHours && (
               <span className="flex items-center gap-1">
@@ -765,7 +781,8 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           <div 
             className="w-[92%] mx-auto rounded-3xl p-2.5 shadow-md text-center z-15 shrink-0 transition-all border border-amber-300/80"
             style={{
-              transform: `translateY(${(config.headerOffsetY || 0) * previewScale}px)`,
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center',
               backgroundColor: `rgba(255, 255, 255, ${(config.cardBgOpacity ?? 80) / 100})`,
               backdropFilter: 'blur(10px)'
             }}
@@ -926,7 +943,8 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
             <div 
               className="w-[88%] mx-auto rounded-full py-1.5 px-3 shadow-md border border-slate-200/80 text-center z-15 shrink-0 transition-all flex flex-col items-center justify-center leading-tight"
               style={{
-                transform: `translateY(${(config.footerOffsetY || 0) * previewScale}px)`,
+                transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+                transformOrigin: 'bottom center',
                 backgroundColor: `rgba(255, 255, 255, ${(config.cardBgOpacity ?? 80) / 100})`,
                 backdropFilter: 'blur(10px)'
               }}
@@ -970,7 +988,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
             />
             <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/85" />
             
-            <div className="absolute top-2 left-3 right-3 flex items-center justify-between text-white">
+            <div 
+              className="absolute top-2 left-3 right-3 flex items-center justify-between text-white transition-transform"
+              style={{
+                transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+                transformOrigin: 'top center'
+              }}
+            >
               <span className="font-extrabold text-[10px] uppercase tracking-widest drop-shadow text-amber-300">
                 {config.text.restaurantName || 'SmartDine'}
               </span>
@@ -1018,7 +1042,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/90" />
             
-            <div className="absolute bottom-1.5 left-0 right-0 text-center text-white/90 text-[9px] font-bold tracking-wider uppercase">
+            <div 
+              className="absolute bottom-1.5 left-0 right-0 text-center text-white/90 text-[9px] font-bold tracking-wider uppercase transition-transform"
+              style={{
+                transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+                transformOrigin: 'bottom center'
+              }}
+            >
               {resolvedTableName} • {config.text.footerText || 'Instant Kitchen Order'}
             </div>
           </div>
@@ -1047,7 +1077,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-black/40" />
 
-            <div className="absolute top-3 left-4 right-4 flex items-center justify-between text-white">
+            <div 
+              className="absolute top-3 left-4 right-4 flex items-center justify-between text-white transition-transform"
+              style={{
+                transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+                transformOrigin: 'top center'
+              }}
+            >
               <span className="font-extrabold uppercase tracking-widest text-[11px] drop-shadow">
                 {config.text.restaurantName || 'SmartDine'}
               </span>
@@ -1070,7 +1106,9 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
             className="w-full flex-1 flex flex-col items-center justify-between p-3 text-center z-10 transition-all"
             style={{
               backgroundColor: `rgba(255, 255, 255, ${(config.cardBgOpacity ?? 95) / 100})`,
-              backdropFilter: 'blur(10px)'
+              backdropFilter: 'blur(10px)',
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
             }}
           >
             <div>
@@ -1104,7 +1142,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           }}
         >
           {/* Top Logo & Elegant Script "Menu" */}
-          <div className="w-full flex flex-col items-center text-center pt-1">
+          <div 
+            className="w-full flex flex-col items-center text-center pt-1 transition-transform"
+            style={{
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center'
+            }}
+          >
             {config.logo.enabled && config.logo.url ? (
               <div 
                 className="rounded-full bg-white/90 p-1 shadow-xs overflow-hidden shrink-0 mb-1"
@@ -1142,7 +1186,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           </div>
 
           {/* Bottom Hand-Drawn Coffee Cup / Culinary Sketch */}
-          <div className="w-full flex items-end justify-between pt-1 z-10">
+          <div 
+            className="w-full flex items-end justify-between pt-1 z-10 transition-transform"
+            style={{
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
+            }}
+          >
             <div className="text-left text-amber-950 font-bold">
               <span className="text-[11px] block">Scan Now</span>
               <span className="text-[8.5px] opacity-75 font-normal">Contactless Dining</span>
@@ -1160,9 +1210,7 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
         </div>
       )}
 
-      
-
-{/* =========================================================================
+      {/* =========================================================================
           LAYOUT 6: ROYAL MANDALA PORTAL & DUAL DISHES (Concept 6 Style)
          ========================================================================= */}
       {layout === 'circular_mandala_portal' && (
@@ -1175,7 +1223,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           }}
         >
           {/* Top Royal Brand Header */}
-          <div className="w-full flex flex-col items-center pt-1 z-15">
+          <div 
+            className="w-full flex flex-col items-center pt-1 z-15 transition-transform"
+            style={{
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center'
+            }}
+          >
             <div className="flex items-center justify-between w-full px-2 mb-1">
               <span className="text-[9px] font-bold uppercase tracking-widest text-amber-300/90 flex items-center gap-1">
                 <Compass className="w-2.5 h-2.5" /> Royal Dining
@@ -1248,7 +1302,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           </div>
 
           {/* Bottom Royal Arch Table Banner */}
-          <div className="w-full z-15 pt-1">
+          <div 
+            className="w-full z-15 pt-1 transition-transform"
+            style={{
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
+            }}
+          >
             <div 
               className="w-full rounded-lg py-1 px-3 border border-amber-400/60 shadow-lg flex items-center justify-between"
               style={{
@@ -1273,7 +1333,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
       {layout === 'bento_modern_grid' && (
         <div className="relative z-10 w-full h-full flex flex-col justify-between p-3.5 bg-slate-950 text-white overflow-hidden">
           {/* Top Bento Header Bar */}
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+          <div 
+            className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center'
+            }}
+          >
             <div>
               <span className="text-[11px] font-black uppercase tracking-wider text-white block">
                 {config.text.restaurantName || 'SmartDine'}
@@ -1353,7 +1419,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           </div>
 
           {/* Bottom Bento Status Bar */}
-          <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[8px] font-mono text-slate-500 shrink-0">
+          <div 
+            className="flex items-center justify-between pt-1 border-t border-slate-800 text-[8px] font-mono text-slate-500 shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
+            }}
+          >
             <span>READY TO ORDER</span>
             <span>{config.openingHours || 'DIRECT KITCHEN SYNC'}</span>
           </div>
@@ -1374,7 +1446,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           />
 
           {/* Top Brand Header */}
-          <div className="relative z-20 w-full flex items-center justify-between p-3.5 pb-0 shrink-0">
+          <div 
+            className="relative z-20 w-full flex items-center justify-between p-3.5 pb-0 shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center'
+            }}
+          >
             <div>
               <span className="text-[12px] font-black uppercase tracking-widest text-white drop-shadow block">
                 {config.text.restaurantName || 'SmartDine'}
@@ -1428,7 +1506,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           </div>
 
           {/* Bottom High Energy Footer */}
-          <div className="relative z-20 w-full p-3 pt-0 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wider text-white shrink-0">
+          <div 
+            className="relative z-20 w-full p-3 pt-0 flex items-center justify-between text-[9px] font-extrabold uppercase tracking-wider text-white shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
+            }}
+          >
             <span className="px-2.5 py-1 rounded-full bg-orange-600 text-white shadow-md">
               {config.ctaBadgeText || 'FAST ORDER'}
             </span>
@@ -1451,7 +1535,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           }}
         >
           {/* Top Neon Brand Header */}
-          <div className="w-full text-center pt-1 z-15 shrink-0">
+          <div 
+            className="w-full text-center pt-1 z-15 shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center'
+            }}
+          >
             <div className="flex items-center justify-between w-full px-2 mb-1">
               <span className="text-[8.5px] font-mono uppercase tracking-widest text-cyan-400 flex items-center gap-1">
                 <Wine className="w-2.5 h-2.5" /> Bar & Lounge
@@ -1501,7 +1591,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           </div>
 
           {/* Bottom Neon CTA Strip */}
-          <div className="w-full z-15 pt-1 shrink-0">
+          <div 
+            className="w-full z-15 pt-1 shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
+            }}
+          >
             <div 
               className="w-full rounded-full py-1 px-3 border border-cyan-400/60 shadow-[0_0_15px_rgba(6,182,212,0.3)] flex items-center justify-between"
               style={{
@@ -1534,7 +1630,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           }}
         >
           {/* Top Romanesque Arch Brand Header */}
-          <div className="w-full flex flex-col items-center pt-1 z-15 shrink-0">
+          <div 
+            className="w-full flex flex-col items-center pt-1 z-15 shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${headerShiftY}px) scale(${hScale})`,
+              transformOrigin: 'top center'
+            }}
+          >
             <div className="flex items-center gap-1.5 text-emerald-900 text-[8px] font-bold uppercase tracking-widest mb-0.5">
               <Flower2 className="w-2.5 h-2.5 text-emerald-800" /> Farm to Table <Flower2 className="w-2.5 h-2.5 text-emerald-800" />
             </div>
@@ -1577,7 +1679,13 @@ export const QRCardRenderer: React.FC<QRCardRendererProps> = ({
           </div>
 
           {/* Bottom Artisanal Kitchen Banner */}
-          <div className="w-full z-15 pt-1 shrink-0">
+          <div 
+            className="w-full z-15 pt-1 shrink-0 transition-transform"
+            style={{
+              transform: `translateY(${footerShiftY}px) scale(${fScale})`,
+              transformOrigin: 'bottom center'
+            }}
+          >
             <span className="text-[8.5px] font-serif italic text-emerald-900/80 block">
               {config.tagline || 'Artisanal Kitchen & Fresh Daily Specials'}
             </span>
