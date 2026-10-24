@@ -141,6 +141,8 @@ export function mergeWithDefaults(
     cardBgOpacity: config.cardBgOpacity ?? 80,
     headerOffsetY: config.headerOffsetY ?? 0,
     footerOffsetY: config.footerOffsetY ?? 0,
+    headerScale: config.headerScale ?? 100,
+    footerScale: config.footerScale ?? 100,
     orbitDish1X: config.orbitDish1X ?? 0,
     orbitDish1Y: config.orbitDish1Y ?? 0,
     orbitDish2X: config.orbitDish2X ?? 0,

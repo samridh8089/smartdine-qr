@@ -101,6 +101,8 @@ export const DEFAULT_QR_CONFIG: QRDesignConfig = {
   cardBgOpacity: 80,
   headerOffsetY: 0,
   footerOffsetY: 0,
+  headerScale: 100,
+  footerScale: 100,
   orbitDish1X: 0,
   orbitDish1Y: 0,
   orbitDish2X: 0,
