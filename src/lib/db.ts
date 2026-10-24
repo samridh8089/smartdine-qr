@@ -3468,6 +3468,250 @@ export const db = {
     return fullOrder;
   },
 
+  async cancelOrderItem(params: {
+    restaurantId: string;
+    orderId: string;
+    orderItemId: string;
+    cancellationReason: string;
+    staffName?: string;
+    restoreInventory?: boolean;
+    dispositionType?: 'restore' | 'waste';
+    wasteReason?: string;
+  }): Promise<{ success: boolean; order?: Order; item?: OrderItem; error?: string }> {
+    const { restaurantId, orderId, orderItemId, cancellationReason, staffName, restoreInventory = true, dispositionType = 'restore', wasteReason } = params;
+
+    const currentOrder = await this.getOrderById(orderId);
+    if (!currentOrder) {
+      return { success: false, error: 'Order not found' };
+    }
+
+    const targetItem = (currentOrder.items || []).find(i => i.id === orderItemId);
+    if (!targetItem) {
+      return { success: false, error: 'Item not found in order' };
+    }
+
+    if (targetItem.is_cancelled) {
+      return { success: true, order: currentOrder, item: targetItem };
+    }
+
+    const updatedNotes = targetItem.notes
+      ? `${targetItem.notes} | [CANCELLED: ${cancellationReason}]`
+      : `[CANCELLED: ${cancellationReason}]`;
+
+    // 1. Mark item cancelled in database
+    const { error: itemUpdateErr } = await supabase
+      .from('order_items')
+      .update({
+        is_cancelled: true,
+        notes: updatedNotes
+      })
+      .eq('id', orderItemId);
+
+    if (itemUpdateErr) {
+      console.error('[cancelOrderItem] Failed to update item:', itemUpdateErr);
+      return { success: false, error: itemUpdateErr.message };
+    }
+
+    // 2. Check batch items status
+    if (targetItem.batch_id) {
+      const { data: batchItems } = await supabase
+        .from('order_items')
+        .select('id, is_cancelled')
+        .eq('batch_id', targetItem.batch_id);
+
+      const activeBatchItems = (batchItems || []).filter(i => !i.is_cancelled && i.id !== orderItemId);
+      if (activeBatchItems.length === 0) {
+        // All items in this batch are cancelled -> mark batch cancelled
+        await supabase
+          .from('order_batches')
+          .update({
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            cancelled_by: staffName || 'Staff Member',
+            updated_at: new Date().toISOString(),
+            special_instructions: `[CANCELLED] ${cancellationReason}`
+          })
+          .eq('id', targetItem.batch_id);
+      }
+    }
+
+    // 3. Fetch all current batches and items to recalculate order status and totals
+    const { data: allBatches } = await supabase
+      .from('order_batches')
+      .select('*')
+      .eq('order_id', orderId);
+
+    const { data: allItems } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId);
+
+    const nonCancelledItems = (allItems || []).filter(i => !i.is_cancelled && !i.notes?.includes('[CANCELLED]'));
+    const activeBatches = (allBatches || []).filter(b => ['new', 'accepted', 'preparing', 'ready'].includes(b.status) && !b.special_instructions?.includes('[CANCELLED]'));
+    const servedBatches = (allBatches || []).filter(b => b.status === 'served' || b.status === 'completed');
+    const servedItems = (allItems || []).filter(i => (i.is_served || i.status === 'served') && !i.is_cancelled);
+
+    let nextOrderStatus: Order['status'] = currentOrder.status;
+    if (nonCancelledItems.length === 0) {
+      nextOrderStatus = 'cancelled';
+    } else if (activeBatches.length > 0) {
+      if (activeBatches.some(b => b.status === 'ready')) nextOrderStatus = 'ready';
+      else if (activeBatches.some(b => b.status === 'preparing')) nextOrderStatus = 'preparing';
+      else if (activeBatches.some(b => b.status === 'accepted')) nextOrderStatus = 'accepted';
+      else nextOrderStatus = 'new';
+    } else if (servedBatches.length > 0 || servedItems.length > 0) {
+      nextOrderStatus = 'served';
+    }
+
+    // 4. Recalculate Billing Totals with remaining items
+    const restaurant = await this.getRestaurantById(restaurantId || currentOrder.restaurant_id);
+    const restOffers = restaurant ? await this.getOffers(restaurant.id) : [];
+
+    const calcResult = calculateBillingTotals({
+      items: allItems || [],
+      batches: allBatches || [],
+      discountAmount: 0,
+      offerCode: undefined,
+      specialInstructions: currentOrder.special_instructions,
+      offers: restOffers,
+      gstEnabled: restaurant?.settings?.gst_enabled !== false,
+      gstPercentage: restaurant?.settings?.gst_percentage || 0,
+      serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
+      serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
+      customCharges: restaurant?.settings?.custom_charges || [],
+      orderType: currentOrder.order_type || 'dine_in'
+    });
+
+    const orderUpdatePayload: any = {
+      status: nextOrderStatus,
+      subtotal: calcResult.validSubtotal,
+      gst: calcResult.gstAmount,
+      tax_total: calcResult.gstAmount,
+      cgst_amount: calcResult.cgstAmount,
+      sgst_amount: calcResult.sgstAmount,
+      service_charge: calcResult.serviceChargeAmount,
+      custom_charges: calcResult.customChargesSnapshot,
+      total: calcResult.grandTotal,
+      grand_total: calcResult.grandTotal,
+      discount_total: calcResult.discountAmount,
+      updated_at: new Date().toISOString(),
+      ...(nextOrderStatus === 'cancelled'
+        ? {
+            cancelled_by: staffName || 'Staff Member',
+            cancellation_reason: cancellationReason,
+            cancelled_at: new Date().toISOString()
+          }
+        : {})
+    };
+
+    const { error: orderUpdateErr } = await supabase
+      .from('orders')
+      .update(orderUpdatePayload)
+      .eq('id', orderId);
+
+    if (orderUpdateErr) {
+      console.warn('[cancelOrderItem] Failed to update parent order with full totals, trying minimal update:', orderUpdateErr);
+      await supabase
+        .from('orders')
+        .update({
+          status: nextOrderStatus,
+          subtotal: calcResult.validSubtotal,
+          total: calcResult.grandTotal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', orderId);
+    }
+
+    // 5. Inventory & Food Disposition
+    try {
+      if (dispositionType === 'waste' || !restoreInventory) {
+        const { recordPreparedFoodDisposition } = await import('./inventoryEngine');
+        await recordPreparedFoodDisposition({
+          restaurantId: restaurantId || currentOrder.restaurant_id,
+          orderId,
+          batchId: targetItem.batch_id,
+          orderItemId: targetItem.id,
+          menuItemId: targetItem.menu_item_id,
+          menuItemName: targetItem.menu_item_name,
+          variantName: targetItem.variant_name,
+          quantity: targetItem.quantity,
+          wasServed: Boolean(targetItem.is_served),
+          dispositionType: 'waste',
+          wasteReason: wasteReason || 'Cancelled by customer / Kitchen waste',
+          notes: `Cancelled dish: ${targetItem.menu_item_name}. Reason: ${cancellationReason}`,
+          handledBy: staffName || 'Staff Member',
+          restoreInventory: false
+        });
+      } else {
+        // Restore stock: Find recipes and return raw ingredients to stock
+        const { data: recipes } = await supabase
+          .from('inventory_recipes')
+          .select('*, inventory_recipe_ingredients(*)')
+          .eq('restaurant_id', restaurantId || currentOrder.restaurant_id)
+          .eq('menu_item_id', targetItem.menu_item_id);
+
+        if (recipes && recipes.length > 0) {
+          const matchingRecipe = recipes.find((r: any) => r.variant_id === targetItem.variant_id) || recipes[0];
+          const ingredients = matchingRecipe?.inventory_recipe_ingredients || [];
+
+          for (const ing of ingredients) {
+            const qtyToRestore = Number(ing.quantity || 0) * Number(targetItem.quantity || 1);
+            if (qtyToRestore <= 0) continue;
+
+            const { data: freshItem } = await supabase
+              .from('inventory_items')
+              .select('*')
+              .eq('id', ing.inventory_item_id)
+              .eq('restaurant_id', restaurantId || currentOrder.restaurant_id)
+              .single();
+
+            if (!freshItem) continue;
+
+            const beforeStock = Number(freshItem.current_stock || 0);
+            const afterStock = Math.round((beforeStock + qtyToRestore) * 10000) / 10000;
+
+            await supabase
+              .from('inventory_items')
+              .update({ current_stock: afterStock, updated_at: new Date().toISOString() })
+              .eq('id', freshItem.id)
+              .eq('restaurant_id', restaurantId || currentOrder.restaurant_id);
+
+            await supabase
+              .from('inventory_transactions')
+              .insert({
+                restaurant_id: restaurantId || currentOrder.restaurant_id,
+                inventory_item_id: freshItem.id,
+                quantity: qtyToRestore,
+                unit: ing.unit || freshItem.unit,
+                before_stock: beforeStock,
+                after_stock: afterStock,
+                transaction_type: 'CANCELLATION_REVERSAL',
+                reference_type: 'order_item_cancellation',
+                reference_id: `${orderId}:${targetItem.id}`,
+                order_id: orderId,
+                batch_id: targetItem.batch_id || null,
+                idempotency_key: `ITEM_ROLLBACK_${orderId}_${targetItem.id}_${freshItem.id}`,
+                user_name: staffName || 'Item Cancellation',
+                notes: `Restored ${qtyToRestore} ${ing.unit || freshItem.unit} for cancelled item: ${targetItem.menu_item_name}`
+              });
+          }
+        }
+
+        // Clean orphan reservations if any
+        await cleanupOrphanReservations(restaurantId || currentOrder.restaurant_id).catch(() => {});
+      }
+    } catch (invErr: any) {
+      console.warn('[cancelOrderItem] Inventory handling notice:', invErr?.message);
+    }
+
+    const updatedOrder = await this.getOrderById(orderId);
+    return {
+      success: true,
+      order: updatedOrder || currentOrder,
+      item: { ...targetItem, is_cancelled: true, notes: updatedNotes }
+    };
+  },
+
   // --- Super Admin Control Panel & SaaS Stats ---
   async getSuperAdminStats(): Promise<{
     totalRestaurants: number;

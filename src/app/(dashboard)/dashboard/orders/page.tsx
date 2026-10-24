@@ -398,6 +398,14 @@ export default function OrdersPage() {
   const [refundStatusSelection, setRefundStatusSelection] = useState<'none' | 'pending' | 'processed' | 'declined'>('none');
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
 
+  // Item-Level Cancellation State (Partial Cancellation)
+  const [cancelItemModalOpen, setCancelItemModalOpen] = useState(false);
+  const [itemToCancel, setItemToCancel] = useState<any | null>(null);
+  const [itemCancelReasonOption, setItemCancelReasonOption] = useState('Customer changed mind');
+  const [itemCustomReasonNotes, setItemCustomReasonNotes] = useState('');
+  const [itemDispositionType, setItemDispositionType] = useState<'restore' | 'waste'>('restore');
+  const [isSubmittingItemCancellation, setIsSubmittingItemCancellation] = useState(false);
+
   // Payment Modal State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'card' | 'split'>('cash');
@@ -1744,6 +1752,88 @@ export default function OrdersPage() {
     } finally {
       processingOrderIdsRef.current.delete(orderIdToCancel);
       setIsSubmittingCancellation(false);
+    }
+  };
+
+  const handleOpenItemCancelModal = (item: any) => {
+    setItemToCancel(item);
+    setItemCancelReasonOption('Customer changed mind');
+    setItemCustomReasonNotes('');
+    setItemDispositionType('restore');
+    setCancelItemModalOpen(true);
+  };
+
+  const handleConfirmItemCancellation = async () => {
+    if (!selectedOrder || !restaurant || !itemToCancel) return;
+
+    if (itemCancelReasonOption === 'Other' && !itemCustomReasonNotes.trim()) {
+      alert('Please specify the cancellation reason in the additional notes.');
+      return;
+    }
+
+    const fullReason = itemCustomReasonNotes.trim()
+      ? (itemCancelReasonOption === 'Other' ? itemCustomReasonNotes.trim() : `${itemCancelReasonOption}: ${itemCustomReasonNotes.trim()}`)
+      : itemCancelReasonOption;
+
+    if (!fullReason.trim()) {
+      alert('A valid cancellation reason is required.');
+      return;
+    }
+
+    setIsSubmittingItemCancellation(true);
+    const targetItemId = itemToCancel.id;
+    const targetOrderId = selectedOrder.id;
+    const origOrder = orders.find(o => o.id === targetOrderId);
+
+    // Immediate optimistic update
+    setCancelItemModalOpen(false);
+    setOrders(prev => prev.map(o => {
+      if (o.id !== targetOrderId) return o;
+      const updatedItems = (o.items || []).map(i => i.id === targetItemId ? {
+        ...i,
+        is_cancelled: true,
+        notes: i.notes ? `${i.notes} | [CANCELLED: ${fullReason}]` : `[CANCELLED: ${fullReason}]`
+      } : i);
+      return {
+        ...o,
+        items: updatedItems
+      };
+    }));
+
+    showToast(`Cancelled ${itemToCancel.menu_item_name}. Updating bill...`, "Dish Cancelled", "info");
+
+    try {
+      const response = await fetch('/api/staff/cancel-order-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          restaurantId: restaurant.id,
+          orderId: targetOrderId,
+          orderItemId: targetItemId,
+          cancellationReason: fullReason,
+          staffName: profile?.full_name || activeRole || 'Staff Member',
+          restoreInventory: itemDispositionType === 'restore',
+          dispositionType: itemDispositionType,
+          wasteReason: itemDispositionType === 'waste' ? fullReason : undefined
+        })
+      });
+
+      const resData = await response.json();
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to cancel item');
+      }
+
+      if (resData.order) {
+        setOrders(prev => prev.map(o => o.id === resData.order.id ? { ...o, ...resData.order } : o));
+      }
+      showToast(`${itemToCancel.menu_item_name} cancelled and bill updated!`, "Success", "success");
+      window.dispatchEvent(new Event('storage'));
+    } catch (err: any) {
+      showToast(`Error cancelling dish: ${err.message}`, "Error", "error");
+      if (origOrder) { setOrders(prev => prev.map(o => o.id === targetOrderId ? origOrder : o)); }
+    } finally {
+      setIsSubmittingItemCancellation(false);
+      setItemToCancel(null);
     }
   };
 
@@ -4419,6 +4509,142 @@ export default function OrdersPage() {
         </Dialog>
       )}
 
+      {/* Partial Cancellation - Dish Cancellation Modal */}
+      {cancelItemModalOpen && itemToCancel && selectedOrder && restaurant && (
+        <Dialog
+          isOpen={cancelItemModalOpen}
+          onClose={() => !isSubmittingItemCancellation && setCancelItemModalOpen(false)}
+          title={`Cancel Dish: ${itemToCancel.menu_item_name}`}
+        >
+          <div className="space-y-4 p-1">
+            {/* Dish Info Box */}
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-slate-900 dark:text-white">
+                  {itemToCancel.quantity}x {itemToCancel.menu_item_name}
+                </span>
+                <span className="font-mono font-bold text-sm text-rose-600 dark:text-rose-400">
+                  -{formatPrice(itemToCancel.price * itemToCancel.quantity, restaurant.settings.currency)}
+                </span>
+              </div>
+              {itemToCancel.variant_name && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">Portion / Variant: {itemToCancel.variant_name}</p>
+              )}
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Table: {selectedOrder.table_name || 'Express Counter'} | Order #{selectedOrder.id.slice(-4).toUpperCase()}
+              </p>
+            </div>
+
+            {/* Reason Selection */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Cancellation Reason *
+              </label>
+              <select
+                value={itemCancelReasonOption}
+                onChange={e => setItemCancelReasonOption(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500"
+              >
+                <option value="Customer changed mind">Customer changed mind / Doesn't want dish</option>
+                <option value="Kitchen out of stock">Kitchen out of stock / Unavailable</option>
+                <option value="Ordered by mistake">Ordered by mistake</option>
+                <option value="Food quality complaint">Food quality complaint / Rejected</option>
+                <option value="Customer in hurry / Long wait">Customer in hurry / Long wait</option>
+                <option value="Other">Other (Specify in notes)</option>
+              </select>
+            </div>
+
+            {/* Custom Notes */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Additional Notes {itemCancelReasonOption === 'Other' && <span className="text-rose-500">*</span>}
+              </label>
+              <input
+                type="text"
+                placeholder={itemCancelReasonOption === 'Other' ? "Required: reason for cancellation..." : "Optional: additional explanation..."}
+                value={itemCustomReasonNotes}
+                onChange={e => setItemCustomReasonNotes(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+            </div>
+
+            {/* Inventory Disposition */}
+            <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2">
+              <label className="block text-xs font-bold text-slate-800 dark:text-slate-200">
+                Inventory & Raw Ingredients
+              </label>
+              <div className="space-y-2">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="itemDisposition"
+                    value="restore"
+                    checked={itemDispositionType === 'restore'}
+                    onChange={() => setItemDispositionType('restore')}
+                    className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                      Restore Raw Ingredients to Stock
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Dish was not cooked or ingredients can safely return to pantry. Stock will be restored.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="itemDisposition"
+                    value="waste"
+                    checked={itemDispositionType === 'waste'}
+                    onChange={() => setItemDispositionType('waste')}
+                    className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-rose-800 dark:text-rose-300">
+                      Kitchen Food Waste (Food Cooked / Damaged)
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Food was already prepared or ingredients spoiled. Logged in waste report, stock will not return.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Financial Impact Note */}
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-xs text-amber-900 dark:text-amber-200 flex items-center justify-between">
+              <span>Bill will automatically reduce by:</span>
+              <span className="font-bold font-mono">
+                {formatPrice(itemToCancel.price * itemToCancel.quantity, restaurant.settings.currency)} + GST
+              </span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                variant="ghost"
+                onClick={() => setCancelItemModalOpen(false)}
+                disabled={isSubmittingItemCancellation}
+              >
+                Go Back
+              </Button>
+              <Button
+                variant="danger"
+                isLoading={isSubmittingItemCancellation}
+                disabled={isSubmittingItemCancellation}
+                onClick={handleConfirmItemCancellation}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-4 cursor-pointer"
+              >
+                Confirm Dish Cancellation
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
       {/* Issue Refund Modal */}
       {refundModalOpen && selectedOrder && restaurant && (
         <Dialog isOpen={refundModalOpen} onClose={() => setRefundModalOpen(false)} title="Issue Refund">
@@ -4583,17 +4809,24 @@ export default function OrdersPage() {
                     ) : (
                       <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900">
                         {selectedOrder.items.map((item: any) => {
-                          const isCancelled = item.is_cancelled || item.status === 'cancelled' || (item.batch_id && selectedOrder.batches?.find((b: any) => b.id === item.batch_id)?.status === 'cancelled');
+                          const isCancelled = item.is_cancelled || item.status === 'cancelled' || (item.batch_id && selectedOrder.batches?.find((b: any) => b.id === item.batch_id)?.status === 'cancelled') || item.notes?.includes('[CANCELLED');
                           const isServed = item.is_served || item.status === 'served' || (item.batch_id && selectedOrder.batches?.find((b: any) => b.id === item.batch_id)?.status === 'served');
+                          const canCancelItem = !isCancelled && !isServed && !['completed', 'cancelled'].includes(selectedOrder.status);
+
                           return (
-                            <div key={item.id} className={`p-4 flex items-center justify-between gap-4 ${isCancelled ? 'bg-rose-50/60 dark:bg-rose-950/20' : isServed ? 'bg-emerald-50/30 dark:bg-emerald-950/10' : ''}`}>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  {isServed && <Check className="h-3.5 w-3.5 text-emerald-600 font-bold" />}
-                                  {isCancelled && <X className="h-3.5 w-3.5 text-rose-500 font-bold" />}
+                            <div key={item.id} className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 ${isCancelled ? 'bg-rose-50/60 dark:bg-rose-950/20' : isServed ? 'bg-emerald-50/30 dark:bg-emerald-950/10' : ''}`}>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {isServed && <Check className="h-3.5 w-3.5 text-emerald-600 font-bold shrink-0" />}
+                                  {isCancelled && <X className="h-3.5 w-3.5 text-rose-500 font-bold shrink-0" />}
                                   <p className={`font-semibold text-sm ${isCancelled ? 'text-rose-600 dark:text-rose-400 line-through' : 'text-slate-800 dark:text-slate-200'}`}>
                                      {item.menu_item_name}
                                   </p>
+                                  {item.variant_name && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                      {item.variant_name}
+                                    </span>
+                                  )}
                                   {isServed && (
                                     <Badge variant="success" className="text-[10px] py-0.5 px-2 font-bold uppercase tracking-wider">
                                       Served
@@ -4601,20 +4834,33 @@ export default function OrdersPage() {
                                   )}
                                   {isCancelled && (
                                     <Badge variant="error" className="text-[10px] py-0.5 px-2 font-bold uppercase tracking-wider">
-                                      Cancelled by {selectedOrder.cancelled_by || 'Staff'} {selectedOrder.cancellation_reason ? `("${selectedOrder.cancellation_reason}")` : ''}
+                                      Cancelled {item.notes?.includes('[CANCELLED:') ? `(${item.notes.match(/\[CANCELLED:\s*([^\]]+)\]/)?.[1] || 'Cancelled'})` : (selectedOrder.cancellation_reason ? `("${selectedOrder.cancellation_reason}")` : '')}
                                     </Badge>
                                   )}
                                 </div>
                                 <p className="text-xs text-slate-400 font-semibold mt-0.5">{item.quantity}x @ {formatPrice(item.price, restaurant.settings.currency)}</p>
-                                {item.notes && (
-                                  <span className="inline-block mt-1 text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-950/20 px-2 py-0.5 rounded border border-rose-100 dark:border-rose-900/30 font-semibold">
-                                    Note: {item.notes}
+                                {item.notes && !item.notes.startsWith('[CANCELLED') && (
+                                  <span className="inline-block mt-1 text-[10px] text-amber-600 bg-amber-50 dark:bg-amber-950/20 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-900/30 font-semibold">
+                                    Note: {item.notes.replace(/\|?\s*\[CANCELLED:[^\]]+\]/, '').trim()}
                                   </span>
                                 )}
                               </div>
-                              <span className={`font-bold ${isCancelled ? 'text-rose-500 line-through' : 'text-slate-900 dark:text-white'}`}>
-                                {formatPrice(isCancelled ? 0 : item.price * item.quantity, restaurant.settings.currency)}
-                              </span>
+                              <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                                <span className={`font-bold text-sm ${isCancelled ? 'text-rose-500 line-through' : 'text-slate-900 dark:text-white'}`}>
+                                  {formatPrice(isCancelled ? 0 : item.price * item.quantity, restaurant.settings.currency)}
+                                </span>
+                                {canCancelItem && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenItemCancelModal(item)}
+                                    className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-1 rounded-lg border border-rose-200 dark:border-rose-900/60 font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                                    title="Cancel this dish from order"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                    <span className="hidden sm:inline">Cancel</span>
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
