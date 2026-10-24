@@ -195,7 +195,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   const [gstPercentage, setGstPercentage] = useState(restaurant?.settings?.gst_percentage ?? 5.0);
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(restaurant?.settings?.service_charge_enabled !== false);
   const [serviceChargePercentage, setServiceChargePercentage] = useState(restaurant?.settings?.service_charge_percentage ?? 5.0);
-  const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' | 'counter_only' | 'takeaway_and_counter' }[]>(restaurant?.settings?.custom_charges || []);
+  const [customCharges, setCustomCharges] = useState<{ id: string; name: string; type: 'fixed' | 'percentage'; value: number; enabled: boolean; applies_to?: 'all' | 'takeaway_only' | 'dine_in_only' | 'counter_only' | 'takeaway_and_counter' }[]>(() => (restaurant?.settings?.custom_charges || []).map((c: any) => ({ ...c, applies_to: c.applies_to || ((c.name || '').toLowerCase().includes('pack') ? 'takeaway_only' : 'all') })));
   const [showCustomerDetailsOnBill, setShowCustomerDetailsOnBill] = useState<boolean>(restaurant?.settings?.show_customer_details_on_bill !== false);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number } | null>(null);
@@ -302,7 +302,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
       setGstPercentage(restaurant.settings?.gst_percentage ?? 5.0);
       setServiceChargeEnabled(restaurant.settings?.service_charge_enabled !== false);
       setServiceChargePercentage(restaurant.settings?.service_charge_percentage ?? 5.0);
-      setCustomCharges(restaurant.settings?.custom_charges || []);
+      setCustomCharges((restaurant.settings?.custom_charges || []).map((c: any) => ({ ...c, applies_to: c.applies_to || ((c.name || '').toLowerCase().includes('pack') ? 'takeaway_only' : 'all') })));
       setShowCustomerDetailsOnBill(restaurant.settings?.show_customer_details_on_bill !== false);
       setGeofenceEnabled(restaurant.settings?.geofence?.enabled === true);
       setGeofenceLat(restaurant.settings?.geofence?.latitude ?? null);
@@ -548,7 +548,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
           gst_percentage: calcGstRate,
           service_charge_enabled: serviceChargeEnabled,
           service_charge_percentage: Number(serviceChargePercentage) || 0,
-          custom_charges: customCharges,
+          custom_charges: customCharges.map(c => ({ ...c, applies_to: c.applies_to || ((c.name || '').toLowerCase().includes('pack') ? 'takeaway_only' : 'all') })),
           show_customer_details_on_bill: showCustomerDetailsOnBill,
           geofence: {
             enabled: geofenceEnabled,

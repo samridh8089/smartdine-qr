@@ -2006,7 +2006,8 @@ export default function OrdersPage() {
       gstPercentage: restaurant.settings.gst_percentage || 0,
       serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-      customCharges: restaurant.settings.custom_charges || []
+      customCharges: restaurant.settings.custom_charges || [],
+      orderType: selectedOrder.order_type || 'dine_in'
     });
 
     const validItems = (selectedOrder.items || []).filter(item => {
@@ -2295,7 +2296,8 @@ export default function OrdersPage() {
       gstPercentage: restaurant.settings.gst_percentage || 0,
       serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-      customCharges: restaurant.settings.custom_charges || []
+      customCharges: restaurant.settings.custom_charges || [],
+      orderType: selectedOrder.order_type || 'dine_in'
     });
 
     let chosenMethod: string = paymentMethod;
@@ -3925,7 +3927,8 @@ export default function OrdersPage() {
                 gstPercentage: restaurant.settings.gst_percentage || 0,
                 serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
                 serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-                customCharges: restaurant.settings.custom_charges || []
+                customCharges: restaurant.settings.custom_charges || [],
+                orderType: selectedOrder.order_type || 'dine_in'
               });
 
               return (
@@ -4265,7 +4268,8 @@ export default function OrdersPage() {
                 gstPercentage: restaurant?.settings?.gst_percentage || 0,
                 serviceChargeEnabled: restaurant?.settings?.service_charge_enabled !== false,
                 serviceChargePercentage: restaurant?.settings?.service_charge_percentage || 0,
-                customCharges: restaurant?.settings?.custom_charges || []
+                customCharges: restaurant?.settings?.custom_charges || [],
+                orderType: selectedOrder.order_type || 'dine_in'
               });
 
               return (
@@ -4922,7 +4926,8 @@ export default function OrdersPage() {
                       gstPercentage: restaurant.settings.gst_percentage || 0,
                       serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
                       serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-                      customCharges: restaurant.settings.custom_charges || []
+                      customCharges: restaurant.settings.custom_charges || [],
+                      orderType: selectedOrder.order_type || 'dine_in'
                     });
 
                     const code = selectedOrder.offer_code;

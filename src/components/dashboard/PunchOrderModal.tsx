@@ -155,7 +155,8 @@ export default function PunchOrderModal({
     gstPercentage: restaurant.settings.gst_percentage || 0,
     serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
     serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-    customCharges: restaurant.settings.custom_charges || []
+    customCharges: restaurant.settings.custom_charges || [],
+    orderType: orderType
   });
 
   const subtotal = calcResult.validSubtotal;

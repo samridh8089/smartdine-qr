@@ -965,9 +965,13 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           detectedCustomerLat,
           detectedCustomerLng
         );
+        const accuracy = Math.round(position.coords?.accuracy || 50);
+        // Enterprise indoor GPS & Wi-Fi drift allowance (indoor device signals drift 50-150m)
+        const indoorDriftAllowance = Math.max(75, Math.min(accuracy, 150));
+        const effectiveDistMeters = Math.max(0, distMeters - indoorDriftAllowance);
         const allowedRadius = Number(restaurant.settings.geofence.radius_meters) || 100;
-        if (distMeters > allowedRadius) {
-          setGeofenceDistance(distMeters);
+        if (effectiveDistMeters > allowedRadius) {
+          setGeofenceDistance(Math.round(distMeters));
           setGeofenceModalOpen(true);
           isSubmittingRef.current = false;
           setOrderPlacing(false);
