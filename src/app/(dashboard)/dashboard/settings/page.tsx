@@ -1332,36 +1332,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
         
         {/* QR DESIGN STUDIO TAB */}
         {activeTab === 'qr_design' && (
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-              <div>
-                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">Bulk Export QR Codes</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Download branded table QR cards as a zip bundle or print ready-to-cut A4 sheets.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleDownloadAllQRZip}
-                  disabled={isBulkDownloading}
-                  className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
-                  title="Download branded QR cards for all tables in a ZIP"
-                >
-                  <Archive className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                  {isBulkDownloading ? `Zipping (${bulkProgress?.current || 0}/${bulkProgress?.total || 0})...` : 'Download All QR (ZIP)'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handlePrintAllQRA4}
-                  className="border-slate-200 dark:border-slate-700 text-xs font-bold cursor-pointer"
-                  title="Print all table QR cards on A4 sheets"
-                >
-                  <Printer className="h-3.5 w-3.5 mr-1 text-slate-500" />
-                  <span>Print All QR (A4)</span>
-                </Button>
-              </div>
-            </div>
+          <div className="w-full">
             <QRDesignStudio restaurant={restaurant} onSaved={refresh} />
           </div>
         )}

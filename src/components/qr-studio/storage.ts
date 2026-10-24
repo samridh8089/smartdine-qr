@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { QRDesignConfig } from './types';
 import { DEFAULT_QR_CONFIG } from './templates';
 import { db } from '@/lib/db';
@@ -84,6 +84,88 @@ export function mergeWithDefaults(
   return {
     ...DEFAULT_QR_CONFIG,
     ...config,
+    studioLayout: config.studioLayout || DEFAULT_QR_CONFIG.studioLayout || 'table_tent_classic',
+    mainCategory: config.mainCategory || DEFAULT_QR_CONFIG.mainCategory || 'restaurant',
+    subCategory: config.subCategory || DEFAULT_QR_CONFIG.subCategory || 'rajasthani_thali',
+    dietaryBadge: config.dietaryBadge !== undefined ? config.dietaryBadge : (DEFAULT_QR_CONFIG.dietaryBadge || 'veg'),
+    aspectRatio: config.aspectRatio || DEFAULT_QR_CONFIG.aspectRatio || '4x6',
+    heroDisplayMode: config.heroDisplayMode || DEFAULT_QR_CONFIG.heroDisplayMode || 'cutout',
+    heroImageZoom: config.heroImageZoom !== undefined ? config.heroImageZoom : (DEFAULT_QR_CONFIG.heroImageZoom || 100),
+    heroOffsetX: config.heroOffsetX !== undefined ? config.heroOffsetX : (DEFAULT_QR_CONFIG.heroOffsetX || 0),
+    heroOffsetY: config.heroOffsetY !== undefined ? config.heroOffsetY : (DEFAULT_QR_CONFIG.heroOffsetY || 0),
+    ctaBadgeText: config.ctaBadgeText || DEFAULT_QR_CONFIG.ctaBadgeText || 'SCAN FOR MENU',
+    tagline: config.tagline !== undefined ? config.tagline : (DEFAULT_QR_CONFIG.tagline || ''),
+    openingHours: config.openingHours !== undefined ? config.openingHours : (DEFAULT_QR_CONFIG.openingHours || ''),
+    wifiPassword: config.wifiPassword !== undefined ? config.wifiPassword : (DEFAULT_QR_CONFIG.wifiPassword || ''),
+    phoneOrWebsite: config.phoneOrWebsite !== undefined ? config.phoneOrWebsite : (DEFAULT_QR_CONFIG.phoneOrWebsite || ''),
+    selectedDishIndex: config.selectedDishIndex !== undefined ? config.selectedDishIndex : (DEFAULT_QR_CONFIG.selectedDishIndex || 0),
+    customDishUrl: config.customDishUrl !== undefined ? config.customDishUrl : (DEFAULT_QR_CONFIG.customDishUrl || ''),
+    selectedCulturalBgIndex: config.selectedCulturalBgIndex !== undefined ? config.selectedCulturalBgIndex : (DEFAULT_QR_CONFIG.selectedCulturalBgIndex || 0),
+    customCulturalBgUrl: config.customCulturalBgUrl !== undefined ? config.customCulturalBgUrl : (DEFAULT_QR_CONFIG.customCulturalBgUrl || ''),
+    gridDishImages: Array.isArray(config.gridDishImages) && config.gridDishImages.length > 0 
+      ? config.gridDishImages.map((img, i) => {
+          if (!img || img.includes('images.unsplash.com')) {
+            const defaults = ['/dish-presets/3d/rajasthani_thali_3d.png', '/dish-presets/3d/dhaba_chai_samosa_3d.png', '/dish-presets/3d/north_indian_paneer_tikka_3d.png'];
+            return defaults[i] || defaults[0];
+          }
+          return img;
+        })
+      : DEFAULT_QR_CONFIG.gridDishImages,
+    bgTextureStyle: config.bgTextureStyle || DEFAULT_QR_CONFIG.bgTextureStyle || 'gradient',
+    bgBlur: config.bgBlur !== undefined ? config.bgBlur : (DEFAULT_QR_CONFIG.bgBlur || 0),
+    bgOverlayOpacity: config.bgOverlayOpacity !== undefined ? config.bgOverlayOpacity : (DEFAULT_QR_CONFIG.bgOverlayOpacity ?? 35),
+    bgOverlayColor: config.bgOverlayColor || DEFAULT_QR_CONFIG.bgOverlayColor || '#000000',
+    qrPositionMode: config.qrPositionMode || 'auto',
+    perTableCustomization: config.perTableCustomization ?? false,
+    tableImageOverrides: config.tableImageOverrides || {},
+    tableDishIndexOverrides: config.tableDishIndexOverrides || {},
+    funnyQuote: config.funnyQuote !== undefined ? config.funnyQuote : '',
+    funnyQuoteBgColor: config.funnyQuoteBgColor || '#FEF08A',
+    funnyQuoteTextColor: config.funnyQuoteTextColor || '#854D0E',
+    funnyQuoteStyle: config.funnyQuoteStyle || 'pill',
+    ctaBadgeMode: config.ctaBadgeMode || 'preset',
+    ctaBadgeBgColor: config.ctaBadgeBgColor || '',
+    ctaBadgeTextColor: config.ctaBadgeTextColor || '',
+    dish3dMode: config.dish3dMode || 'floating_plate',
+    dish3dElevation: config.dish3dElevation ?? 12,
+    dish3dShadowDepth: config.dish3dShadowDepth || 'deep_3d',
+    dish3dTilt: config.dish3dTilt ?? 6,
+    canvasSpacing: config.canvasSpacing || 'spacious',
+    freePositioningEnabled: config.freePositioningEnabled ?? false,
+    dishOffsetX: config.dishOffsetX ?? 0,
+    dishOffsetY: config.dishOffsetY ?? 0,
+    dishScale: config.dishScale ?? 100,
+    qrOffsetX: config.qrOffsetX ?? 0,
+    qrOffsetY: config.qrOffsetY ?? 0,
+    qrCardSize: config.qrCardSize ?? 160,
+    cardBgOpacity: config.cardBgOpacity ?? 80,
+    headerOffsetY: config.headerOffsetY ?? 0,
+    footerOffsetY: config.footerOffsetY ?? 0,
+    orbitDish1X: config.orbitDish1X ?? 0,
+    orbitDish1Y: config.orbitDish1Y ?? 0,
+    orbitDish2X: config.orbitDish2X ?? 0,
+    orbitDish2Y: config.orbitDish2Y ?? 0,
+    orbitDish3X: config.orbitDish3X ?? 0,
+    orbitDish3Y: config.orbitDish3Y ?? 0,
+    dish3dShape: config.dish3dShape || 'round_platter',
+    elementOrder: config.elementOrder || 'header_qr_dish',
+    kraftPaperTint: config.kraftPaperTint || DEFAULT_QR_CONFIG.kraftPaperTint || '#C5A880',
+    funnyQuoteBlur: config.funnyQuoteBlur !== undefined ? config.funnyQuoteBlur : (DEFAULT_QR_CONFIG.funnyQuoteBlur ?? 8),
+    funnyQuoteOpacity: config.funnyQuoteOpacity !== undefined ? config.funnyQuoteOpacity : (DEFAULT_QR_CONFIG.funnyQuoteOpacity ?? 90),
+    orbitDish1Scale: config.orbitDish1Scale !== undefined ? config.orbitDish1Scale : 100,
+    orbitDish2Scale: config.orbitDish2Scale !== undefined ? config.orbitDish2Scale : 100,
+    orbitDish3Scale: config.orbitDish3Scale !== undefined ? config.orbitDish3Scale : 100,
+    hideOrbitDish1: config.hideOrbitDish1 ?? false,
+    hideOrbitDish2: config.hideOrbitDish2 ?? false,
+    hideOrbitDish3: config.hideOrbitDish3 ?? false,
+    orbitDishStyle: config.orbitDishStyle || 'framed_gold',
+    dishZoom: config.dishZoom !== undefined ? config.dishZoom : 100,
+    hideCenterDish: config.hideCenterDish ?? false,
+    topBadgeText: config.topBadgeText !== undefined ? config.topBadgeText : (DEFAULT_QR_CONFIG.topBadgeText || 'SCAN MENU'),
+    topBadgeSubText: config.topBadgeSubText !== undefined ? config.topBadgeSubText : (DEFAULT_QR_CONFIG.topBadgeSubText || 'Fast Order'),
+    hideTopBadge: config.hideTopBadge ?? false,
+    footerSubText: config.footerSubText !== undefined ? config.footerSubText : (DEFAULT_QR_CONFIG.footerSubText || 'Instant Kitchen Dispatch'),
+    hideFooterBadge: config.hideFooterBadge ?? false,
     text: {
       ...DEFAULT_QR_CONFIG.text,
       ...(config.text || {}),

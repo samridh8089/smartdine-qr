@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+import type { SupabaseClient } from '@supabase/supabase-js';
+let _adminClient: SupabaseClient | null = null;
+function getAdmin(): SupabaseClient {
+  if (!_adminClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+    _adminClient = createClient(url, key);
+  }
+  return _adminClient;
+}
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = getAdmin();
     const { email } = await req.json();
 
     if (!email || !email.trim()) {
@@ -34,7 +41,7 @@ export async function POST(req: Request) {
 
     // 2. Check auth users list
     const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const matchedUser = (users || []).find(u => 
+    const matchedUser = (users || []).find((u: any) => 
       u.email?.toLowerCase().trim() === cleanInput ||
       u.id === cleanInput ||
       u.email?.toLowerCase().startsWith(cleanInput)

@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import sharp from 'sharp';
 import { generateStructuredGeminiJSON } from '@/lib/gemini';
 
 export const maxDuration = 60;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
 const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
 export interface ImageCandidate {
@@ -34,6 +33,8 @@ async function cropImageBoundingBox(base64Data: string, box: { x: number; y: num
     }
     if (!cleanBase64) return null;
 
+    const sharpMod = await import('sharp');
+    const sharp = (sharpMod as any).default || sharpMod;
     const imgBuffer = Buffer.from(cleanBase64, 'base64');
     const metadata = await sharp(imgBuffer).metadata();
     if (!metadata.width || !metadata.height) return null;
