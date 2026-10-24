@@ -521,7 +521,8 @@ export default function OrderTrackingPage({ params }: PageProps) {
     gstPercentage,
     serviceChargeEnabled,
     serviceChargePercentage,
-    customCharges: restaurant?.settings?.custom_charges || []
+    customCharges: restaurant?.settings?.custom_charges || [],
+    orderType: order.order_type || 'dine_in'
   });
 
   const snapSubtotal = Number(order.subtotal || 0);
@@ -1690,19 +1691,12 @@ export default function OrderTrackingPage({ params }: PageProps) {
                     <span>{formatPrice(calculatedServiceCharge, restaurant.settings.currency)}</span>
                   </div>
                 )}
-                {order.custom_charges && order.custom_charges.map((charge: any) => {
-                  const disc = order.discount_amount || 0;
-                  const base = Math.max(0, displaySubtotal - disc);
-                  const val = charge.type === 'percentage' 
-                    ? base * (charge.value / 100) 
-                    : charge.value;
-                  return (
-                    <div key={charge.id} className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                      <span>{charge.name}</span>
-                      <span>{formatPrice(val, restaurant.settings.currency)}</span>
-                    </div>
-                  );
-                })}
+                {calcResult.customChargesSnapshot && calcResult.customChargesSnapshot.map((charge: any, idx: number) => (
+                  <div key={charge.id || idx} className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+                    <span>{charge.name}</span>
+                    <span>{formatPrice(charge.calculatedAmount, restaurant.settings.currency)}</span>
+                  </div>
+                ))}
                 <div className="h-px bg-slate-200 dark:bg-slate-800 my-1" />
                 <div className="flex justify-between text-slate-900 dark:text-white font-black text-sm md:text-base">
                   <span>Grand Total</span>

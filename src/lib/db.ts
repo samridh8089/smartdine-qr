@@ -2791,8 +2791,10 @@ export const db = {
           appliesTo = 'all';
         }
       }
-      if (appliesTo === 'takeaway_only' && (currentOrderType === 'dine_in' || currentOrderType === 'reservation')) return false;
-      if (appliesTo === 'dine_in_only' && currentOrderType === 'takeaway') return false;
+      if (appliesTo === 'takeaway_only') return currentOrderType === 'takeaway';
+      if (appliesTo === 'dine_in_only') return currentOrderType === 'dine_in';
+      if (appliesTo === 'counter_only') return currentOrderType === 'counter';
+      if (appliesTo === 'takeaway_and_counter') return currentOrderType === 'takeaway' || currentOrderType === 'counter';
       return true;
     };
 

@@ -176,6 +176,8 @@ export async function POST(req: Request) {
       const custLat = body.customerLat !== undefined ? Number(body.customerLat) : null;
       const custLng = body.customerLng !== undefined ? Number(body.customerLng) : null;
       const maxRadius = Number(restaurant.settings.geofence.radius_meters) || 100;
+      // 100m buffer for indoor GPS & Wi-Fi triangulation drift
+      const indoorDriftBuffer = 100;
       
       if (custLat !== null && custLng !== null && !isNaN(custLat) && !isNaN(custLng)) {
         const distance = calculateHaversineDistanceMeters(
@@ -184,10 +186,10 @@ export async function POST(req: Request) {
           custLat,
           custLng
         );
-        if (distance > maxRadius) {
+        if (distance > (maxRadius + indoorDriftBuffer)) {
           timer.end('inventory');
           return NextResponse.json({
-            error: `Dine-in orders are restricted to the restaurant premises. Detected distance is ~${distance}m (allowed radius is ${maxRadius}m). If you wish to order from elsewhere, please choose Takeaway.`,
+            error: `Dine-in orders are restricted to the restaurant premises. Detected distance is ~${Math.round(distance)}m (allowed radius is ${maxRadius}m). If you wish to order from elsewhere, please choose Takeaway.`,
             code: 'GEOFENCE_RESTRICTION'
           }, { status: 403 });
         }
