@@ -1,26 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
-
-function getSupabaseClient(req: Request) {
-  const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
-  const token = authHeader.replace('Bearer ', '').trim();
-
-  if (serviceKey && serviceKey !== '[SENSITIVE]' && serviceKey.length > 20) {
-    return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-  }
-
-  if (token) {
-    return createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-      auth: { persistSession: false }
-    });
-  }
-
-  return createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
+let _supabaseAdmin: SupabaseClient | null = null;
+function getSupabaseClient() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role configuration');
+  _supabaseAdmin = createClient(url, key, { auth: { persistSession: false } });
+  return _supabaseAdmin;
 }
 
 export async function GET(req: Request) {
@@ -31,7 +20,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
     }
 
-    const client = getSupabaseClient(req);
+    // Tenant Isolation Guard: only authorized staff of this restaurant
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'supervisor', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
+    const client = getSupabaseClient();
 
     const { data: rest, error } = await client
       .from('restaurants')
@@ -89,7 +88,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
     }
 
-    const client = getSupabaseClient(req);
+    // Require staff authorization for device management
+    const authCheck = await verifyStaffRequest(
+      req,
+      action === 'register'
+        ? ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen', 'waiter', 'captain', 'cashier', 'super_admin']
+        : ['owner', 'manager', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
+    const client = getSupabaseClient();
 
     const { data: rest, error: fetchErr } = await client
       .from('restaurants')

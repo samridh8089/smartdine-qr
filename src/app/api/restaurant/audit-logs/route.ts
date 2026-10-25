@@ -2,10 +2,17 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { handleApiError } from '@/lib/errors';
 import { formatAuditLogDisplay } from '@/lib/auditLogger';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function GET(req: Request) {
   try {
@@ -21,6 +28,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: 'restaurantId is required' }, { status: 400 });
     }
 
+    // 1. Mandatory Authorization & Multi-tenant IDOR protection (Finding C6)
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'supervisor', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+
     let query = supabaseAdmin
       .from('audit_logs')
       .select('id, restaurant_id, user_email, action, details, created_at', { count: 'exact' })
@@ -28,8 +47,10 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (search.trim()) {
-      query = query.or(`action.ilike.%${search}%,details.ilike.%${search}%,user_email.ilike.%${search}%`);
+    // Sanitize search query against PostgREST filter injection (Finding C6)
+    const cleanSearch = search.replace(/[^a-zA-Z0-9\s\-_@.]/g, '').trim();
+    if (cleanSearch) {
+      query = query.or(`action.ilike.%${cleanSearch}%,details.ilike.%${cleanSearch}%,user_email.ilike.%${cleanSearch}%`);
     }
 
     if (action && action !== 'all') {
@@ -42,7 +63,10 @@ export async function GET(req: Request) {
       } else if (action === 'payment') {
         query = query.or('action.ilike.%payment%,action.ilike.%void%,action.ilike.%refund%,details.ilike.%payment%');
       } else {
-        query = query.or(`action.ilike.%${action}%,details.ilike.%${action}%`);
+        const cleanAction = action.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim();
+        if (cleanAction) {
+          query = query.or(`action.ilike.%${cleanAction}%,details.ilike.%${cleanAction}%`);
+        }
       }
     }
 
@@ -50,7 +74,7 @@ export async function GET(req: Request) {
     if (error) throw error;
 
     // Parse details JSON if needed
-    const parsedLogs = (data || []).map(log => {
+    const parsedLogs = (data || []).map((log: any) => {
       let parsedDetails: any = log.details;
       if (typeof log.details === 'string') {
         try {
@@ -97,6 +121,18 @@ export async function POST(req: Request) {
     if (!restaurantId || !action) {
       return NextResponse.json({ success: false, error: 'restaurantId and action are required' }, { status: 400 });
     }
+
+    // Mandatory Authorization & Multi-tenant isolation (Finding C6)
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'supervisor', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     const fullDetails = JSON.stringify({
       userName: userName || userEmail || 'Staff',

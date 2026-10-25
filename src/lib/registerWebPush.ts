@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase';
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || 'BD9b2X5g43S7-oR2_aQ_b8yU6Z_0gL-36x1v0N5X5V0W-0w1X5V0W-0w1X5V0W-0';
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -64,9 +65,14 @@ export async function subscribeUserToPush(
     }
 
     if (subscription && userId && restaurantId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+      }
       await fetch('/api/push/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
           subscription,
           userId,

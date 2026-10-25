@@ -5,9 +5,15 @@ import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role configuration');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 
 export async function POST(req: Request) {
@@ -52,11 +58,15 @@ export async function POST(req: Request) {
     // 2. Mark profile as verified in Database if userId is provided
     if (userId) {
       try {
-        await supabaseAdmin.from('profiles').update({
-          is_verified: true,
-          verification_status: 'active',
-          updated_at: new Date().toISOString()
-        }).eq('id', userId);
+        const admin = getSupabaseAdmin();
+        const { data: userProf } = await admin.from('profiles').select('id, email').eq('id', userId).maybeSingle();
+        if (userProf && userProf.email?.toLowerCase() === cleanEmail) {
+          await admin.from('profiles').update({
+            is_verified: true,
+            verification_status: 'active',
+            updated_at: new Date().toISOString()
+          }).eq('id', userId);
+        }
       } catch (e) {
         console.warn('[Verify-OTP] Profile status update notice:', e);
       }
