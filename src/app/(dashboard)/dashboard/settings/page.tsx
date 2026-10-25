@@ -29,6 +29,7 @@ import { downloadAllTablesQRZip, printAllTablesA4Sheet } from '@/components/qr-s
 import { useQRDesign } from '@/components/qr-studio/storage';
 import { getCanonicalTableQRUrl } from '@/lib/qr';
 import { saveStaffProfile, getStaffProfiles, StaffProfile } from '@/lib/attendoEngine';
+import { formatAuditLogDisplay } from '@/lib/auditLogger';
 
 interface HubModuleItem {
   id: 'profile' | 'staff' | 'qr_design' | 'charges' | 'payments' | 'devices' | 'notifications' | 'backup' | 'logs' | 'offers';
@@ -2935,25 +2936,30 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900/40">
-                      {logs.map((log) => (
-                        <tr key={log.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
-                          <td className="px-6 py-3 font-extrabold text-slate-900 dark:text-white">
-                            {log.user_email}
-                          </td>
-                          <td className="px-6 py-3 uppercase">
-                            <Badge variant={
-                              log.action.includes('delete') ? 'error' :
-                              log.action.includes('create') ? 'success' : 'neutral'
-                            }>
-                              {log.action.replace('_', ' ')}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-3 text-slate-500 dark:text-slate-400 text-xs">{log.details}</td>
-                          <td className="px-6 py-3 text-slate-400 text-xs font-semibold">
-                            {new Date(log.created_at).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
+                      {logs.map((log) => {
+                        const formatted = formatAuditLogDisplay(log);
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-100/50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="px-6 py-3 font-extrabold text-slate-900 dark:text-white">
+                              {formatted.userDisplay}
+                            </td>
+                            <td className="px-6 py-3 uppercase">
+                              <Badge variant={
+                                log.action.includes('delete') || log.action.includes('cancel') || log.action.includes('void') ? 'error' :
+                                log.action.includes('create') || log.action.includes('complete') || log.action.includes('paid') ? 'success' : 'neutral'
+                              }>
+                                {formatted.badgeAction}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-3 text-slate-700 dark:text-slate-300 text-xs font-normal max-w-lg break-words">
+                              {formatted.detailsDisplay}
+                            </td>
+                            <td className="px-6 py-3 text-slate-400 text-xs font-semibold whitespace-nowrap">
+                              {new Date(log.created_at).toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
