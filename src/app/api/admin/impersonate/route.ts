@@ -3,12 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
 import { handleApiError } from '@/lib/errors';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const authCheck = await verifySuperAdminRequest(req);
     if (!authCheck.isSuperAdmin && authCheck.response) {
       return authCheck.response;
@@ -92,12 +99,39 @@ export async function POST(req: Request) {
       console.warn('[Impersonation Audit Notice]:', auditErr);
     }
 
+    // Sanitize response to prevent plaintext password leakage (Finding C5)
+    let sanitizedProfile = profileToUse;
+    if (profileToUse) {
+      const { plain_password, ...safeProfile } = profileToUse;
+      sanitizedProfile = safeProfile;
+    }
+
+    let sanitizedRestaurant = rest;
+    if (rest?.settings?.staff_metadata) {
+      const sanitizedMeta: Record<string, any> = {};
+      for (const [k, v] of Object.entries(rest.settings.staff_metadata as Record<string, any>)) {
+        if (v && typeof v === 'object') {
+          const { plain_password, ...safeV } = v;
+          sanitizedMeta[k] = safeV;
+        } else {
+          sanitizedMeta[k] = v;
+        }
+      }
+      sanitizedRestaurant = {
+        ...rest,
+        settings: {
+          ...rest.settings,
+          staff_metadata: sanitizedMeta
+        }
+      };
+    }
+
     return NextResponse.json({
       success: true,
       message: `Impersonation active for ${rest.name} (${targetRole})`,
-      restaurant: rest,
+      restaurant: sanitizedRestaurant,
       targetRole,
-      ownerProfile: profileToUse
+      ownerProfile: sanitizedProfile
     });
   } catch (err: any) {
     return handleApiError('Admin-Impersonate', err, 'Failed to initialize impersonation session', 500);

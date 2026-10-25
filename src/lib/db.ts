@@ -90,7 +90,6 @@ export interface Restaurant {
       is_active?: boolean;
       is_verified?: boolean;
       verification_status?: string;
-      plain_password?: string;
     }>;
     geofence?: {
       enabled?: boolean;
@@ -165,7 +164,6 @@ export interface Profile {
   is_verified?: boolean;
   verification_status?: 'active' | 'pending_verification' | 'unverified';
   last_login_at?: string;
-  plain_password?: string;
   push_token?: string;
   created_at?: string;
   metadata?: any;
@@ -4024,7 +4022,6 @@ export const db = {
     full_name?: string;
     email?: string;
     phone?: string;
-    plain_password?: string;
     status?: string;
   }): Promise<any> {
     const { data, error } = await supabase
@@ -4697,7 +4694,6 @@ export const db = {
         restaurant_id: restaurantId,
         is_active: false
       }),
-      plain_password: password,
     } as Profile;
   },
 

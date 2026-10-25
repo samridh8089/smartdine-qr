@@ -4,14 +4,19 @@ import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const authHeader = req.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '').trim();
     const body = await req.json();
@@ -57,7 +62,7 @@ export async function POST(req: Request) {
 
     // 2. Validate current password credentials via Supabase Auth API
     const tempAnonClient = createClient(
-      supabaseUrl,
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
     );
 
@@ -80,11 +85,6 @@ export async function POST(req: Request) {
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message || 'Failed to update password' }, { status: 500 });
     }
-
-    // Update plain_password on profile if row exists
-    try {
-      await supabaseAdmin.from('profiles').update({ plain_password: newPassword }).eq('id', targetId);
-    } catch (e) {}
 
     return NextResponse.json({
       success: true,
