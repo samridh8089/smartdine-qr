@@ -690,8 +690,8 @@ export default function InventoryDashboardPage() {
     const referenceBaseMarginPct = baselineMarginPct || calculatedBaseMarginPct;
     const marginDiff = parseFloat((marginPercentage - referenceBaseMarginPct).toFixed(1));
 
-    // Loss Detection
-    const isLoss = grossMargin < 0;
+    // Loss & Zero Margin Detection
+    const isLoss = (grossMargin <= 0 || marginPercentage <= 0) && sellingPrice > 0;
     const isLowMargin = !isLoss && marginPercentage < 20;
 
     // Suggested Selling Price: restores original baseline margin or minimum 65% margin
@@ -2496,7 +2496,7 @@ export default function InventoryDashboardPage() {
                               <div>₹{metrics.grossMargin}</div>
                               {metrics.isLoss ? (
                                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                                  Loss
+                                  {metrics.grossMargin < 0 ? 'Loss' : '0% Margin'}
                                 </div>
                               ) : metrics.isLowMargin ? (
                                 <div className="text-[10px] font-semibold text-slate-500">
@@ -3367,7 +3367,7 @@ export default function InventoryDashboardPage() {
                     : Number(selectedMenuItemForRecipe?.price || 0);
                   const modalGrossMargin = parseFloat((modalSellingPrice - modalTotalCost).toFixed(2));
                   const modalMarginPct = modalSellingPrice > 0 ? parseFloat(((modalGrossMargin / modalSellingPrice) * 100).toFixed(1)) : 0;
-                  const isLoss = modalGrossMargin < 0;
+                  const isLoss = (modalGrossMargin <= 0 || modalMarginPct <= 0) && modalSellingPrice > 0;
 
                   const existingMatch = recipes.find(r => 
                     r.menu_item_id === selectedMenuItemForRecipe?.id && 
@@ -3478,7 +3478,7 @@ export default function InventoryDashboardPage() {
                               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gross Margin</span>
                               {isLoss ? (
                                 <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900 text-white dark:bg-white dark:text-slate-900">
-                                  Loss
+                                  {modalGrossMargin < 0 ? 'Loss' : '0% Margin'}
                                 </span>
                               ) : (
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
@@ -3492,7 +3492,7 @@ export default function InventoryDashboardPage() {
                           </div>
                           <div className="mt-3 text-[10px] font-medium text-slate-500">
                             {isLoss
-                              ? 'Cost exceeds selling price'
+                              ? (modalGrossMargin < 0 ? 'Cost exceeds selling price' : 'Zero margin: Selling price equals food cost')
                               : `Food cost is ${modalSellingPrice > 0 ? ((modalTotalCost / modalSellingPrice) * 100).toFixed(0) : 0}% of price`}
                           </div>
                         </div>

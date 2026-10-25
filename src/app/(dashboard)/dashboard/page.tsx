@@ -566,7 +566,7 @@ export default function DashboardPage() {
             const costPctDiff = baselineCost > 0 ? parseFloat(((costDiff / baselineCost) * 100).toFixed(1)) : 0;
             const suggestedPrice = Math.ceil(totalCost / 0.35);
 
-            if (totalCost > sellingPrice && sellingPrice > 0) {
+            if (totalCost >= sellingPrice && sellingPrice > 0) {
               lossList.push({
                 id: menuItem.id,
                 name: menuItem.name,
@@ -1673,11 +1673,13 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-gray-950 dark:text-white block">{item.name}</span>
                           <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900 text-white dark:bg-white dark:text-slate-900">
-                            Loss
+                            {item.diff > 0 ? 'Loss' : '0% Margin'}
                           </span>
                         </div>
                         <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mt-0.5">
-                          Cost: ₹{item.cost} • Selling: ₹{item.price} (Loss: -₹{item.diff})
+                          {item.diff > 0 
+                            ? `Cost: ₹${item.cost} • Selling: ₹${item.price} (Loss: -₹${item.diff})` 
+                            : `Cost: ₹${item.cost} • Selling: ₹${item.price} (0% Margin)`}
                         </span>
                         <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
                           Suggested: ₹{item.suggestedPrice}
