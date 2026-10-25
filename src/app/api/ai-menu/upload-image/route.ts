@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     // Enforce Staff Authorization & Tenant Isolation (Finding C6)
     const authCheck = await verifyStaffRequest(
       req,
-      ['owner', 'manager', 'head_chef', 'super_admin'],
+      ['owner', 'manager', 'supervisor', 'head_chef', 'super_admin'],
       restaurantId
     );
     if (!authCheck.isAuthorized) {
@@ -265,6 +265,14 @@ async function deleteStorageObjectIfUnshared(
 
 export async function DELETE(req: Request) {
   try {
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'supervisor', 'head_chef', 'super_admin']
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceRoleKey) {
       return NextResponse.json({ error: 'Storage service key not configured' }, { status: 500 });
