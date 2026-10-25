@@ -228,7 +228,14 @@ export async function POST(req: Request) {
       last_order_id: realOrderId,
       last_amount: paidAmount,
       renewal_date: subscriptionEndsAt,
-      payment_history: [paymentDetailsRecord]
+      payment_history: [paymentDetailsRecord],
+      dpdp_consent: {
+        consented: true,
+        consented_at: new Date().toISOString(),
+        consented_by: cleanEmail,
+        consent_version: '2026.1',
+        notice: 'DPDP Act 2023 Restaurant Data Fiduciary & Processing Agreement'
+      }
     };
 
     // ─── 5. GENERATE SLUG ──────────────────────────────────────────────────────

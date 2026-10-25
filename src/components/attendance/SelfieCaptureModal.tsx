@@ -249,6 +249,9 @@ export default function SelfieCaptureModal({
             className="hidden"
           />
 
+          <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 mb-1 select-none">
+            🔒 <strong>DPDP Notice:</strong> Selfie is captured solely to verify shift attendance and is securely pruned periodically.
+          </p>
           {/* Action Buttons */}
           <div className="w-full mt-5 space-y-2">
             {!capturedImage ? (

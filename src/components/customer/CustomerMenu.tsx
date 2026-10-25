@@ -2367,6 +2367,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                     ? `Place Counter Order • ${formatPrice(cartTotal, restaurant.settings.currency)}`
                     : `Place Order • ${formatPrice(cartTotal, restaurant.settings.currency)}`}
                 </Button>
+                <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 mt-2 select-none">
+                  🔒 By ordering, you agree to dining terms. Details are processed strictly for order fulfillment under India&apos;s DPDP Act 2023.
+                </p>
               </div>
             );
           })()
