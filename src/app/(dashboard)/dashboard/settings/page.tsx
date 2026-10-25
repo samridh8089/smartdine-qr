@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRestaurant } from '../../layout';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { db, Profile, AuditLog, getPlanFeatures } from '@/lib/db';
-import { storage, supabase } from '@/lib/supabase';
+import { storage, supabase, signOutUser } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
@@ -1022,7 +1022,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
     if (!confirm('WARNING: Are you sure you want to logout all devices? You will be signed out of all current sessions.')) return;
     try {
       await logoutAllDevices(restaurant.id);
-      await supabase.auth.signOut();
+      await signOutUser();
       window.location.href = '/login';
     } catch (e: any) {
       alert(`Error logging out all devices: ${e.message}`);
@@ -2657,7 +2657,10 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                               variant="outline"
                               size="sm"
                               onClick={async () => {
-                                await supabase.auth.signOut();
+                                if (restaurant?.id) {
+                                  await removeTrustedDevice(restaurant.id, dev.device_session_id);
+                                }
+                                await signOutUser();
                                 window.location.href = '/login';
                               }}
                               className="text-xs font-semibold"
