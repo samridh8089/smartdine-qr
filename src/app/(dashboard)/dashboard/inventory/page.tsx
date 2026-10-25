@@ -346,6 +346,11 @@ export default function InventoryDashboardPage() {
   const [editingPriceDishId, setEditingPriceDishId] = useState<string | null>(null);
   const [inlinePriceInput, setInlinePriceInput] = useState<string>('');
   const [isUpdatingInlinePrice, setIsUpdatingInlinePrice] = useState(false);
+  const [minMarginThreshold, setMinMarginThreshold] = useState<number>(() => {
+    return Number((restaurant?.settings as any)?.min_margin_threshold ?? 5);
+  });
+  const [isSavingThreshold, setIsSavingThreshold] = useState(false);
+  const [thresholdSavedSuccess, setThresholdSavedSuccess] = useState(false);
 
   // In-flight Mutex Refs
   const submittingPurchaseRef = useRef(false);
@@ -410,9 +415,16 @@ export default function InventoryDashboardPage() {
     }
   }, [showRecipeModal]);
 
+  // Sync minMarginThreshold from restaurant settings
+  useEffect(() => {
+    if ((restaurant?.settings as any)?.min_margin_threshold !== undefined) {
+      setMinMarginThreshold(Number((restaurant?.settings as any).min_margin_threshold));
+    }
+  }, [(restaurant?.settings as any)?.min_margin_threshold]);
+
   // 1-Click Direct Recipe Open from URL (e.g. from Main Dashboard ?tab=recipes&dishId=...)
   useEffect(() => {
-    if (loading || menuItems.length === 0 || typeof window === 'undefined') return;
+    if (menuItems.length === 0 || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const targetDishId = params.get('dishId');
     const targetVariantId = params.get('variantId');
@@ -430,7 +442,7 @@ export default function InventoryDashboardPage() {
         }
       }
     }
-  }, [loading, menuItems, openRecipeModalForDish]);
+  }, [menuItems, openRecipeModalForDish]);
 
   // Load Inventory Data
   const loadData = async () => {
@@ -468,23 +480,22 @@ export default function InventoryDashboardPage() {
       setDispositions(dispRes.data || []);
       setAlerts(alertsRes.data || []);
 
-      // 2. Load Hourly Impact Report
-      const impact = await getHourlyInventoryImpactReport(restaurantId, 1);
-      setHourlyImpact(impact);
+      // Instant UI Unblock: enable instant recipe modal rendering
+      setLoading(false);
 
-      // 3. Load AI Recipe Credit Usage
-      try {
-        const usageRes = await fetch(`/api/ai-usage/check?restaurantId=${restaurantId}&featureKey=ai_recipe_generation`);
-        if (usageRes.ok) {
-          const uData = await usageRes.json();
-          setAiRecipeUsage({ used: uData.used, limit: uData.limit, remaining: uData.remaining });
-        }
-      } catch (e) {}
+      // Background Non-blocking Tasks
+      getHourlyInventoryImpactReport(restaurantId, 1).then(setHourlyImpact).catch(() => {});
+      syncInventoryMenuAvailability(restaurantId).catch(() => {});
 
-      // 4. Sync Menu Availability with Inventory
-      await syncInventoryMenuAvailability(restaurantId);
+      // Background AI Recipe Credit Usage
+      fetch(`/api/ai-usage/check?restaurantId=${restaurantId}&featureKey=ai_recipe_generation`)
+        .then(r => r.ok ? r.json() : null)
+        .then(uData => {
+          if (uData) setAiRecipeUsage({ used: uData.used, limit: uData.limit, remaining: uData.remaining });
+        })
+        .catch(() => {});
 
-      // 5. Clean up any orphan reservations for cancelled/completed orders (non-blocking)
+      // Clean up any orphan reservations for cancelled/completed orders (non-blocking)
       getClientAuthHeaders().then(authHeaders => {
         fetch(`/api/staff/cleanup-reservations?restaurantId=${restaurantId}`, {
           method: 'POST',
@@ -493,7 +504,6 @@ export default function InventoryDashboardPage() {
       }).catch(() => {});
     } catch (err) {
       console.error('Error loading inventory data:', err);
-    } finally {
       setLoading(false);
     }
   };
@@ -690,9 +700,10 @@ export default function InventoryDashboardPage() {
     const referenceBaseMarginPct = baselineMarginPct || calculatedBaseMarginPct;
     const marginDiff = parseFloat((marginPercentage - referenceBaseMarginPct).toFixed(1));
 
-    // Loss & Zero Margin Detection
-    const isLoss = (grossMargin <= 0 || marginPercentage <= 0) && sellingPrice > 0;
-    const isLowMargin = !isLoss && marginPercentage < 20;
+    // Loss & Configurable Margin Threshold Detection (Default 5%)
+    const isLoss = grossMargin < 0 && sellingPrice > 0;
+    const isBelowThreshold = (marginPercentage <= minMarginThreshold || grossMargin <= 0) && sellingPrice > 0;
+    const isLowMargin = isBelowThreshold;
 
     // Suggested Selling Price: restores original baseline margin or minimum 65% margin
     const targetMarginRatio = Math.max(0.3, Math.min(0.85, (referenceBaseMarginPct > 0 ? referenceBaseMarginPct / 100 : 0.65)));
@@ -715,6 +726,7 @@ export default function InventoryDashboardPage() {
       referenceBaseMarginPct,
       marginDiff,
       isLoss,
+      isBelowThreshold,
       isLowMargin,
       suggestedPrice,
       ingredientsCount: recipe.inventory_recipe_ingredients.length,
@@ -732,10 +744,30 @@ export default function InventoryDashboardPage() {
     const m = calculateRecipeMetrics(item);
     if (m.isConfigured) {
       recipeCostSummary.totalConfigured++;
-      if (m.isLoss) recipeCostSummary.lossCount++;
+      if (m.isBelowThreshold) recipeCostSummary.lossCount++;
       if (m.hasCostChanged && m.isCostHigher) recipeCostSummary.inflationCount++;
     }
   });
+
+  // Margin Alert Threshold Handler (Owner Configurable)
+  const handleSaveThreshold = async (newVal: number) => {
+    if (isNaN(newVal) || newVal < 0 || newVal > 100) return;
+    setMinMarginThreshold(newVal);
+    setIsSavingThreshold(true);
+    try {
+      const updatedSettings = {
+        ...(restaurant?.settings || {}),
+        min_margin_threshold: newVal
+      };
+      await supabase.from('restaurants').update({ settings: updatedSettings }).eq('id', restaurantId);
+      setThresholdSavedSuccess(true);
+      setTimeout(() => setThresholdSavedSuccess(false), 2000);
+    } catch (e) {
+      console.error('Failed to save margin threshold:', e);
+    } finally {
+      setIsSavingThreshold(false);
+    }
+  };
 
   // Selling Price Direct Update Handler (Modal)
   const handleUpdateSellingPrice = async (targetPrice?: number) => {
@@ -2316,10 +2348,32 @@ export default function InventoryDashboardPage() {
       {activeTab === 'recipes' && (
         <div className="space-y-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Menu Item Recipe Costing & Portion Costing</h3>
-                <p className="text-xs text-slate-500">Configure distinct raw ingredients and quantities for each portion size (Half, Full, Standard)</p>
+                <p className="text-xs text-slate-500">Configure distinct raw ingredients and quantities for each portion size</p>
+              </div>
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Min Margin Alert:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={minMarginThreshold}
+                    onChange={e => {
+                      const v = Number(e.target.value);
+                      setMinMarginThreshold(v);
+                      handleSaveThreshold(v);
+                    }}
+                    className="w-12 px-1.5 py-0.5 text-xs font-black bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded text-center text-slate-900 dark:text-white"
+                  />
+                  <span className="text-xs font-bold text-slate-500">%</span>
+                </div>
+                {thresholdSavedSuccess && (
+                  <span className="text-[10px] font-bold text-slate-900 dark:text-white">Saved</span>
+                )}
               </div>
             </div>
 
@@ -2494,9 +2548,9 @@ export default function InventoryDashboardPage() {
                           {metrics.isConfigured ? (
                             <div>
                               <div>₹{metrics.grossMargin}</div>
-                              {metrics.isLoss ? (
+                              {metrics.isBelowThreshold ? (
                                 <div className="text-[10px] font-black uppercase tracking-wider text-slate-900 dark:text-slate-100">
-                                  {metrics.grossMargin < 0 ? 'Loss' : '0% Margin'}
+                                  {metrics.isLoss ? 'Loss' : `${metrics.marginPercentage}% Margin`}
                                 </div>
                               ) : metrics.isLowMargin ? (
                                 <div className="text-[10px] font-semibold text-slate-500">
@@ -3367,7 +3421,8 @@ export default function InventoryDashboardPage() {
                     : Number(selectedMenuItemForRecipe?.price || 0);
                   const modalGrossMargin = parseFloat((modalSellingPrice - modalTotalCost).toFixed(2));
                   const modalMarginPct = modalSellingPrice > 0 ? parseFloat(((modalGrossMargin / modalSellingPrice) * 100).toFixed(1)) : 0;
-                  const isLoss = (modalGrossMargin <= 0 || modalMarginPct <= 0) && modalSellingPrice > 0;
+                  const isLoss = modalGrossMargin < 0 && modalSellingPrice > 0;
+                  const isBelowThreshold = (modalMarginPct <= minMarginThreshold || modalGrossMargin <= 0) && modalSellingPrice > 0;
 
                   const existingMatch = recipes.find(r => 
                     r.menu_item_id === selectedMenuItemForRecipe?.id && 
@@ -3456,7 +3511,7 @@ export default function InventoryDashboardPage() {
                               </button>
                             </div>
                           </div>
-                          {isLoss ? (
+                          {isBelowThreshold ? (
                             <button
                               type="button"
                               onClick={() => handleUpdateSellingPrice(suggestedPrice)}
@@ -3476,9 +3531,9 @@ export default function InventoryDashboardPage() {
                           <div>
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gross Margin</span>
-                              {isLoss ? (
+                              {isBelowThreshold ? (
                                 <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900 text-white dark:bg-white dark:text-slate-900">
-                                  {modalGrossMargin < 0 ? 'Loss' : '0% Margin'}
+                                  {isLoss ? 'Loss' : `${modalMarginPct}% Margin`}
                                 </span>
                               ) : (
                                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
@@ -3492,7 +3547,9 @@ export default function InventoryDashboardPage() {
                           </div>
                           <div className="mt-3 text-[10px] font-medium text-slate-500">
                             {isLoss
-                              ? (modalGrossMargin < 0 ? 'Cost exceeds selling price' : 'Zero margin: Selling price equals food cost')
+                              ? 'Cost exceeds selling price'
+                              : isBelowThreshold
+                              ? `Below minimum ${minMarginThreshold}% target margin`
                               : `Food cost is ${modalSellingPrice > 0 ? ((modalTotalCost / modalSellingPrice) * 100).toFixed(0) : 0}% of price`}
                           </div>
                         </div>

@@ -119,7 +119,7 @@ export default function DashboardPage() {
   const [completingOrderIds, setCompletingOrderIds] = useState<string[]>([]);
   const [floorTables, setFloorTables] = useState<any[]>([]);
   const [recipeCostAlerts, setRecipeCostAlerts] = useState<{
-    lossItems: Array<{ id: string; name: string; cost: number; price: number; suggestedPrice: number; diff: number }>;
+    lossItems: Array<{ id: string; name: string; cost: number; price: number; suggestedPrice: number; diff: number; marginPct?: number; threshold?: number }>;
     inflationItems: Array<{ id: string; name: string; cost: number; baseline: number; diff: number; diffPct: number }>;
   }>({ lossItems: [], inflationItems: [] });
 
@@ -528,7 +528,7 @@ export default function DashboardPage() {
           const mList = menuRes.data || [];
           const iList = itemsRes.data || [];
 
-          const lossList: Array<{ id: string; name: string; cost: number; price: number; suggestedPrice: number; diff: number }> = [];
+          const lossList: Array<{ id: string; name: string; cost: number; price: number; suggestedPrice: number; diff: number; marginPct?: number; threshold?: number }> = [];
           const inflationList: Array<{ id: string; name: string; cost: number; baseline: number; diff: number; diffPct: number }> = [];
 
           rList.forEach((r: any) => {
@@ -565,13 +565,18 @@ export default function DashboardPage() {
             const costDiff = parseFloat((totalCost - baselineCost).toFixed(2));
             const costPctDiff = baselineCost > 0 ? parseFloat(((costDiff / baselineCost) * 100).toFixed(1)) : 0;
             const suggestedPrice = Math.ceil(totalCost / 0.35);
+            const marginPct = sellingPrice > 0 ? parseFloat((((sellingPrice - totalCost) / sellingPrice) * 100).toFixed(1)) : 0;
+            const threshold = Number((activeRest?.settings as any)?.min_margin_threshold ?? 5);
+            const isBelowThreshold = (marginPct <= threshold || totalCost >= sellingPrice) && sellingPrice > 0;
 
-            if (totalCost >= sellingPrice && sellingPrice > 0) {
+            if (isBelowThreshold) {
               lossList.push({
                 id: menuItem.id,
                 name: menuItem.name,
                 cost: totalCost,
                 price: sellingPrice,
+                marginPct,
+                threshold,
                 suggestedPrice,
                 diff: parseFloat((totalCost - sellingPrice).toFixed(2))
               });
@@ -1126,7 +1131,7 @@ export default function DashboardPage() {
                 : `${recipeCostAlerts.inflationItems.length} recipes affected by ingredient price inflation`}
             </span>
           </div>
-          <Link href={recipeCostAlerts.lossItems.length > 0 ? `/dashboard/inventory?tab=recipes&dishId=${recipeCostAlerts.lossItems[0].id}` : '/dashboard/inventory?tab=recipes'}>
+          <Link href={recipeCostAlerts.lossItems.length > 0 ? `/dashboard/inventory?tab=recipes&dishId=${recipeCostAlerts.lossItems[0].id}` : '/dashboard/inventory?tab=recipes'} prefetch={true}>
             <Button size="sm" className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl hover:opacity-90 cursor-pointer">
               Review Recipes & Costing <ArrowRight className="h-3.5 w-3.5 ml-1" />
             </Button>
@@ -1673,19 +1678,19 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-gray-950 dark:text-white block">{item.name}</span>
                           <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900 text-white dark:bg-white dark:text-slate-900">
-                            {item.diff > 0 ? 'Loss' : '0% Margin'}
+                            {item.diff > 0 ? 'Loss' : `${item.marginPct}% Margin`}
                           </span>
                         </div>
                         <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mt-0.5">
                           {item.diff > 0 
                             ? `Cost: ₹${item.cost} • Selling: ₹${item.price} (Loss: -₹${item.diff})` 
-                            : `Cost: ₹${item.cost} • Selling: ₹${item.price} (0% Margin)`}
+                            : `Margin: ${item.marginPct}% (Min: ${item.threshold || 5}%) • Cost: ₹${item.cost} • Selling: ₹${item.price}`}
                         </span>
                         <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
                           Suggested: ₹{item.suggestedPrice}
                         </span>
                       </div>
-                      <Link href={`/dashboard/inventory?tab=recipes&dishId=${item.id}`}>
+                      <Link href={`/dashboard/inventory?tab=recipes&dishId=${item.id}`} prefetch={true}>
                         <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold cursor-pointer">
                           Fix Price
                         </Button>
@@ -1701,7 +1706,7 @@ export default function DashboardPage() {
                           Cost: ₹{item.cost} (Was ₹{item.baseline}, +₹{item.diff})
                         </span>
                       </div>
-                      <Link href={`/dashboard/inventory?tab=recipes&dishId=${item.id}`}>
+                      <Link href={`/dashboard/inventory?tab=recipes&dishId=${item.id}`} prefetch={true}>
                         <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold cursor-pointer">
                           Review
                         </Button>
