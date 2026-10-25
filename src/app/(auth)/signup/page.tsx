@@ -378,7 +378,7 @@ function SignupForm() {
             <Link href="/privacy-policy" target="_blank" className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
               Privacy Policy
             </Link>
-            , and give lawful consent under India&apos;s <strong>DPDP Act 2023</strong> to process restaurant, staff, and dining order data as Data Fiduciary.
+            , and give lawful consent under India&apos;s <strong>DPDP Act 2023</strong> to process restaurant, staff, and dining order data for operations, digital billing, loyalty rewards, and promotional marketing offers.
           </span>
         </label>
       </div>

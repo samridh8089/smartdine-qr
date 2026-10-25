@@ -2368,7 +2368,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                     : `Place Order • ${formatPrice(cartTotal, restaurant.settings.currency)}`}
                 </Button>
                 <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 mt-2 select-none">
-                  🔒 By ordering, you agree to dining terms. Details are processed strictly for order fulfillment under India&apos;s DPDP Act 2023.
+                  🔒 By ordering, you agree to dining terms & receiving order updates and exclusive restaurant offers. Details are processed under India&apos;s DPDP Act 2023.
                 </p>
               </div>
             );
@@ -2480,6 +2480,9 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                     className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-stone-500/20"
                     required
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Used for order status, digital billing & exclusive offers. Protected under DPDP Act 2023.
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">

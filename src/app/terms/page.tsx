@@ -79,11 +79,21 @@ export default function TermsPage() {
           </section>
 
           <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-3">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-              4. Governing Law
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              4. Customer Dining Data & Promotional Marketing Authorization
             </h2>
             <p className="leading-relaxed">
-              These terms shall be governed by and construed in accordance with the laws of India, under the jurisdiction of courts in New Delhi.
+              Restaurant owners and CleverOps are authorized to process dining customer contact information (such as mobile numbers and order preferences) collected through QR ordering and billing for order fulfillment, digital receipts, loyalty reward tracking, and sending promotional marketing communications (including festival discounts, coupons, and menu announcements via WhatsApp, SMS, or Email). Both the Restaurant and CleverOps undertake to process such data in compliance with India&apos;s Digital Personal Data Protection Act, 2023 (DPDP Act) and provide customers with an easy mechanism to opt-out or unsubscribe from promotional messages at any time.
+            </p>
+          </section>
+
+          <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-3">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              5. Governing Law & Jurisdiction
+            </h2>
+            <p className="leading-relaxed">
+              These terms shall be governed by and construed in accordance with the laws of India, under the exclusive jurisdiction of competent courts in Udaipur, Rajasthan, India.
             </p>
           </section>
 

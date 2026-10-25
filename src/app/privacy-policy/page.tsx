@@ -82,9 +82,9 @@ export default function PrivacyPolicyPage() {
               </div>
 
               <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
-                <h3 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider mb-1">B. Dining Customers & Guests (QR Menu)</h3>
+                <h3 className="font-bold text-slate-900 dark:text-white text-xs uppercase tracking-wider mb-1">B. Dining Customers & Guests (QR Menu, Billing & Loyalty)</h3>
                 <p className="text-xs text-slate-600 dark:text-slate-300">
-                  Customer name, mobile number (collected strictly for order status, digital billing, or takeaway delivery fulfillment), dining table number, and itemized food order logs. Viewing digital menus does <em>not</em> mandate entering a phone number.
+                  Customer name, mobile number, table number, and itemized food order logs. This data is collected to fulfill digital table orders, generate digital GST invoices, track loyalty reward points, and deliver exclusive dining offers, seasonal discounts, and festival coupons from the restaurant and CleverOps network. Viewing digital menus does <em>not</em> mandate entering a phone number.
                 </p>
               </div>
 
@@ -114,14 +114,15 @@ export default function PrivacyPolicyPage() {
               We abide strictly by the principle of Purpose Limitation. Your personal data is processed solely for specified, lawful business purposes:
             </p>
             <ul className="list-disc list-inside space-y-1.5 pl-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
-              <li>Transmitting order tickets from QR table menus to Kitchen Display Systems (KDS).</li>
-              <li>Generating compliant digital GST bills, split-payment receipts, and invoices.</li>
-              <li>Sending transactional updates via WhatsApp or SMS regarding order preparedness.</li>
-              <li>Verifying staff shifts, attendance punctuality, and payroll calculation.</li>
-              <li>Preventing unauthorized device access through remote session management.</li>
+              <li>Transmitting live order tickets from QR table menus to Kitchen Display Systems (KDS).</li>
+              <li>Generating compliant digital GST bills, dual-tender split receipts, and downloadable invoices.</li>
+              <li>Sending transactional order updates and digital receipts directly via WhatsApp or SMS.</li>
+              <li><strong>Promotional Marketing, Offers & Loyalty:</strong> Sending curated festival offers, special discounts, new dish announcements, loyalty coupons, and re-engagement promotions from the dining restaurant and CleverOps platform via WhatsApp, SMS, or Email.</li>
+              <li>Verifying staff shifts, attendance punctuality, and payroll calculations.</li>
+              <li>Preventing software abuse and unauthorized multi-device access through active session security.</li>
             </ul>
-            <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl text-xs text-amber-800 dark:text-amber-300">
-              <strong>Unbundled Consent Standard:</strong> Transactional dining fulfillment is never bundled with marketing. Diners have the autonomous right to withdraw consent or unsubscribe from non-essential promotional messages at any time without forfeiting access to food ordering.
+            <div className="mt-3 p-3 bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-xl text-xs text-emerald-900 dark:text-emerald-300 leading-relaxed">
+              <strong>Promotional Offers & Consent Notice:</strong> By placing an order and providing contact details, customers consent to receiving transactional order notices as well as exclusive dining offers, discounts, and reward coupons from the restaurant and CleverOps. Under DPDP Rules 2026, customers retain the autonomous right to opt-out or unsubscribe from promotional marketing anytime by replying &ldquo;STOP&rdquo; on WhatsApp or emailing our Grievance Officer.
             </div>
           </section>
 
