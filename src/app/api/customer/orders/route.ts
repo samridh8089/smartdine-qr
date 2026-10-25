@@ -115,7 +115,7 @@ export async function POST(req: Request) {
         : Promise.resolve({ data: null, error: null }),
       supabase.from('restaurants').select('*').eq('id', restaurantId).maybeSingle(),
       (tableId && tableId !== 'takeaway' && tableId !== 'reservation' && tableId !== 'counter') 
-        ? supabase.from('tables').select('*').eq('id', tableId).maybeSingle()
+        ? supabase.from('tables').select('*').eq('id', tableId).eq('restaurant_id', restaurantId).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
       cartItemIds.length > 0
         ? supabase.from('menu_items').select('id, name, price, is_available').in('id', cartItemIds).eq('restaurant_id', restaurantId)
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
         ? supabase.from('menu_item_variants').select('id, menu_item_id, name, price, is_available').in('menu_item_id', cartItemIds)
         : Promise.resolve({ data: [], error: null }),
       (orderType === 'dine_in' && tableId && tableId !== 'takeaway' && tableId !== 'reservation' && tableId !== 'counter')
-        ? supabase.from('orders').select('*').eq('table_id', tableId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).neq('payment_status', 'paid').order('created_at', { ascending: false }).limit(1)
+        ? supabase.from('orders').select('*').eq('table_id', tableId).eq('restaurant_id', restaurantId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).neq('payment_status', 'paid').order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [], error: null })
     ]);
 
@@ -270,13 +270,21 @@ export async function POST(req: Request) {
       typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
 
     for (const entry of items) {
+      const rawQty = (entry.quantity !== undefined && entry.quantity !== null && entry.quantity !== '') ? Number(entry.quantity) : 1;
+      const qty = Math.floor(rawQty);
+      if (isNaN(qty) || qty < 1 || qty > 50 || rawQty !== qty) {
+        timer.end('inventory');
+        return NextResponse.json({
+          error: 'Invalid quantity for item. Quantity must be a whole number between 1 and 50.'
+        }, { status: 400 });
+      }
+
       const itemId = entry.menuItemId || entry.id || entry.menu_item_id;
       const menuItem = allMenuItems.find(i => i.id === itemId);
       if (!menuItem || menuItem.is_available === false) {
         timer.end('inventory');
         return NextResponse.json({ error: `Item "${menuItem?.name || 'Selected'}" is currently out of stock.` }, { status: 400 });
       }
-      const qty = Number(entry.quantity || 1);
 
       let safeVariantId: string | null = null;
       let safeVariantName: string | null = entry.variantName || null;
@@ -531,7 +539,7 @@ export async function POST(req: Request) {
         table_name: (orderType === 'reservation' || tableId === 'reservation') ? 'Reservation' : (orderType === 'counter' || tableId === 'counter') ? 'Express Counter' : (table.name || 'Table 1'),
         status: 'new',
         order_type: (orderType === 'reservation' || orderType === 'counter') ? 'dine_in' : orderType,
-        payment_status: paymentStatus,
+        payment_status: 'pending', // Enforced server-side for customer QR ordering (Finding C2 & High Finding #1)
         special_instructions: [
           specialInstructions,
           (finalCustomerName || finalCustomerPhone) ? `CUSTOMER: ${finalCustomerName || 'Guest'} | PHONE: ${finalCustomerPhone}` : null

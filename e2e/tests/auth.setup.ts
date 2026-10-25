@@ -26,13 +26,14 @@ const STORAGE_STATE = {
 };
 
 // ── Seed credentials (Spec TDM-002) ─────────────────────────────────────
+const defaultPw = process.env.E2E_DEFAULT_PASSWORD || 'TestPass123!';
 const CREDENTIALS = {
-  owner:      { email: 'owner@test.com',       password: 'TestOwner123!'    },
-  waiter:     { email: 'waiter@test.com',      password: 'TestWaiter123!'   },
-  kitchen:    { email: 'kitchen@test.com',     password: 'TestKitchen123!'  },
-  cashier:    { email: 'cashier@test.com',     password: 'TestCashier123!'  },
-  manager:    { email: 'manager@test.com',     password: 'TestManager123!'  },
-  superAdmin: { email: 'superadmin@test.com',  password: 'SuperAdmin123!'   },
+  owner:      { email: process.env.E2E_OWNER_EMAIL || 'owner@test.com',       password: process.env.E2E_OWNER_PASSWORD || defaultPw },
+  waiter:     { email: process.env.E2E_WAITER_EMAIL || 'waiter@test.com',      password: process.env.E2E_WAITER_PASSWORD || defaultPw },
+  kitchen:    { email: process.env.E2E_KITCHEN_EMAIL || 'kitchen@test.com',     password: process.env.E2E_KITCHEN_PASSWORD || defaultPw },
+  cashier:    { email: process.env.E2E_CASHIER_EMAIL || 'cashier@test.com',     password: process.env.E2E_CASHIER_PASSWORD || defaultPw },
+  manager:    { email: process.env.E2E_MANAGER_EMAIL || 'manager@test.com',     password: process.env.E2E_MANAGER_PASSWORD || defaultPw },
+  superAdmin: { email: process.env.E2E_SUPER_ADMIN_EMAIL || 'superadmin@test.com',  password: process.env.E2E_SUPER_ADMIN_PASSWORD || defaultPw },
 };
 
 // ── Helper: performs login and saves storage state ────────────────────────

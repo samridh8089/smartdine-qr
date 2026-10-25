@@ -58,13 +58,14 @@ async function provision() {
   else console.log('✅ Restaurant seeded (test-restaurant)');
 
   // 2. Users to create
+  const defaultPw = process.env.E2E_DEFAULT_PASSWORD || 'TestPass123!';
   const users = [
-    { email: 'owner@test.com', password: 'TestOwner123!', role: 'owner', name: 'QA Owner' },
-    { email: 'waiter@test.com', password: 'TestWaiter123!', role: 'waiter', name: 'QA Waiter' },
-    { email: 'kitchen@test.com', password: 'TestKitchen123!', role: 'kitchen', name: 'QA Kitchen' },
-    { email: 'cashier@test.com', password: 'TestCashier123!', role: 'cashier', name: 'QA Cashier' },
-    { email: 'manager@test.com', password: 'TestManager123!', role: 'manager', name: 'QA Manager' },
-    { email: 'superadmin@test.com', password: 'SuperAdmin123!', role: 'super_admin', name: 'QA SuperAdmin' }
+    { email: process.env.E2E_OWNER_EMAIL || 'owner@test.com', password: process.env.E2E_OWNER_PASSWORD || defaultPw, role: 'owner', name: 'QA Owner' },
+    { email: process.env.E2E_WAITER_EMAIL || 'waiter@test.com', password: process.env.E2E_WAITER_PASSWORD || defaultPw, role: 'waiter', name: 'QA Waiter' },
+    { email: process.env.E2E_KITCHEN_EMAIL || 'kitchen@test.com', password: process.env.E2E_KITCHEN_PASSWORD || defaultPw, role: 'kitchen', name: 'QA Kitchen' },
+    { email: process.env.E2E_CASHIER_EMAIL || 'cashier@test.com', password: process.env.E2E_CASHIER_PASSWORD || defaultPw, role: 'cashier', name: 'QA Cashier' },
+    { email: process.env.E2E_MANAGER_EMAIL || 'manager@test.com', password: process.env.E2E_MANAGER_PASSWORD || defaultPw, role: 'manager', name: 'QA Manager' },
+    { email: process.env.E2E_SUPER_ADMIN_EMAIL || 'superadmin@test.com', password: process.env.E2E_SUPER_ADMIN_PASSWORD || defaultPw, role: 'super_admin', name: 'QA SuperAdmin' }
   ];
 
   for (const user of users) {

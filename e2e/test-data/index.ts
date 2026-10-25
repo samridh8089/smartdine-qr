@@ -9,20 +9,20 @@ export const SEED_DATA = {
   restaurantSlug: 'test-restaurant',
   tableSlug: 'table-1',
   owner: {
-    email: 'owner@test.com',
-    password: 'TestOwner123!',
+    email: process.env.E2E_OWNER_EMAIL || 'owner@test.com',
+    password: process.env.E2E_OWNER_PASSWORD || 'TestOwner123!',
   },
   waiter: {
-    email: 'waiter@test.com',
-    password: 'TestWaiter123!',
+    email: process.env.E2E_WAITER_EMAIL || 'waiter@test.com',
+    password: process.env.E2E_WAITER_PASSWORD || 'TestWaiter123!',
   },
   kitchen: {
-    email: 'kitchen@test.com',
-    password: 'TestKitchen123!',
+    email: process.env.E2E_KITCHEN_EMAIL || 'kitchen@test.com',
+    password: process.env.E2E_KITCHEN_PASSWORD || 'TestKitchen123!',
   },
   superAdmin: {
-    email: 'superadmin@test.com',
-    password: 'SuperAdmin123!',
+    email: process.env.E2E_SUPER_ADMIN_EMAIL || 'superadmin@test.com',
+    password: process.env.E2E_SUPER_ADMIN_PASSWORD || 'TestSuperAdmin123!',
   },
   billingTestItem: {
     name: 'Item For Billing Test',
