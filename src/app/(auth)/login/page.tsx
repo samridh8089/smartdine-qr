@@ -129,7 +129,7 @@ export default function LoginPage() {
       else if (userRole === 'waiter' || userRole === 'cashier' || userRole === 'supervisor') targetUrl = '/dashboard/orders';
     }
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('cleverops_device_id');
+      localStorage.setItem('cleverops_auth_timestamp', String(Date.now()));
     }
     router.push(targetUrl);
     setLoading(false);

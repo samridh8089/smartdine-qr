@@ -286,16 +286,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const myDevId = getOrCreateDeviceId();
         const freshRest = await db.getRestaurantById(restaurant.id);
         if (!freshRest) return;
-        const revoked = freshRest.settings?.revoked_devices;
-        const activeDevs = freshRest.settings?.active_devices;
-        const isRevoked = Boolean(
-          revoked?.[myDevId] ||
-          (activeDevs && Object.keys(activeDevs).length > 0 && !activeDevs[myDevId])
-        );
+        const revocation = freshRest.settings?.revoked_devices?.[myDevId];
+        let authTimestamp = Number(localStorage.getItem('cleverops_auth_timestamp') || 0);
+        if (!authTimestamp) {
+          authTimestamp = Date.now();
+          localStorage.setItem('cleverops_auth_timestamp', String(authTimestamp));
+        }
+        const revocationTime = revocation?.revoked_at ? new Date(revocation.revoked_at).getTime() : 0;
+        const isRevoked = Boolean(revocation && revocationTime > authTimestamp);
 
         if (isRevoked) {
           console.warn('[RemoteLogout] Session was revoked remotely via heartbeat.');
           localStorage.removeItem('cleverops_device_id');
+          localStorage.removeItem('cleverops_auth_timestamp');
           await signOutUser();
           window.location.href = '/login?reason=session_revoked';
         }
@@ -341,16 +344,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           // Realtime Remote Logout Detection
           if (typeof window !== 'undefined') {
             const myDevId = getOrCreateDeviceId();
-            const revoked = updatedRest.settings?.revoked_devices;
-            const activeDevs = updatedRest.settings?.active_devices;
-            const isRevoked = Boolean(
-              revoked?.[myDevId] ||
-              (activeDevs && Object.keys(activeDevs).length > 0 && !activeDevs[myDevId])
-            );
+            const revocation = updatedRest.settings?.revoked_devices?.[myDevId];
+            let authTimestamp = Number(localStorage.getItem('cleverops_auth_timestamp') || 0);
+            if (!authTimestamp) {
+              authTimestamp = Date.now();
+              localStorage.setItem('cleverops_auth_timestamp', String(authTimestamp));
+            }
+            const revocationTime = revocation?.revoked_at ? new Date(revocation.revoked_at).getTime() : 0;
+            const isRevoked = Boolean(revocation && revocationTime > authTimestamp);
 
             if (isRevoked) {
               console.warn('[RemoteLogout] Session was revoked remotely via realtime.');
               localStorage.removeItem('cleverops_device_id');
+              localStorage.removeItem('cleverops_auth_timestamp');
               await signOutUser();
               window.location.href = '/login?reason=session_revoked';
               return;

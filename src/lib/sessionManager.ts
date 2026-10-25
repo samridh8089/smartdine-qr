@@ -54,11 +54,20 @@ export async function registerDeviceActivity(restaurantId?: string, profile?: an
   try {
     const deviceId = getOrCreateDeviceId();
 
-    // Check if this device has been revoked
+    // Check if this device has been explicitly revoked after login
     const rest = await db.getRestaurantById(restaurantId);
-    if (rest?.settings?.revoked_devices?.[deviceId]) {
+    const revocation = rest?.settings?.revoked_devices?.[deviceId];
+    let authTimestamp = Number(localStorage.getItem('cleverops_auth_timestamp') || 0);
+    if (!authTimestamp) {
+      authTimestamp = Date.now();
+      localStorage.setItem('cleverops_auth_timestamp', String(authTimestamp));
+    }
+    const revocationTime = revocation?.revoked_at ? new Date(revocation.revoked_at).getTime() : 0;
+
+    if (revocation && revocationTime > authTimestamp) {
       console.warn('[SessionManager] This device has been revoked remotely.');
       localStorage.removeItem('cleverops_device_id');
+      localStorage.removeItem('cleverops_auth_timestamp');
       await signOutUser();
       window.location.href = '/login?reason=session_revoked';
       return;
