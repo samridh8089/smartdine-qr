@@ -111,6 +111,9 @@ export interface Restaurant {
       is_trusted?: boolean;
       last_active_at: string;
     }>;
+    revoked_devices?: Record<string, {
+      revoked_at: string;
+    }>;
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';

@@ -3,7 +3,7 @@
 import { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { getActiveUser, supabase, clearActiveUserCache } from '@/lib/supabase';
+import { getActiveUser, supabase, clearActiveUserCache, signOutUser } from '@/lib/supabase';
 import { db, Profile, Restaurant, isSubscriptionExpired } from '@/lib/db';
 import { DEFAULT_PLAN_SPECS, parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
@@ -19,7 +19,7 @@ import {
   Bell, BellOff, UserCheck
 } from 'lucide-react';
 import { setGlobalMute, stopLoudBell, isGloballyMuted, playLoudBell } from '@/lib/soundAlert';
-import { registerDeviceActivity } from '@/lib/sessionManager';
+import { registerDeviceActivity, getOrCreateDeviceId } from '@/lib/sessionManager';
 
 // Central Route to Entitlement Feature Key Mapping
 const ROUTE_FEATURE_KEYS: Record<string, { key: string; name: string; desc: string }> = {
@@ -277,6 +277,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [restaurant?.id, profile?.id]);
 
+  // Periodic Remote Session Revocation Guard (5-second tick + window focus check)
+  useEffect(() => {
+    if (!restaurant?.id || !profile) return;
+
+    const checkRevocation = async () => {
+      try {
+        const myDevId = getOrCreateDeviceId();
+        const freshRest = await db.getRestaurantById(restaurant.id);
+        if (!freshRest) return;
+        const revoked = freshRest.settings?.revoked_devices;
+        const activeDevs = freshRest.settings?.active_devices;
+        const isRevoked = Boolean(
+          revoked?.[myDevId] ||
+          (activeDevs && Object.keys(activeDevs).length > 0 && !activeDevs[myDevId])
+        );
+
+        if (isRevoked) {
+          console.warn('[RemoteLogout] Session was revoked remotely via heartbeat.');
+          localStorage.removeItem('cleverops_device_id');
+          await signOutUser();
+          window.location.href = '/login?reason=session_revoked';
+        }
+      } catch (_) {}
+    };
+
+    const interval = setInterval(checkRevocation, 5000);
+    window.addEventListener('focus', checkRevocation);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkRevocation();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', checkRevocation);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [restaurant?.id, profile?.id]);
+
   // Realtime Supabase Subscription for Restaurant License/Plan updates
   useEffect(() => {
     if (!profile?.restaurant_id) return;
@@ -297,6 +336,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           setRestaurant(updatedRest);
           if (updatedRest.subscription_plan) {
             await fetchPlanSpec(updatedRest.subscription_plan);
+          }
+
+          // Realtime Remote Logout Detection
+          if (typeof window !== 'undefined') {
+            const myDevId = getOrCreateDeviceId();
+            const revoked = updatedRest.settings?.revoked_devices;
+            const activeDevs = updatedRest.settings?.active_devices;
+            const isRevoked = Boolean(
+              revoked?.[myDevId] ||
+              (activeDevs && Object.keys(activeDevs).length > 0 && !activeDevs[myDevId])
+            );
+
+            if (isRevoked) {
+              console.warn('[RemoteLogout] Session was revoked remotely via realtime.');
+              localStorage.removeItem('cleverops_device_id');
+              await signOutUser();
+              window.location.href = '/login?reason=session_revoked';
+              return;
+            }
           }
         }
       )
