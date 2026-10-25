@@ -25,6 +25,7 @@ function SignupForm() {
   // Selected Plan from URL params
   const [selectedPlan, setSelectedPlan] = useState<'starter' | 'pro' | 'premium' | 'trial'>('starter');
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
+  const [dpdpConsent, setDpdpConsent] = useState(false);
 
   const isTrialMode = selectedPlan === 'trial';
 
@@ -87,6 +88,10 @@ function SignupForm() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!dpdpConsent) {
+      setError('You must accept the Terms of Service and provide DPDP Act consent to register your restaurant.');
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -108,6 +113,8 @@ function SignupForm() {
             plan: 'starter',
             isTrial: true,
             billingInterval,
+            dpdpConsent: true,
+            dpdpConsentTimestamp: new Date().toISOString(),
             paymentDetails: { isDemo: true, razorpay_payment_id: `trial_${Date.now()}`, razorpay_order_id: `ord_trial_${Date.now()}`, amount: 0 }
           })
         });
@@ -215,6 +222,8 @@ function SignupForm() {
                 slug,
                 plan: targetPlan,
                 billingInterval,
+                dpdpConsent: true,
+                dpdpConsentTimestamp: new Date().toISOString(),
                 paymentDetails: {
                   razorpay_order_id: response.razorpay_order_id,
                   razorpay_payment_id: response.razorpay_payment_id,
@@ -350,7 +359,36 @@ function SignupForm() {
         </p>
       </div>
 
-      <Button type="submit" className="w-full cursor-pointer" isLoading={loading}>
+      {/* Mandatory DPDP Act 2023 & Terms Consent */}
+      <div className="pt-1 pb-1">
+        <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-600 dark:text-slate-400 select-none leading-relaxed">
+          <input
+            type="checkbox"
+            required
+            checked={dpdpConsent}
+            onChange={(e) => setDpdpConsent(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+          />
+          <span>
+            I agree to CleverOps&apos;s{' '}
+            <Link href="/terms" target="_blank" className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+              Terms of Service
+            </Link>{' '}
+            and{' '}
+            <Link href="/privacy-policy" target="_blank" className="font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+              Privacy Policy
+            </Link>
+            , and give lawful consent under India&apos;s <strong>DPDP Act 2023</strong> to process restaurant, staff, and dining order data as Data Fiduciary.
+          </span>
+        </label>
+      </div>
+
+      <Button 
+        type="submit" 
+        className="w-full cursor-pointer disabled:opacity-50" 
+        isLoading={loading}
+        disabled={loading || !dpdpConsent}
+      >
         Proceed to Payment & Activate
       </Button>
     </form>
