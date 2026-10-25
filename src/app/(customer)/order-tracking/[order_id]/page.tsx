@@ -931,11 +931,28 @@ export default function OrderTrackingPage({ params }: PageProps) {
                           </span>
                         </div>
 
+                        {/* Payment QR Code display (if uploaded) */}
+                        {restaurant.settings?.payment_qr && (
+                          <div className="flex flex-col items-center justify-center p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-2 text-center border border-slate-200 dark:border-slate-700">
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
+                            <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200/80 inline-block">
+                              <img
+                                src={restaurant.settings.payment_qr}
+                                alt="Restaurant Payment QR"
+                                className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
+                              />
+                            </div>
+                            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                              Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
+                            </p>
+                          </div>
+                        )}
+
                         {restaurant.settings?.upi_id && (
                           <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg text-[11px] font-semibold space-y-1">
                             <div className="flex justify-between text-slate-500">
                               <span>Payee Name</span>
-                              <span className="text-slate-800 dark:text-slate-200">{restaurant.settings.upi_name}</span>
+                              <span className="text-slate-800 dark:text-slate-200">{restaurant.settings.upi_name || restaurant.name}</span>
                             </div>
                             <div className="flex justify-between text-slate-500">
                               <span>UPI ID</span>
@@ -945,14 +962,16 @@ export default function OrderTrackingPage({ params }: PageProps) {
                         )}
 
                         <div className="flex flex-col sm:flex-row gap-2">
-                          <a
-                            href={`upi://pay?pa=${encodeURIComponent(restaurant.settings?.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings?.upi_name || restaurant.name)}&am=${unpaidAmt}&cu=INR`}
-                            className="w-full"
-                          >
-                            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs">
-                              Pay {formatPrice(unpaidAmt, restaurant.settings.currency)} Now
-                            </Button>
-                          </a>
+                          {restaurant.settings?.upi_id && (
+                            <a
+                              href={`upi://pay?pa=${encodeURIComponent(restaurant.settings?.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings?.upi_name || restaurant.name)}&am=${unpaidAmt}&cu=INR`}
+                              className="w-full"
+                            >
+                              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs">
+                                Pay {formatPrice(unpaidAmt, restaurant.settings.currency)} Now via UPI App
+                              </Button>
+                            </a>
+                          )}
                           <Button
                             variant="outline"
                             onClick={handleConfirmMergedPayment}
@@ -1016,16 +1035,35 @@ export default function OrderTrackingPage({ params }: PageProps) {
                     Pay <strong>{formatPrice(displayTotal, restaurant.settings.currency)}</strong> online using any UPI application.
                   </p>
                   
-                  <div className="bg-slate-50/65 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 font-semibold">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Payee Name</span>
-                      <span className="text-slate-700 dark:text-slate-300">{restaurant.settings.upi_name}</span>
+                  {/* Payment QR Code display (if uploaded) */}
+                  {restaurant.settings?.payment_qr && (
+                    <div className="flex flex-col items-center justify-center p-3.5 bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-center">
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
+                      <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200/80 inline-block">
+                        <img
+                          src={restaurant.settings.payment_qr}
+                          alt="Restaurant Payment QR"
+                          className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
+                        />
+                      </div>
+                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
+                      </p>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">UPI ID</span>
-                      <span className="text-slate-700 dark:text-slate-300 font-mono">{restaurant.settings.upi_id}</span>
+                  )}
+
+                  {restaurant.settings?.upi_id && (
+                    <div className="bg-slate-50/65 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 font-semibold">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Payee Name</span>
+                        <span className="text-slate-700 dark:text-slate-300">{restaurant.settings.upi_name || restaurant.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">UPI ID</span>
+                        <span className="text-slate-700 dark:text-slate-300 font-mono">{restaurant.settings.upi_id}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {(() => {
                     let canActivatePayment = false;
@@ -1044,14 +1082,16 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
                     return canActivatePayment ? (
                       <div className="flex flex-col sm:flex-row gap-2.5">
-                        <a 
-                          href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || '')}&am=${displayTotal}&cu=INR`}
-                          className="w-full"
-                        >
-                          <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10 cursor-pointer py-3 rounded-xl text-xs sm:text-sm">
-                            Pay {formatPrice(displayTotal, restaurant.settings.currency)} Now
-                          </Button>
-                        </a>
+                        {restaurant.settings?.upi_id && (
+                          <a 
+                            href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || '')}&am=${displayTotal}&cu=INR`}
+                            className="w-full"
+                          >
+                            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10 cursor-pointer py-3 rounded-xl text-xs sm:text-sm">
+                              Pay {formatPrice(displayTotal, restaurant.settings.currency)} Now via UPI App
+                            </Button>
+                          </a>
+                        )}
                         <Button 
                           variant="outline" 
                           onClick={handleConfirmPayment}
