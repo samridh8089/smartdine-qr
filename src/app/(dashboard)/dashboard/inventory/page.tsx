@@ -339,6 +339,13 @@ export default function InventoryDashboardPage() {
   // Analytics Filter
   const [analyticsSelectedItemId, setAnalyticsSelectedItemId] = useState<string>('all');
   const [isUpdatingBaseline, setIsUpdatingBaseline] = useState(false);
+  const [baselineSuccessDishId, setBaselineSuccessDishId] = useState<string | null>(null);
+  const [modalSellingPriceInput, setModalSellingPriceInput] = useState<string>('');
+  const [isUpdatingSellingPrice, setIsUpdatingSellingPrice] = useState(false);
+  const [priceSuccessDishId, setPriceSuccessDishId] = useState<string | null>(null);
+  const [editingPriceDishId, setEditingPriceDishId] = useState<string | null>(null);
+  const [inlinePriceInput, setInlinePriceInput] = useState<string>('');
+  const [isUpdatingInlinePrice, setIsUpdatingInlinePrice] = useState(false);
 
   // In-flight Mutex Refs
   const submittingPurchaseRef = useRef(false);
@@ -658,6 +665,125 @@ export default function InventoryDashboardPage() {
     };
   };
 
+  // Food Cost & Margin Summary across all configured dishes
+  const recipeCostSummary = {
+    totalConfigured: 0,
+    lossCount: 0,
+    inflationCount: 0
+  };
+  menuItems.forEach(item => {
+    const m = calculateRecipeMetrics(item);
+    if (m.isConfigured) {
+      recipeCostSummary.totalConfigured++;
+      if (m.isLoss) recipeCostSummary.lossCount++;
+      if (m.hasCostChanged && m.isCostHigher) recipeCostSummary.inflationCount++;
+    }
+  });
+
+  // Selling Price Direct Update Handler (Modal)
+  const handleUpdateSellingPrice = async (targetPrice?: number) => {
+    const dish = selectedMenuItemForRecipe;
+    if (!dish || isUpdatingSellingPrice) return;
+    const priceToSet = typeof targetPrice === 'number' ? targetPrice : parseFloat(modalSellingPriceInput);
+    if (isNaN(priceToSet) || priceToSet <= 0) {
+      alert('Please enter a valid selling price');
+      return;
+    }
+
+    setIsUpdatingSellingPrice(true);
+    try {
+      if (selectedRecipeVariantId) {
+        const { error } = await supabase
+          .from('menu_item_variants')
+          .update({ price: priceToSet })
+          .eq('id', selectedRecipeVariantId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('menu_items')
+          .update({ price: priceToSet, updated_at: new Date().toISOString() })
+          .eq('id', dish.id);
+        if (error) throw error;
+      }
+
+      setMenuItems(prev => prev.map(m => {
+        if (m.id === dish.id) {
+          if (selectedRecipeVariantId) {
+            return {
+              ...m,
+              variants: (m.variants || []).map((v: any) => v.id === selectedRecipeVariantId ? { ...v, price: priceToSet } : v)
+            };
+          }
+          return { ...m, price: priceToSet };
+        }
+        return m;
+      }));
+
+      setSelectedMenuItemForRecipe((prev: any) => {
+        if (!prev) return prev;
+        if (selectedRecipeVariantId) {
+          return {
+            ...prev,
+            variants: (prev.variants || []).map((v: any) => v.id === selectedRecipeVariantId ? { ...v, price: priceToSet } : v)
+          };
+        }
+        return { ...prev, price: priceToSet };
+      });
+
+      setModalSellingPriceInput(String(priceToSet));
+      setPriceSuccessDishId(selectedRecipeVariantId || dish.id);
+      setTimeout(() => setPriceSuccessDishId(null), 3000);
+    } catch (err: any) {
+      alert('Failed to update selling price: ' + err.message);
+    } finally {
+      setIsUpdatingSellingPrice(false);
+    }
+  };
+
+  // Inline Table Price Update Handler
+  const handleSaveInlinePrice = async (dish: any, variantId: string | null = null, newPriceStr?: string) => {
+    const priceToSet = parseFloat(newPriceStr !== undefined ? newPriceStr : inlinePriceInput);
+    if (isNaN(priceToSet) || priceToSet <= 0) {
+      alert('Please enter a valid selling price');
+      return;
+    }
+    setIsUpdatingInlinePrice(true);
+    try {
+      if (variantId) {
+        const { error } = await supabase
+          .from('menu_item_variants')
+          .update({ price: priceToSet })
+          .eq('id', variantId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('menu_items')
+          .update({ price: priceToSet, updated_at: new Date().toISOString() })
+          .eq('id', dish.id);
+        if (error) throw error;
+      }
+
+      setMenuItems(prev => prev.map(m => {
+        if (m.id === dish.id) {
+          if (variantId) {
+            return {
+              ...m,
+              variants: (m.variants || []).map((v: any) => v.id === variantId ? { ...v, price: priceToSet } : v)
+            };
+          }
+          return { ...m, price: priceToSet };
+        }
+        return m;
+      }));
+
+      setEditingPriceDishId(null);
+    } catch (err: any) {
+      alert('Failed to update selling price: ' + err.message);
+    } finally {
+      setIsUpdatingInlinePrice(false);
+    }
+  };
+
   const handleUpdateRecipeBaseline = async (recipeId: string, newBaselineCost: number, newSellingPrice: number) => {
     if (!recipeId || isUpdatingBaseline) return;
     setIsUpdatingBaseline(true);
@@ -682,6 +808,10 @@ export default function InventoryDashboardPage() {
       if (error) throw error;
 
       setRecipes(prev => prev.map(r => r.id === recipeId ? { ...r, notes: JSON.stringify(meta) } : r));
+      setBaselineSuccessDishId(recipeId);
+      setTimeout(() => {
+        setBaselineSuccessDishId(null);
+      }, 3000);
     } catch (err: any) {
       alert('Failed to update baseline: ' + err.message);
     } finally {
@@ -1068,12 +1198,15 @@ export default function InventoryDashboardPage() {
     setSelectedRecipeVariantId(variantId);
     setFocusedDishId(dish.id);
 
+    const variantObj = (dish.variants || []).find((v: any) => v.id === variantId);
+    const initialPrice = variantObj ? Number(variantObj.price || 0) : Number(dish.price || 0);
+    setModalSellingPriceInput(initialPrice > 0 ? String(initialPrice) : '');
+    setPriceSuccessDishId(null);
+
     const match = recipes.find(r => 
       r.menu_item_id === dish.id && 
       (variantId ? r.variant_id === variantId : (!r.variant_id || r.variant_id === null))
     );
-
-    const variantObj = (dish.variants || []).find((v: any) => v.id === variantId);
 
     if (match) {
       setRecipeSteps(match.preparation_steps || '');
@@ -1698,8 +1831,8 @@ export default function InventoryDashboardPage() {
               </div>
             </div>
 
-            {/* 4 Compact KPI Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            {/* 5 Compact KPI Summary Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
               <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-2.5 sm:p-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Total Stock Value</span>
                 <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
@@ -1731,6 +1864,28 @@ export default function InventoryDashboardPage() {
                 <p className="text-[11px] text-slate-500 font-medium mt-0.5">From order KOTs</p>
               </div>
 
+              <div 
+                onClick={() => setActiveTab('recipes')}
+                className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-2.5 sm:p-3 cursor-pointer hover:border-slate-400 dark:hover:border-slate-600 transition"
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Recipe Cost Alerts</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
+                    {recipeCostSummary.lossCount + recipeCostSummary.inflationCount} Alerts
+                  </span>
+                  {(recipeCostSummary.lossCount + recipeCostSummary.inflationCount) > 0 && (
+                    <span className="h-2 w-2 rounded-full bg-slate-900 dark:bg-white animate-pulse" />
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                  {recipeCostSummary.lossCount > 0 
+                    ? `${recipeCostSummary.lossCount} selling at loss` 
+                    : recipeCostSummary.inflationCount > 0 
+                    ? `${recipeCostSummary.inflationCount} cost increased` 
+                    : 'Margins normal'}
+                </p>
+              </div>
+
               <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 rounded-xl p-2.5 sm:p-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">AI Recipe Credits</span>
                 <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
@@ -1742,6 +1897,36 @@ export default function InventoryDashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Recipe Food Cost & Loss Alert Banner */}
+          {(recipeCostSummary.lossCount > 0 || recipeCostSummary.inflationCount > 0) && (
+            <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-3 sm:p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {recipeCostSummary.lossCount > 0 && (
+                  <span className="text-[10px] font-mono font-black uppercase tracking-wider bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-2 py-0.5 rounded">
+                    {recipeCostSummary.lossCount} Loss {recipeCostSummary.lossCount > 1 ? 'Dishes' : 'Dish'}
+                  </span>
+                )}
+                {recipeCostSummary.inflationCount > 0 && (
+                  <span className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2 py-0.5 rounded">
+                    {recipeCostSummary.inflationCount} Cost Increased
+                  </span>
+                )}
+                <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {recipeCostSummary.lossCount > 0 
+                    ? `${recipeCostSummary.lossCount} recipe selling below ingredient cost` 
+                    : `${recipeCostSummary.inflationCount} recipes affected by ingredient cost changes`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('recipes')}
+                className="px-3 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-xs cursor-pointer hover:bg-slate-800 dark:hover:bg-slate-100 transition whitespace-nowrap self-start sm:self-auto"
+              >
+                Review Recipes
+              </button>
+            </div>
+          )}
 
           {/* Hourly Stock Shortage Impact Banner */}
           {hourlyImpact && hourlyImpact.affectedOrdersCount > 0 && (
@@ -1798,7 +1983,11 @@ export default function InventoryDashboardPage() {
                   </div>
                   <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700">
                     {mod.id === 'items' ? `${activeItems.length} Items` :
-                     mod.id === 'recipes' ? `${recipes.length} Recipes` :
+                     mod.id === 'recipes' ? (
+                       recipeCostSummary.lossCount > 0 ? `${recipeCostSummary.lossCount} Loss Alert` :
+                       recipeCostSummary.inflationCount > 0 ? `${recipeCostSummary.inflationCount} Cost Increased` :
+                       `${recipes.length} Recipes`
+                     ) :
                      mod.id === 'purchases' ? `${effectivePurchases.length} Bills` :
                      mod.id === 'dispositions' ? `${dispositions.length} Dispositions` :
                      mod.id === 'transactions' ? `${effectiveTransactions.length} Entries` :
@@ -2206,23 +2395,75 @@ export default function InventoryDashboardPage() {
                           {metrics.isConfigured ? (
                             <div>
                               <div>₹{metrics.recipeCost}</div>
-                              {metrics.hasCostChanged && (
+                              {metrics.hasCostChanged ? (
                                 <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
                                   Was ₹{metrics.baselineCost} ({metrics.costDiff > 0 ? `+₹${metrics.costDiff}` : `-₹${Math.abs(metrics.costDiff)}`})
+                                </div>
+                              ) : (
+                                <div className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                  Baseline: ₹{metrics.baselineCost}
                                 </div>
                               )}
                             </div>
                           ) : '—'}
                         </td>
                         <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
-                          <div>
-                            <div>₹{metrics.sellingPrice}</div>
-                            {metrics.isLoss && (
-                              <div className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
-                                Suggested: ₹{metrics.suggestedPrice}
+                          {editingPriceDishId === item.id ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-slate-400">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={inlinePriceInput}
+                                onChange={e => setInlinePriceInput(e.target.value)}
+                                className="w-16 px-1.5 py-0.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded"
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSaveInlinePrice(item, null, inlinePriceInput)}
+                                disabled={isUpdatingInlinePrice}
+                                className="px-1.5 py-0.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] rounded cursor-pointer"
+                              >
+                                Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingPriceDishId(null)}
+                                className="px-1 py-0.5 text-slate-400 hover:text-slate-600 text-[10px] cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="group flex flex-col items-start">
+                              <div className="flex items-center gap-1.5">
+                                <span>₹{metrics.sellingPrice}</span>
+                                {!hasVariants && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingPriceDishId(item.id);
+                                      setInlinePriceInput(String(metrics.sellingPrice));
+                                    }}
+                                    className="text-[10px] text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline cursor-pointer"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
                               </div>
-                            )}
-                          </div>
+                              {metrics.isLoss && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveInlinePrice(item, null, String(metrics.suggestedPrice))}
+                                  className="text-[10px] font-bold text-slate-700 dark:text-slate-300 hover:underline cursor-pointer"
+                                >
+                                  Suggested: ₹{metrics.suggestedPrice}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200">
                           {metrics.isConfigured ? (
@@ -2993,10 +3234,10 @@ export default function InventoryDashboardPage() {
             {/* Dialog Container */}
             <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[88vh] overflow-hidden animate-pop z-10">
               {/* Header */}
-              <div className="px-5 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+              <div className="px-5 sm:px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center shrink-0 bg-slate-50/80 dark:bg-slate-900/80">
                 <div>
-                  <h3 className="font-black text-base text-slate-900 dark:text-white">Recipe: {selectedMenuItemForRecipe.name}</h3>
-                  <p className="text-xs text-slate-500">Selling Price: ₹{selectedMenuItemForRecipe.price}</p>
+                  <h3 className="font-black text-base text-slate-900 dark:text-white">{selectedMenuItemForRecipe.name}</h3>
+                  <p className="text-xs text-slate-500 font-medium">Recipe Costing & Pricing</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -3009,9 +3250,9 @@ export default function InventoryDashboardPage() {
                         handleGenerateAiRecipe(dishName);
                       }
                     }}
-                    className="flex items-center gap-1 bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-600 cursor-pointer shadow-xs"
+                    className="flex items-center gap-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold hover:opacity-90 cursor-pointer shadow-xs"
                   >
-                    <Sparkles className="h-3.5 w-3.5" /> Generate AI Draft
+                    <Sparkles className="h-3.5 w-3.5" /> AI Draft
                   </button>
                   <button 
                     onClick={handleCloseRecipeModal}
@@ -3022,10 +3263,11 @@ export default function InventoryDashboardPage() {
                 </div>
               </div>
 
-              <div className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto min-h-0 overscroll-contain">
+              <div className="p-4 sm:p-5 space-y-4 flex-1 overflow-y-auto min-h-0 overscroll-contain">
+                {/* Portion Selector & Label Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Configuring Portion / Variant Recipe</label>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Portion / Variant</label>
                     {selectedMenuItemForRecipe?.has_variants && selectedMenuItemForRecipe?.variants?.length > 0 ? (
                       <select
                         value={selectedRecipeVariantId || 'base'}
@@ -3037,6 +3279,8 @@ export default function InventoryDashboardPage() {
                             (val ? r.variant_id === val : (!r.variant_id || r.variant_id === null))
                           );
                           const variantObj = (selectedMenuItemForRecipe.variants || []).find((v: any) => v.id === val);
+                          const vPrice = variantObj ? Number(variantObj.price || 0) : Number(selectedMenuItemForRecipe.price || 0);
+                          setModalSellingPriceInput(vPrice > 0 ? String(vPrice) : '');
                           if (match) {
                             setRecipeSteps(match.preparation_steps || '');
                             setRecipeServingSize(match.serving_size || (variantObj ? variantObj.name : '1 Portion'));
@@ -3061,14 +3305,14 @@ export default function InventoryDashboardPage() {
                         ))}
                       </select>
                     ) : (
-                      <p className="text-xs font-bold text-slate-500 bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                        Standard Single Portion Dish
-                      </p>
+                      <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400">
+                        Standard Dish (Single Portion)
+                      </div>
                     )}
                   </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Portion / Serving Size Label</label>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Portion Label</label>
                     <input
                       type="text"
                       placeholder="e.g. Standard Portion, Full Plate, 500ml Bowl"
@@ -3079,7 +3323,7 @@ export default function InventoryDashboardPage() {
                   </div>
                 </div>
 
-                {/* Recipe Costing Summary Card */}
+                {/* Recipe Costing, Selling Price & Profitability Grid */}
                 {(() => {
                   const modalTotalCost = recipeIngredients.reduce((acc, ing) => {
                     const selItem = effectiveItems.find(i => i.id === ing.inventory_item_id);
@@ -3090,7 +3334,12 @@ export default function InventoryDashboardPage() {
                     }
                     return acc + (qtyInItemUnit * Number(selItem.cost_per_unit || 0));
                   }, 0);
-                  const modalSellingPrice = Number(selectedMenuItemForRecipe?.price || 0);
+                  const currentVariantObj = selectedRecipeVariantId 
+                    ? (selectedMenuItemForRecipe.variants || []).find((v: any) => v.id === selectedRecipeVariantId)
+                    : null;
+                  const modalSellingPrice = currentVariantObj 
+                    ? Number(currentVariantObj.price || 0)
+                    : Number(selectedMenuItemForRecipe?.price || 0);
                   const modalGrossMargin = parseFloat((modalSellingPrice - modalTotalCost).toFixed(2));
                   const modalMarginPct = modalSellingPrice > 0 ? parseFloat(((modalGrossMargin / modalSellingPrice) * 100).toFixed(1)) : 0;
                   const isLoss = modalGrossMargin < 0;
@@ -3112,49 +3361,116 @@ export default function InventoryDashboardPage() {
                   const suggestedPrice = Math.ceil(modalTotalCost / 0.35);
 
                   return (
-                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-2 text-xs">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Total Recipe Cost</span>
-                          <span className="text-base font-black text-slate-900 dark:text-white">₹{formatCurrency(modalTotalCost)}</span>
-                          {hasDiff && (
-                            <span className="text-[10px] text-slate-500 block">
-                              Was ₹{formatCurrency(baselineCost)} ({costDiff > 0 ? `+₹${costDiff}` : `-₹${Math.abs(costDiff)}`})
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Selling Price</span>
-                          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">₹{formatCurrency(modalSellingPrice)}</span>
-                          {isLoss && (
-                            <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100 block">
-                              Suggested: ₹{suggestedPrice}
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Gross Margin</span>
-                          <span className="text-sm font-black text-slate-900 dark:text-white">
-                            ₹{formatCurrency(modalGrossMargin)} ({modalMarginPct}%)
-                          </span>
-                          {isLoss && (
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 block">
-                              Loss
-                            </span>
-                          )}
-                        </div>
-                        {existingMatch && (
-                          <div className="w-full sm:w-auto pt-1 sm:pt-0">
+                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* 1. Food Cost */}
+                        <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Food Cost</span>
+                            <div className="text-lg font-black text-slate-900 dark:text-white">
+                              ₹{formatCurrency(modalTotalCost)}
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-medium mt-1">
+                              {hasDiff ? (
+                                <span>Was ₹{formatCurrency(baselineCost)} ({costDiff > 0 ? `+₹${costDiff}` : `-₹${Math.abs(costDiff)}`})</span>
+                              ) : (
+                                <span>Baseline: ₹{formatCurrency(baselineCost ?? modalTotalCost)}</span>
+                              )}
+                            </div>
+                          </div>
+                          {existingMatch && (
                             <button
                               type="button"
                               onClick={() => handleUpdateRecipeBaseline(existingMatch.id, modalTotalCost, modalSellingPrice)}
                               disabled={isUpdatingBaseline}
-                              className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2.5 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-50"
+                              className="mt-3 w-full text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1 transition"
                             >
-                              {isUpdatingBaseline ? 'Updating...' : 'Set as New Baseline'}
+                              {isUpdatingBaseline ? (
+                                'Updating...'
+                              ) : baselineSuccessDishId === existingMatch.id ? (
+                                <>
+                                  <Check className="h-3 w-3" />
+                                  <span>Baseline Updated</span>
+                                </>
+                              ) : (
+                                'Set as New Baseline'
+                              )}
                             </button>
+                          )}
+                        </div>
+
+                        {/* 2. Selling Price (Editable) */}
+                        <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Selling Price</span>
+                              {priceSuccessDishId && (
+                                <span className="text-[10px] font-bold text-slate-900 dark:text-white flex items-center gap-0.5">
+                                  <Check className="h-2.5 w-2.5" /> Saved
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-sm font-bold text-slate-400">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={modalSellingPriceInput}
+                                onChange={e => setModalSellingPriceInput(e.target.value)}
+                                className="w-full px-2 py-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-black text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-slate-400"
+                                placeholder="0"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateSellingPrice()}
+                                disabled={isUpdatingSellingPrice}
+                                className="px-2.5 py-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-bold rounded-lg hover:opacity-90 disabled:opacity-50 cursor-pointer transition shrink-0"
+                              >
+                                {isUpdatingSellingPrice ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
                           </div>
-                        )}
+                          {isLoss ? (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateSellingPrice(suggestedPrice)}
+                              className="mt-3 w-full text-[10px] font-bold text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 px-2 py-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer flex items-center justify-center gap-1 transition"
+                            >
+                              Use Suggested: ₹{suggestedPrice}
+                            </button>
+                          ) : (
+                            <div className="mt-3 text-[10px] text-slate-400 text-center font-medium">
+                              Current: ₹{formatCurrency(modalSellingPrice)}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. Gross Margin */}
+                        <div className="bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 rounded-xl p-3 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gross Margin</span>
+                              {isLoss ? (
+                                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900 text-white dark:bg-white dark:text-slate-900">
+                                  Loss
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                                  {modalMarginPct}%
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-lg font-black text-slate-900 dark:text-white">
+                              ₹{formatCurrency(modalGrossMargin)}
+                            </div>
+                          </div>
+                          <div className="mt-3 text-[10px] font-medium text-slate-500">
+                            {isLoss
+                              ? 'Cost exceeds selling price'
+                              : `Food cost is ${modalSellingPrice > 0 ? ((modalTotalCost / modalSellingPrice) * 100).toFixed(0) : 0}% of price`}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   );
