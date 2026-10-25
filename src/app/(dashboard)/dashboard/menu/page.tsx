@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { db, Category, MenuItem } from '@/lib/db';
 import { useRestaurant } from '../../layout';
 import { ImageUpload } from '@/components/ui/ImageUpload';
-import { getActiveUser } from '@/lib/supabase';
+import { getActiveUser, getClientAuthHeaders } from '@/lib/supabase';
 import { formatPrice } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -368,9 +368,13 @@ export default function MenuManagementPage() {
     setAiError(null);
 
     try {
+      const authHeaders = await getClientAuthHeaders();
       const res = await fetch('/api/ai-menu/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           restaurantId: targetRestId,
           images: [

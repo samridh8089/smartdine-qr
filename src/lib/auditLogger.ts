@@ -1,3 +1,4 @@
+import { getClientAuthHeaders } from './supabase';
 /**
  * Production Audit Trail Engine
  * Records all critical restaurant actions:
@@ -49,13 +50,18 @@ export async function recordAuditLog(entry: AuditEntry): Promise<void> {
       timestamp: new Date().toISOString()
     };
 
-    // If client-side, post to /api/restaurant/audit-logs
+    // If client-side, post to /api/restaurant/audit-logs with auth headers
     if (typeof window !== 'undefined') {
-      fetch('/api/restaurant/audit-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(err => console.warn('[Audit Log Client Error]:', err));
+      getClientAuthHeaders().then(authHeaders => {
+        fetch('/api/restaurant/audit-logs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders
+          },
+          body: JSON.stringify(payload)
+        }).catch(err => console.warn('[Audit Log Client Error]:', err));
+      }).catch(() => {});
       return;
     }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getActiveUser } from '@/lib/supabase';
+import { getActiveUser, getClientAuthHeaders } from '@/lib/supabase';
 import { db } from '@/lib/db';
 import AiMenuInput from '@/components/ai-menu/AiMenuInput';
 import AiMenuReview, { AiExtractedCategory } from '@/components/ai-menu/AiMenuReview';
@@ -90,9 +90,13 @@ export default function AiMenuPage() {
 
       const requestId = `req_ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+      const authHeaders = await getClientAuthHeaders();
       const res = await fetch('/api/ai-menu/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           restaurantId,
           images: payload.images,
@@ -157,9 +161,13 @@ export default function AiMenuPage() {
           if (finalImageUrl && (finalImageUrl.startsWith('http') || finalImageUrl.startsWith('data:image/'))) {
             if (finalImageUrl.includes('pollinations.ai') || item.imageSource === 'ai_suggestion' || finalImageUrl.startsWith('data:image/')) {
               try {
+                const authHeaders = await getClientAuthHeaders();
                 const uploadRes = await fetch('/api/ai-menu/upload-image', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders
+                  },
                   body: JSON.stringify({
                     restaurantId,
                     itemId: item.id,
