@@ -610,4 +610,35 @@ export function calculateBillSplit(
   }
 }
 
+export interface SplitPaymentDetail {
+  isSplit: boolean;
+  mode?: string;
+  splits: Array<{
+    name: string;
+    amount: number;
+    method: 'cash' | 'upi' | 'card' | string;
+  }>;
+}
 
+export function parseSplitPaymentDetails(order: any): SplitPaymentDetail {
+  if (!order) return { isSplit: false, splits: [] };
+  if (order.payment_method === 'split' && order.payment_reference) {
+    try {
+      const parsed = typeof order.payment_reference === 'string'
+        ? JSON.parse(order.payment_reference)
+        : order.payment_reference;
+      if (parsed?.splits && Array.isArray(parsed.splits) && parsed.splits.length > 0) {
+        return {
+          isSplit: true,
+          mode: parsed.mode || 'split',
+          splits: parsed.splits.map((s: any) => ({
+            name: s.name || (s.method === 'cash' ? 'Cash' : s.method === 'upi' ? 'Online (UPI)' : s.method === 'card' ? 'Card' : s.method?.toUpperCase() || 'Payment'),
+            amount: Number(s.amount) || 0,
+            method: s.method || 'cash'
+          }))
+        };
+      }
+    } catch (_) {}
+  }
+  return { isSplit: false, splits: [] };
+}
