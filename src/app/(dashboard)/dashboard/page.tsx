@@ -118,6 +118,10 @@ export default function DashboardPage() {
   const [isSubmittingSettle, setIsSubmittingSettle] = useState(false);
   const [completingOrderIds, setCompletingOrderIds] = useState<string[]>([]);
   const [floorTables, setFloorTables] = useState<any[]>([]);
+  const [recipeCostAlerts, setRecipeCostAlerts] = useState<{
+    lossItems: Array<{ id: string; name: string; cost: number; price: number; suggestedPrice: number; diff: number }>;
+    inflationItems: Array<{ id: string; name: string; cost: number; baseline: number; diff: number; diffPct: number }>;
+  }>({ lossItems: [], inflationItems: [] });
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const backgroundTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -511,6 +515,82 @@ export default function DashboardPage() {
               lowStock: sMap.lowStockItems || []
             });
           }
+        } catch (e) {}
+
+        // Recipe Cost & Margin Alerts deferred
+        try {
+          const [recipesRes, menuRes, itemsRes] = await Promise.all([
+            supabase.from('inventory_recipes').select('*, inventory_recipe_ingredients(*)').eq('restaurant_id', restId),
+            supabase.from('menu_items').select('*').eq('restaurant_id', restId),
+            supabase.from('inventory_items').select('*').eq('restaurant_id', restId)
+          ]);
+          const rList = recipesRes.data || [];
+          const mList = menuRes.data || [];
+          const iList = itemsRes.data || [];
+
+          const lossList: Array<{ id: string; name: string; cost: number; price: number; suggestedPrice: number; diff: number }> = [];
+          const inflationList: Array<{ id: string; name: string; cost: number; baseline: number; diff: number; diffPct: number }> = [];
+
+          rList.forEach((r: any) => {
+            const menuItem = mList.find((m: any) => m.id === r.menu_item_id);
+            if (!menuItem) return;
+            const sellingPrice = Number(menuItem.price || 0);
+
+            let totalCost = 0;
+            (r.inventory_recipe_ingredients || []).forEach((ing: any) => {
+              const it = iList.find((i: any) => i.id === ing.inventory_item_id);
+              if (it) {
+                let qty = Number(ing.quantity || 0);
+                const ingUnit = (ing.unit || '').toLowerCase().trim();
+                const itUnit = (it.unit || '').toLowerCase().trim();
+                if (ingUnit === 'gram' && itUnit === 'kg') qty = qty / 1000;
+                else if (ingUnit === 'kg' && itUnit === 'gram') qty = qty * 1000;
+                else if (ingUnit === 'ml' && itUnit === 'litre') qty = qty / 1000;
+                else if (ingUnit === 'litre' && itUnit === 'ml') qty = qty * 1000;
+                totalCost += qty * Number(it.cost_per_unit || 0);
+              }
+            });
+
+            totalCost = parseFloat(totalCost.toFixed(2));
+            let baselineCost = totalCost;
+            if (r.notes) {
+              try {
+                const meta = JSON.parse(r.notes);
+                if (typeof meta?.baselineCost === 'number' && meta.baselineCost > 0) {
+                  baselineCost = Number(meta.baselineCost);
+                }
+              } catch (_) {}
+            }
+
+            const costDiff = parseFloat((totalCost - baselineCost).toFixed(2));
+            const costPctDiff = baselineCost > 0 ? parseFloat(((costDiff / baselineCost) * 100).toFixed(1)) : 0;
+            const suggestedPrice = Math.ceil(totalCost / 0.35);
+
+            if (totalCost > sellingPrice && sellingPrice > 0) {
+              lossList.push({
+                id: menuItem.id,
+                name: menuItem.name,
+                cost: totalCost,
+                price: sellingPrice,
+                suggestedPrice,
+                diff: parseFloat((totalCost - sellingPrice).toFixed(2))
+              });
+            } else if (costDiff >= 0.05) {
+              inflationList.push({
+                id: menuItem.id,
+                name: menuItem.name,
+                cost: totalCost,
+                baseline: baselineCost,
+                diff: costDiff,
+                diffPct: costPctDiff
+              });
+            }
+          });
+
+          setRecipeCostAlerts({
+            lossItems: lossList,
+            inflationItems: inflationList
+          });
         } catch (e) {}
       }, 1000);
 
@@ -1026,6 +1106,34 @@ export default function DashboardPage() {
       })()}
 
 
+      {/* Recipe Cost & Margin Inflation Alert Banner on Main Overview */}
+      {(recipeCostAlerts.lossItems.length > 0 || recipeCostAlerts.inflationItems.length > 0) && (
+        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {recipeCostAlerts.lossItems.length > 0 && (
+              <span className="text-[10px] font-mono font-black uppercase tracking-wider bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-2 py-0.5 rounded">
+                {recipeCostAlerts.lossItems.length} Loss {recipeCostAlerts.lossItems.length > 1 ? 'Dishes' : 'Dish'}
+              </span>
+            )}
+            {recipeCostAlerts.inflationItems.length > 0 && (
+              <span className="text-[10px] font-mono font-bold text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2 py-0.5 rounded">
+                {recipeCostAlerts.inflationItems.length} Cost Increased
+              </span>
+            )}
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+              {recipeCostAlerts.lossItems.length > 0 
+                ? `${recipeCostAlerts.lossItems.length} recipe selling below food cost (${recipeCostAlerts.lossItems.map(i => i.name).slice(0, 2).join(', ')}${recipeCostAlerts.lossItems.length > 2 ? '...' : ''})` 
+                : `${recipeCostAlerts.inflationItems.length} recipes affected by ingredient price inflation`}
+            </span>
+          </div>
+          <Link href="/dashboard/inventory?tab=recipes">
+            <Button size="sm" className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl hover:opacity-90">
+              Review Recipes & Costing <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Top Row: Revenue & Core Stats (4 Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900">
@@ -1459,7 +1567,7 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Out of Stock Card */}
           <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
             <CardContent className="p-5 space-y-3">
@@ -1532,6 +1640,68 @@ export default function DashboardPage() {
                       <Link href="/dashboard/inventory">
                         <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold">
                           Add Stock
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recipe Cost & Margin Card */}
+          <Card className="border border-gray-200 dark:border-gray-800 rounded-2xl bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
+            <CardContent className="p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-2.5">
+                <span className="text-xs font-bold text-gray-950 dark:text-white uppercase tracking-wider">
+                  Recipe Cost & Margin ({recipeCostAlerts.lossItems.length + recipeCostAlerts.inflationItems.length})
+                </span>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 dark:bg-gray-800 text-gray-950 dark:text-white border border-gray-300 dark:border-gray-700">
+                  {recipeCostAlerts.lossItems.length > 0 ? 'LOSS ALERT' : recipeCostAlerts.inflationItems.length > 0 ? 'COST SHIFT' : 'HEALTHY'}
+                </span>
+              </div>
+
+              {(recipeCostAlerts.lossItems.length === 0 && recipeCostAlerts.inflationItems.length === 0) ? (
+                <div className="py-4 text-center text-xs font-semibold text-gray-500 dark:text-gray-400">
+                  All recipes have healthy margins. No loss dishes detected.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {recipeCostAlerts.lossItems.map((item, idx) => (
+                    <div key={`loss-${idx}`} className="p-3 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 text-xs">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-gray-950 dark:text-white block">{item.name}</span>
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900 text-white dark:bg-white dark:text-slate-900">
+                            Loss
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mt-0.5">
+                          Cost: ₹{item.cost} • Selling: ₹{item.price} (Loss: -₹{item.diff})
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-300 block">
+                          Suggested: ₹{item.suggestedPrice}
+                        </span>
+                      </div>
+                      <Link href="/dashboard/inventory?tab=recipes">
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold">
+                          Fix Price
+                        </Button>
+                      </Link>
+                    </div>
+                  ))}
+
+                  {recipeCostAlerts.inflationItems.map((item, idx) => (
+                    <div key={`inf-${idx}`} className="p-3 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-200 dark:border-gray-800 flex items-start justify-between gap-3 text-xs">
+                      <div>
+                        <span className="font-bold text-gray-950 dark:text-white block">{item.name}</span>
+                        <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium block mt-0.5">
+                          Cost: ₹{item.cost} (Was ₹{item.baseline}, +₹{item.diff})
+                        </span>
+                      </div>
+                      <Link href="/dashboard/inventory?tab=recipes">
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold">
+                          Review
                         </Button>
                       </Link>
                     </div>
