@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { db, Order, Restaurant, CustomerRequest, OrderBatch, VALID_ORDER_TRANSITIONS, getDayRangeInTimezone, getTodayDateString } from '@/lib/db';
 import { calculateBillingTotals, calculateBillSplit, parseOrderRefundDetails, parseSplitPaymentDetails } from '@/lib/billingEngine';
 import { recordAuditLog } from '@/lib/auditLogger';
-import { getActiveUser, supabase } from '@/lib/supabase';
+import { getActiveUser, supabase, getClientAuthHeaders } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
 import { formatPrice, formatDate, getFormattedOrderId, matchesOrderSearchQuery, parseCustomerDetailsFromOrder, validateIndianMobileNumber, cleanIndianMobileNumber } from '@/lib/utils';
 import { formatExactTimestamp } from '@/lib/timestamp';
@@ -1807,9 +1807,13 @@ export default function OrdersPage() {
     showToast(`Cancelled ${itemToCancel.menu_item_name}. Updating bill...`, "Dish Cancelled", "info");
 
     try {
+      const authHeaders = await getClientAuthHeaders();
       const response = await fetch('/api/staff/cancel-order-item', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           restaurantId: restaurant.id,
           orderId: targetOrderId,

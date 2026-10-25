@@ -2740,7 +2740,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                 <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
                   <div>
                     <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Enable Online Payment</span>
-                    <span className="text-xs text-slate-400 mt-1 block">Toggle this switch to allow customers to initiate one-click UPI payments upon served orders.</span>
+                    
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input 
@@ -2756,7 +2756,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                 <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
                   <div>
                     <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Enable Takeaway Ordering</span>
-                    <span className="text-xs text-slate-400 mt-1 block">Toggle this switch to generate a dedicated Takeaway QR and allow prepaid customer orders.</span>
+                    
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input 

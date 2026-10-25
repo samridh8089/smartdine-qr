@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRestaurant } from '../../layout';
 import { db, Order, Category, MenuItem, getPlanFeatures } from '@/lib/db';
-import { getActiveUser, supabase } from '@/lib/supabase';
+import { getActiveUser, supabase, getClientAuthHeaders } from '@/lib/supabase';
 import { formatPrice, parseCustomerDetailsFromOrder, cleanIndianMobileNumber, validateIndianMobileNumber, isOrderReservation, getFormattedOrderId } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -1188,21 +1188,27 @@ export default function ReportsPage() {
     setAuditLoading(true);
     const q = encodeURIComponent(auditSearchQuery.trim());
     const act = encodeURIComponent(auditActionFilter);
-    fetch(`/api/restaurant/audit-logs?restaurantId=${restId}&search=${q}&action=${act}&page=${auditPage}&limit=10`)
-      .then(res => res.json())
-      .then(data => {
-        if (isMounted) {
-          setAuditLogs(data.auditLogs || data.logs || []);
-          setAuditTotal(data.total || (data.logs?.length ?? 0));
-          setAuditLoading(false);
-        }
+    getClientAuthHeaders().then(authHeaders => {
+      fetch(`/api/restaurant/audit-logs?restaurantId=${restId}&search=${q}&action=${act}&page=${auditPage}&limit=10`, {
+        headers: authHeaders
       })
-      .catch(err => {
-        if (isMounted) {
-          console.error('Audit logs fetch failed:', err);
-          setAuditLoading(false);
-        }
-      });
+        .then(res => res.json())
+        .then(data => {
+          if (isMounted) {
+            setAuditLogs(data.auditLogs || data.logs || []);
+            setAuditTotal(data.total || (data.logs?.length ?? 0));
+            setAuditLoading(false);
+          }
+        })
+        .catch(err => {
+          if (isMounted) {
+            console.error('Audit logs fetch failed:', err);
+            setAuditLoading(false);
+          }
+        });
+    }).catch(() => {
+      if (isMounted) setAuditLoading(false);
+    });
 
     return () => {
       isMounted = false;
