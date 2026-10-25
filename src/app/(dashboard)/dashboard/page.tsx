@@ -1126,8 +1126,8 @@ export default function DashboardPage() {
                 : `${recipeCostAlerts.inflationItems.length} recipes affected by ingredient price inflation`}
             </span>
           </div>
-          <Link href="/dashboard/inventory?tab=recipes">
-            <Button size="sm" className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl hover:opacity-90">
+          <Link href={recipeCostAlerts.lossItems.length > 0 ? `/dashboard/inventory?tab=recipes&dishId=${recipeCostAlerts.lossItems[0].id}` : '/dashboard/inventory?tab=recipes'}>
+            <Button size="sm" className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold rounded-xl hover:opacity-90 cursor-pointer">
               Review Recipes & Costing <ArrowRight className="h-3.5 w-3.5 ml-1" />
             </Button>
           </Link>
@@ -1683,8 +1683,8 @@ export default function DashboardPage() {
                           Suggested: ₹{item.suggestedPrice}
                         </span>
                       </div>
-                      <Link href="/dashboard/inventory?tab=recipes">
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold">
+                      <Link href={`/dashboard/inventory?tab=recipes&dishId=${item.id}`}>
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold cursor-pointer">
                           Fix Price
                         </Button>
                       </Link>
@@ -1699,8 +1699,8 @@ export default function DashboardPage() {
                           Cost: ₹{item.cost} (Was ₹{item.baseline}, +₹{item.diff})
                         </span>
                       </div>
-                      <Link href="/dashboard/inventory?tab=recipes">
-                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold">
+                      <Link href={`/dashboard/inventory?tab=recipes&dishId=${item.id}`}>
+                        <Button size="sm" variant="ghost" className="h-7 text-[11px] text-gray-900 hover:text-black dark:text-gray-200 px-2 font-bold cursor-pointer">
                           Review
                         </Button>
                       </Link>
