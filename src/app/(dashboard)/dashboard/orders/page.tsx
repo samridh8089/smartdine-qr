@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { db, Order, Restaurant, CustomerRequest, OrderBatch, VALID_ORDER_TRANSITIONS, getDayRangeInTimezone, getTodayDateString } from '@/lib/db';
-import { calculateBillingTotals, calculateBillSplit, parseOrderRefundDetails } from '@/lib/billingEngine';
+import { calculateBillingTotals, calculateBillSplit, parseOrderRefundDetails, parseSplitPaymentDetails } from '@/lib/billingEngine';
 import { recordAuditLog } from '@/lib/auditLogger';
 import { getActiveUser, supabase } from '@/lib/supabase';
 import { useRestaurant } from '../../layout';
@@ -409,6 +409,10 @@ export default function OrdersPage() {
   // Payment Modal State
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'card' | 'split'>('cash');
+  const [splitTab, setSplitTab] = useState<'cash_online' | 'equal' | 'custom'>('cash_online');
+  const [splitCashAmount, setSplitCashAmount] = useState<number>(0);
+  const [splitOnlineAmount, setSplitOnlineAmount] = useState<number>(0);
+  const [splitOnlineMethod, setSplitOnlineMethod] = useState<'upi' | 'card'>('upi');
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
   const [splitGuestCount, setSplitGuestCount] = useState<number>(2);
   const [splitGuests, setSplitGuests] = useState<Array<{ name: string; amount: number; method: 'cash' | 'upi' | 'card' }>>([
@@ -2141,12 +2145,25 @@ export default function OrdersPage() {
               <div class="divider"></div>
               <p class="bold text-right">Total: ${formatPrice(calcResult.grandTotal, restaurant.settings?.currency)}</p>
               ${(() => {
+                const splitData = parseSplitPaymentDetails(order);
+                if (splitData.isSplit && splitData.splits.length > 0) {
+                  return `
+                    <div class="divider"></div>
+                    <p style="margin:2px 0;"><span class="bold">PAYMENT BREAKDOWN (SPLIT):</span></p>
+                    ${splitData.splits.map((s: any) => `
+                      <p class="text-right" style="margin:2px 0;">${s.name}: ${formatPrice(s.amount, restaurant.settings?.currency)}</p>
+                    `).join('')}
+                  `;
+                }
+                return `<p class="text-right"><span class="bold">Payment:</span> ${order.payment_method?.toUpperCase() || 'CASH'}</p>`;
+              })()}
+              ${(() => {
                 const ref = parseOrderRefundDetails(order);
                 if (!ref.isRefunded) return '';
                 const net = Math.max(0, calcResult.grandTotal - ref.refundAmount);
                 return `
-                  <p class="text-right" style="color:#b91c1c;font-weight:bold;">Refund (${ref.refundMethod || 'UPI'}): -${formatPrice(ref.refundAmount, restaurant.settings?.currency)}</p>
                   <div class="divider"></div>
+                  <p class="text-right" style="color:#b91c1c;font-weight:bold;">Refund (${ref.refundMethod || 'UPI'}): -${formatPrice(ref.refundAmount, restaurant.settings?.currency)}</p>
                   <p class="bold text-right" style="font-size:14px;color:#047857;">Net Paid: ${formatPrice(net, restaurant.settings?.currency)}</p>
                 `;
               })()}
@@ -2196,7 +2213,16 @@ export default function OrdersPage() {
   <p><span class="bold">Date:</span> ${formatExactTimestamp(order.created_at)}</p>
   ${billCustomerName ? `<p><span class="bold">Customer:</span> ${billCustomerName}</p>` : ''}
   ${billCustomerPhone ? `<p><span class="bold">Phone:</span> ${billCustomerPhone}</p>` : ''}
-  <p><span class="bold">Payment:</span> ${receiptRefund.isRefunded ? (receiptRefund.isPartial ? `PAID (${formatPrice(receiptRefund.refundAmount, restaurant.settings?.currency)} Refunded)` : `REFUNDED`) : `PAID (${order.payment_method?.toUpperCase() || 'PAID'})`}</p>
+  <p><span class="bold">Payment:</span> ${(() => {
+    if (receiptRefund.isRefunded) {
+      return receiptRefund.isPartial ? `PAID (${formatPrice(receiptRefund.refundAmount, restaurant.settings?.currency)} Refunded)` : `REFUNDED`;
+    }
+    const splitInfo = parseSplitPaymentDetails(order);
+    if (splitInfo.isSplit && splitInfo.splits.length > 0) {
+      return `PAID (Split: ${splitInfo.splits.map((s: any) => `${formatPrice(s.amount, restaurant.settings?.currency)} ${s.name}`).join(' + ')})`;
+    }
+    return `PAID (${order.payment_method?.toUpperCase() || 'PAID'})`;
+  })()}</p>
   <div class="divider"></div>
   <table>
     <thead><tr><th style="text-align:left">Item</th><th class="text-right">Qty</th><th class="text-right">Price</th></tr></thead>
@@ -2244,7 +2270,11 @@ export default function OrdersPage() {
     const shareRefund = parseOrderRefundDetails(order);
     const netShareAmt = Math.max(0, calcResult.grandTotal - shareRefund.refundAmount);
     const refundLine = shareRefund.isRefunded ? `Refund (${shareRefund.refundMethod || 'UPI'}): -${formatPrice(shareRefund.refundAmount, restaurant.settings?.currency)}\n*Net Paid: ${formatPrice(netShareAmt, restaurant.settings?.currency)}*\n` : '';
-    const textSummary = `*Receipt - ${restaurant.name}*\nOrder: ${formattedId}\nTable: ${order.table_name || 'Dine-In'}\nDate: ${formatExactTimestamp(order.created_at)}\n---\n${validItems.map((i: any) => `${i.quantity}x ${i.menu_item_name} - ${formatPrice(i.price * i.quantity, restaurant.settings?.currency)}`).join('\n')}\n---\nSubtotal: ${formatPrice(calcResult.validSubtotal, restaurant.settings?.currency)}\n${calcResult.discountAmount > 0 ? `Discount: -${formatPrice(calcResult.discountAmount, restaurant.settings?.currency)}\n` : ''}Taxes: ${formatPrice(calcResult.gstAmount, restaurant.settings?.currency)}\n*Grand Total: ${formatPrice(calcResult.grandTotal, restaurant.settings?.currency)}*\n${refundLine}Paid via: ${order.payment_method?.toUpperCase() || 'Cash'}\nThank you!`;
+    const splitReceiptData = parseSplitPaymentDetails(order);
+    const splitPaymentText = splitReceiptData.isSplit && splitReceiptData.splits.length > 0
+      ? `Paid via: Split (${splitReceiptData.splits.map((s: any) => `${formatPrice(s.amount, restaurant.settings?.currency)} ${s.name}`).join(' + ')})`
+      : `Paid via: ${order.payment_method?.toUpperCase() || 'Cash'}`;
+    const textSummary = `*Receipt - ${restaurant.name}*\nOrder: ${formattedId}\nTable: ${order.table_name || 'Dine-In'}\nDate: ${formatExactTimestamp(order.created_at)}\n---\n${validItems.map((i: any) => `${i.quantity}x ${i.menu_item_name} - ${formatPrice(i.price * i.quantity, restaurant.settings?.currency)}`).join('\n')}\n---\nSubtotal: ${formatPrice(calcResult.validSubtotal, restaurant.settings?.currency)}\n${calcResult.discountAmount > 0 ? `Discount: -${formatPrice(calcResult.discountAmount, restaurant.settings?.currency)}\n` : ''}Taxes: ${formatPrice(calcResult.gstAmount, restaurant.settings?.currency)}\n*Grand Total: ${formatPrice(calcResult.grandTotal, restaurant.settings?.currency)}*\n${refundLine}${splitPaymentText}\nThank you!`;
 
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
@@ -2306,27 +2336,50 @@ export default function OrdersPage() {
     let splitSummary: any = null;
 
     if (paymentMethod === 'split') {
-      const splitResult = calculateBillSplit(calcResult.grandTotal, splitMode, {
-        guestCount: splitGuestCount,
-        customAmounts: splitGuests.map(g => g.amount),
-        paymentMethods: splitGuests.map(g => g.method)
-      });
+      let finalSplits: any[] = [];
 
-      if (splitMode === 'custom' && !splitResult.isFullyPaid) {
-        showToast(`Split total must equal exact bill. Remaining balance: ${formatPrice(splitResult.remainingBalance, restaurant.settings.currency)}`, 'Split Bill Notice', 'warning');
-        submittingPaymentRef.current = false;
-        setSubmittingPayment(false);
-        return;
+      if (splitTab === 'cash_online') {
+        const cashVal = Number(splitCashAmount) || 0;
+        const onlineVal = Number(splitOnlineAmount) || 0;
+        const sum = parseFloat((cashVal + onlineVal).toFixed(2));
+        const diff = Math.abs(calcResult.grandTotal - sum);
+
+        if (diff > 0.05) {
+          showToast(`Split total must equal exact bill of ${formatPrice(calcResult.grandTotal, restaurant.settings.currency)}. Current total: ${formatPrice(sum, restaurant.settings.currency)}`, 'Split Bill Notice', 'warning');
+          submittingPaymentRef.current = false;
+          setSubmittingPayment(false);
+          return;
+        }
+
+        finalSplits = [
+          { name: 'Cash', amount: cashVal, method: 'cash' },
+          { name: splitOnlineMethod === 'card' ? 'Card' : 'Online (UPI)', amount: onlineVal, method: splitOnlineMethod }
+        ];
+      } else {
+        const splitResult = calculateBillSplit(calcResult.grandTotal, splitMode, {
+          guestCount: splitGuestCount,
+          customAmounts: splitGuests.map(g => g.amount),
+          paymentMethods: splitGuests.map(g => g.method)
+        });
+
+        if (splitMode === 'custom' && !splitResult.isFullyPaid) {
+          showToast(`Split total must equal exact bill. Remaining balance: ${formatPrice(splitResult.remainingBalance, restaurant.settings.currency)}`, 'Split Bill Notice', 'warning');
+          submittingPaymentRef.current = false;
+          setSubmittingPayment(false);
+          return;
+        }
+
+        finalSplits = splitGuests.map((g, idx) => ({
+          name: g.name || `Guest ${idx + 1}`,
+          amount: splitMode === 'equal' ? splitResult.splits[idx]?.amount : g.amount,
+          method: g.method
+        }));
       }
 
       splitSummary = {
         is_split: true,
-        mode: splitMode,
-        splits: splitGuests.map((g, idx) => ({
-          name: g.name || `Guest ${idx + 1}`,
-          amount: splitMode === 'equal' ? splitResult.splits[idx]?.amount : g.amount,
-          method: g.method
-        }))
+        mode: splitTab === 'cash_online' ? 'cash_online' : splitMode,
+        splits: finalSplits
       };
       paymentRefData = JSON.stringify(splitSummary);
       chosenMethod = 'split';
@@ -3874,7 +3927,15 @@ export default function OrdersPage() {
                           {Number(selectedOrder.total || 0) > 0 && (selectedOrder.payment_status === 'paid' || effectiveStatus === 'completed' || selectedOrderRefundInfo.isPartial) && selectedOrder.payment_status !== 'refunded' ? (
                             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 font-semibold text-xs rounded-xl border border-emerald-200 dark:border-emerald-800/60 w-full sm:w-auto justify-center">
                               <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                              <span>Paid ({selectedOrder.payment_method?.toUpperCase() || 'PAID'})</span>
+                              <span>
+                                {(() => {
+                                  const sp = parseSplitPaymentDetails(selectedOrder);
+                                  if (sp.isSplit && sp.splits.length > 0) {
+                                    return 'Paid: Split (' + sp.splits.map((s: any) => formatPrice(s.amount, restaurant.settings?.currency) + ' ' + s.name).join(' + ') + ')';
+                                  }
+                                  return 'Paid (' + (selectedOrder.payment_method?.toUpperCase() || 'PAID') + ')';
+                                })()}
+                              </span>
                             </div>
                           ) : null}
                       {selectedOrderRefundInfo.isRefunded && (
@@ -3994,9 +4055,15 @@ export default function OrdersPage() {
                         type="button"
                         onClick={() => {
                           setPaymentMethod('split');
-                          // Initialize equal split amounts
-                          const equalAmt = parseFloat((calcResult.grandTotal / splitGuestCount).toFixed(2));
-                          const remainder = parseFloat((calcResult.grandTotal - (equalAmt * (splitGuestCount - 1))).toFixed(2));
+                          setSplitTab('cash_online');
+                          const total = calcResult.grandTotal || 0;
+                          const half = parseFloat((total / 2).toFixed(2));
+                          setSplitCashAmount(half);
+                          setSplitOnlineAmount(parseFloat((total - half).toFixed(2)));
+                          setSplitOnlineMethod('upi');
+
+                          const equalAmt = parseFloat((total / splitGuestCount).toFixed(2));
+                          const remainder = parseFloat((total - (equalAmt * (splitGuestCount - 1))).toFixed(2));
                           setSplitGuests(Array.from({ length: splitGuestCount }, (_, idx) => ({
                             name: `Guest ${String.fromCharCode(65 + idx)}`,
                             amount: idx === splitGuestCount - 1 ? remainder : equalAmt,
@@ -4024,7 +4091,17 @@ export default function OrdersPage() {
                           <div className="flex items-center gap-1 bg-white dark:bg-slate-800 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs">
                             <button
                               type="button"
+                              onClick={() => setSplitTab('cash_online')}
+                              className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
+                                splitTab === 'cash_online' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'
+                              }`}
+                            >
+                              💵 Cash + Online
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => {
+                                setSplitTab('equal');
                                 setSplitMode('equal');
                                 const equalAmt = parseFloat((calcResult.grandTotal / splitGuestCount).toFixed(2));
                                 const remainder = parseFloat((calcResult.grandTotal - (equalAmt * (splitGuestCount - 1))).toFixed(2));
@@ -4035,22 +4112,156 @@ export default function OrdersPage() {
                                 })));
                               }}
                               className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
-                                splitMode === 'equal' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'
+                                splitTab === 'equal' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'
                               }`}
                             >
                               Equal Split
                             </button>
                             <button
                               type="button"
-                              onClick={() => setSplitMode('custom')}
+                              onClick={() => {
+                                setSplitTab('custom');
+                                setSplitMode('custom');
+                              }}
                               className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
-                                splitMode === 'custom' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'
+                                splitTab === 'custom' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'
                               }`}
                             >
                               Custom Split
                             </button>
                           </div>
                         </div>
+
+                        {splitTab === 'cash_online' && (
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {/* Cash Amount Card */}
+                              <div className="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-800/90 shadow-xs space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider">
+                                    <Banknote className="h-4 w-4" /> Cash Amount
+                                  </span>
+                                  <span className="text-[10px] font-mono font-semibold text-slate-400">Cash in Hand</span>
+                                </div>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2.5 text-slate-400 font-mono font-bold text-sm">₹</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={calcResult.grandTotal}
+                                    step="1"
+                                    value={splitCashAmount === 0 ? '' : splitCashAmount}
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const raw = parseFloat(e.target.value) || 0;
+                                      const cash = Math.max(0, raw);
+                                      setSplitCashAmount(cash);
+                                      const rem = Math.max(0, parseFloat((calcResult.grandTotal - cash).toFixed(2)));
+                                      setSplitOnlineAmount(rem);
+                                    }}
+                                    className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-base font-extrabold font-mono text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                  />
+                                </div>
+                                {/* Quick Cash Chips */}
+                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                  {[50, 100, 200, 500].filter(amt => amt <= calcResult.grandTotal).map(amt => (
+                                    <button
+                                      key={amt}
+                                      type="button"
+                                      onClick={() => {
+                                        setSplitCashAmount(amt);
+                                        setSplitOnlineAmount(Math.max(0, parseFloat((calcResult.grandTotal - amt).toFixed(2))));
+                                      }}
+                                      className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                                    >
+                                      ₹{amt}
+                                    </button>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const half = parseFloat((calcResult.grandTotal / 2).toFixed(2));
+                                      setSplitCashAmount(half);
+                                      setSplitOnlineAmount(parseFloat((calcResult.grandTotal - half).toFixed(2)));
+                                    }}
+                                    className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
+                                  >
+                                    50%
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Online / UPI Card */}
+                              <div className="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800/90 shadow-xs space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 uppercase tracking-wider">
+                                    <Smartphone className="h-4 w-4" /> Online / Digital
+                                  </span>
+                                  <select
+                                    value={splitOnlineMethod}
+                                    onChange={(e) => setSplitOnlineMethod(e.target.value as any)}
+                                    className="px-1.5 py-0.5 text-[10px] font-bold rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                                  >
+                                    <option value="upi">UPI / QR</option>
+                                    <option value="card">Card POS</option>
+                                  </select>
+                                </div>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-2.5 text-slate-400 font-mono font-bold text-sm">₹</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={calcResult.grandTotal}
+                                    step="1"
+                                    value={splitOnlineAmount === 0 ? '' : splitOnlineAmount}
+                                    placeholder="0"
+                                    onChange={(e) => {
+                                      const raw = parseFloat(e.target.value) || 0;
+                                      const online = Math.max(0, raw);
+                                      setSplitOnlineAmount(online);
+                                      const rem = Math.max(0, parseFloat((calcResult.grandTotal - online).toFixed(2)));
+                                      setSplitCashAmount(rem);
+                                    }}
+                                    className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-base font-extrabold font-mono text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                                  <span className="text-[10px] text-slate-500">Auto-balanced with cash in hand</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Balance Verification Banner */}
+                            {(() => {
+                              const cash = Number(splitCashAmount) || 0;
+                              const online = Number(splitOnlineAmount) || 0;
+                              const allocated = parseFloat((cash + online).toFixed(2));
+                              const diff = parseFloat((calcResult.grandTotal - allocated).toFixed(2));
+                              const isExact = Math.abs(diff) < 0.05;
+
+                              return (
+                                <div className={`p-3 rounded-xl border text-xs flex items-center justify-between font-mono font-bold ${
+                                  isExact
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                                    : 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                                }`}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{isExact ? '✅' : '⚠️'}</span>
+                                    <span>
+                                      Total: {formatPrice(allocated, restaurant.settings.currency)} 
+                                      <span className="text-[11px] font-normal text-slate-500 ml-1">
+                                        ({formatPrice(cash, restaurant.settings.currency)} Cash + {formatPrice(online, restaurant.settings.currency)} {splitOnlineMethod === 'card' ? 'Card' : 'UPI'})
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <span>
+                                    {isExact ? 'Exact Match' : diff > 0 ? `Remaining: ${formatPrice(diff, restaurant.settings.currency)}` : `Overpaid: ${formatPrice(Math.abs(diff), restaurant.settings.currency)}`}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
 
                         {splitMode === 'equal' && (
                           <div className="space-y-3">
@@ -4232,7 +4443,8 @@ export default function OrdersPage() {
                       disabled={
                         submittingPayment || 
                         selectedOrder.payment_status === 'paid' ||
-                        (paymentMethod === 'split' && splitMode === 'custom' && Math.abs(calcResult.grandTotal - splitGuests.reduce((s, g) => s + (Number(g.amount) || 0), 0)) > 0.05)
+                        (paymentMethod === 'split' && splitTab === 'cash_online' && Math.abs(calcResult.grandTotal - ((Number(splitCashAmount) || 0) + (Number(splitOnlineAmount) || 0))) > 0.05) ||
+                        (paymentMethod === 'split' && (splitTab === 'custom' || splitMode === 'custom') && Math.abs(calcResult.grandTotal - splitGuests.reduce((s, g) => s + (Number(g.amount) || 0), 0)) > 0.05)
                       }
                       onClick={handleConfirmPayment}
                     >
@@ -4242,6 +4454,8 @@ export default function OrdersPage() {
                         ? `Confirm UPI Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`
                         : paymentMethod === 'card'
                         ? `Confirm Card Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`
+                        : splitTab === 'cash_online'
+                        ? `Confirm Split (${formatPrice(Number(splitCashAmount) || 0, restaurant.settings.currency)} Cash + ${formatPrice(Number(splitOnlineAmount) || 0, restaurant.settings.currency)} ${splitOnlineMethod === 'card' ? 'Card' : 'UPI'})`
                         : `Confirm Split Payment (${formatPrice(calcResult.grandTotal, restaurant.settings.currency)})`}
                     </Button>
                   </div>

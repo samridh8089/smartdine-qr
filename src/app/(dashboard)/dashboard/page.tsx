@@ -14,7 +14,7 @@ import {
   DollarSign, ClipboardList, Users, TrendingUp, 
   ArrowRight, Clock, CheckCircle2, Check, AlertCircle, ShoppingBag,
   ChefHat, MenuSquare, Boxes, QrCode, BarChart3, CreditCard, Settings,
-  Megaphone, X, Bell, BellOff, Sparkles, Receipt
+  Megaphone, X, Bell, BellOff, Sparkles, Receipt, Banknote, Smartphone
 } from 'lucide-react';
 
 import { calculateBillingTotals, isRevenueOrder, getOrderRevenueAmount, calculateOrdersRevenue } from '@/lib/billingEngine';
@@ -112,6 +112,9 @@ export default function DashboardPage() {
   const [quickSettleOrder, setQuickSettleOrder] = useState<Order | null>(null);
   const [isQuickSettleOpen, setIsQuickSettleOpen] = useState(false);
   const [quickSettlePaymentMethod, setQuickSettlePaymentMethod] = useState<'cash' | 'upi' | 'card' | 'split'>('cash');
+  const [quickSettleSplitCash, setQuickSettleSplitCash] = useState<number>(0);
+  const [quickSettleSplitOnline, setQuickSettleSplitOnline] = useState<number>(0);
+  const [quickSettleSplitOnlineMethod, setQuickSettleSplitOnlineMethod] = useState<'upi' | 'card'>('upi');
   const [isSubmittingSettle, setIsSubmittingSettle] = useState(false);
   const [completingOrderIds, setCompletingOrderIds] = useState<string[]>([]);
   const [floorTables, setFloorTables] = useState<any[]>([]);
@@ -691,12 +694,33 @@ export default function DashboardPage() {
 
     const chosenMethod = quickSettlePaymentMethod;
 
+    if (chosenMethod === 'split') {
+      const cashVal = Number(quickSettleSplitCash) || 0;
+      const onlineVal = Number(quickSettleSplitOnline) || 0;
+      const sum = parseFloat((cashVal + onlineVal).toFixed(2));
+      if (Math.abs(calcResult.grandTotal - sum) > 0.05) {
+        submittingSettleRef.current = false;
+        setIsSubmittingSettle(false);
+        return;
+      }
+    }
+
+    const splitSummary = chosenMethod === 'split' ? {
+      is_split: true,
+      mode: 'cash_online',
+      splits: [
+        { name: 'Cash', amount: Number(quickSettleSplitCash) || 0, method: 'cash' },
+        { name: quickSettleSplitOnlineMethod === 'card' ? 'Card' : 'Online (UPI)', amount: Number(quickSettleSplitOnline) || 0, method: quickSettleSplitOnlineMethod }
+      ]
+    } : null;
+
     // 1. Instant Optimistic UI Update (<10ms)
     setIsQuickSettleOpen(false);
     setOrders(prev => prev.map(o => o.id === targetOrderId ? {
       ...o,
       payment_status: 'paid',
       payment_method: chosenMethod,
+      payment_reference: splitSummary ? JSON.stringify(splitSummary) : o.payment_reference,
       paid_at: new Date().toISOString(),
       status: 'completed'
     } : o));
@@ -764,6 +788,7 @@ export default function DashboardPage() {
             staffName: contextProfile?.full_name || 'Owner',
             paymentStatus: 'paid',
             paymentMethod: chosenMethod,
+            paymentReference: splitSummary ? JSON.stringify(splitSummary) : undefined,
             subtotal: calcResult.validSubtotal,
             gst: calcResult.gstAmount,
             serviceCharge: calcResult.serviceChargeAmount,
@@ -1800,7 +1825,16 @@ export default function DashboardPage() {
                           <button
                             key={method}
                             type="button"
-                            onClick={() => setQuickSettlePaymentMethod(method)}
+                            onClick={() => {
+                              setQuickSettlePaymentMethod(method);
+                              if (method === 'split') {
+                                const total = calcResult.grandTotal || 0;
+                                const half = parseFloat((total / 2).toFixed(2));
+                                setQuickSettleSplitCash(half);
+                                setQuickSettleSplitOnline(parseFloat((total - half).toFixed(2)));
+                                setQuickSettleSplitOnlineMethod('upi');
+                              }
+                            }}
                             className={`py-2 px-1 text-center rounded-xl text-xs font-bold transition-all cursor-pointer ${
                               isSelected
                                 ? 'bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900 border border-slate-700 dark:border-slate-200 shadow-xs'
@@ -1812,6 +1846,125 @@ export default function DashboardPage() {
                         );
                       })}
                     </div>
+
+                    {/* Split Cash + Online Inputs */}
+                    {quickSettlePaymentMethod === 'split' && (
+                      <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 border border-amber-200 dark:border-amber-900/40 rounded-xl space-y-3 animate-in fade-in duration-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {/* Cash Card */}
+                          <div className="p-2.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-800/90 shadow-xs space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1 uppercase tracking-wider">
+                                <Banknote className="h-3.5 w-3.5" /> Cash Amount
+                              </span>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-2 text-slate-400 font-mono font-bold text-xs">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max={calcResult.grandTotal}
+                                step="1"
+                                value={quickSettleSplitCash === 0 ? '' : quickSettleSplitCash}
+                                placeholder="0"
+                                onChange={(e) => {
+                                  const raw = parseFloat(e.target.value) || 0;
+                                  const cash = Math.max(0, raw);
+                                  setQuickSettleSplitCash(cash);
+                                  const rem = Math.max(0, parseFloat((calcResult.grandTotal - cash).toFixed(2)));
+                                  setQuickSettleSplitOnline(rem);
+                                }}
+                                className="w-full pl-6 pr-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-sm font-extrabold font-mono text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              />
+                            </div>
+                            {/* Quick chips */}
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {[50, 100, 200, 500].filter(amt => amt <= calcResult.grandTotal).map(amt => (
+                                <button
+                                  key={amt}
+                                  type="button"
+                                  onClick={() => {
+                                    setQuickSettleSplitCash(amt);
+                                    setQuickSettleSplitOnline(Math.max(0, parseFloat((calcResult.grandTotal - amt).toFixed(2))));
+                                  }}
+                                  className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 cursor-pointer"
+                                >
+                                  ₹{amt}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const half = parseFloat((calcResult.grandTotal / 2).toFixed(2));
+                                  setQuickSettleSplitCash(half);
+                                  setQuickSettleSplitOnline(parseFloat((calcResult.grandTotal - half).toFixed(2)));
+                                }}
+                                className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 cursor-pointer"
+                              >
+                                50%
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Online Card */}
+                          <div className="p-2.5 rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-800/90 shadow-xs space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1 uppercase tracking-wider">
+                                <Smartphone className="h-3.5 w-3.5" /> Online / Digital
+                              </span>
+                              <select
+                                value={quickSettleSplitOnlineMethod}
+                                onChange={(e) => setQuickSettleSplitOnlineMethod(e.target.value as any)}
+                                className="px-1 py-0.5 text-[9px] font-bold rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                              >
+                                <option value="upi">UPI / QR</option>
+                                <option value="card">Card POS</option>
+                              </select>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-2 text-slate-400 font-mono font-bold text-xs">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max={calcResult.grandTotal}
+                                step="1"
+                                value={quickSettleSplitOnline === 0 ? '' : quickSettleSplitOnline}
+                                placeholder="0"
+                                onChange={(e) => {
+                                  const raw = parseFloat(e.target.value) || 0;
+                                  const online = Math.max(0, raw);
+                                  setQuickSettleSplitOnline(online);
+                                  const rem = Math.max(0, parseFloat((calcResult.grandTotal - online).toFixed(2)));
+                                  setQuickSettleSplitCash(rem);
+                                }}
+                                className="w-full pl-6 pr-2 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-sm font-extrabold font-mono text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              />
+                            </div>
+                            <div className="text-[9px] text-slate-500">Auto-balanced</div>
+                          </div>
+                        </div>
+
+                        {/* Balance Banner */}
+                        {(() => {
+                          const cash = Number(quickSettleSplitCash) || 0;
+                          const online = Number(quickSettleSplitOnline) || 0;
+                          const allocated = parseFloat((cash + online).toFixed(2));
+                          const diff = parseFloat((calcResult.grandTotal - allocated).toFixed(2));
+                          const isExact = Math.abs(diff) < 0.05;
+
+                          return (
+                            <div className={`p-2 rounded-lg border text-[11px] flex items-center justify-between font-mono font-bold ${
+                              isExact
+                                ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                                : 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+                            }`}>
+                              <span>{isExact ? '✅' : '⚠️'} {formatPrice(allocated, currency)} ({formatPrice(cash, currency)} Cash + {formatPrice(online, currency)} {quickSettleSplitOnlineMethod === 'card' ? 'Card' : 'UPI'})</span>
+                              <span>{isExact ? 'Exact Match' : diff > 0 ? `Remaining: ${formatPrice(diff, currency)}` : `Overpaid: ${formatPrice(Math.abs(diff), currency)}`}</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
 
                   {/* Modal Footer */}
@@ -1829,11 +1982,16 @@ export default function DashboardPage() {
                     </Button>
                     <Button
                       isLoading={isSubmittingSettle}
-                      disabled={isSubmittingSettle}
+                      disabled={
+                        isSubmittingSettle ||
+                        (quickSettlePaymentMethod === 'split' && Math.abs(calcResult.grandTotal - ((Number(quickSettleSplitCash) || 0) + (Number(quickSettleSplitOnline) || 0))) > 0.05)
+                      }
                       onClick={handleQuickSettleConfirm}
                       className="bg-slate-800 hover:bg-slate-700 text-white dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white font-bold text-xs sm:text-sm px-6 py-2.5 rounded-xl shadow-sm cursor-pointer transition-all"
                     >
-                      Confirm Payment ({formatPrice(calcResult.grandTotal, currency)})
+                      {quickSettlePaymentMethod === 'split'
+                        ? `Confirm Split (${formatPrice(Number(quickSettleSplitCash) || 0, currency)} Cash + ${formatPrice(Number(quickSettleSplitOnline) || 0, currency)} ${quickSettleSplitOnlineMethod === 'card' ? 'Card' : 'UPI'})`
+                        : `Confirm Payment (${formatPrice(calcResult.grandTotal, currency)})`}
                     </Button>
                   </div>
                 </>
