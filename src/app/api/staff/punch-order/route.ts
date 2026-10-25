@@ -15,7 +15,15 @@ export async function POST(req: Request) {
   try {
     // 1. AUTH & VALIDATION PHASE
     timer.start('auth');
-    const body = await req.json();
+
+    // Enforce Staff Authorization first before parsing body
+    const authCheck = await verifyStaffRequest(req, ['waiter', 'captain', 'cleaner', 'helper', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin']);
+    if (!authCheck.isAuthorized) {
+      timer.end('auth');
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => ({}));
 
     const validation = validateSchema(body, {
       restaurantId: { rules: [Validators.restaurantId()], required: true },
@@ -48,17 +56,10 @@ export async function POST(req: Request) {
       takeawayNotes
     } = body;
 
-    // Enforce Staff Authorization & Tenant Isolation
-    const authCheck = await verifyStaffRequest(req, ['waiter', 'captain', 'cleaner', 'helper', 'cashier', 'supervisor', 'manager', 'owner', 'super_admin'], restaurantId);
-    if (!authCheck.isAuthorized && authCheck.response) {
-      const userAgent = req.headers.get('user-agent') || '';
-      const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);
-      const isLegacyStaffPunch = (isMobileClient || Boolean(inputStaffName)) && Boolean(restaurantId);
-
-      if (!isLegacyStaffPunch) {
-        timer.end('auth');
-        return authCheck.response;
-      }
+    // Tenant isolation verification
+    if (!authCheck.isSuperAdmin && authCheck.profile?.restaurant_id && authCheck.profile.restaurant_id !== restaurantId) {
+      timer.end('auth');
+      return NextResponse.json({ error: 'FORBIDDEN', message: 'Unauthorized access to this restaurant' }, { status: 403 });
     }
 
     const staffName = authCheck.profile?.full_name || inputStaffName || authCheck.user?.email || 'Staff';

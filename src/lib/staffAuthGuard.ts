@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const rawKey = (serviceKey && serviceKey !== '[SENSITIVE]')
-  ? serviceKey
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseServiceKey = rawKey || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+let _supabaseAdminInstance: SupabaseClient | null = null;
+
+function getSupabaseAdmin(): SupabaseClient {
+  if (_supabaseAdminInstance) return _supabaseAdminInstance;
+
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!rawUrl) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable');
+  }
+  if (!serviceKey) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+  }
+
+  _supabaseAdminInstance = createClient(rawUrl, serviceKey);
+  return _supabaseAdminInstance;
+}
 
 const STAFF_AUTH_CACHE = new Map<string, { result: StaffAuthResult; expiresAt: number }>();
 
@@ -32,6 +42,8 @@ export async function verifyStaffRequest(
     if (!token) {
       token = req.headers.get('x-staff-token') || req.headers.get('x-admin-token') || '';
     }
+
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     // Service role key fast path (internal API calls, background tasks, scripts)
     const isServiceKey = Boolean(serviceKey && serviceKey.length > 20 && (
@@ -105,38 +117,14 @@ export async function verifyStaffRequest(
       }
     }
 
-    // Check impersonation header for super admins / local development
-    const impersonatedHeader = req.headers.get('x-impersonated-profile');
-    if (impersonatedHeader) {
-      try {
-        const impProf = JSON.parse(impersonatedHeader);
-        if (impProf?.restaurant_id || impProf?.role === 'super_admin' || impProf?.role === 'owner') {
-          const effectiveRole = impProf.role || 'owner';
-          if (!allowedRoles || allowedRoles.includes(effectiveRole)) {
-            return {
-              isAuthorized: true,
-              isSuperAdmin: impProf.role === 'super_admin',
-              user: { id: impProf.id || 'impersonated', email: impProf.email || 'staff@cleverops.in' },
-              profile: impProf,
-              response: null
-            };
-          }
-        }
-      } catch (_) {}
-    }
+    // NOTE: 'x-impersonated-profile' header handling has been completely removed for security (R2)
+    // NOTE: Query string (?token=) extraction has been completely removed for security
 
     if (!token) {
-      const url = new URL(req.url);
-      token = url.searchParams.get('token') || '';
-    }
-
-    if (!token) {
-      // Local development or localhost fallback if restaurant header is provided
+      // Strict local development check: ONLY when NODE_ENV is explicitly 'development', never based on host header
       const localRestId = req.headers.get('x-restaurant-id');
       const localStaffRole = req.headers.get('x-staff-role') || 'owner';
-      const host = req.headers.get('host') || '';
-      const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-      const isDevEnv = process.env.NODE_ENV !== 'production' || isLocalhost;
+      const isDevEnv = process.env.NODE_ENV === 'development';
       if (localRestId && isDevEnv) {
         return {
           isAuthorized: true,
@@ -158,6 +146,8 @@ export async function verifyStaffRequest(
         }, { status: 401 })
       };
     }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     // 1. Verify token with Supabase Auth
     let userResult = await supabaseAdmin.auth.getUser(token);
@@ -194,39 +184,12 @@ export async function verifyStaffRequest(
       }
     }
 
-    // 1b. If still expired/invalid, allow grace-period recovery if JWT has valid sub matching an active profile
-    if ((authErr || !user) && token) {
-      try {
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-          const sub = payload.sub;
-          const exp = payload.exp;
-          const nowSec = Math.floor(Date.now() / 1000);
-          // Grace period: allow expired token up to 7 days if sub exists in profiles
-          if (sub && exp && (nowSec - exp) < 604800) {
-            const { data: prof } = await supabaseAdmin
-              .from('profiles')
-              .select('id, email, full_name, role, restaurant_id')
-              .eq('id', sub)
-              .maybeSingle();
-
-            if (prof && (!targetRestaurantId || prof.restaurant_id === targetRestaurantId || prof.role === 'super_admin' || prof.role === 'owner')) {
-              user = { id: prof.id, email: prof.email, user_metadata: {} } as any;
-              authErr = null;
-            }
-          }
-        }
-      } catch (_) {}
-    }
+    // NOTE: Unsigned JWT "grace period" fallback has been completely removed for security (R3)
 
     if (authErr || !user) {
-      // Local development or localhost fallback if restaurant header is provided
       const localRestId = req.headers.get('x-restaurant-id') || targetRestaurantId;
       const localStaffRole = req.headers.get('x-staff-role') || 'owner';
-      const host = req.headers.get('host') || '';
-      const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
-      const isDevEnv = process.env.NODE_ENV !== 'production' || isLocalhost;
+      const isDevEnv = process.env.NODE_ENV === 'development';
       if (localRestId && isDevEnv) {
         return {
           isAuthorized: true,
@@ -285,15 +248,8 @@ export async function verifyStaffRequest(
       };
     }
 
-    const userEmail = (user.email || resolvedProfile?.email || '').toLowerCase().trim();
-    const isSuperAdmin = resolvedProfile?.role === 'super_admin' || 
-      userEmail === 'dsoni1281@gmail.com' || 
-      userEmail === 'admin@cleverops.in' || 
-      userEmail === 'founder@cleverops.in' || 
-      userEmail === 'samridhtomar8@gmail.com' ||
-      userEmail === 'superadmin@cleverops.in' ||
-      userEmail === 'superadmin@test.com';
-
+    // Hardened Super Admin determination: STRICTLY role === 'super_admin' in database (C7, R4)
+    const isSuperAdmin = resolvedProfile?.role === 'super_admin';
     const effectiveRole = isSuperAdmin ? 'super_admin' : (resolvedProfile?.role || 'owner');
 
     // 3. Verify Allowed Roles
