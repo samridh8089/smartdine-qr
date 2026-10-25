@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
-import { getActiveDevices, removeTrustedDevice, logoutAllDevices } from '@/lib/sessionManager';
+import { getActiveDevices, removeTrustedDevice, logoutAllDevices, getOrCreateDeviceId, detectCurrentDeviceInfo, registerDeviceActivity } from '@/lib/sessionManager';
 import { QRDesignStudio } from '@/components/qr-studio/QRDesignStudio';
 import { setGlobalMute, playLoudBell, stopLoudBell } from '@/lib/soundAlert';
 import { OffersSettings } from '@/components/dashboard/OffersSettings';
@@ -879,32 +879,44 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   };
 
   const loadDevices = async () => {
+    if (!restaurant?.id) return;
     setDevicesLoading(true);
     try {
-      let devs: any[] = [];
-      if (profile?.id) {
-        devs = await getActiveDevices(profile.id);
-      }
-      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-      const isMobile = /Android|iPhone|iPad|Mobile/i.test(ua);
-      const osName = ua.includes('Windows') ? 'Windows PC' : ua.includes('Mac') ? 'macOS Device' : ua.includes('Android') ? 'Android Mobile' : ua.includes('iPhone') ? 'iPhone' : isMobile ? 'Mobile Device' : 'Desktop Browser';
-      const browserName = ua.includes('Chrome') ? 'Chrome' : ua.includes('Firefox') ? 'Firefox' : ua.includes('Safari') ? 'Safari' : ua.includes('Edg') ? 'Edge' : 'Browser';
+      const currentId = getOrCreateDeviceId();
+      const currentInfo = detectCurrentDeviceInfo();
 
-      const currentDev = {
-        device_name: `${osName} (${browserName})`,
-        platform: isMobile ? 'Mobile' : 'Desktop',
-        is_current: true,
-        is_trusted: true,
-        device_session_id: 'active_current_session',
-        last_active_at: new Date().toISOString()
-      };
-
-      if (!devs || devs.length === 0) {
-        setDevicesList([currentDev]);
-      } else {
-        const hasCurrent = devs.some((d: any) => d.is_current);
-        setDevicesList(hasCurrent ? devs : [currentDev, ...devs]);
+      if (profile) {
+        await registerDeviceActivity(restaurant.id, profile);
       }
+
+      const remoteDevs = await getActiveDevices(restaurant.id);
+      
+      const mapped = (remoteDevs || []).map((d: any) => ({
+        ...d,
+        is_current: d.device_id === currentId,
+        device_session_id: d.device_id
+      }));
+
+      const hasCurrent = mapped.some((d: any) => d.is_current);
+      if (!hasCurrent) {
+        mapped.unshift({
+          device_id: currentId,
+          device_session_id: currentId,
+          device_name: currentInfo.deviceName,
+          platform: currentInfo.platform,
+          is_current: true,
+          is_trusted: true,
+          last_active_at: new Date().toISOString()
+        });
+      }
+
+      mapped.sort((a: any, b: any) => {
+        if (a.is_current) return -1;
+        if (b.is_current) return 1;
+        return new Date(b.last_active_at || 0).getTime() - new Date(a.last_active_at || 0).getTime();
+      });
+
+      setDevicesList(mapped);
     } catch (e) {
       console.warn('Load devices warning:', e);
     } finally {
@@ -994,22 +1006,22 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   }, [activeTab, profile?.id]);
 
   const handleRemoveTrustedDevice = async (sessionId: string) => {
-    if (!profile?.id) return;
-    if (!confirm('Are you sure you want to remove this trusted device? The next login from that device will require OTP verification.')) return;
+    if (!restaurant?.id) return;
+    if (!confirm('Are you sure you want to remove and logout this device?')) return;
     try {
-      await removeTrustedDevice(profile.id, sessionId);
+      await removeTrustedDevice(restaurant.id, sessionId);
       await loadDevices();
-      alert('Trusted device removed successfully.');
+      alert('Device removed successfully.');
     } catch (e: any) {
       alert(`Error removing device: ${e.message}`);
     }
   };
 
   const handleLogoutAllDevices = async () => {
-    if (!profile?.id) return;
+    if (!restaurant?.id) return;
     if (!confirm('WARNING: Are you sure you want to logout all devices? You will be signed out of all current sessions.')) return;
     try {
-      await logoutAllDevices(profile.id);
+      await logoutAllDevices(restaurant.id);
       await supabase.auth.signOut();
       window.location.href = '/login';
     } catch (e: any) {
@@ -2630,14 +2642,14 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                         </div>
 
                         <div className="flex items-center gap-2 self-end sm:self-auto">
-                          {dev.is_trusted && !dev.is_current && (
+                          {!dev.is_current && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleRemoveTrustedDevice(dev.device_session_id)}
                               className="text-xs text-rose-600 hover:text-rose-700 border-rose-200 dark:border-rose-900/60 font-semibold"
                             >
-                              Remove Trust
+                              <LogOut className="h-3 w-3 mr-1" /> Logout Device
                             </Button>
                           )}
                           {dev.is_current ? (
