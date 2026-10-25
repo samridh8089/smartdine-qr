@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRestaurant } from '../../layout';
 import { supabase, getClientAuthHeaders } from '@/lib/supabase';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
@@ -352,6 +352,7 @@ export default function InventoryDashboardPage() {
   const purchaseIdempotencyRef = useRef<string | null>(null);
   const importingAiDraftRef = useRef(false);
   const savingItemRef = useRef(false);
+  const handledUrlDishIdRef = useRef<string | null>(null);
 
   // Filtered Windows 10 Hub Modules
   const filteredHubModules = useMemo(() => {
@@ -364,6 +365,40 @@ export default function InventoryDashboardPage() {
     );
   }, [hubSearchQuery]);
 
+  // Recipe Open Modal Helper (Variant / Portion Aware)
+  const openRecipeModalForDish = useCallback((dish: any, variantId: string | null = null) => {
+    setSelectedMenuItemForRecipe(dish);
+    setSelectedRecipeVariantId(variantId);
+    setFocusedDishId(dish.id);
+
+    const variantObj = (dish.variants || []).find((v: any) => v.id === variantId);
+    const initialPrice = variantObj ? Number(variantObj.price || 0) : Number(dish.price || 0);
+    setModalSellingPriceInput(initialPrice > 0 ? String(initialPrice) : '');
+    setPriceSuccessDishId(null);
+
+    const match = recipes.find(r => 
+      r.menu_item_id === dish.id && 
+      (variantId ? r.variant_id === variantId : (!r.variant_id || r.variant_id === null))
+    );
+
+    if (match) {
+      setRecipeSteps(match.preparation_steps || '');
+      setRecipeServingSize(match.serving_size || (variantObj ? variantObj.name : '1 Portion'));
+      setRecipeIngredients(
+        (match.inventory_recipe_ingredients || []).map((ing: any) => ({
+          inventory_item_id: ing.inventory_item_id,
+          quantity: ing.quantity,
+          unit: ing.unit
+        }))
+      );
+    } else {
+      setRecipeSteps('');
+      setRecipeServingSize(variantObj ? variantObj.name : '1 Portion');
+      setRecipeIngredients([{ inventory_item_id: '', quantity: 100, unit: 'gram' }]);
+    }
+    setShowRecipeModal(true);
+  }, [recipes]);
+
   // Prevent background page shift when Recipe Modal is open
   useEffect(() => {
     if (showRecipeModal) {
@@ -374,6 +409,28 @@ export default function InventoryDashboardPage() {
       };
     }
   }, [showRecipeModal]);
+
+  // 1-Click Direct Recipe Open from URL (e.g. from Main Dashboard ?tab=recipes&dishId=...)
+  useEffect(() => {
+    if (loading || menuItems.length === 0 || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const targetDishId = params.get('dishId');
+    const targetVariantId = params.get('variantId');
+    if (targetDishId && handledUrlDishIdRef.current !== targetDishId) {
+      handledUrlDishIdRef.current = targetDishId;
+      const targetDish = menuItems.find(m => m.id === targetDishId);
+      if (targetDish) {
+        setActiveTab('recipes');
+        openRecipeModalForDish(targetDish, targetVariantId || null);
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('dishId');
+          cleanUrl.searchParams.delete('variantId');
+          window.history.replaceState({}, '', cleanUrl.toString());
+        }
+      }
+    }
+  }, [loading, menuItems, openRecipeModalForDish]);
 
   // Load Inventory Data
   const loadData = async () => {
@@ -1192,39 +1249,7 @@ export default function InventoryDashboardPage() {
     }
   };
 
-  // Recipe Open Modal Helper (Variant / Portion Aware)
-  const openRecipeModalForDish = (dish: any, variantId: string | null = null) => {
-    setSelectedMenuItemForRecipe(dish);
-    setSelectedRecipeVariantId(variantId);
-    setFocusedDishId(dish.id);
 
-    const variantObj = (dish.variants || []).find((v: any) => v.id === variantId);
-    const initialPrice = variantObj ? Number(variantObj.price || 0) : Number(dish.price || 0);
-    setModalSellingPriceInput(initialPrice > 0 ? String(initialPrice) : '');
-    setPriceSuccessDishId(null);
-
-    const match = recipes.find(r => 
-      r.menu_item_id === dish.id && 
-      (variantId ? r.variant_id === variantId : (!r.variant_id || r.variant_id === null))
-    );
-
-    if (match) {
-      setRecipeSteps(match.preparation_steps || '');
-      setRecipeServingSize(match.serving_size || (variantObj ? variantObj.name : '1 Portion'));
-      setRecipeIngredients(
-        (match.inventory_recipe_ingredients || []).map((ing: any) => ({
-          inventory_item_id: ing.inventory_item_id,
-          quantity: ing.quantity,
-          unit: ing.unit
-        }))
-      );
-    } else {
-      setRecipeSteps('');
-      setRecipeServingSize(variantObj ? variantObj.name : '1 Portion');
-      setRecipeIngredients([{ inventory_item_id: '', quantity: 100, unit: 'gram' }]);
-    }
-    setShowRecipeModal(true);
-  };
 
   // Recipe Close Modal Helper
   const handleCloseRecipeModal = () => {
