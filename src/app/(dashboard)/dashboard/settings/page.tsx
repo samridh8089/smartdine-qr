@@ -2443,9 +2443,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                     Plug & Play
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Configure paper roll sizing, receipt notes, and test any Bluetooth, USB, or Network Thermal Printer directly.
-                </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -2479,7 +2476,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                     <button
                       type="button"
                       onClick={() => setThermalPaperWidth('80mm')}
-                      className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                      className={`p-4 rounded-xl border text-left transition-all flex items-center gap-3 ${
                         thermalPaperWidth === '80mm'
                           ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
                           : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
@@ -2493,16 +2490,13 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                           <span>80mm (3-Inch Standard)</span>
                           <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-semibold">Recommended</span>
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Standard commercial POS format. Ideal for full item descriptions, GST breakdown, and table details.
-                        </p>
                       </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setThermalPaperWidth('58mm')}
-                      className={`p-4 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                      className={`p-4 rounded-xl border text-left transition-all flex items-center gap-3 ${
                         thermalPaperWidth === '58mm'
                           ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
                           : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
@@ -2515,9 +2509,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                         <div className="font-bold text-sm text-slate-900 dark:text-white">
                           58mm (2-Inch Mini Roll)
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Compact roll width for portable handheld Bluetooth printers, fast takeaway slips, and mini counters.
-                        </p>
                       </div>
                     </button>
                   </div>
@@ -2566,9 +2557,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                       placeholder="e.g. Thank you for dining with us! Please visit again. • Wi-Fi: BistroCafe"
                       className="w-full text-xs p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      This greeting is printed at the very bottom of every customer bill and receipt.
-                    </p>
+
                   </div>
                 </div>
               </CardContent>
@@ -2578,9 +2567,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4">
               <div>
                 <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Active Devices & Security Sessions</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Manage logged in devices, revoke trusted access, or sign out active sessions across Android and Desktop browsers.
-                </p>
               </div>
               <div className="flex items-center gap-2">
                 <Button
