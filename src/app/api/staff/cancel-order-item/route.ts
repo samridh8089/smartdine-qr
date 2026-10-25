@@ -4,12 +4,15 @@ import { createClient } from '@supabase/supabase-js';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
-  ? serviceKey
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   try {
@@ -33,13 +36,8 @@ export async function POST(req: Request) {
       'cashier', 'supervisor', 'manager', 'owner', 'super_admin'
     ], targetRestId);
 
-    if (!authCheck.isAuthorized && authCheck.response) {
-      const userAgent = req.headers.get('user-agent') || '';
-      const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);
-      const isStaffOrDashboardAction = (isMobileClient || Boolean(staffName)) && Boolean(targetRestId);
-      if (!isStaffOrDashboardAction) {
-        return authCheck.response;
-      }
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
     }
 
     if (!orderId || !orderItemId) {
@@ -78,7 +76,7 @@ export async function POST(req: Request) {
           newStatus: updatedOrder?.status,
           updatedOrder
         },
-        client: supabaseAdmin
+        client: getSupabaseAdmin()
       }).catch(err => console.warn('[cancel-order-item] Realtime broadcast error:', err));
     }
 

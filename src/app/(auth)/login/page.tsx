@@ -48,31 +48,6 @@ export default function LoginPage() {
       password
     });
 
-    // Auto-recovery: If signInWithPassword failed due to credentials or unconfirmed email,
-    // invoke server-side sync to update auth password and confirm email for registered staff
-    if (err && (err.message?.toLowerCase().includes('invalid login credentials') || err.message?.toLowerCase().includes('email not confirmed'))) {
-      try {
-        const syncRes = await fetch('/api/auth/staff-sync-login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email.trim().toLowerCase(),
-            password
-          })
-        });
-        const syncData = await syncRes.json();
-        if (syncRes.ok && syncData?.synced) {
-          const retry = await supabase.auth.signInWithPassword({
-            email: email.trim().toLowerCase(),
-            password
-          });
-          if (!retry.error && retry.data?.user) {
-            data = retry.data;
-            err = null;
-          }
-        }
-      } catch (_) {}
-    }
 
     if (err || !data?.user) {
       const rawMsg = err?.message || (err as any)?.msg || (err as any)?.error_description || '';

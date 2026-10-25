@@ -9,12 +9,15 @@ import { logSystemEvent, getOrderCorrelationId, type SystemEventType } from '@/l
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 import { dispatchFCMNotification } from '@/lib/pushDispatcher';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
-  ? serviceKey
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   try {
@@ -25,14 +28,11 @@ export async function POST(req: Request) {
       'kitchen', 'head_chef', 'chef', 'kitchen_helper',
       'cashier', 'supervisor', 'manager', 'owner', 'super_admin'
     ], targetRestId);
-    if (!authCheck.isAuthorized && authCheck.response) {
-      const userAgent = req.headers.get('user-agent') || '';
-      const isMobileClient = /okhttp|Android|Expo|Dalvik|ReactNative/i.test(userAgent);
-      const isStaffOrDashboardAction = (isMobileClient || Boolean(body.staffName)) && Boolean(targetRestId);
-      if (!isStaffOrDashboardAction) {
-        return authCheck.response;
-      }
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
     }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     const normalizedBody = {
       ...body,
@@ -94,30 +94,30 @@ export async function POST(req: Request) {
     let currentOrderStatus: string | null = null;
 
     if (orderId) {
-      const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', orderId).maybeSingle();
+      const { data: ord } = await getSupabaseAdmin().from('orders').select('restaurant_id, status').eq('id', orderId).maybeSingle();
       if (ord) {
         orderRestId = ord.restaurant_id || null;
         currentOrderStatus = ord.status || null;
       } else {
         // Universal ID fallback: orderId may actually be a batchId
-        const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', orderId).maybeSingle();
+        const { data: bRec } = await getSupabaseAdmin().from('order_batches').select('order_id').eq('id', orderId).maybeSingle();
         if (bRec?.order_id) {
           resolvedOrderId = bRec.order_id;
-          const { data: bOrd } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', bRec.order_id).maybeSingle();
+          const { data: bOrd } = await getSupabaseAdmin().from('orders').select('restaurant_id, status').eq('id', bRec.order_id).maybeSingle();
           orderRestId = bOrd?.restaurant_id || null;
           currentOrderStatus = bOrd?.status || null;
         }
       }
     } else if (batchId) {
-      const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
+      const { data: bRec } = await getSupabaseAdmin().from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
       if (bRec?.order_id) {
         resolvedOrderId = bRec.order_id;
-        const { data: ord } = await supabaseAdmin.from('orders').select('restaurant_id, status').eq('id', bRec.order_id).maybeSingle();
+        const { data: ord } = await getSupabaseAdmin().from('orders').select('restaurant_id, status').eq('id', bRec.order_id).maybeSingle();
         orderRestId = ord?.restaurant_id || null;
         currentOrderStatus = ord?.status || null;
       } else {
         // Universal ID fallback: batchId may actually be a direct orderId
-        const { data: ord } = await supabaseAdmin.from('orders').select('id, restaurant_id, status').eq('id', batchId).maybeSingle();
+        const { data: ord } = await getSupabaseAdmin().from('orders').select('id, restaurant_id, status').eq('id', batchId).maybeSingle();
         if (ord?.id) {
           resolvedOrderId = ord.id;
           orderRestId = ord.restaurant_id || null;
@@ -140,7 +140,7 @@ export async function POST(req: Request) {
     if (currentOrderStatus && ['cancelled', 'completed'].includes(currentOrderStatus)) {
       if (effectiveStatus === currentOrderStatus) {
         // Idempotent return if already in requested terminal status
-        const { data: ordData } = await supabaseAdmin.from('orders').select('*').eq('id', resolvedOrderId).maybeSingle();
+        const { data: ordData } = await getSupabaseAdmin().from('orders').select('*').eq('id', resolvedOrderId).maybeSingle();
         return NextResponse.json({
           success: true,
           order: ordData,
@@ -161,7 +161,7 @@ export async function POST(req: Request) {
     if (effectiveStatus === 'completed') {
       let targetOrderId = orderId;
       if (!targetOrderId && batchId) {
-        const { data: bRec } = await supabaseAdmin.from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
+        const { data: bRec } = await getSupabaseAdmin().from('order_batches').select('order_id').eq('id', batchId).maybeSingle();
         targetOrderId = bRec?.order_id || batchId;
       }
       if (!targetOrderId) {
@@ -199,7 +199,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
         }
         // Universal ID Fallback: If batchId was actually an orderId, update order directly
-        const { data: directOrder } = await supabaseAdmin.from('orders').select('id').eq('id', batchId).maybeSingle();
+        const { data: directOrder } = await getSupabaseAdmin().from('orders').select('id').eq('id', batchId).maybeSingle();
         if (directOrder?.id) {
           updatedOrder = await db.updateOrderStatus(directOrder.id, effectiveStatus, staffName, cancellationReason, supabaseAdmin);
         } else {
@@ -221,7 +221,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: dbErr.message, code: dbErr.code }, { status: 409 });
         }
         // Universal ID Fallback: If orderId was actually a batchId, update batch directly
-        const { data: directBatch } = await supabaseAdmin.from('order_batches').select('id').eq('id', orderId).maybeSingle();
+        const { data: directBatch } = await getSupabaseAdmin().from('order_batches').select('id').eq('id', orderId).maybeSingle();
         if (directBatch?.id) {
           updatedOrder = await db.updateBatchStatus(directBatch.id, effectiveStatus, staffName, cancellationReason);
           updatedBatch = directBatch;
@@ -377,7 +377,7 @@ export async function POST(req: Request) {
       // Write audit log entry + emit audit_logs system event
       void (async () => {
         try {
-          const { error: auditErr } = await supabaseAdmin.from('audit_logs').insert({
+          const { error: auditErr } = await getSupabaseAdmin().from('audit_logs').insert({
             restaurant_id: restId,
             user_email: staffName,
             action: `order_status_${effectiveStatus}`,

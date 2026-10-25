@@ -90,8 +90,6 @@ export async function processKdsOfflineQueue(restaurantId: string): Promise<{ sy
       }
     } catch (_) {}
   }
-  const impersonated = typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_impersonated_profile') : null;
-
   for (const item of queue) {
     try {
       const res = await fetch('/api/staff/update-order-status', {
@@ -101,7 +99,6 @@ export async function processKdsOfflineQueue(restaurantId: string): Promise<{ sy
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
           ...(token ? { 'x-staff-token': token } : {}),
-          ...(impersonated ? { 'x-impersonated-profile': impersonated } : {}),
           ...(restaurantId ? { 'x-restaurant-id': restaurantId } : {}),
           'x-staff-role': 'kitchen'
         },
@@ -504,7 +501,6 @@ export default function KitchenDisplayPage() {
       };
 
       let token = await getKdsToken(false);
-      const impersonated = typeof window !== 'undefined' ? sessionStorage.getItem('smartdine_impersonated_profile') : null;
 
       const doKdsFetch = async (authToken: string) => {
         return fetch('/api/staff/update-order-status', {
@@ -513,7 +509,6 @@ export default function KitchenDisplayPage() {
           headers: {
             'Content-Type': 'application/json',
             ...(authToken ? { 'Authorization': `Bearer ${authToken}`, 'x-staff-token': authToken } : {}),
-            ...(impersonated ? { 'x-impersonated-profile': impersonated } : {}),
             ...(restaurantId ? { 'x-restaurant-id': restaurantId } : {}),
             'x-staff-role': profile?.role || 'kitchen'
           },

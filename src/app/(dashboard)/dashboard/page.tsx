@@ -778,8 +778,7 @@ export default function DashboardPage() {
             'Content-Type': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}`, 'x-staff-token': token } : {}),
             ...(restaurant?.id ? { 'x-restaurant-id': restaurant.id } : {}),
-            'x-staff-role': contextProfile?.role || 'owner',
-            ...(contextProfile ? { 'x-impersonated-profile': JSON.stringify(contextProfile) } : {})
+            'x-staff-role': contextProfile?.role || 'owner'
           },
           body: JSON.stringify({
             orderId: targetOrderId,
@@ -874,8 +873,7 @@ export default function DashboardPage() {
             'Content-Type': 'application/json',
             ...(token ? { 'Authorization': `Bearer ${token}`, 'x-staff-token': token } : {}),
             ...(restaurant?.id ? { 'x-restaurant-id': restaurant.id } : {}),
-            'x-staff-role': contextProfile?.role || 'owner',
-            ...(contextProfile ? { 'x-impersonated-profile': JSON.stringify(contextProfile) } : {})
+            'x-staff-role': contextProfile?.role || 'owner'
           },
           body: JSON.stringify({
             orderId: targetOrderId,

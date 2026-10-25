@@ -2,10 +2,16 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('Supabase admin credentials are not properly configured.');
+  }
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 export async function POST(req: Request) {
   try {
@@ -21,18 +27,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'targetUserId is required' }, { status: 400 });
     }
 
-    let requesterProfile = authCheck.profile;
+    const requesterProfile = authCheck.profile;
+    const supabaseAdmin = getSupabaseAdmin();
 
     // 3. Fetch target user profile
     const { data: targetProfile } = await supabaseAdmin.from('profiles').select('*').eq('id', targetUserId).maybeSingle();
 
-    if (targetProfile?.role === 'owner' || targetProfile?.role === 'super_admin') {
+    if (!targetProfile) {
+      return NextResponse.json({ error: 'NOT_FOUND', message: 'Target staff member profile not found' }, { status: 404 });
+    }
+
+    if (targetProfile.role === 'owner' || targetProfile.role === 'super_admin') {
       return NextResponse.json({ error: 'Forbidden: Cannot delete owner or super admin accounts' }, { status: 403 });
     }
 
     // Tenant isolation check
     if (requesterProfile.role !== 'super_admin') {
-      if (targetProfile && targetProfile.restaurant_id && requesterProfile.restaurant_id !== targetProfile.restaurant_id) {
+      if (targetProfile.restaurant_id && requesterProfile.restaurant_id !== targetProfile.restaurant_id) {
         return NextResponse.json({ error: 'Forbidden: User belongs to another restaurant' }, { status: 403 });
       }
     }
@@ -71,8 +82,10 @@ export async function POST(req: Request) {
     try {
       const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
       const token = authHeader.replace('Bearer ', '').trim();
-      if (token) {
-        const callerClient = createClient(supabaseUrl, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-', {
+      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (token && supabaseUrl && anonKey) {
+        const callerClient = createClient(supabaseUrl, anonKey, {
           global: { headers: { Authorization: `Bearer ${token}` } }
         });
         await callerClient.rpc('delete_staff_user', { target_user_id: targetUserId });
@@ -82,7 +95,7 @@ export async function POST(req: Request) {
     }
 
     // Broadcast staff-deleted event across Realtime channels
-    const restId = targetProfile?.restaurant_id || requesterProfile.restaurant_id;
+    const restId = targetProfile.restaurant_id || requesterProfile.restaurant_id;
     if (restId) {
       try {
         const { broadcastStaffRealtimeEvent } = await import('@/lib/realtime');

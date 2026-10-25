@@ -1,15 +1,24 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const rawKey = (serviceKey && serviceKey !== '[SENSITIVE]')
-  ? serviceKey
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseServiceKey = rawKey || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+let _supabaseAdminInstance: SupabaseClient | null = null;
 
+function getSupabaseAdmin(): SupabaseClient {
+  if (_supabaseAdminInstance) return _supabaseAdminInstance;
+
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!rawUrl) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable');
+  }
+  if (!serviceKey) {
+    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+  }
+
+  _supabaseAdminInstance = createClient(rawUrl, serviceKey);
+  return _supabaseAdminInstance;
+}
 
 export async function verifySuperAdminRequest(req: Request) {
   try {
@@ -35,10 +44,7 @@ export async function verifySuperAdminRequest(req: Request) {
       }
     }
 
-    if (!token) {
-      const url = new URL(req.url);
-      token = url.searchParams.get('token') || '';
-    }
+    // NOTE: Query string (?token=) has been removed for security to avoid token leaks in logs/browser history
 
     if (!token) {
       return {
@@ -51,6 +57,7 @@ export async function verifySuperAdminRequest(req: Request) {
       };
     }
 
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(token);
     if (authErr || !user) {
       return {
@@ -66,14 +73,8 @@ export async function verifySuperAdminRequest(req: Request) {
       .eq('id', user.id)
       .maybeSingle();
 
-    const userEmail = (user.email || profile?.email || '').toLowerCase().trim();
-    const isSuperAdmin = profile?.role === 'super_admin' || 
-      userEmail === 'dsoni1281@gmail.com' || 
-      userEmail === 'admin@cleverops.in' || 
-      userEmail === 'founder@cleverops.in' || 
-      userEmail === 'samridhtomar8@gmail.com' ||
-      userEmail === 'superadmin@cleverops.in' ||
-      userEmail === 'superadmin@test.com';
+    // STRICT ROLE CHECK: Only authentic role in database is authorized (C7)
+    const isSuperAdmin = profile?.role === 'super_admin';
 
     if (!isSuperAdmin) {
       console.warn(`[FORBIDDEN 403]: Non-super-admin user ${user.email} (Role: ${profile?.role || 'owner'}) called admin API`);
