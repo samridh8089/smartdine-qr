@@ -73,7 +73,7 @@ export default function Footer() {
             <ul className="space-y-2.5 text-xs">
               <li className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-emerald-500 shrink-0" />
-                <a href="mailto:dsoni1281@gmail.com" className="hover:text-white transition-colors">dsoni1281@gmail.com</a>
+                <a href="mailto:deepak.soni19492@gmail.com" className="hover:text-white transition-colors">deepak.soni19492@gmail.com</a>
               </li>
               <li className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -85,7 +85,7 @@ export default function Footer() {
               </li>
               <li className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-                <span className="text-slate-400">214B 2nd Floor, Riddhi Siddhi Complex, Madhuban, Udaipur, Rajasthan - 313001</span>
+                <span className="text-slate-400">214, 2nd Floor, Riddhi Siddhi Complex, Madhuban, Udaipur, Rajasthan - 313001</span>
               </li>
             </ul>
           </div>

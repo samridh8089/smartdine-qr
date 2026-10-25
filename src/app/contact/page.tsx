@@ -81,8 +81,8 @@ export default function ContactPage() {
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 For sales inquiries, technical help, or refund requests under our 3-4 working days SLA:
               </p>
-              <a href="mailto:dsoni1281@gmail.com" className="text-emerald-600 dark:text-emerald-400 font-extrabold text-base hover:underline block">
-                dsoni1281@gmail.com
+              <a href="mailto:deepak.soni19492@gmail.com" className="text-emerald-600 dark:text-emerald-400 font-extrabold text-base hover:underline block">
+                deepak.soni19492@gmail.com
               </a>
             </div>
 
@@ -111,7 +111,7 @@ export default function ContactPage() {
               </h3>
               <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-relaxed">
                 CleverOps Technologies<br />
-                214B 2nd Floor, Riddhi Siddhi Complex, Madhuban,<br />
+                214, 2nd Floor, Riddhi Siddhi Complex, Madhuban,<br />
                 Udaipur, Rajasthan - 313001
               </p>
             </div>
