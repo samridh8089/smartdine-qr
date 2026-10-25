@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { handleApiError } from '@/lib/errors';
+import { formatAuditLogDisplay } from '@/lib/auditLogger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -72,9 +73,7 @@ export async function GET(req: Request) {
         user_role: parsedDetails?.role || null,
         entity_type: detectedEntityType,
         entity_id: detectedOrderId,
-        details: typeof parsedDetails?.message === 'string' 
-          ? parsedDetails.message 
-          : (typeof log.details === 'string' ? log.details : JSON.stringify(log.details)),
+        details: formatAuditLogDisplay(log).detailsDisplay,
         parsedDetails
       };
     });
