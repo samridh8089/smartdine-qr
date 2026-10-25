@@ -35,13 +35,13 @@ export default function PrivacyPolicyPage() {
         <div className="space-y-4 text-center border-b border-slate-200 dark:border-slate-800 pb-8">
           <div className="inline-flex items-center gap-2 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 px-4 py-1.5 rounded-full text-xs font-extrabold tracking-wide uppercase">
             <Lock className="h-4 w-4" />
-            DPDP Act 2023 & DPDP Rules Compliant
+            DPDP Act 2023 & DPDP Rules (2025–2026) Compliant
           </div>
           <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
             Privacy Policy & Data Protection
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm max-w-2xl mx-auto leading-relaxed">
-            Last Updated: October 2026. CleverOps (<strong>cleverops.in</strong>) operates in complete compliance with India&apos;s <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> and the notified <strong>DPDP Rules</strong>.
+            Last Updated: October 2026. CleverOps (<strong>cleverops.in</strong>) operates in complete compliance with India&apos;s <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> and the notified <strong>DPDP Rules (2025–2026)</strong> issued by MeitY.
           </p>
         </div>
 
@@ -174,7 +174,7 @@ export default function PrivacyPolicyPage() {
 
             <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
               <a
-                href="mailto:privacy@cleverops.in?subject=DPDP%20Data%20Principal%20Request%20-%20CleverOps&body=Dear%20Grievance%20Officer%2C%0A%0AI%20am%20exercising%20my%20rights%20under%20the%20DPDP%20Act%202023.%0A%0ARequest%20Type%20(Access%20%2F%20Correction%20%2F%20Erasure)%3A%20%0AMy%20Registered%20Phone%20%2F%20Email%3A%20%0ARestaurant%20Name%20(if%20applicable)%3A%20%0ADetails%3A%20"
+                href="mailto:deepak.soni19492@gmail.com?subject=DPDP%20Data%20Principal%20Request%20-%20CleverOps&body=Dear%20Grievance%20Officer%2C%0A%0AI%20am%20exercising%20my%20rights%20under%20the%20DPDP%20Act%202023.%0A%0ARequest%20Type%20(Access%20%2F%20Correction%20%2F%20Erasure)%3A%20%0AMy%20Registered%20Phone%20%2F%20Email%3A%20%0ARestaurant%20Name%20(if%20applicable)%3A%20%0ADetails%3A%20"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-bold hover:bg-slate-800 dark:hover:bg-slate-100 transition shadow-xs"
               >
                 <Mail className="h-4 w-4" /> Exercise DPDP Rights (Email Officer)
@@ -233,33 +233,37 @@ export default function PrivacyPolicyPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-xs">
               <div className="p-3.5 rounded-xl bg-slate-800/80 dark:bg-slate-900/80 border border-slate-700/80 space-y-1">
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Officer Name & Designation</span>
-                <span className="font-extrabold text-white text-sm">Samridh Tomar</span>
-                <span className="text-slate-300 block text-[11px]">Head of Security & Grievance Officer</span>
+                <span className="font-extrabold text-white text-sm">Deepak Kumar Soni</span>
+                <span className="text-slate-300 block text-[11px]">Data Protection & Grievance Officer</span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-800/80 dark:bg-slate-900/80 border border-slate-700/80 space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Official Privacy Email</span>
-                <a href="mailto:privacy@cleverops.in" className="font-extrabold text-emerald-400 hover:underline text-sm block">
-                  privacy@cleverops.in
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Official Privacy Email & Phone</span>
+                <a href="mailto:deepak.soni19492@gmail.com" className="font-extrabold text-emerald-400 hover:underline text-sm block">
+                  deepak.soni19492@gmail.com
                 </a>
-                <span className="text-slate-300 block text-[11px]">CC: support@cleverops.in</span>
+                <a href="tel:+917742054535" className="text-slate-300 hover:text-white block text-[11px]">
+                  Direct: +91 77420 54535
+                </a>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-800/80 dark:bg-slate-900/80 border border-slate-700/80 space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Entity & Postal Address</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Official Registered Address</span>
                 <span className="font-bold text-white block">CleverOps Technologies</span>
-                <span className="text-slate-300 block text-[11px]">India</span>
+                <span className="text-slate-300 block text-[11px] leading-relaxed">
+                  214, 2nd Floor, Riddhi Siddhi Complex, Madhuban, Udaipur, Rajasthan - 313001
+                </span>
               </div>
 
               <div className="p-3.5 rounded-xl bg-slate-800/80 dark:bg-slate-900/80 border border-slate-700/80 space-y-1">
-                <span className="text-slate-400 block text-[10px] uppercase font-bold">Resolution Standard</span>
-                <span className="font-bold text-emerald-400 block">30 Calendar Days</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Statutory Resolution Timeline</span>
+                <span className="font-bold text-emerald-400 block">Within 30 Calendar Days</span>
                 <span className="text-slate-300 block text-[11px]">Formal written resolution acknowledgement</span>
               </div>
             </div>
 
             <p className="text-[11px] text-slate-400 pt-2">
-              If a grievance is not resolved to your satisfaction within 30 days, Data Principals possess the right to approach the <strong>Data Protection Board of India (DPBI)</strong> in accordance with Section 13(3) of the Act.
+              If a grievance is not resolved to your satisfaction within 30 days, Data Principals possess the statutory right to approach the <strong>Data Protection Board of India (DPBI)</strong> in accordance with Section 13(3) of the Act.
             </p>
           </section>
 
