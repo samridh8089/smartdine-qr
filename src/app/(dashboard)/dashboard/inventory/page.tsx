@@ -338,6 +338,7 @@ export default function InventoryDashboardPage() {
 
   // Analytics Filter
   const [analyticsSelectedItemId, setAnalyticsSelectedItemId] = useState<string>('all');
+  const [isUpdatingBaseline, setIsUpdatingBaseline] = useState(false);
 
   // In-flight Mutex Refs
   const submittingPurchaseRef = useRef(false);
@@ -531,11 +532,33 @@ export default function InventoryDashboardPage() {
     previewCostInItemUnit = previewQtyInItemUnit > 0 ? parseFloat((previewTotalAmount / previewQtyInItemUnit).toFixed(6)) : 0;
   }
 
-  // Recipe Costing Helper
-  const calculateRecipeMetrics = (menuItem: any) => {
-    const recipe = recipes.find(r => r.menu_item_id === menuItem.id);
+  // Recipe Costing & Inflation Variance Helper
+  const calculateRecipeMetrics = (menuItem: any, variantId?: string | null) => {
+    const recipe = variantId
+      ? recipes.find(r => r.menu_item_id === menuItem.id && r.variant_id === variantId)
+      : recipes.find(r => r.menu_item_id === menuItem.id && (!r.variant_id || r.variant_id === null)) || recipes.find(r => r.menu_item_id === menuItem.id);
+
     if (!recipe || !recipe.inventory_recipe_ingredients || recipe.inventory_recipe_ingredients.length === 0) {
-      return { isConfigured: false, recipeCost: 0, sellingPrice: menuItem.price, grossMargin: 0, marginPercentage: 0, ingredientsCount: 0 };
+      return {
+        isConfigured: false,
+        recipeCost: 0,
+        baselineCost: 0,
+        costDiff: 0,
+        costPctDiff: 0,
+        hasCostChanged: false,
+        isCostHigher: false,
+        hasSavedBaseline: false,
+        sellingPrice: Number(menuItem.price || 0),
+        grossMargin: 0,
+        marginPercentage: 0,
+        referenceBaseMarginPct: 0,
+        marginDiff: 0,
+        isLoss: false,
+        isLowMargin: false,
+        suggestedPrice: Number(menuItem.price || 0),
+        ingredientsCount: 0,
+        recipeId: null
+      };
     }
 
     let totalCost = 0;
@@ -550,18 +573,120 @@ export default function InventoryDashboardPage() {
       }
     });
 
+    const currentCost = parseFloat(totalCost.toFixed(2));
     const sellingPrice = Number(menuItem.price || 0);
-    const grossMargin = sellingPrice - totalCost;
-    const marginPercentage = sellingPrice > 0 ? ((grossMargin / sellingPrice) * 100) : 0;
+    const grossMargin = parseFloat((sellingPrice - currentCost).toFixed(2));
+    const marginPercentage = sellingPrice > 0 ? parseFloat(((grossMargin / sellingPrice) * 100).toFixed(1)) : 0;
+
+    // Parse baseline cost and previous cost from recipe.notes
+    let baselineCost = currentCost;
+    let baselineSellingPrice = sellingPrice;
+    let baselineMarginPct = marginPercentage;
+    let hasSavedBaseline = false;
+
+    if (recipe.notes) {
+      try {
+        const meta = JSON.parse(recipe.notes);
+        if (meta && typeof meta === 'object') {
+          if (typeof meta.baselineCost === 'number' && meta.baselineCost > 0) {
+            baselineCost = parseFloat(Number(meta.baselineCost).toFixed(2));
+            hasSavedBaseline = true;
+          }
+          if (typeof meta.baselineSellingPrice === 'number' && meta.baselineSellingPrice > 0) {
+            baselineSellingPrice = Number(meta.baselineSellingPrice);
+          }
+          if (typeof meta.baselineMarginPct === 'number') {
+            baselineMarginPct = Number(meta.baselineMarginPct);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Fallback to restaurant.settings.recipe_cost_baselines
+    if (!hasSavedBaseline && (restaurant?.settings as any)?.recipe_cost_baselines) {
+      const key = recipe.id || menuItem.id;
+      const b = ((restaurant?.settings as any).recipe_cost_baselines as any)[key];
+      if (b && typeof b.baselineCost === 'number' && b.baselineCost > 0) {
+        baselineCost = parseFloat(Number(b.baselineCost).toFixed(2));
+        hasSavedBaseline = true;
+      }
+    }
+
+    // Calculate Variance
+    const costDiff = parseFloat((currentCost - baselineCost).toFixed(2));
+    const costPctDiff = baselineCost > 0 ? parseFloat(((costDiff / baselineCost) * 100).toFixed(1)) : 0;
+    const hasCostChanged = hasSavedBaseline && Math.abs(costDiff) >= 0.05;
+    const isCostHigher = costDiff > 0;
+
+    // Margin comparison against baseline
+    const baseMargin = baselineSellingPrice - baselineCost;
+    const calculatedBaseMarginPct = baselineSellingPrice > 0
+      ? parseFloat(((baseMargin / baselineSellingPrice) * 100).toFixed(1))
+      : marginPercentage;
+    const referenceBaseMarginPct = baselineMarginPct || calculatedBaseMarginPct;
+    const marginDiff = parseFloat((marginPercentage - referenceBaseMarginPct).toFixed(1));
+
+    // Loss Detection
+    const isLoss = grossMargin < 0;
+    const isLowMargin = !isLoss && marginPercentage < 20;
+
+    // Suggested Selling Price: restores original baseline margin or minimum 65% margin
+    const targetMarginRatio = Math.max(0.3, Math.min(0.85, (referenceBaseMarginPct > 0 ? referenceBaseMarginPct / 100 : 0.65)));
+    const suggestedPrice = targetMarginRatio < 1
+      ? Math.ceil(currentCost / (1 - targetMarginRatio))
+      : Math.ceil(currentCost * 1.5);
 
     return {
       isConfigured: true,
-      recipeCost: parseFloat(totalCost.toFixed(2)),
+      recipeCost: currentCost,
+      baselineCost,
+      costDiff,
+      costPctDiff,
+      hasCostChanged,
+      isCostHigher,
+      hasSavedBaseline,
       sellingPrice,
-      grossMargin: parseFloat(grossMargin.toFixed(2)),
-      marginPercentage: parseFloat(marginPercentage.toFixed(1)),
-      ingredientsCount: recipe.inventory_recipe_ingredients.length
+      grossMargin,
+      marginPercentage,
+      referenceBaseMarginPct,
+      marginDiff,
+      isLoss,
+      isLowMargin,
+      suggestedPrice,
+      ingredientsCount: recipe.inventory_recipe_ingredients.length,
+      recipeId: recipe.id
     };
+  };
+
+  const handleUpdateRecipeBaseline = async (recipeId: string, newBaselineCost: number, newSellingPrice: number) => {
+    if (!recipeId || isUpdatingBaseline) return;
+    setIsUpdatingBaseline(true);
+    try {
+      const marginPct = newSellingPrice > 0 ? parseFloat((((newSellingPrice - newBaselineCost) / newSellingPrice) * 100).toFixed(1)) : 0;
+      const meta = {
+        baselineCost: parseFloat(newBaselineCost.toFixed(2)),
+        previousCost: parseFloat(newBaselineCost.toFixed(2)),
+        baselineSellingPrice: newSellingPrice,
+        baselineMarginPct: marginPct,
+        updatedAt: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('inventory_recipes')
+        .update({
+          notes: JSON.stringify(meta),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', recipeId);
+
+      if (error) throw error;
+
+      setRecipes(prev => prev.map(r => r.id === recipeId ? { ...r, notes: JSON.stringify(meta) } : r));
+    } catch (err: any) {
+      alert('Failed to update baseline: ' + err.message);
+    } finally {
+      setIsUpdatingBaseline(false);
+    }
   };
 
   // Item Save Handler
@@ -1005,6 +1130,37 @@ export default function InventoryDashboardPage() {
         (selectedRecipeVariantId ? r.variant_id === selectedRecipeVariantId : (!r.variant_id || r.variant_id === null))
       );
 
+      let existingMeta: any = {};
+      try {
+        if (existingMatch?.notes) existingMeta = JSON.parse(existingMatch.notes);
+      } catch (_) {}
+
+      const validIngredients = recipeIngredients.filter(i => i.inventory_item_id && Number(i.quantity) > 0);
+      const computedTotalCost = validIngredients.reduce((sum, ing) => {
+        const item = effectiveItems.find(i => i.id === ing.inventory_item_id);
+        if (!item) return sum;
+        let qty = Number(ing.quantity || 0);
+        if (normalizeUnit(ing.unit) !== normalizeUnit(item.unit) && areUnitsCompatible(ing.unit, item.unit)) {
+          qty = convertUnit(qty, ing.unit, item.unit);
+        }
+        return sum + (qty * Number(item.cost_per_unit || 0));
+      }, 0);
+
+      const computedCostRounded = parseFloat(computedTotalCost.toFixed(2));
+      const computedSellingPrice = Number(selectedMenuItemForRecipe.price || 0);
+      const computedMarginPct = computedSellingPrice > 0 ? parseFloat((((computedSellingPrice - computedCostRounded) / computedSellingPrice) * 100).toFixed(1)) : 0;
+
+      const updatedRecipeMeta = {
+        ...existingMeta,
+        baselineCost: existingMeta.baselineCost ?? computedCostRounded,
+        previousCost: existingMeta.baselineCost ?? computedCostRounded,
+        baselineSellingPrice: existingMeta.baselineSellingPrice ?? computedSellingPrice,
+        baselineMarginPct: existingMeta.baselineMarginPct ?? computedMarginPct,
+        lastCost: computedCostRounded,
+        updatedAt: new Date().toISOString()
+      };
+      const updatedNotesJson = JSON.stringify(updatedRecipeMeta);
+
       if (existingMatch) {
         targetRecipeId = existingMatch.id;
         const { error: updErr } = await supabase
@@ -1012,6 +1168,7 @@ export default function InventoryDashboardPage() {
           .update({
             preparation_steps: recipeSteps,
             serving_size: recipeServingSize,
+            notes: updatedNotesJson,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingMatch.id);
@@ -1025,6 +1182,7 @@ export default function InventoryDashboardPage() {
             variant_id: selectedRecipeVariantId || null,
             preparation_steps: recipeSteps,
             serving_size: recipeServingSize,
+            notes: updatedNotesJson,
             updated_at: new Date().toISOString()
           })
           .select();
@@ -1038,7 +1196,6 @@ export default function InventoryDashboardPage() {
       // Delete old ingredients and re-insert
       await supabase.from('inventory_recipe_ingredients').delete().eq('recipe_id', targetRecipeId);
 
-      const validIngredients = recipeIngredients.filter(i => i.inventory_item_id && Number(i.quantity) > 0);
       if (validIngredients.length > 0) {
         await supabase.from('inventory_recipe_ingredients').insert(
           validIngredients.map(ing => ({
@@ -2045,20 +2202,56 @@ export default function InventoryDashboardPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-gray-700 dark:text-gray-300">
-                          {metrics.isConfigured ? `₹${metrics.recipeCost}` : '—'}
+                        <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200">
+                          {metrics.isConfigured ? (
+                            <div>
+                              <div>₹{metrics.recipeCost}</div>
+                              {metrics.hasCostChanged && (
+                                <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                  Was ₹{metrics.baselineCost} ({metrics.costDiff > 0 ? `+₹${metrics.costDiff}` : `-₹${Math.abs(metrics.costDiff)}`})
+                                </div>
+                              )}
+                            </div>
+                          ) : '—'}
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-gray-950 dark:text-white">
-                          ₹{metrics.sellingPrice}
+                        <td className="py-3.5 px-4 font-bold text-slate-900 dark:text-white">
+                          <div>
+                            <div>₹{metrics.sellingPrice}</div>
+                            {metrics.isLoss && (
+                              <div className="text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                                Suggested: ₹{metrics.suggestedPrice}
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-gray-100">
-                          {metrics.isConfigured ? `₹${metrics.grossMargin}` : '—'}
+                        <td className="py-3.5 px-4 font-bold text-slate-800 dark:text-slate-200">
+                          {metrics.isConfigured ? (
+                            <div>
+                              <div>₹{metrics.grossMargin}</div>
+                              {metrics.isLoss ? (
+                                <div className="text-[10px] font-black uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                                  Loss
+                                </div>
+                              ) : metrics.isLowMargin ? (
+                                <div className="text-[10px] font-semibold text-slate-500">
+                                  Low Margin
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : '—'}
                         </td>
                         <td className="py-3.5 px-4 font-bold">
                           {metrics.isConfigured ? (
-                            <span className="px-2 py-0.5 rounded-md text-[11px] border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100 font-medium">
-                              {metrics.marginPercentage}%
-                            </span>
+                            <div>
+                              <span className="px-2 py-0.5 rounded-md text-[11px] border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 font-medium">
+                                {metrics.marginPercentage}%
+                              </span>
+                              {metrics.hasCostChanged && metrics.marginDiff !== 0 && (
+                                <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+                                  {metrics.marginDiff > 0 ? `+${metrics.marginDiff}%` : `${metrics.marginDiff}%`}
+                                </div>
+                              )}
+                            </div>
                           ) : '—'}
                         </td>
                         <td className="py-3.5 px-4 text-right">
@@ -2898,21 +3091,70 @@ export default function InventoryDashboardPage() {
                     return acc + (qtyInItemUnit * Number(selItem.cost_per_unit || 0));
                   }, 0);
                   const modalSellingPrice = Number(selectedMenuItemForRecipe?.price || 0);
-                  const modalGrossMargin = modalSellingPrice - modalTotalCost;
+                  const modalGrossMargin = parseFloat((modalSellingPrice - modalTotalCost).toFixed(2));
+                  const modalMarginPct = modalSellingPrice > 0 ? parseFloat(((modalGrossMargin / modalSellingPrice) * 100).toFixed(1)) : 0;
+                  const isLoss = modalGrossMargin < 0;
+
+                  const existingMatch = recipes.find(r => 
+                    r.menu_item_id === selectedMenuItemForRecipe?.id && 
+                    (selectedRecipeVariantId ? r.variant_id === selectedRecipeVariantId : (!r.variant_id || r.variant_id === null))
+                  );
+
+                  let baselineCost: number | null = null;
+                  if (existingMatch?.notes) {
+                    try {
+                      const parsed = JSON.parse(existingMatch.notes);
+                      if (typeof parsed?.baselineCost === 'number') baselineCost = Number(parsed.baselineCost);
+                    } catch (_) {}
+                  }
+                  const hasDiff = baselineCost !== null && Math.abs(modalTotalCost - baselineCost) >= 0.05;
+                  const costDiff = baselineCost !== null ? parseFloat((modalTotalCost - baselineCost).toFixed(2)) : 0;
+                  const suggestedPrice = Math.ceil(modalTotalCost / 0.35);
 
                   return (
-                    <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-300 block">Total Recipe Cost</span>
-                        <span className="text-base font-black text-slate-900 dark:text-white">₹{formatCurrency(modalTotalCost)}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 block">Selling Price</span>
-                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">₹{formatCurrency(modalSellingPrice)}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 block">Gross Margin</span>
-                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">₹{formatCurrency(modalGrossMargin)}</span>
+                    <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-2 text-xs">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Total Recipe Cost</span>
+                          <span className="text-base font-black text-slate-900 dark:text-white">₹{formatCurrency(modalTotalCost)}</span>
+                          {hasDiff && (
+                            <span className="text-[10px] text-slate-500 block">
+                              Was ₹{formatCurrency(baselineCost)} ({costDiff > 0 ? `+₹${costDiff}` : `-₹${Math.abs(costDiff)}`})
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Selling Price</span>
+                          <span className="text-sm font-bold text-slate-700 dark:text-slate-300">₹{formatCurrency(modalSellingPrice)}</span>
+                          {isLoss && (
+                            <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100 block">
+                              Suggested: ₹{suggestedPrice}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Gross Margin</span>
+                          <span className="text-sm font-black text-slate-900 dark:text-white">
+                            ₹{formatCurrency(modalGrossMargin)} ({modalMarginPct}%)
+                          </span>
+                          {isLoss && (
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 block">
+                              Loss
+                            </span>
+                          )}
+                        </div>
+                        {existingMatch && (
+                          <div className="w-full sm:w-auto pt-1 sm:pt-0">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateRecipeBaseline(existingMatch.id, modalTotalCost, modalSellingPrice)}
+                              disabled={isUpdatingBaseline}
+                              className="text-[10px] font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 px-2.5 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer disabled:opacity-50"
+                            >
+                              {isUpdatingBaseline ? 'Updating...' : 'Set as New Baseline'}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
