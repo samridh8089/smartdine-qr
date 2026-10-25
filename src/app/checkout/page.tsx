@@ -16,7 +16,7 @@ function CheckoutContent() {
 
   const orderId = searchParams.get('orderId') || '';
   const amount = Number(searchParams.get('amount') || '999');
-  const keyId = searchParams.get('keyId') || '***REMOVED***';
+  const keyId = searchParams.get('keyId') || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
   const plan = searchParams.get('plan') || 'pro';
   const restaurantName = searchParams.get('restaurantName') || 'Restaurant';
   const fullName = searchParams.get('fullName') || '';

@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
+import { getRazorpayCredentials, verifyRazorpaySignature, fetchRazorpayPayment } from '@/lib/paymentSecurity';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   let realPaymentId = '';
@@ -63,51 +70,51 @@ export async function POST(req: Request) {
         }, { status: 400 });
       }
 
-      if (!paymentDetails.isDemo) {
-        const keySecret = process.env.RAZORPAY_KEY_SECRET || '***REMOVED***';
-        const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '***REMOVED***';
+      let keyId: string;
+      let keySecret: string;
+      try {
+        const creds = getRazorpayCredentials();
+        keyId = creds.keyId;
+        keySecret = creds.keySecret;
+      } catch (credErr: any) {
+        return NextResponse.json({ error: 'Razorpay payment gateway credentials not configured' }, { status: 500 });
+      }
 
-        let signatureValid = false;
+      let signatureValid = false;
 
-        if (paymentDetails.razorpay_signature && paymentDetails.razorpay_order_id && paymentDetails.razorpay_payment_id) {
-          const expectedSig = crypto
-            .createHmac('sha256', keySecret)
-            .update(`${paymentDetails.razorpay_order_id}|${paymentDetails.razorpay_payment_id}`)
-            .digest('hex');
-
-          if (expectedSig === paymentDetails.razorpay_signature) {
-            signatureValid = true;
-          } else {
-            console.warn('[Onboarding] HMAC signature mismatch. Attempting direct Razorpay API payment verification fallback...');
-          }
-        }
-
-        // Direct Razorpay API verification fallback (ensures legitimate captured payments are NEVER rejected)
-        if (!signatureValid && paymentDetails.razorpay_payment_id) {
-          try {
-            const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-            const rzpRes = await fetch(`https://api.razorpay.com/v1/payments/${paymentDetails.razorpay_payment_id}`, {
-              headers: { Authorization: `Basic ${auth}` }
-            });
-            const rzpPayment = await rzpRes.json();
-            if (rzpPayment && (rzpPayment.status === 'captured' || rzpPayment.status === 'authorized')) {
-              console.log('[Onboarding] Payment verified via official Razorpay API check:', rzpPayment.id, rzpPayment.status);
-              signatureValid = true;
-            } else {
-              console.warn('[Onboarding] Razorpay API payment status check failed:', rzpPayment);
-            }
-          } catch (apiErr) {
-            console.error('[Onboarding] Razorpay API verification exception:', apiErr);
-          }
-        }
+      if (paymentDetails.razorpay_signature && paymentDetails.razorpay_order_id && paymentDetails.razorpay_payment_id) {
+        signatureValid = verifyRazorpaySignature(
+          paymentDetails.razorpay_order_id,
+          paymentDetails.razorpay_payment_id,
+          paymentDetails.razorpay_signature,
+          keySecret
+        );
 
         if (!signatureValid) {
-          return NextResponse.json({
-            error: 'Payment verification failed: Razorpay payment signature could not be verified.'
-          }, { status: 400 });
+          console.warn('[Onboarding] HMAC signature mismatch. Attempting direct Razorpay API payment verification fallback...');
         }
       }
+
+      // Direct Razorpay API verification fallback (ensures legitimate captured payments are NEVER rejected)
+      if (!signatureValid && paymentDetails.razorpay_payment_id) {
+        const payRes = await fetchRazorpayPayment(paymentDetails.razorpay_payment_id, keyId, keySecret);
+        if (payRes.success && payRes.payment) {
+          const rzpPayment = payRes.payment;
+          if ((rzpPayment.status === 'captured' || rzpPayment.status === 'authorized') && rzpPayment.order_id === paymentDetails.razorpay_order_id) {
+            console.log('[Onboarding] Payment verified via official Razorpay API check:', rzpPayment.id, rzpPayment.status);
+            signatureValid = true;
+          }
+        }
+      }
+
+      if (!signatureValid) {
+        return NextResponse.json({
+          error: 'Payment verification failed: Razorpay payment signature could not be verified.'
+        }, { status: 400 });
+      }
     }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     // ─── 2. IDEMPOTENCY CHECK (CHECK IF PAYMENT WAS ALREADY PROCESSED) ──────────
     if (realPaymentId) {
@@ -134,7 +141,7 @@ export async function POST(req: Request) {
 
     // Search existing auth users via Admin API
     const { data: { users: allUsers } } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const existingUser = (allUsers || []).find(u => u.email?.toLowerCase().trim() === cleanEmail);
+    const existingUser = (allUsers || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
 
     if (existingUser?.id) {
       userId = existingUser.id;
@@ -366,16 +373,17 @@ export async function POST(req: Request) {
     if (realPaymentId && !realPaymentId.startsWith('demo_')) {
       console.warn(`[AUTOMATIC REFUND TRIGGERED]: Onboarding failed post-payment for ${realPaymentId}. Initiating refund...`);
       try {
-        const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '***REMOVED***';
-        const keySecret = process.env.RAZORPAY_KEY_SECRET || '***REMOVED***';
-        if (!keyId || !keySecret) {
+        let creds: { keyId: string; keySecret: string };
+        try {
+          creds = getRazorpayCredentials();
+        } catch (_) {
           console.warn('[AUTOMATIC REFUND SKIPPED]: Missing Razorpay API keys.');
           return NextResponse.json({
             error: 'Onboarding failed, and automated refund could not be initiated due to unconfigured API keys. Please contact support.',
             details: 'MISSING_RAZORPAY_KEYS'
           }, { status: 500 });
         }
-        const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+        const auth = Buffer.from(`${creds.keyId}:${creds.keySecret}`).toString('base64');
 
         const refundRes = await fetch(`https://api.razorpay.com/v1/payments/${realPaymentId}/refund`, {
           method: 'POST',

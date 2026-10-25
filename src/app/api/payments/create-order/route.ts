@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { validateSchema, Validators } from '@/lib/validation';
 import { handleApiError } from '@/lib/errors';
 import { ServerTimer } from '@/lib/serverTiming';
+import { getRazorpayCredentials, getServerPlanPrice } from '@/lib/paymentSecurity';
 
 export async function POST(req: Request) {
   const totalStart = performance.now();
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const validation = validateSchema(body, {
-      amount: { rules: [Validators.number({ min: 1 })], required: true },
+      amount: { rules: [Validators.number({ min: 1 })], required: false },
       currency: { rules: [Validators.enum(['INR', 'USD'] as const)], required: false },
       plan: { rules: [Validators.string({ max: 50 })], required: false },
       restaurantId: { rules: [Validators.string({ max: 100 })], required: false },
@@ -125,10 +126,22 @@ export async function POST(req: Request) {
       }
     }
 
-    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '***REMOVED***';
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '***REMOVED***';
+    let keyId: string;
+    let keySecret: string;
+    try {
+      const creds = getRazorpayCredentials();
+      keyId = creds.keyId;
+      keySecret = creds.keySecret;
+    } catch (credErr: any) {
+      return NextResponse.json({ error: 'Razorpay payment gateway credentials not configured' }, { status: 500 });
+    }
 
-    const amountInPaise = Math.round(Number(amount) * 100);
+    // Server-side authoritative pricing (C3: prevents client-side price tampering)
+    const { price: verifiedPlanPrice, planId: normalizedPlanId } = await getServerPlanPrice(
+      plan || 'pro',
+      billingInterval as 'monthly' | 'yearly'
+    );
+    const amountInPaise = Math.round(verifiedPlanPrice * 100);
 
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
@@ -145,9 +158,10 @@ export async function POST(req: Request) {
         receipt: `rcpt_${targetRestaurantId ? targetRestaurantId.slice(0, 8) + '_' : ''}${Date.now()}`,
         notes: {
           restaurant_id: targetRestaurantId || '',
-          plan_name: plan || '',
+          plan_name: normalizedPlanId,
           billing_interval: billingInterval || 'monthly',
-          is_upgrade: isUpgrade ? 'true' : 'false'
+          is_upgrade: isUpgrade ? 'true' : 'false',
+          verified_amount: verifiedPlanPrice.toString()
         },
       }),
     });

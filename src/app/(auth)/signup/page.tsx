@@ -200,7 +200,7 @@ function SignupForm() {
 
       // 3. Open Razorpay Checkout Modal
       const options = {
-        key: orderData.keyId || '***REMOVED***',
+        key: orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
         amount: orderData.amount,
         currency: orderData.currency || 'INR',
         name: 'CleverOps',

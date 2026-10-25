@@ -1,12 +1,26 @@
 import { NextResponse } from 'next/server';
+import { getRazorpayCredentials, getServerPlanPrice } from '@/lib/paymentSecurity';
 
 export async function POST(req: Request) {
   try {
-    const { amount, currency = 'INR', plan, restaurantId, billingInterval } = await req.json();
+    const { amount, currency = 'INR', plan, restaurantId, billingInterval = 'monthly' } = await req.json();
 
-    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '***REMOVED***';
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '***REMOVED***';
+    let keyId: string;
+    let keySecret: string;
+    try {
+      const creds = getRazorpayCredentials();
+      keyId = creds.keyId;
+      keySecret = creds.keySecret;
+    } catch (credErr: any) {
+      return NextResponse.json({ error: 'Razorpay payment gateway credentials not configured' }, { status: 500 });
+    }
 
+    // Authoritative server-side price calculation (C3)
+    const { price: verifiedPlanPrice, planId: normalizedPlanId } = await getServerPlanPrice(
+      plan || 'pro',
+      billingInterval as 'monthly' | 'yearly'
+    );
+    const amountInPaise = Math.round(verifiedPlanPrice * 100);
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
 
@@ -17,13 +31,15 @@ export async function POST(req: Request) {
         'Authorization': `Basic ${auth}`,
       },
       body: JSON.stringify({
-        amount: Math.round(amount * 100), // amount in paise
+        amount: amountInPaise,
         currency: currency || 'INR',
         receipt: `rcpt_${Date.now()}`,
         notes: {
-          restaurant_id: restaurantId,
-          plan,
+          restaurant_id: restaurantId || '',
+          plan: normalizedPlanId,
+          plan_name: normalizedPlanId,
           billing_interval: billingInterval,
+          verified_amount: verifiedPlanPrice.toString()
         },
       }),
     });
@@ -40,9 +56,11 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       orderId: data.id,
+      order_id: data.id,
       amount: data.amount,
       currency: data.currency,
       keyId,
+      key: keyId
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

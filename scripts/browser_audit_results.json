@@ -239,7 +239,7 @@
         }
       },
       {
-        "text": "Connecting to 'https://lumberjack.razorpay.com/v1/track?key_id=***REMOVED***' violates the following Content Security Policy directive: \"connect-src 'self' https://*.supabase.co wss://*.supabase.co https://checkout.razorpay.com https://api.razorpay.com https://lumberjack-cx.razorpay.com https://www.cleverops.in https://cleverops.in\". The action has been blocked.",
+        "text": "Connecting to 'https://lumberjack.razorpay.com/v1/track?key_id=[REDACTED_RAZORPAY_KEY]' violates the following Content Security Policy directive: \"connect-src 'self' https://*.supabase.co wss://*.supabase.co https://checkout.razorpay.com https://api.razorpay.com https://lumberjack-cx.razorpay.com https://www.cleverops.in https://cleverops.in\". The action has been blocked.",
         "location": {
           "url": "https://checkout.razorpay.com/v1/checkout.js",
           "lineNumber": 0
@@ -251,7 +251,7 @@
         "url": "https://cdn.razorpay.com/static/cx/razorpay-risk-detection/bundle.js"
       },
       {
-        "url": "https://lumberjack.razorpay.com/v1/track?key_id=***REMOVED***"
+        "url": "https://lumberjack.razorpay.com/v1/track?key_id=[REDACTED_RAZORPAY_KEY]"
       }
     ]
   },
