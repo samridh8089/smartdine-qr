@@ -102,6 +102,15 @@ export interface Restaurant {
     thermal_footer_note?: string;
     thermal_show_gstin?: boolean;
     thermal_auto_print?: boolean;
+    active_devices?: Record<string, {
+      device_id: string;
+      device_name: string;
+      platform: 'Desktop' | 'Mobile' | 'Tablet';
+      user_email?: string;
+      user_id?: string;
+      is_trusted?: boolean;
+      last_active_at: string;
+    }>;
   };
   subscription_plan: 'starter' | 'pro' | 'premium';
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';

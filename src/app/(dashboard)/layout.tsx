@@ -19,6 +19,7 @@ import {
   Bell, BellOff, UserCheck
 } from 'lucide-react';
 import { setGlobalMute, stopLoudBell, isGloballyMuted, playLoudBell } from '@/lib/soundAlert';
+import { registerDeviceActivity } from '@/lib/sessionManager';
 
 // Central Route to Entitlement Feature Key Mapping
 const ROUTE_FEATURE_KEYS: Record<string, { key: string; name: string; desc: string }> = {
@@ -269,6 +270,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   useEffect(() => {
     setGlobalMute(alarmMuted);
   }, [alarmMuted]);
+
+  useEffect(() => {
+    if (restaurant?.id && profile) {
+      registerDeviceActivity(restaurant.id, profile);
+    }
+  }, [restaurant?.id, profile?.id]);
 
   // Realtime Supabase Subscription for Restaurant License/Plan updates
   useEffect(() => {
