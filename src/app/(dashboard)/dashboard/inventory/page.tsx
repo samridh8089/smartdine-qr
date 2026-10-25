@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRestaurant } from '../../layout';
-import { supabase } from '@/lib/supabase';
+import { supabase, getClientAuthHeaders } from '@/lib/supabase';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import { 
   convertUnit, 
@@ -420,7 +420,12 @@ export default function InventoryDashboardPage() {
       await syncInventoryMenuAvailability(restaurantId);
 
       // 5. Clean up any orphan reservations for cancelled/completed orders (non-blocking)
-      fetch(`/api/staff/cleanup-reservations?restaurantId=${restaurantId}`, { method: 'POST' }).catch(() => {});
+      getClientAuthHeaders().then(authHeaders => {
+        fetch(`/api/staff/cleanup-reservations?restaurantId=${restaurantId}`, {
+          method: 'POST',
+          headers: authHeaders
+        }).catch(() => {});
+      }).catch(() => {});
     } catch (err) {
       console.error('Error loading inventory data:', err);
     } finally {
@@ -1176,9 +1181,13 @@ export default function InventoryDashboardPage() {
 
     setAiGenerating(true);
     try {
+      const authHeaders = await getClientAuthHeaders();
       const res = await fetch('/api/ai-recipe/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({ dishName: dishToUse, restaurantId })
       });
       const data = await res.json();

@@ -36,6 +36,73 @@ export const clearActiveUserCache = () => {
   cachedProfileTimestamp = 0;
 };
 
+/**
+ * Safely extracts active Supabase JWT access token across auth session and localStorage
+ */
+export const getClientAuthToken = async (forceRefresh = false): Promise<string> => {
+  if (typeof window === 'undefined') return '';
+
+  try {
+    // 1. Direct Supabase session
+    if (forceRefresh) {
+      const { data: refreshData } = await supabase.auth.refreshSession().catch(() => ({ data: null }));
+      if (refreshData?.session?.access_token) {
+        return refreshData.session.access_token;
+      }
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: null }));
+    if (sessionData?.session?.access_token) {
+      return sessionData.session.access_token;
+    }
+
+    // 2. Read from localStorage smartdine_auth_token_v2
+    const raw = localStorage.getItem('smartdine_auth_token_v2');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        const token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+        if (token && typeof token === 'string' && token.length > 20) return token;
+      } catch {
+        if (typeof raw === 'string' && raw.length > 20) return raw;
+      }
+    }
+
+    // 3. Scan for Supabase project keys (sb-*-auth-token)
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        const item = localStorage.getItem(key);
+        if (item) {
+          try {
+            const parsed = JSON.parse(item);
+            const token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+            if (token && typeof token === 'string' && token.length > 20) return token;
+          } catch {}
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[getClientAuthToken] Notice extracting auth token:', err);
+  }
+
+  return '';
+};
+
+/**
+ * Returns Bearer and staff authorization headers for authenticated internal API calls
+ */
+export const getClientAuthHeaders = async (forceRefresh = false): Promise<Record<string, string>> => {
+  const token = await getClientAuthToken(forceRefresh);
+  if (token) {
+    return {
+      'Authorization': `Bearer ${token}`,
+      'x-staff-token': token
+    };
+  }
+  return {};
+};
+
 export const signOutUser = async () => {
   clearActiveUserCache();
   try {
@@ -224,9 +291,14 @@ export const storage = {
         ? `${cleanSubdir}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
         : `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
-      const res = await fetch('/api/ai-menu/upload-image', {
+      const authHeaders = await getClientAuthHeaders();
+
+      let res = await fetch('/api/ai-menu/upload-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({
           restaurantId,
           itemId: uniqueSubPath,
@@ -234,6 +306,26 @@ export const storage = {
           previousUrl: previousUrl || undefined
         })
       });
+
+      // Token retry if 401 Unauthorized
+      if (res.status === 401) {
+        const refreshedHeaders = await getClientAuthHeaders(true);
+        if (refreshedHeaders.Authorization) {
+          res = await fetch('/api/ai-menu/upload-image', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...refreshedHeaders
+            },
+            body: JSON.stringify({
+              restaurantId,
+              itemId: uniqueSubPath,
+              imageUrl: dataUrl,
+              previousUrl: previousUrl || undefined
+            })
+          });
+        }
+      }
 
       const resData = await res.json();
       if (!res.ok || !resData.success || !resData.storageUrl) {
@@ -329,8 +421,10 @@ export const storage = {
       if (excludeItemId) params.set('excludeItemId', excludeItemId);
 
       if (typeof window !== 'undefined') {
+        const authHeaders = await getClientAuthHeaders();
         const res = await fetch(`/api/ai-menu/upload-image?${params.toString()}`, {
-          method: 'DELETE'
+          method: 'DELETE',
+          headers: authHeaders
         });
         if (!res.ok) {
           console.warn(`[Storage Delete] Server responded with status ${res.status}`);

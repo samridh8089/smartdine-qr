@@ -5,6 +5,7 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Button } from '@/components/ui/Button';
 import { Sparkles, Check, ArrowRight, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { db } from '@/lib/db';
+import { getClientAuthHeaders } from '@/lib/supabase';
 
 interface CleanupSuggestion {
   id: string;
@@ -41,9 +42,13 @@ export default function AiMenuCleanupModal({
   const handleRunCleanup = async () => {
     setLoading(true);
     try {
+      const authHeaders = await getClientAuthHeaders();
       const res = await fetch('/api/ai-menu/cleanup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders
+        },
         body: JSON.stringify({ restaurantId })
       });
       const data = await res.json();
