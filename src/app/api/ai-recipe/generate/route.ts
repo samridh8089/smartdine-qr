@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { generateStructuredGeminiJSON } from '@/lib/gemini';
 import { consumeAICreditForRestaurant, isFeatureEnabledForRestaurant } from '@/lib/entitlements';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 // Helper to generate realistic, authentic culinary recipes for any dish type
 function generateRealisticFallbackRecipe(dishName: string, cuisine?: string) {
@@ -360,6 +361,20 @@ export async function POST(req: Request) {
 
     if (!dishName && !imageBase64) {
       return NextResponse.json({ error: 'Dish name or recipe image is required' }, { status: 400 });
+    }
+
+    if (!restaurantId) {
+      return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    // Mandatory Authorization & Multi-tenant IDOR protection (Finding C6)
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'head_chef', 'chef', 'supervisor', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
     }
 
     let usageInfo: any = null;

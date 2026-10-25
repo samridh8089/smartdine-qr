@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   try {
@@ -11,6 +18,18 @@ export async function POST(req: Request) {
     if (!restaurantId) {
       return NextResponse.json({ error: 'Restaurant ID is required' }, { status: 400 });
     }
+
+    // Mandatory Authorization & Multi-tenant IDOR protection (Finding C6)
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'head_chef', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
 
     const { data: items } = await supabaseAdmin.from('menu_items').select('*').eq('restaurant_id', restaurantId);
     const { data: categories } = await supabaseAdmin.from('categories').select('*').eq('restaurant_id', restaurantId);
@@ -34,13 +53,13 @@ export async function POST(req: Request) {
     const insights: string[] = [];
 
     // Analyze menu health
-    const missingDescCount = existingItems.filter(i => !i.description || i.description.trim().length < 5).length;
+    const missingDescCount = existingItems.filter((i: any) => !i.description || i.description.trim().length < 5).length;
     if (missingDescCount > 0) {
       insights.push(`${missingDescCount} item(s) have missing or brief descriptions.`);
     }
 
     const duplicatesMap: Record<string, number> = {};
-    existingItems.forEach(i => {
+    existingItems.forEach((i: any) => {
       const clean = i.name.trim().toLowerCase();
       duplicatesMap[clean] = (duplicatesMap[clean] || 0) + 1;
     });
@@ -50,7 +69,7 @@ export async function POST(req: Request) {
       insights.push(`${duplicateNames.length} potential duplicate item name(s) identified in menu.`);
     }
 
-    existingItems.forEach(item => {
+    existingItems.forEach((item: any) => {
       const issues: string[] = [];
       let sugName = item.name;
       let sugDesc = item.description || '';

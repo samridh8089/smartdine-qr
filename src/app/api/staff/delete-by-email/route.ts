@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _adminClient: any = null;
+function getSupabaseAdmin() {
+  if (_adminClient) return _adminClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role configuration');
+  _adminClient = createClient(url, key);
+  return _adminClient;
+}
 
 export async function POST(req: Request) {
   try {
@@ -24,7 +30,7 @@ export async function POST(req: Request) {
     }
 
     // 2. Protect Restaurant Owner: never allow deleting the restaurant owner account
-    const { data: restRow } = await supabaseAdmin
+    const { data: restRow } = await getSupabaseAdmin()
       .from('restaurants')
       .select('owner_id, settings')
       .eq('id', restaurantId)
@@ -32,7 +38,7 @@ export async function POST(req: Request) {
 
     let ownerEmail: string | null = restRow?.settings?.owner_email?.toLowerCase() || null;
     if (restRow?.owner_id) {
-      const { data: ownerProf } = await supabaseAdmin
+      const { data: ownerProf } = await getSupabaseAdmin()
         .from('profiles')
         .select('email')
         .eq('id', restRow.owner_id)
@@ -54,23 +60,23 @@ export async function POST(req: Request) {
 
     // 3a. Lookup via generateLink
     try {
-      const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+      const { data: linkData } = await getSupabaseAdmin().auth.admin.generateLink({
         type: 'magiclink',
         email: cleanEmail
       });
       if (linkData?.user?.id && linkData.user.id !== restRow?.owner_id) {
-        const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(linkData.user.id);
+        const { error: delErr } = await getSupabaseAdmin().auth.admin.deleteUser(linkData.user.id);
         if (!delErr) deletedAuthCount++;
       }
     } catch (_) {}
 
     // 3b. Lookup via listUsers
     try {
-      const { data: authUsersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      const matchingUsers = (authUsersData?.users || []).filter(u => u.email?.toLowerCase() === cleanEmail);
+      const { data: authUsersData } = await getSupabaseAdmin().auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const matchingUsers = (authUsersData?.users || []).filter((u: any) => u.email?.toLowerCase() === cleanEmail);
       for (const u of matchingUsers) {
         if (u.id !== restRow?.owner_id) {
-          const { error: delErr } = await supabaseAdmin.auth.admin.deleteUser(u.id);
+          const { error: delErr } = await getSupabaseAdmin().auth.admin.deleteUser(u.id);
           if (!delErr) deletedAuthCount++;
         }
       }
@@ -81,13 +87,13 @@ export async function POST(req: Request) {
     // 3c. Fallback for known test staff ID
     if (cleanEmail === 'poojagarg0885@gmail.com') {
       try {
-        await supabaseAdmin.auth.admin.deleteUser('178ea265-32b1-4119-839e-583961f23650');
+        await getSupabaseAdmin().auth.admin.deleteUser('178ea265-32b1-4119-839e-583961f23650');
         deletedAuthCount++;
       } catch (_) {}
     }
 
     // 4. Delete profile records matching this email
-    await supabaseAdmin
+    await getSupabaseAdmin()
       .from('profiles')
       .delete()
       .eq('email', cleanEmail)
@@ -95,7 +101,7 @@ export async function POST(req: Request) {
 
     // 5. Clean up from restaurant settings (staff_metadata and attendo.staff_profiles)
     try {
-      const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
+      const { data: rest } = await getSupabaseAdmin().from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
       if (rest) {
         const staffMeta = { ...(rest.settings?.staff_metadata || {}) };
         let metaChanged = false;
@@ -111,7 +117,7 @@ export async function POST(req: Request) {
         const attendoChanged = filteredAttendo.length !== currentAttendoList.length;
 
         if (metaChanged || attendoChanged) {
-          await supabaseAdmin.from('restaurants').update({
+          await getSupabaseAdmin().from('restaurants').update({
             settings: {
               ...rest.settings,
               staff_metadata: staffMeta,

@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server';
 import { generateStructuredGeminiJSON } from '@/lib/gemini';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 export async function POST(req: Request) {
   try {
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'head_chef', 'chef', 'supervisor', 'super_admin']
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
     const { itemName, categoryName, language = 'english' } = await req.json();
 
     if (!itemName) {

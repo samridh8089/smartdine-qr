@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _adminClient: any = null;
+function getSupabaseAdmin() {
+  if (_adminClient) return _adminClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role configuration');
+  _adminClient = createClient(url, key);
+  return _adminClient;
+}
 
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
@@ -25,7 +30,7 @@ export async function GET(req: Request) {
       return authCheck.response;
     }
 
-    const { data: rest, error } = await supabaseAdmin
+    const { data: rest, error } = await getSupabaseAdmin()
       .from('restaurants')
       .select('settings')
       .eq('id', restaurantId)
@@ -59,7 +64,7 @@ export async function POST(req: Request) {
 
     // Prevent cross-restaurant and cross-role assignments:
     // Fetch valid staff profiles belonging exclusively to this restaurant
-    const { data: validStaff } = await supabaseAdmin
+    const { data: validStaff } = await getSupabaseAdmin()
       .from('profiles')
       .select('id, full_name, role, restaurant_id')
       .eq('restaurant_id', restaurantId);
@@ -76,7 +81,7 @@ export async function POST(req: Request) {
           }, { status: 403 });
         }
 
-        const staffRecord = staffId ? validStaffMap.get(staffId) : null;
+        const staffRecord: any = staffId ? validStaffMap.get(staffId) : null;
         const isKitchenRole = ['kitchen', 'head_chef', 'chef', 'kitchen_helper'].includes(staffRecord?.role || '') || ['kitchen', 'head_chef', 'chef', 'kitchen_helper'].includes(item.role || '');
         if (staffRecord && isKitchenRole) {
           return NextResponse.json({
@@ -88,7 +93,7 @@ export async function POST(req: Request) {
     }
 
     // Fetch restaurant settings
-    const { data: rest, error: fetchErr } = await supabaseAdmin
+    const { data: rest, error: fetchErr } = await getSupabaseAdmin()
       .from('restaurants')
       .select('settings')
       .eq('id', restaurantId)
@@ -103,7 +108,7 @@ export async function POST(req: Request) {
       table_assignments: assignments || []
     };
 
-    const { error: updateErr } = await supabaseAdmin
+    const { error: updateErr } = await getSupabaseAdmin()
       .from('restaurants')
       .update({ settings: updatedSettings })
       .eq('id', restaurantId);

@@ -2,13 +2,31 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateMagicBytes, ALLOWED_IMAGE_MIMES, MAX_FILE_SIZE_BYTES, sanitizeFilename } from '@/lib/fileValidation';
 import { handleApiError } from '@/lib/errors';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
 export async function POST(req: Request) {
   try {
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const body = await req.json();
+    const { restaurantId, itemId, imageUrl, previousUrl, oldImageUrl } = body;
+    const oldToClean = previousUrl || oldImageUrl;
 
+    if (!restaurantId || !imageUrl) {
+      return NextResponse.json({ error: 'Missing restaurantId or imageUrl' }, { status: 400 });
+    }
+
+    // Enforce Staff Authorization & Tenant Isolation (Finding C6)
+    const authCheck = await verifyStaffRequest(
+      req,
+      ['owner', 'manager', 'head_chef', 'super_admin'],
+      restaurantId
+    );
+    if (!authCheck.isAuthorized) {
+      return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
+    }
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceRoleKey) {
       console.error('[Upload Image Error] SUPABASE_SERVICE_ROLE_KEY environment variable is not configured.');
       return NextResponse.json({
@@ -17,14 +35,6 @@ export async function POST(req: Request) {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
-
-    const body = await req.json();
-    const { restaurantId, itemId, imageUrl, previousUrl, oldImageUrl } = body;
-    const oldToClean = previousUrl || oldImageUrl;
-
-    if (!restaurantId || !imageUrl) {
-      return NextResponse.json({ error: 'Missing restaurantId or imageUrl' }, { status: 400 });
-    }
 
     // 1. If already a Supabase Storage URL, return as-is
     if (typeof imageUrl === 'string' && imageUrl.includes('supabase.co/storage/v1/object/public/')) {

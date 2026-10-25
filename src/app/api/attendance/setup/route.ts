@@ -1,11 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const authCheck = await verifySuperAdminRequest(req);
+    if (!authCheck.isSuperAdmin) {
+      return NextResponse.json({ error: 'UNAUTHORIZED', message: 'Super admin authorization required' }, { status: 401 });
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ error: 'Missing Supabase service role configuration' }, { status: 500 });
+    }
+
     const admin = createClient(supabaseUrl, supabaseKey);
     const tableStatus: Record<string, string> = {};
 

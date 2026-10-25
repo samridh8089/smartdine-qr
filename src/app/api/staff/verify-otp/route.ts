@@ -1,13 +1,20 @@
 import { NextResponse } from 'next/server';
 import { verifyOtp } from '@/lib/otpEngine';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: SupabaseClient | null = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role configuration');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const body = await req.json();
     const { email, otp, staffId, restaurantId } = body;
 
@@ -60,8 +67,8 @@ export async function POST(req: Request) {
           const staffMeta = rest.settings?.staff_metadata || {};
           const existingMeta = staffMeta[staffId] || {};
 
-          // Also fetch profile info if email/name missing
-          const { data: prof } = await supabaseAdmin.from('profiles').select('*').eq('id', staffId).maybeSingle();
+          // Also fetch profile info if email/name missing (explicit columns)
+          const { data: prof } = await supabaseAdmin.from('profiles').select('id, email, full_name, role, department').eq('id', staffId).maybeSingle();
 
           staffMeta[staffId] = {
             ...existingMeta,
