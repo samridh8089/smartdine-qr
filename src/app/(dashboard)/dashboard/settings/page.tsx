@@ -2315,19 +2315,11 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                               </td>
                               <td className="px-5 py-3 font-mono text-xs">
                                 <div>{st.email}</div>
-                                {st.plain_password && !isOwner ? (
-                                  <div className="flex items-center gap-1.5 mt-1 text-[11px]">
-                                    <span className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded select-all font-mono">{st.plain_password}</span>
-                                    <button 
-                                      type="button" 
-                                      onClick={() => navigator.clipboard.writeText(st.plain_password || '')} 
-                                      className="text-slate-400 hover:text-emerald-500 transition-colors"
-                                      title="Copy Password"
-                                    >
-                                      <Copy className="h-3 w-3" />
-                                    </button>
+                                {!isOwner && (
+                                  <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400">
+                                    <span className="font-mono">••••••••</span>
                                   </div>
-                                ) : null}
+                                )}
                               </td>
                               <td className="px-5 py-3">
                                 <div className="flex flex-col gap-1">

@@ -3225,7 +3225,7 @@ export default function SuperAdminPage() {
                   <div>
                     <span className="font-extrabold text-sm text-slate-900 dark:text-white">{staff.full_name || staff.email}</span>
                     <span className="ml-2 uppercase text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">{staff.role}</span>
-                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">PIN: {staff.plain_password || '••••'}</p>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">PIN: ••••</p>
                   </div>
                   <Button
                     size="sm"
@@ -3236,7 +3236,7 @@ export default function SuperAdminPage() {
                         full_name: staff.full_name || '',
                         email: staff.email || '',
                         role: staff.role || 'waiter',
-                        pin: staff.plain_password || '',
+                        pin: '',
                         shift: 'General',
                         active: true
                       });

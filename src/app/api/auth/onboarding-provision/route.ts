@@ -308,7 +308,6 @@ export async function POST(req: Request) {
         email: cleanEmail,
         full_name: cleanName,
         role: 'owner',
-        plain_password: password || undefined,
         updated_at: new Date().toISOString()
       });
     } catch (profErr) {

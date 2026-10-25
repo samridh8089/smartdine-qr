@@ -3,12 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 import { verifySuperAdminRequest } from '@/lib/superAdminGuard';
 import { handleApiError } from '@/lib/errors';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const authCheck = await verifySuperAdminRequest(req);
     if (!authCheck.isSuperAdmin && authCheck.response) {
       return authCheck.response;
@@ -78,7 +85,6 @@ export async function POST(req: Request) {
       if (updates.full_name !== undefined) profUpdates.full_name = updates.full_name;
       if (updates.email !== undefined) profUpdates.email = updates.email;
       if (updates.phone !== undefined) profUpdates.phone = updates.phone;
-      if (updates.plain_password !== undefined) profUpdates.plain_password = updates.plain_password;
 
       // If resetting password and Supabase Auth Admin is available
       if (updates.new_password) {
@@ -86,7 +92,6 @@ export async function POST(req: Request) {
           await supabaseAdmin.auth.admin.updateUserById(entityId, {
             password: updates.new_password
           });
-          profUpdates.plain_password = updates.new_password;
         } catch (pwErr) {
           console.warn('[Admin Password Reset Notice]:', pwErr);
         }
@@ -107,7 +112,6 @@ export async function POST(req: Request) {
       if (updates.email !== undefined) staffUpdates.email = updates.email;
       if (updates.phone !== undefined) staffUpdates.phone = updates.phone;
       if (updates.role !== undefined) staffUpdates.role = updates.role;
-      if (updates.pin !== undefined) staffUpdates.plain_password = updates.pin;
       if (updates.shift !== undefined || updates.permissions !== undefined) {
         // Stored in settings/metadata if needed
         staffUpdates.updated_at = new Date().toISOString();

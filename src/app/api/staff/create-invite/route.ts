@@ -2,15 +2,21 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { checkResourceLimitForRestaurant } from '@/lib/entitlements';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 export async function POST(req: Request) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const body = await req.json();
     const { name, email, phone, password, role, department, restaurantId } = body;
     let newUser: any = null;
@@ -128,7 +134,7 @@ export async function POST(req: Request) {
         let authPhoneConflict = false;
         try {
           const { data: authUsersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-          const matchingAuthUser = (authUsersData?.users || []).find(u => {
+          const matchingAuthUser = (authUsersData?.users || []).find((u: any) => {
             const uRestId = u.user_metadata?.restaurant_id;
             if (uRestId && uRestId !== restaurantId) return false;
             const uPhone = (u.user_metadata?.phone || u.phone || '').replace(/\D/g, '');
@@ -227,15 +233,12 @@ export async function POST(req: Request) {
       if (!existingAuthUserId) {
         try {
           const { data: authList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-          const found = authList?.users ? authList.users.find(u => u.email?.toLowerCase() === cleanEmail) : null;
+          const found = authList?.users ? authList.users.find((u: any) => u.email?.toLowerCase() === cleanEmail) : null;
           if (found?.id) existingAuthUserId = found.id;
         } catch (_) {}
       }
 
-      // 4c. Known test account fallback
-      if (!existingAuthUserId && cleanEmail === 'poojagarg0885@gmail.com') {
-        existingAuthUserId = '178ea265-32b1-4119-839e-583961f23650';
-      }
+
 
       if (existingAuthUserId) {
         if (existingAuthUserId === restRow?.owner_id) {
@@ -372,7 +375,6 @@ export async function POST(req: Request) {
       full_name: name,
       role: role || 'staff',
       restaurant_id: restaurantId,
-      plain_password: password || undefined,
       updated_at: new Date().toISOString()
     });
 
@@ -387,7 +389,6 @@ export async function POST(req: Request) {
           role: role || 'staff',
           department: resolvedDept,
           phone: phone || '',
-          plain_password: password || undefined,
           is_active: true,
           is_verified: false,
           verification_status: 'pending_verification'

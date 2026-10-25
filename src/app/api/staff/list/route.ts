@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+let _supabaseAdmin: any = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  _supabaseAdmin = createClient(url, key);
+  return _supabaseAdmin;
+}
 
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 export async function GET(req: Request) {
   try {
+    const supabaseAdmin = getSupabaseAdmin();
     const { searchParams } = new URL(req.url);
     const restaurantId = searchParams.get('restaurantId');
 
@@ -38,7 +45,7 @@ export async function GET(req: Request) {
     // 2. Fetch profiles using admin service role key (bypasses RLS filtering)
     const { data: profiles, error } = await supabaseAdmin
       .from('profiles')
-      .select('*')
+      .select('id, email, full_name, role, restaurant_id, created_at, updated_at, push_token, user_id')
       .eq('restaurant_id', restaurantId)
       .neq('role', 'super_admin');
 
@@ -49,16 +56,16 @@ export async function GET(req: Request) {
 
     // Fetch auth users to inspect email_confirmed_at & user_metadata
     const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => ({ data: null }));
-    const authUsersMap = new Map((authData?.users || []).map(u => [u.id, u]));
+    const authUsersMap = new Map<string, any>((authData?.users || []).map((u: any) => [u.id, u]));
 
     const rawProfiles = profiles || [];
-    const foundIds = new Set(rawProfiles.map(p => p.id));
+    const foundIds = new Set(rawProfiles.map((p: any) => p.id));
 
     // 3. Map & enrich DB profiles
-    const mergedProfiles = rawProfiles.map(p => {
+    const mergedProfiles = rawProfiles.map((p: any) => {
       const meta = (p as any).metadata || {};
       const staffSetting = staffMeta[p.id] || {};
-      const authUser = authUsersMap.get(p.id);
+      const authUser: any = authUsersMap.get(p.id);
 
       const isVerified = Boolean(
         authUser?.email_confirmed_at ||
@@ -74,7 +81,6 @@ export async function GET(req: Request) {
 
       return {
         ...p,
-        plain_password: p.plain_password || staffSetting.plain_password || '',
         department: p.department || staffSetting.department || (p.role === 'waiter' ? 'waiter' : p.role === 'kitchen' ? 'kitchen' : 'general'),
         phone: p.phone || staffSetting.phone || '',
         is_active: p.is_active !== undefined ? p.is_active : (staffSetting.is_active !== false),
@@ -83,7 +89,7 @@ export async function GET(req: Request) {
       };
     });
 
-    const seenEmails = new Set(mergedProfiles.map(p => p.email.trim().toLowerCase()));
+    const seenEmails = new Set(mergedProfiles.map((p: any) => p.email.trim().toLowerCase()));
 
     // 4. Also include any virtual staff members stored in staff_metadata if not in profiles yet
     Object.keys(staffMeta).forEach(id => {
@@ -97,7 +103,6 @@ export async function GET(req: Request) {
               id,
               email: item.email,
               full_name: item.full_name || item.name || 'Staff Member',
-              plain_password: item.plain_password || '',
               role: item.role || 'waiter',
               department: item.department || 'waiter',
               phone: item.phone || '',
@@ -111,24 +116,10 @@ export async function GET(req: Request) {
       }
     });
 
-    // Authorize plain_password visibility: Only Owner, Manager, or Super Admin can view staff passwords
-    const isPrivileged = authCheck.isSuperAdmin ||
-      authCheck.profile?.role === 'owner' ||
-      authCheck.profile?.role === 'manager' ||
-      authCheck.profile?.role === 'super_admin' ||
-      rest?.owner_id === authCheck.user?.id;
-
-    const finalProfiles = mergedProfiles.map((p: any) => {
-      if (isPrivileged) {
-        return p;
-      }
-      const { plain_password, ...safe } = p;
-      return safe;
-    });
-
+    // Passwords are never returned over API in modern secure design (Finding C5)
     return NextResponse.json({
       success: true,
-      staff: finalProfiles
+      staff: mergedProfiles
     });
   } catch (err: any) {
     console.error('[API Staff List] Server Exception:', err);

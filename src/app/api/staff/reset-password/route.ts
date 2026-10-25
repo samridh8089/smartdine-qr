@@ -112,23 +112,6 @@ export async function POST(req: Request) {
       updateSuccess = true;
     } catch (_) {}
 
-    // Update plain_password on profile and staff_metadata if row exists
-    try {
-      await supabaseAdmin.from('profiles').update({ plain_password: newPassword }).eq('id', targetUserId);
-      if (restIdForCheck) {
-        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restIdForCheck).maybeSingle();
-        if (rest) {
-          const staffMeta = rest.settings?.staff_metadata || {};
-          if (staffMeta[targetUserId]) {
-            staffMeta[targetUserId].plain_password = newPassword;
-            await supabaseAdmin.from('restaurants').update({
-              settings: { ...rest.settings, staff_metadata: staffMeta }
-            }).eq('id', restIdForCheck);
-          }
-        }
-      }
-    } catch (e) {}
-
     return NextResponse.json({
       success: true,
       message: `Password updated successfully for ${targetProfile.full_name || targetProfile.email}.`
