@@ -2535,7 +2535,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
               </div>
 
               {/* UPI prepaid billing card */}
-              {restaurant.settings.payment_enabled && restaurant.settings.upi_id ? (
+              {restaurant.settings.payment_enabled && (restaurant.settings.upi_id || restaurant.settings.payment_qr) ? (
                 <div className="border border-stone-200 dark:border-stone-800 bg-[#F8F8F6] dark:bg-stone-900/30 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider">Prepaid UPI Transfer</span>
@@ -2543,26 +2543,48 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       Prepaid Only
                     </span>
                   </div>
-                  
-                  <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-stone-200 dark:border-stone-800 p-3 rounded-lg">
-                    <div>
-                      <p className="text-[9px] text-stone-400 font-bold">UPI NAME</p>
-                      <p className="text-xs font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[9px] text-stone-400 font-bold">UPI ID</p>
-                      <p className="text-xs font-mono font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_id}</p>
-                    </div>
-                  </div>
 
-                  <a
-                    href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${cartTotal}&cu=INR`}
-                    onClick={() => setTakeawayPaymentCompleted(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    Pay {formatPrice(cartTotal, restaurant.settings.currency)} Now
-                  </a>
+                  {/* QR Image Display (if uploaded) */}
+                  {restaurant.settings.payment_qr && (
+                    <div className="flex flex-col items-center justify-center p-3.5 bg-white dark:bg-slate-900 border border-stone-200 dark:border-stone-800 rounded-xl space-y-2 text-center">
+                      <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
+                      <div className="p-2 bg-white rounded-lg shadow-sm border border-stone-150 inline-block">
+                        <img
+                          src={restaurant.settings.payment_qr}
+                          alt="Restaurant Payment QR"
+                          className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
+                        />
+                      </div>
+                      <p className="text-[11px] font-medium text-stone-500 dark:text-stone-400">
+                        Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
+                      </p>
+                    </div>
+                  )}
+
+                  {/* UPI Details (if UPI ID provided) */}
+                  {restaurant.settings.upi_id && (
+                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-stone-200 dark:border-stone-800 p-3 rounded-lg">
+                      <div>
+                        <p className="text-[9px] text-stone-400 font-bold">UPI NAME</p>
+                        <p className="text-xs font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_name || restaurant.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-stone-400 font-bold">UPI ID</p>
+                        <p className="text-xs font-mono font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_id}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {restaurant.settings.upi_id && (
+                    <a
+                      href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${cartTotal}&cu=INR`}
+                      onClick={() => setTakeawayPaymentCompleted(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-900 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Pay {formatPrice(cartTotal, restaurant.settings.currency)} Now via UPI App
+                    </a>
+                  )}
                   
                   <label className="flex items-start gap-2.5 pt-1.5 cursor-pointer select-none">
                     <input
@@ -2591,7 +2613,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 Please complete UPI payment to confirm your table reservation and pre-ordered dishes.
               </div>
 
-              {restaurant.settings.payment_enabled && restaurant.settings.upi_id ? (
+              {restaurant.settings.payment_enabled && (restaurant.settings.upi_id || restaurant.settings.payment_qr) ? (
                 <div className="border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/10 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Reservation Payment</span>
@@ -2599,26 +2621,48 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                       Required
                     </span>
                   </div>
-                  
-                  <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-3 rounded-lg">
-                    <div>
-                      <p className="text-[9px] text-slate-400 font-bold">UPI NAME</p>
-                      <p className="text-xs font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[9px] text-slate-400 font-bold">UPI ID</p>
-                      <p className="text-xs font-mono font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_id}</p>
-                    </div>
-                  </div>
 
-                  <a
-                    href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${cartTotal}&cu=INR`}
-                    onClick={() => setReservationPaymentCompleted(true)}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer"
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    Pay {formatPrice(cartTotal, restaurant.settings.currency)} Now
-                  </a>
+                  {/* QR Image Display (if uploaded) */}
+                  {restaurant.settings.payment_qr && (
+                    <div className="flex flex-col items-center justify-center p-3.5 bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl space-y-2 text-center">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
+                      <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-150 inline-block">
+                        <img
+                          src={restaurant.settings.payment_qr}
+                          alt="Restaurant Payment QR"
+                          className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
+                        />
+                      </div>
+                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                        Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
+                      </p>
+                    </div>
+                  )}
+
+                  {/* UPI Details (if UPI ID provided) */}
+                  {restaurant.settings.upi_id && (
+                    <div className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800 p-3 rounded-lg">
+                      <div>
+                        <p className="text-[9px] text-slate-400 font-bold">UPI NAME</p>
+                        <p className="text-xs font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_name || restaurant.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-slate-400 font-bold">UPI ID</p>
+                        <p className="text-xs font-mono font-black text-slate-800 dark:text-white mt-0.5">{restaurant.settings.upi_id}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {restaurant.settings.upi_id && (
+                    <a
+                      href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${cartTotal}&cu=INR`}
+                      onClick={() => setReservationPaymentCompleted(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all cursor-pointer"
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Pay {formatPrice(cartTotal, restaurant.settings.currency)} Now via UPI App
+                    </a>
+                  )}
                   
                   <label className="flex items-start gap-2.5 pt-1.5 cursor-pointer select-none">
                     <input

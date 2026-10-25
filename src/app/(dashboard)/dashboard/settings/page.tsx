@@ -587,6 +587,12 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
   const handleSavePaymentSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!restaurant || !profile) return;
+
+    if (paymentEnabled && !upiId.trim() && !paymentQr.trim()) {
+      alert('Please provide at least a Restaurant UPI ID or upload a Payment QR Image.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -2767,22 +2773,20 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   <div className="space-y-4 pt-2">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <Input
-                        label="Restaurant UPI ID (pa)"
+                        label="Restaurant UPI ID (pa) — Optional if QR uploaded"
                         placeholder="e.g. a2zitems@paytm, businessname@okaxis"
                         value={upiId}
                         onChange={(e) => setUpiId(e.target.value)}
-                        required
                       />
                       <Input
-                        label="UPI Name (pn)"
+                        label="UPI Name (pn) — Optional"
                         placeholder="e.g. A2Z Items Restaurant"
                         value={upiName}
                         onChange={(e) => setUpiName(e.target.value)}
-                        required
                       />
                     </div>
                     <ImageUpload
-                      label="Payment QR Image"
+                      label="Payment QR Image — Optional if UPI ID provided"
                       value={paymentQr}
                       onChange={(url) => setPaymentQr(url)}
                       restaurantId={restaurant?.id || ''}
@@ -2791,7 +2795,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                     <div className="p-3 bg-amber-50/10 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-amber-600 dark:text-amber-400 text-xs rounded-xl flex items-start gap-2.5 font-semibold">
                       <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                       <span>
-                        Payments are processed via UPI deep links directly on the customer's phone using a standard UPI app. No commissions or gateway fees are applied. Staff must manually verify collections inside the Live Orders portal.
+                        You can provide a UPI ID (for 1-click mobile payments), upload a Payment QR image (for customer scan), or both! If you upload a Payment QR, customers can scan it directly with Google Pay, PhonePe, Paytm, BHIM, or any UPI app.
                       </span>
                     </div>
                   </div>
