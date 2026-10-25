@@ -9,12 +9,10 @@ function getSupabaseClient(req: Request) {
   const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
   const token = authHeader.replace('Bearer ', '').trim();
 
-  // If service role key is configured in env, use it for unconstrained operations
   if (serviceKey && serviceKey !== '[SENSITIVE]' && serviceKey.length > 20) {
     return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   }
 
-  // If user Bearer token is provided, execute as authenticated user (passes Supabase RLS)
   if (token) {
     return createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: `Bearer ${token}` } },
@@ -22,7 +20,6 @@ function getSupabaseClient(req: Request) {
     });
   }
 
-  // Fallback to anon
   return createClient(supabaseUrl, anonKey, { auth: { persistSession: false } });
 }
 
@@ -36,7 +33,6 @@ export async function GET(req: Request) {
 
     const client = getSupabaseClient(req);
 
-    // 1. Fetch restaurant settings for active web devices
     const { data: rest, error } = await client
       .from('restaurants')
       .select('settings')
@@ -46,7 +42,6 @@ export async function GET(req: Request) {
     const activeDevicesObj = rest?.settings?.active_devices || {};
     const webDevices = Object.values(activeDevicesObj);
 
-    // 2. Fetch mobile app sessions from profiles with active mobile push tokens
     const { data: profiles } = await client
       .from('profiles')
       .select('id, email, full_name, role, push_token, updated_at')
@@ -108,11 +103,15 @@ export async function POST(req: Request) {
 
     const currentSettings = rest.settings || {};
     let activeDevices = { ...(currentSettings.active_devices || {}) };
+    let revokedDevices = { ...(currentSettings.revoked_devices || {}) };
 
     if (action === 'register') {
       if (!deviceId) {
         return NextResponse.json({ error: 'deviceId is required' }, { status: 400 });
       }
+
+      // If this device was previously in revoked list, remove it upon fresh active registration
+      delete revokedDevices[deviceId];
 
       // Cleanup devices inactive for > 30 days
       const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -135,6 +134,11 @@ export async function POST(req: Request) {
       };
     } else if (action === 'logout_device' || action === 'remove_device') {
       if (targetDeviceId) {
+        // Add to revokedDevices so target device gets kicked out on next tick/heartbeat
+        revokedDevices[targetDeviceId] = {
+          revoked_at: new Date().toISOString()
+        };
+
         // If target is a native mobile app session, clear push_token from profile
         if (targetDeviceId.startsWith('app_session_')) {
           const profileId = targetDeviceId.replace('app_session_', '');
@@ -153,6 +157,9 @@ export async function POST(req: Request) {
         }
       }
     } else if (action === 'logout_all') {
+      for (const k of Object.keys(activeDevices)) {
+        revokedDevices[k] = { revoked_at: new Date().toISOString() };
+      }
       activeDevices = {};
       await client
         .from('profiles')
@@ -160,12 +167,21 @@ export async function POST(req: Request) {
         .eq('restaurant_id', restaurantId);
     }
 
+    // Prune revoked devices older than 7 days
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    for (const [id, rev] of Object.entries(revokedDevices) as [string, any][]) {
+      if (rev.revoked_at && new Date(rev.revoked_at).getTime() < sevenDaysAgo) {
+        delete revokedDevices[id];
+      }
+    }
+
     const { error: updateErr } = await client
       .from('restaurants')
       .update({
         settings: {
           ...currentSettings,
-          active_devices: activeDevices
+          active_devices: activeDevices,
+          revoked_devices: revokedDevices
         }
       })
       .eq('id', restaurantId);

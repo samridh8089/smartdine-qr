@@ -20,6 +20,10 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      const reason = params.get('reason');
+      if (reason === 'session_revoked') {
+        setError('Your session was logged out from another device.');
+      }
       const urlLang = params.get('lang');
       if (urlLang === 'en' || urlLang === 'hi') {
         setActiveLang(urlLang);
@@ -123,6 +127,9 @@ export default function LoginPage() {
     if (targetUrl === '/dashboard') {
       if (userRole === 'kitchen') targetUrl = '/dashboard/kds';
       else if (userRole === 'waiter' || userRole === 'cashier' || userRole === 'supervisor') targetUrl = '/dashboard/orders';
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('cleverops_device_id');
     }
     router.push(targetUrl);
     setLoading(false);

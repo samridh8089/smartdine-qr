@@ -1,7 +1,7 @@
 // CleverOps Device & Session Manager
 // Automatically syncs and tracks active hardware & browser sessions
 
-import { supabase } from './supabase';
+import { supabase, signOutUser } from './supabase';
 import { db } from './db';
 
 export function getOrCreateDeviceId(): string {
@@ -53,6 +53,17 @@ export async function registerDeviceActivity(restaurantId?: string, profile?: an
   if (!restaurantId || typeof window === 'undefined') return;
   try {
     const deviceId = getOrCreateDeviceId();
+
+    // Check if this device has been revoked
+    const rest = await db.getRestaurantById(restaurantId);
+    if (rest?.settings?.revoked_devices?.[deviceId]) {
+      console.warn('[SessionManager] This device has been revoked remotely.');
+      localStorage.removeItem('cleverops_device_id');
+      await signOutUser();
+      window.location.href = '/login?reason=session_revoked';
+      return;
+    }
+
     const { deviceName, platform } = detectCurrentDeviceInfo();
     const authHeaders = await getAuthHeaders();
 
@@ -124,16 +135,24 @@ export async function removeTrustedDevice(restaurantId?: string, targetDeviceId?
     const rest = await db.getRestaurantById(restaurantId);
     if (rest) {
       const currentDevices = { ...(rest.settings?.active_devices || {}) };
+      const revokedDevices = { ...(rest.settings?.revoked_devices || {}) };
+      
       delete currentDevices[targetDeviceId];
       for (const [k, v] of Object.entries(currentDevices) as [string, any][]) {
         if (v.device_id === targetDeviceId || v.device_session_id === targetDeviceId || k === targetDeviceId) {
           delete currentDevices[k];
         }
       }
+
+      revokedDevices[targetDeviceId] = {
+        revoked_at: new Date().toISOString()
+      };
+
       await db.updateRestaurant(restaurantId, {
         settings: {
           ...rest.settings,
-          active_devices: currentDevices
+          active_devices: currentDevices,
+          revoked_devices: revokedDevices
         }
       });
     }
@@ -171,10 +190,15 @@ export async function logoutAllDevices(restaurantId?: string): Promise<void> {
   try {
     const rest = await db.getRestaurantById(restaurantId);
     if (rest) {
+      const revoked: Record<string, any> = { ...(rest.settings?.revoked_devices || {}) };
+      for (const k of Object.keys(rest.settings?.active_devices || {})) {
+        revoked[k] = { revoked_at: new Date().toISOString() };
+      }
       await db.updateRestaurant(restaurantId, {
         settings: {
           ...rest.settings,
-          active_devices: {}
+          active_devices: {},
+          revoked_devices: revoked
         }
       });
     }
