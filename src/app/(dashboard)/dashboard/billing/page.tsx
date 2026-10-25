@@ -201,7 +201,7 @@ export default function BillingPage() {
       }
 
       const options = {
-        key: orderData.keyId || 'rzp_live_TK1Nbl3mJiENjR',
+        key: orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
         amount: orderData.amount,
         currency: orderData.currency || 'INR',
         name: 'CleverOps',
