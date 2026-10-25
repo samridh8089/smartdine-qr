@@ -23,13 +23,14 @@ loadEnv('.env.local');
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
+const defaultPw = process.env.E2E_DEFAULT_PASSWORD || 'TestPass123!';
 const users = [
-  { role: 'owner', email: 'owner@test.com', password: 'TestOwner123!' },
-  { role: 'waiter', email: 'waiter@test.com', password: 'TestWaiter123!' },
-  { role: 'kitchen', email: 'kitchen@test.com', password: 'TestKitchen123!' },
-  { role: 'cashier', email: 'cashier@test.com', password: 'TestCashier123!' },
-  { role: 'manager', email: 'manager@test.com', password: 'TestManager123!' },
-  { role: 'superAdmin', email: 'superadmin@test.com', password: '***REMOVED***' },
+  { role: 'owner', email: process.env.E2E_OWNER_EMAIL || 'owner@test.com', password: process.env.E2E_OWNER_PASSWORD || defaultPw },
+  { role: 'waiter', email: process.env.E2E_WAITER_EMAIL || 'waiter@test.com', password: process.env.E2E_WAITER_PASSWORD || defaultPw },
+  { role: 'kitchen', email: process.env.E2E_KITCHEN_EMAIL || 'kitchen@test.com', password: process.env.E2E_KITCHEN_PASSWORD || defaultPw },
+  { role: 'cashier', email: process.env.E2E_CASHIER_EMAIL || 'cashier@test.com', password: process.env.E2E_CASHIER_PASSWORD || defaultPw },
+  { role: 'manager', email: process.env.E2E_MANAGER_EMAIL || 'manager@test.com', password: process.env.E2E_MANAGER_PASSWORD || defaultPw },
+  { role: 'superAdmin', email: process.env.E2E_SUPER_ADMIN_EMAIL || 'superadmin@test.com', password: process.env.E2E_SUPER_ADMIN_PASSWORD || defaultPw },
 ];
 
 async function testAll() {
