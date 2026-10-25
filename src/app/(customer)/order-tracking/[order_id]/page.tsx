@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/Badge';
 import Link from 'next/link';
 import { 
   CheckCircle2, AlertTriangle, ArrowLeft, 
-  RotateCcw, Printer, ChefHat, Clock, Plus, Bell
+  RotateCcw, Printer, ChefHat, Clock, Plus, Bell, Copy, Check
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -54,6 +54,19 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [showTimeline, setShowTimeline] = useState<boolean>(true);
   const [activeWaiterRequest, setActiveWaiterRequest] = useState<any | null>(null);
+  const [userSelectedPaymentMode, setUserSelectedPaymentMode] = useState<'upi' | 'qr' | null>(null);
+  const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
+
+  const handleCopyUpiId = (upiId: string) => {
+    if (!upiId) return;
+    try {
+      navigator.clipboard.writeText(upiId);
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 2000);
+    } catch (e) {
+      console.warn('Clipboard write failed:', e);
+    }
+  };
 
   const loadOrderData = async () => {
     try {
@@ -922,67 +935,134 @@ export default function OrderTrackingPage({ params }: PageProps) {
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold text-center">
                         All orders in this merged session have been paid. Thank you!
                       </p>
-                    ) : canActivateMergedPayment ? (
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center text-xs font-extrabold text-slate-800 dark:text-white">
-                          <span>Outstanding Merged Total</span>
-                          <span className="text-sm font-mono text-emerald-700 dark:text-emerald-400">
-                            {formatPrice(unpaidAmt, restaurant.settings.currency)}
-                          </span>
-                        </div>
+                    ) : canActivateMergedPayment ? (() => {
+                      const hasQr = Boolean(restaurant.settings?.payment_qr);
+                      const hasUpi = Boolean(restaurant.settings?.upi_id);
+                      const isHighVal = unpaidAmt > 2000;
+                      const activeMode = userSelectedPaymentMode
+                        ? userSelectedPaymentMode
+                        : (isHighVal || !hasQr ? 'upi' : 'qr');
 
-                        {/* Payment QR Code display (if uploaded) */}
-                        {restaurant.settings?.payment_qr && (
-                          <div className="flex flex-col items-center justify-center p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-2 text-center border border-slate-200 dark:border-slate-700">
-                            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
-                            <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200/80 inline-block">
-                              <img
-                                src={restaurant.settings.payment_qr}
-                                alt="Restaurant Payment QR"
-                                className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
-                              />
-                            </div>
-                            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                              Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
-                            </p>
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center text-xs font-extrabold text-slate-800 dark:text-white">
+                            <span>Outstanding Merged Total</span>
+                            <span className="text-sm font-mono text-emerald-700 dark:text-emerald-400">
+                              {formatPrice(unpaidAmt, restaurant.settings.currency)}
+                            </span>
                           </div>
-                        )}
 
-                        {restaurant.settings?.upi_id && (
-                          <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg text-[11px] font-semibold space-y-1">
-                            <div className="flex justify-between text-slate-500">
-                              <span>Payee Name</span>
-                              <span className="text-slate-800 dark:text-slate-200">{restaurant.settings.upi_name || restaurant.name}</span>
+                          {/* 2-Option Selector */}
+                          {hasQr && hasUpi && (
+                            <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                              <button
+                                type="button"
+                                onClick={() => setUserSelectedPaymentMode('upi')}
+                                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                  activeMode === 'upi'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+                                }`}
+                              >
+                                <span>Pay via UPI App</span>
+                                {isHighVal && (
+                                  <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-bold">
+                                    Recommended
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setUserSelectedPaymentMode('qr')}
+                                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                  activeMode === 'qr'
+                                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+                                }`}
+                              >
+                                <span>Scan QR</span>
+                              </button>
                             </div>
-                            <div className="flex justify-between text-slate-500">
-                              <span>UPI ID</span>
-                              <span className="text-slate-800 dark:text-slate-200 font-mono">{restaurant.settings.upi_id}</span>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          {restaurant.settings?.upi_id && (
-                            <a
-                              href={`upi://pay?pa=${encodeURIComponent(restaurant.settings?.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings?.upi_name || restaurant.name)}&am=${unpaidAmt}&cu=INR`}
-                              className="w-full"
-                            >
-                              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs">
-                                Pay {formatPrice(unpaidAmt, restaurant.settings.currency)} Now via UPI App
-                              </Button>
-                            </a>
                           )}
+
+                          {isHighVal && activeMode === 'upi' && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                              Recommended for bills above ₹2,000 to prevent bank QR limits.
+                            </p>
+                          )}
+
+                          {/* Option A: UPI App / ID */}
+                          {activeMode === 'upi' && hasUpi && (
+                            <div className="space-y-2.5">
+                              <a
+                                href={`upi://pay?pa=${encodeURIComponent(restaurant.settings?.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings?.upi_name || restaurant.name)}&am=${unpaidAmt}&cu=INR`}
+                                className="w-full block"
+                              >
+                                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs cursor-pointer shadow-sm">
+                                  Pay {formatPrice(unpaidAmt, restaurant.settings.currency)} via UPI App
+                                </Button>
+                              </a>
+
+                              <div className="bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1">
+                                <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                                  <span>Payee Name</span>
+                                  <span className="font-semibold text-slate-800 dark:text-slate-200">{restaurant.settings?.upi_name || restaurant.name}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                                  <span>UPI ID</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{restaurant.settings?.upi_id}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyUpiId(restaurant.settings?.upi_id || '')}
+                                      className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 cursor-pointer"
+                                    >
+                                      {copiedUpi ? (
+                                        <>
+                                          <Check className="h-3 w-3" />
+                                          <span>Copied</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="h-3 w-3" />
+                                          <span>Copy</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Option B: Scan QR */}
+                          {activeMode === 'qr' && hasQr && (
+                            <div className="flex flex-col items-center justify-center p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl space-y-2 text-center border border-slate-200 dark:border-slate-700">
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
+                              <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200/80 inline-block">
+                                <img
+                                  src={restaurant.settings.payment_qr}
+                                  alt="Restaurant Payment QR"
+                                  className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
+                                />
+                              </div>
+                              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                                Scan with any UPI app
+                              </p>
+                            </div>
+                          )}
+
                           <Button
                             variant="outline"
                             onClick={handleConfirmMergedPayment}
                             disabled={submittingPayment}
-                            className="w-full font-bold py-2.5 rounded-xl text-xs disabled:opacity-50"
+                            className="w-full font-bold py-2.5 rounded-xl text-xs disabled:opacity-50 cursor-pointer"
                           >
                             {submittingPayment ? 'Submitting...' : 'I Have Completed Payment'}
                           </Button>
                         </div>
-                      </div>
-                    ) : (
+                      );
+                    })() : (
                       <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs rounded-xl font-semibold flex items-center gap-2">
                         <Clock className="h-4 w-4 shrink-0 animate-pulse" />
                         <span>Payment link will activate once all orders in your merged group are served.</span>
@@ -1029,91 +1109,163 @@ export default function OrderTrackingPage({ params }: PageProps) {
                     Submitted: {order.paid_at ? new Date(order.paid_at).toLocaleTimeString() : 'Just now'}
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <p className="text-xs text-slate-550 dark:text-slate-400 font-semibold leading-relaxed">
-                    Pay <strong>{formatPrice(displayTotal, restaurant.settings.currency)}</strong> online using any UPI application.
-                  </p>
-                  
-                  {/* Payment QR Code display (if uploaded) */}
-                  {restaurant.settings?.payment_qr && (
-                    <div className="flex flex-col items-center justify-center p-3.5 bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-center">
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
-                      <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200/80 inline-block">
-                        <img
-                          src={restaurant.settings.payment_qr}
-                          alt="Restaurant Payment QR"
-                          className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
-                        />
-                      </div>
-                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                        Scan with Google Pay, PhonePe, Paytm, BHIM, or any UPI app
-                      </p>
-                    </div>
-                  )}
+              ) : (() => {
+                  let canActivatePayment = false;
+                  if ((order.status as string) === 'cancelled') {
+                    canActivatePayment = false;
+                  } else if (order.order_type === 'takeaway') {
+                    canActivatePayment = ['ready', 'served', 'completed'].includes(order.status);
+                  } else if (order.batches && order.batches.length > 0) {
+                    const hasUnservedActiveBatch = order.batches.some((b: any) => {
+                      const isCancelled = (b.status as string) === 'cancelled' || b.special_instructions?.includes('[CANCELLED]');
+                      if (isCancelled) return false;
+                      return (b.status as string) !== 'served' && (b.status as string) !== 'completed';
+                    });
+                    canActivatePayment = !hasUnservedActiveBatch;
+                  } else {
+                    canActivatePayment = ['served', 'completed'].includes(order.status);
+                  }
 
-                  {restaurant.settings?.upi_id && (
-                    <div className="bg-slate-50/65 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 font-semibold">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Payee Name</span>
-                        <span className="text-slate-700 dark:text-slate-300">{restaurant.settings.upi_name || restaurant.name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">UPI ID</span>
-                        <span className="text-slate-700 dark:text-slate-300 font-mono">{restaurant.settings.upi_id}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {(() => {
-                    let canActivatePayment = false;
-                    if ((order.status as string) === 'cancelled') {
-                      canActivatePayment = false;
-                    } else if (order.batches && order.batches.length > 0) {
-                      const hasUnservedActiveBatch = order.batches.some((b: any) => {
-                        const isCancelled = (b.status as string) === 'cancelled' || b.special_instructions?.includes('[CANCELLED]');
-                        if (isCancelled) return false;
-                        return (b.status as string) !== 'served' && (b.status as string) !== 'completed';
-                      });
-                      canActivatePayment = !hasUnservedActiveBatch;
-                    } else {
-                      canActivatePayment = ['served', 'completed'].includes(order.status);
-                    }
-
-                    return canActivatePayment ? (
-                      <div className="flex flex-col sm:flex-row gap-2.5">
-                        {restaurant.settings?.upi_id && (
-                          <a 
-                            href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || '')}&am=${displayTotal}&cu=INR`}
-                            className="w-full"
-                          >
-                            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10 cursor-pointer py-3 rounded-xl text-xs sm:text-sm">
-                              Pay {formatPrice(displayTotal, restaurant.settings.currency)} Now via UPI App
-                            </Button>
-                          </a>
-                        )}
-                        <Button 
-                          variant="outline" 
-                          onClick={handleConfirmPayment}
-                          disabled={submittingPayment}
-                          className="w-full font-bold cursor-pointer py-3 rounded-xl text-xs sm:text-sm disabled:opacity-50"
-                        >
-                          {submittingPayment ? 'Submitting...' : 'I have completed payment'}
-                        </Button>
-                      </div>
-                    ) : (
+                  if (!canActivatePayment) {
+                    return (
                       <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs rounded-xl font-semibold flex items-center gap-2">
                         <Clock className="h-4 w-4 shrink-0 animate-pulse" />
                         <span>
                           {order.order_type === 'takeaway' 
-                            ? 'Payment link will activate once your order is ready for pickup.'
-                            : 'Payment link will activate once your order is served.'}
+                            ? 'Payment will be available once your order is ready for pickup.'
+                            : 'Payment will be available once your food is served.'}
                         </span>
                       </div>
                     );
-                  })()}
-                </div>
-              )}
+                  }
+
+                  const hasQr = Boolean(restaurant.settings?.payment_qr);
+                  const hasUpi = Boolean(restaurant.settings?.upi_id);
+                  const isHighVal = displayTotal > 2000;
+                  const activeMode = userSelectedPaymentMode
+                    ? userSelectedPaymentMode
+                    : (isHighVal || !hasQr ? 'upi' : 'qr');
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center text-xs font-extrabold text-slate-800 dark:text-white pb-1">
+                        <span>Payable Amount</span>
+                        <span className="text-sm font-mono text-emerald-700 dark:text-emerald-400">
+                          {formatPrice(displayTotal, restaurant.settings.currency)}
+                        </span>
+                      </div>
+
+                      {/* 2-Option Selector */}
+                      {hasQr && hasUpi && (
+                        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setUserSelectedPaymentMode('upi')}
+                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                              activeMode === 'upi'
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+                            }`}
+                          >
+                            <span>Pay via UPI App</span>
+                            {isHighVal && (
+                              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 rounded font-bold">
+                                Recommended
+                              </span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setUserSelectedPaymentMode('qr')}
+                            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                              activeMode === 'qr'
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-xs'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+                            }`}
+                          >
+                            <span>Scan QR</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {isHighVal && activeMode === 'upi' && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                          Recommended for bills above ₹2,000 to prevent bank QR limits.
+                        </p>
+                      )}
+
+                      {/* Option A: UPI App / ID */}
+                      {activeMode === 'upi' && hasUpi && (
+                        <div className="space-y-2.5">
+                          <a
+                            href={`upi://pay?pa=${encodeURIComponent(restaurant.settings.upi_id || '')}&pn=${encodeURIComponent(restaurant.settings.upi_name || restaurant.name)}&am=${displayTotal}&cu=INR`}
+                            className="w-full block"
+                          >
+                            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/10 cursor-pointer py-3 rounded-xl text-xs sm:text-sm">
+                              Pay {formatPrice(displayTotal, restaurant.settings.currency)} via UPI App
+                            </Button>
+                          </a>
+
+                          <div className="bg-slate-50/65 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5 font-semibold">
+                            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                              <span>Payee Name</span>
+                              <span className="text-slate-800 dark:text-slate-200">{restaurant.settings.upi_name || restaurant.name}</span>
+                            </div>
+                            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+                              <span>UPI ID</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-slate-800 dark:text-slate-200">{restaurant.settings.upi_id}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyUpiId(restaurant.settings?.upi_id || '')}
+                                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 cursor-pointer"
+                                >
+                                  {copiedUpi ? (
+                                    <>
+                                      <Check className="h-3 w-3" />
+                                      <span>Copied</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-3 w-3" />
+                                      <span>Copy</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Option B: Scan QR */}
+                      {activeMode === 'qr' && hasQr && (
+                        <div className="flex flex-col items-center justify-center p-3.5 bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2 text-center">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Scan QR Code to Pay</span>
+                          <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200/80 inline-block">
+                            <img
+                              src={restaurant.settings.payment_qr}
+                              alt="Restaurant Payment QR"
+                              className="w-48 h-48 sm:w-56 sm:h-56 object-contain rounded"
+                            />
+                          </div>
+                          <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                            Scan with any UPI app
+                          </p>
+                        </div>
+                      )}
+
+                      <Button 
+                        variant="outline" 
+                        onClick={handleConfirmPayment}
+                        disabled={submittingPayment}
+                        className="w-full font-bold cursor-pointer py-3 rounded-xl text-xs sm:text-sm disabled:opacity-50"
+                      >
+                        {submittingPayment ? 'Submitting...' : 'I have completed payment'}
+                      </Button>
+                    </div>
+                  );
+                })()}
             </CardContent>
           </Card>
         )}
