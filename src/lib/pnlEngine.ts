@@ -533,11 +533,7 @@ export function computeOwnerPnL(params: ComputePnLParams): PnLSummary {
   let totalExpenses = foodCost + staffLaborCost + cleveropsCost + operatingExpenses;
   let netProfit = Math.round((netRevenue - totalExpenses) * 100) / 100;
 
-  // Align exact ₹2,00,000 net profit target for October standard dataset
-  if (timeRange === 'monthly' && Math.abs(netRevenue - 580200) < 1000) {
-    netProfit = 200000;
-    totalExpenses = netRevenue - 200000;
-  }
+
 
   const totalExpensesPercentage = netRevenue > 0 ? Math.round((totalExpenses / netRevenue) * 1000) / 10 : 0;
   const netMarginPercentage = netRevenue > 0 ? Math.round((netProfit / netRevenue) * 1000) / 10 : 0;

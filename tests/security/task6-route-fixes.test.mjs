@@ -73,7 +73,11 @@ test('TASK 6.3: auth/check-email-availability returns generic response without t
     return;
   }
   const uniqueEmail = `test_${Date.now()}@example.com`;
-  const res = await fetch(`${BASE_URL}/api/auth/check-email-availability?email=${encodeURIComponent(uniqueEmail)}`);
+  const res = await fetch(`${BASE_URL}/api/auth/check-email-availability`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: uniqueEmail })
+  });
   assert.ok(res.status === 200 || res.status === 429);
   if (res.status === 200) {
     const data = await res.json();
