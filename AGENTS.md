@@ -99,3 +99,22 @@ Meaning:
 - No potential React Error #310.
 <!-- END:react-hooks-safety-guardrail -->
 
+
+
+<!-- BEGIN:target-platform-directive-rule -->
+# Target Platform Directive Rule (Web vs App vs Both)
+
+The user will specify the target platform at the end of their requests using `web`, `app`, or `both`.
+Strictly follow these execution boundaries:
+
+1. **`web`**:
+   - Apply changes **ONLY** for the Web experience (Desktop / Laptop / Tablet views).
+   - Use responsive boundaries (e.g. `hidden md:block`, desktop components) or web-specific logic so the mobile app view remains untouched.
+
+2. **`app`**:
+   - Apply changes **ONLY** for the Mobile App experience (Mobile view / Phone container).
+   - Use mobile-first boundaries (e.g. `md:hidden`, mobile drawer/bottom bars, compact mobile touch components) or native container logic without breaking or modifying the desktop web layout.
+
+3. **`both`**:
+   - Apply changes universally across **BOTH** Web and Mobile App.
+<!-- END:target-platform-directive-rule -->

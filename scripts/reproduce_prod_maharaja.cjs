@@ -52,7 +52,7 @@ async function main() {
 
   console.log('Logging in as dsoni1281@gmail.com...');
   await ownerPage.fill('input[type="email"]', 'dsoni1281@gmail.com');
-  await ownerPage.fill('input[type="password"]', '123456');
+  await ownerPage.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || 'test-password');
   await ownerPage.click('button[type="submit"]');
 
   await ownerPage.waitForURL(url => url.pathname.includes('/dashboard'), { timeout: 25000 });

@@ -7,9 +7,25 @@ import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 function isPrivateIp(ip: string): boolean {
   if (!ip) return true;
+  let normalized = ip.toLowerCase().trim();
+  if (normalized.startsWith('[') && normalized.endsWith(']')) {
+    normalized = normalized.slice(1, -1);
+  }
+
+  // IPv4-mapped IPv6 check: ::ffff:127.0.0.1 or ::ffff:7f00:1
+  if (normalized.startsWith('::ffff:') || normalized.startsWith('0:0:0:0:0:ffff:')) {
+    const parts = normalized.split(':');
+    const lastPart = parts[parts.length - 1];
+    if (lastPart.includes('.')) {
+      normalized = lastPart;
+    } else {
+      return true; // Block raw hex IPv4-mapped addresses
+    }
+  }
+
   // IPv4 check
-  if (ip.includes('.')) {
-    const parts = ip.split('.').map(Number);
+  if (normalized.includes('.')) {
+    const parts = normalized.split('.').map(Number);
     if (parts.length === 4 && parts.every(p => !isNaN(p) && p >= 0 && p <= 255)) {
       if (parts[0] === 127) return true; // 127.0.0.0/8 loopback
       if (parts[0] === 10) return true;  // 10.0.0.0/8 private
@@ -20,11 +36,12 @@ function isPrivateIp(ip: string): boolean {
     }
     return false;
   }
+
   // IPv6 check
-  const normalized = ip.toLowerCase().trim();
-  if (normalized === '::1' || normalized === '::') return true;
-  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // fc00::/7
-  if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true; // fe80::/10
+  if (normalized === '::1' || normalized === '::' || normalized === '0:0:0:0:0:0:0:1' || normalized === '0:0:0:0:0:0:0:0') return true;
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // fc00::/7 (ULA)
+  if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true; // fe80::/10 (Link-Local)
+  if (normalized.startsWith('ff')) return true; // Multicast
   return false;
 }
 
@@ -122,6 +139,10 @@ export async function POST(req: Request) {
         });
       } finally {
         clearTimeout(timeoutId);
+      }
+
+      if ((fetchRes.status >= 300 && fetchRes.status < 400) || (fetchRes as any).type === 'opaqueredirect') {
+        return NextResponse.json({ error: 'Redirects are not allowed for image fetching.' }, { status: 400 });
       }
 
       if (!fetchRes.ok) {

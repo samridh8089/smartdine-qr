@@ -95,16 +95,16 @@ async function auditOwnerAccount() {
     console.log(`✅ Sign-in with process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '' SUCCEEDED! User ID: ${signData1.user.id}, Session Token: ${signData1.session ? 'Valid' : 'None'}`);
   }
 
-  // Test password '123456'
+  // Test password process.env.E2E_OWNER_PASSWORD || 'test-password'
   const { data: signData2, error: signErr2 } = await supabaseAnon.auth.signInWithPassword({
     email: 'you@gmail.com',
     password: (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || '')
   });
 
   if (signErr2) {
-    console.log(`Sign-in with '123456' failed: ${signErr2.message} (code: ${signErr2.code}, status: ${signErr2.status})`);
+    console.log(`Sign-in with process.env.E2E_OWNER_PASSWORD || 'test-password' failed: ${signErr2.message} (code: ${signErr2.code}, status: ${signErr2.status})`);
   } else {
-    console.log(`✅ Sign-in with '123456' SUCCEEDED! User ID: ${signData2.user.id}, Session Token: ${signData2.session ? 'Valid' : 'None'}`);
+    console.log(`✅ Sign-in with process.env.E2E_OWNER_PASSWORD || 'test-password' SUCCEEDED! User ID: ${signData2.user.id}, Session Token: ${signData2.session ? 'Valid' : 'None'}`);
   }
 }
 

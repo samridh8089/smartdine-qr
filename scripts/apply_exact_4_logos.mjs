@@ -154,7 +154,7 @@ async function main() {
   console.log('-> Patched [11] Table Assignment staff retrieval');
 
   // 12. FIX Staff Management: Never fallback to 123456 for staff passwords
-  const staffPwdTarget = "D[n.id]?n.plain_password||'123456':n.plain_password?'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022':'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022 (Encrypted)'";
+  const staffPwdTarget = "D[n.id]?n.plain_password||process.env.E2E_STAFF_PASSWORD || 'test-password':n.plain_password?'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022':'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022 (Encrypted)'";
   const staffPwdReplacement = "D[n.id]?(n.plain_password||'Protected'):(n.plain_password?'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022':'\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022 (Encrypted)')";
   if (code.includes(staffPwdTarget)) {
     code = code.replace(staffPwdTarget, staffPwdReplacement);

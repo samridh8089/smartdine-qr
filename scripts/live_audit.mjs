@@ -35,7 +35,7 @@ async function runLiveAudit() {
   const tLoginStart = Date.now();
   await pageOwner.goto('https://www.cleverops.in/login', { waitUntil: 'domcontentloaded' });
   await pageOwner.type('input[type="email"]', 'deepak.soni19492@gmail.com');
-  await pageOwner.type('input[type="password"]', '123456');
+  await pageOwner.type('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.E2E_STAFF_PASSWORD || 'test-password');
 
   const btnClickStart = Date.now();
   await Promise.all([

@@ -18,18 +18,19 @@ function getAdmin(): SupabaseClient {
   return _adminClient;
 }
 
-// In-route rate limit map: 10 requests per IP per minute
-const checkEmailRateLimits = new Map<string, { count: number; resetAt: number }>();
+// Dual rate limit maps: 10 requests per IP per minute, 5 requests per email per minute
+const checkEmailIpRateLimits = new Map<string, { count: number; resetAt: number }>();
+const checkEmailTargetRateLimits = new Map<string, { count: number; resetAt: number }>();
 
-function isRateLimited(ip: string): boolean {
+function checkRateLimit(map: Map<string, { count: number; resetAt: number }>, key: string, maxLimit: number): boolean {
   const now = Date.now();
-  const entry = checkEmailRateLimits.get(ip);
+  const entry = map.get(key);
   if (!entry || now > entry.resetAt) {
-    checkEmailRateLimits.set(ip, { count: 1, resetAt: now + 60000 });
+    map.set(key, { count: 1, resetAt: now + 60000 });
     return false;
   }
   entry.count += 1;
-  return entry.count > 10;
+  return entry.count > maxLimit;
 }
 
 export async function POST(req: Request) {
@@ -37,9 +38,10 @@ export async function POST(req: Request) {
     const forwarded = req.headers.get('x-forwarded-for');
     const ip = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1';
 
-    if (isRateLimited(ip)) {
+    // 1. IP-level rate limiting
+    if (checkRateLimit(checkEmailIpRateLimits, ip, 10)) {
       return NextResponse.json({
-        error: 'Too many requests. Please wait a minute and try again.',
+        error: 'Too many requests from this IP. Please wait a minute and try again.',
         available: false
       }, { status: 429 });
     }
@@ -51,6 +53,15 @@ export async function POST(req: Request) {
     }
 
     const cleanInput = email.trim().toLowerCase();
+
+    // 2. Email-level rate limiting (anti-enumeration & anti-spraying)
+    if (checkRateLimit(checkEmailTargetRateLimits, cleanInput, 5)) {
+      return NextResponse.json({
+        error: 'Too many lookup requests for this email. Please wait a minute and try again.',
+        available: false
+      }, { status: 429 });
+    }
+
     const supabaseAdmin = getAdmin();
 
     // Look up directly in profiles table by email or username (indexed lookup, never listUsers)
@@ -58,20 +69,19 @@ export async function POST(req: Request) {
       .from('profiles')
       .select('id, email')
       .or(`email.ilike.${cleanInput},id.eq.${cleanInput}`)
+      .limit(1)
       .maybeSingle();
 
-    if (existingProfile) {
-      // Generic response: Never leak tenant, restaurant name, or internal user details
-      return NextResponse.json({
-        available: false,
-        exists: true,
-        message: 'This email is already registered. Please log in or use another email.'
-      }, { status: 200 });
-    }
-
-    return NextResponse.json({ available: true, exists: false });
+    // Generic response: Never disclose internal account metadata or tenant boundaries
+    return NextResponse.json({
+      available: !existingProfile,
+      checked: true
+    });
   } catch (err: any) {
-    console.error('[Check Email Availability Error]:', err?.message);
-    return NextResponse.json({ error: 'Failed to validate email availability' }, { status: 500 });
+    console.error('[Check Email Availability Error]', err?.message || err);
+    return NextResponse.json({
+      error: 'Unable to check availability at this time',
+      available: false
+    }, { status: 500 });
   }
 }

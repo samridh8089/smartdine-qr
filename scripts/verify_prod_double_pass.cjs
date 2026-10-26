@@ -69,7 +69,7 @@ async function main() {
   console.log('1. Owner logging in on www.cleverops.in...');
   await ownerPage1.goto('https://www.cleverops.in/login', { waitUntil: 'domcontentloaded' });
   await ownerPage1.fill('input[type="email"]', 'dsoni1281@gmail.com');
-  await ownerPage1.fill('input[type="password"]', '123456');
+  await ownerPage1.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || 'test-password');
   await ownerPage1.click('button[type="submit"]');
   try {
     await ownerPage1.waitForURL(u => u.pathname.includes('/dashboard'), { timeout: 35000, waitUntil: 'domcontentloaded' });
@@ -163,7 +163,7 @@ async function main() {
   console.log('1. Fresh Owner login and reopen Tables & QRs...');
   await ownerPage2.goto('https://www.cleverops.in/login', { waitUntil: 'domcontentloaded' });
   await ownerPage2.fill('input[type="email"]', 'dsoni1281@gmail.com');
-  await ownerPage2.fill('input[type="password"]', '123456');
+  await ownerPage2.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || 'test-password');
   await ownerPage2.click('button[type="submit"]');
   await ownerPage2.waitForURL(u => u.pathname.includes('/dashboard'), { timeout: 30000 });
 
