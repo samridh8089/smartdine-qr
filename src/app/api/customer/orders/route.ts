@@ -159,8 +159,7 @@ export async function POST(req: Request) {
     const restaurant = rRes.data;
     if (!restaurant) {
       timer.end('inventory');
-      const errDetail = rRes.error ? ` (DB Error: ${rRes.error.message})` : '';
-      return NextResponse.json({ error: `Restaurant not found for ID: ${restaurantId}${errDetail}` }, { status: 404 });
+      return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
     // Enforce active SaaS license: reject customer orders if restaurant subscription is expired or suspended
@@ -173,32 +172,33 @@ export async function POST(req: Request) {
     }
 
     // Anti-Prank Geofence Restriction: Dine-in table orders must be placed within restaurant premises
-    if (orderType === 'dine_in' && restaurant.settings?.geofence?.enabled && restaurant.settings?.geofence?.latitude && restaurant.settings?.geofence?.longitude) {
-      const custLat = body.customerLat !== undefined ? Number(body.customerLat) : null;
-      const custLng = body.customerLng !== undefined ? Number(body.customerLng) : null;
-      const maxRadius = Number(restaurant.settings.geofence.radius_meters) || 100;
-      // 100m buffer for indoor GPS & Wi-Fi triangulation drift
-      const indoorDriftBuffer = 100;
+    if (restaurant.settings?.geofence?.enabled) {
+      const custLat = (body.customerLat !== undefined && body.customerLat !== null && body.customerLat !== '') ? Number(body.customerLat) : null;
+      const custLng = (body.customerLng !== undefined && body.customerLng !== null && body.customerLng !== '') ? Number(body.customerLng) : null;
       if (custLat === null || custLng === null || isNaN(custLat) || isNaN(custLng)) {
         timer.end('inventory');
         return NextResponse.json({
-          error: 'Location verification is required for Dine-in orders at this restaurant. Please enable device location access to proceed.',
+          error: 'Location verification is required for orders at this restaurant. Please enable device location access to proceed.',
           code: 'GEOFENCE_LOCATION_REQUIRED'
         }, { status: 403 });
       }
 
-      const distance = calculateHaversineDistanceMeters(
-        restaurant.settings.geofence.latitude,
-        restaurant.settings.geofence.longitude,
-        custLat,
-        custLng
-      );
-      if (distance > (maxRadius + indoorDriftBuffer)) {
-        timer.end('inventory');
-        return NextResponse.json({
-          error: 'Dine-in orders are restricted to the restaurant premises. If you wish to order from elsewhere, please choose Takeaway.',
-          code: 'GEOFENCE_RESTRICTION'
-        }, { status: 403 });
+      if (orderType === 'dine_in' && restaurant.settings?.geofence?.latitude && restaurant.settings?.geofence?.longitude) {
+        const maxRadius = Number(restaurant.settings.geofence.radius_meters) || 100;
+        const indoorDriftBuffer = 100;
+        const distance = calculateHaversineDistanceMeters(
+          restaurant.settings.geofence.latitude,
+          restaurant.settings.geofence.longitude,
+          custLat,
+          custLng
+        );
+        if (distance > (maxRadius + indoorDriftBuffer)) {
+          timer.end('inventory');
+          return NextResponse.json({
+            error: 'Dine-in orders are restricted to the restaurant premises. If you wish to order from elsewhere, please choose Takeaway.',
+            code: 'GEOFENCE_RESTRICTION'
+          }, { status: 403 });
+        }
       }
     }
 
