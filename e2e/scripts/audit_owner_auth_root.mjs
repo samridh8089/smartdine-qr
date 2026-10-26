@@ -83,22 +83,22 @@ async function auditOwnerAccount() {
   // PART 5: SUPABASE AUTH SIGN IN TEST
   console.log('\n--- PART 5: SUPABASE AUTH SIGN IN TEST ---');
   
-  // Test password 'Password123!'
+  // Test password process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || ''
   const { data: signData1, error: signErr1 } = await supabaseAnon.auth.signInWithPassword({
     email: 'you@gmail.com',
-    password: 'Password123!'
+    password: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || ''
   });
 
   if (signErr1) {
-    console.log(`Sign-in with 'Password123!' failed: ${signErr1.message} (code: ${signErr1.code}, status: ${signErr1.status})`);
+    console.log(`Sign-in with process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '' failed: ${signErr1.message} (code: ${signErr1.code}, status: ${signErr1.status})`);
   } else {
-    console.log(`✅ Sign-in with 'Password123!' SUCCEEDED! User ID: ${signData1.user.id}, Session Token: ${signData1.session ? 'Valid' : 'None'}`);
+    console.log(`✅ Sign-in with process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '' SUCCEEDED! User ID: ${signData1.user.id}, Session Token: ${signData1.session ? 'Valid' : 'None'}`);
   }
 
   // Test password '123456'
   const { data: signData2, error: signErr2 } = await supabaseAnon.auth.signInWithPassword({
     email: 'you@gmail.com',
-    password: '123456'
+    password: (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || '')
   });
 
   if (signErr2) {

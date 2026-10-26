@@ -24,7 +24,7 @@ async function testRealtime() {
   // Authenticate mobile client
   const { data: auth } = await mobileClient.auth.signInWithPassword({
     email: 'dsoni1281@gmail.com',
-    password: '123456'
+    password: (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || '')
   });
 
   const channelName = `staff_${restaurantId}`;

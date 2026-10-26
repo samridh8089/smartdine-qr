@@ -199,7 +199,7 @@ async function runMultiBatchVerification() {
   try {
     await supabase.auth.signInWithPassword({
       email: 'you@gmail.com',
-      password: 'Password123!'
+      password: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || ''
     });
 
     const { data: rest } = await supabase.from('restaurants').select('*').eq('slug', 'bistro').single();

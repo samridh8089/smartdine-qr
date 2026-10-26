@@ -41,7 +41,7 @@ describe('Task 1: Supabase Security Hardening Migration Tests', () => {
 
   it('Live database rejects reset_staff_password for anon role', async () => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
     const res = await fetch(`${supabaseUrl}/rest/v1/rpc/reset_staff_password`, {
       method: 'POST',

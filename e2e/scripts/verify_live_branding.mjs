@@ -67,7 +67,7 @@ async function runLiveBrandingVerification() {
   console.log('\n--- 2. TESTING PLAYWRIGHT BROWSER VISIBILITY ---');
   const { data: authData } = await supabase.auth.signInWithPassword({
     email: 'you@gmail.com',
-    password: 'Password123!'
+    password: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || ''
   });
 
   const browser = await chromium.launch({ headless: true });
