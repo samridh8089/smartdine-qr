@@ -333,13 +333,13 @@ export default function OwnerNetMarginCard({
               </div>
             </div>
 
-            {/* Modal Body: Tab 1 (Executive Overview - Fits In Viewport With NO Scroll) */}
+            {/* Modal Body: Tab 1 (Executive Overview - Smooth Scrollable so NO cards are clipped) */}
             {activeModalTab === 'summary' && (
-              <div className="p-4 sm:p-5 space-y-3.5 overflow-hidden">
+              <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 max-h-[calc(88vh-80px)] pb-6">
                 
                 {/* SECTION 1: UNIT ECONOMICS BRIEF ("100 me se kitne paise kahan gaye") */}
-                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 space-y-2.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/60 pb-2.5">
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/60 pb-2">
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
                         Unit Economics • Revenue Distribution Per ₹100
@@ -358,24 +358,22 @@ export default function OwnerNetMarginCard({
                     </div>
                   </div>
 
-                  {/* Per ₹100 Itemized Breakdown Pills */}
-                  <div className="flex flex-wrap gap-1.5 text-xs">
+                  {/* Per ₹100 High-Level Brief Pills (Clean 1-line summary) */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
                       Food Raw Material: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.foodCost?.toFixed(1) || '31.0'}</strong>
                     </div>
                     <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
                       Staff Payroll: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.staffLabor?.toFixed(1) || '14.8'}</strong>
                     </div>
-                    {(pnl.expenseCards || []).map((ec) => (
-                      <div key={ec.id} className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
-                        {ec.title.split(' ')[0]}: <strong className="text-slate-900 dark:text-white">₹{ec.perHundred.toFixed(1)}</strong>
-                      </div>
-                    ))}
+                    <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
+                      Operating Overheads: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.operatingExpenses?.toFixed(1) || '19.5'}</strong>
+                    </div>
                     <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
                       CleverOps POS: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.cleverops?.toFixed(1) || '0.1'}</strong>
                     </div>
                     <div className="px-2.5 py-1 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold shadow-2xs">
-                      Pocket Profit In Hand: <strong>₹{pnl.perHundredBreakdown?.netProfit?.toFixed(1) || '34.5'} / ₹100</strong>
+                      Pocket Profit: <strong>₹{pnl.perHundredBreakdown?.netProfit?.toFixed(1) || '34.5'} / ₹100</strong>
                     </div>
                   </div>
                 </div>
