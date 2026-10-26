@@ -1197,7 +1197,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       saveCart([]);
       setSpecialInstructions('');
       setIdempotencyKey(crypto.randomUUID());
-      router.push(`/order-tracking/${newOrder.id}`);
+      if (newOrder?.tracking_token && typeof window !== 'undefined') {
+        sessionStorage.setItem(`smartdine_order_token_${newOrder.id}`, newOrder.tracking_token);
+      }
+      const trackingQuery = newOrder?.tracking_token ? `?token=${encodeURIComponent(newOrder.tracking_token)}` : '';
+      router.push(`/order-tracking/${newOrder.id}${trackingQuery}`);
 
     } catch (e: any) {
       // Cart is already open — just show the error and re-enable the button
