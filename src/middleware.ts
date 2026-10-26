@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 
 /**
  * Enhanced Production-Grade Next.js Middleware.
  * Features:
- * 1. Endpoint-specific Rate Limiting with per-IP and per-account/email tracking.
- * 2. Exponential Backoff on rate limit violations (configurable limits & backoff via env vars).
- * 3. HTTP 429 response with Retry-After and rate limit telemetry headers.
- * 4. Strict CORS Allowlist & Preflight OPTIONS handling.
- * 5. Production Security Headers (CSP, HSTS, X-Content-Type-Options, etc.).
+ * 1. Distributed Rate Limiting via Upstash Redis (@upstash/ratelimit) with fallback sliding window.
+ * 2. Strict Authentication Verification: Requests are ONLY treated as authenticated after cryptographic/auth verification.
+ * 3. Endpoint-specific Rate Limiting with per-IP and per-account/email tracking.
+ * 4. Exponential Backoff on rate limit violations.
+ * 5. HTTP 429 response with Retry-After and rate limit telemetry headers.
+ * 6. Strict CORS Allowlist & Preflight OPTIONS handling.
+ * 7. Production Security Headers (CSP, HSTS, X-Content-Type-Options, etc.).
  */
 
 interface RateLimitState {
@@ -19,33 +23,139 @@ interface RateLimitState {
   blockedUntil: number;
 }
 
-const rateLimitMap = new Map<string, RateLimitState>();
+const localRateLimitMap = new Map<string, RateLimitState>();
 
-// Periodic cleanup of expired rate limit records
+// Periodic cleanup of expired local rate limit records
 if (typeof setInterval !== 'undefined') {
   setInterval(() => {
     const now = Date.now();
-    for (const [key, state] of rateLimitMap.entries()) {
+    for (const [key, state] of localRateLimitMap.entries()) {
       if (now > state.resetTime && now > state.blockedUntil) {
-        rateLimitMap.delete(key);
+        localRateLimitMap.delete(key);
       }
     }
   }, 60000);
 }
 
-const ALLOWED_ORIGINS = [
-  'https://www.cleverops.in',
-  'https://cleverops.in'
-];
+// Upstash Redis connection (initialized when credentials are provided)
+const redisRestUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const redisRestToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
-function getEnvNumber(key: string, defaultValue: number): number {
-  const val = process.env[key];
-  if (!val) return defaultValue;
-  const parsed = parseInt(val, 10);
-  return isNaN(parsed) || parsed <= 0 ? defaultValue : parsed;
+const redisClient = (redisRestUrl && redisRestToken)
+  ? new Redis({ url: redisRestUrl, token: redisRestToken })
+  : null;
+
+const upstashLimiters = new Map<string, Ratelimit>();
+
+function getUpstashLimiter(limit: number, windowMs: number): Ratelimit | null {
+  if (!redisClient) return null;
+  const key = `${limit}:${windowMs}`;
+  if (!upstashLimiters.has(key)) {
+    const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+    upstashLimiters.set(
+      key,
+      new Ratelimit({
+        redis: redisClient,
+        limiter: Ratelimit.slidingWindow(limit, `${windowSeconds} s`),
+        analytics: false,
+        prefix: 'smartdine_rl',
+      })
+    );
+  }
+  return upstashLimiters.get(key)!;
 }
 
-function checkRateLimit(
+// Token verification cache with 60s TTL to prevent auth spamming
+const tokenVerificationCache = new Map<string, { isValid: boolean; expiresAt: number }>();
+
+async function verifyAuthToken(token: string): Promise<boolean> {
+  if (!token || token.length < 20) return false;
+
+  // 1. Service role key fast path
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey && serviceKey.length > 20 && token === serviceKey) {
+    return true;
+  }
+
+  // 2. Cache lookup
+  const now = Date.now();
+  const cached = tokenVerificationCache.get(token);
+  if (cached && cached.expiresAt > now) {
+    return cached.isValid;
+  }
+
+  // 3. Cryptographic / API verification via Supabase Auth
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return false;
+    }
+
+    const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const isValid = res.ok;
+    tokenVerificationCache.set(token, {
+      isValid,
+      expiresAt: now + (isValid ? 60000 : 10000)
+    });
+    return isValid;
+  } catch {
+    return false;
+  }
+}
+
+async function extractAndVerifySession(request: NextRequest): Promise<boolean> {
+  // 1. Authorization header
+  const authHeader = request.headers.get('authorization') || '';
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    if (await verifyAuthToken(token)) {
+      return true;
+    }
+  }
+
+  // 2. Cookie extraction
+  const cookieHeader = request.headers.get('cookie') || '';
+  const cookieMatches = cookieHeader.match(/(?:smartdine_auth_token_v2|sb-[^=]+-auth-token(?:\.\d+)?)=([^;]+)/g) || [];
+  for (const m of cookieMatches) {
+    const val = m.split('=')[1];
+    if (!val) continue;
+    try {
+      const rawVal = decodeURIComponent(val);
+      let candidateToken = '';
+      if (rawVal.startsWith('base64-')) {
+        const decoded = Buffer.from(rawVal.substring(7), 'base64').toString('utf8');
+        const parsed = JSON.parse(decoded);
+        candidateToken = Array.isArray(parsed) ? (parsed[0]?.access_token || parsed[0]) : (parsed?.access_token || parsed);
+      } else {
+        const parsed = JSON.parse(rawVal);
+        candidateToken = Array.isArray(parsed) ? (parsed[0]?.access_token || parsed[0]) : (parsed?.access_token || parsed);
+      }
+      if (candidateToken && typeof candidateToken === 'string' && candidateToken.length > 20) {
+        if (await verifyAuthToken(candidateToken)) {
+          return true;
+        }
+      }
+    } catch {
+      if (val.length > 20) {
+        if (await verifyAuthToken(decodeURIComponent(val))) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function checkRateLimitLocal(
   key: string,
   maxLimit: number,
   windowMs: number,
@@ -53,11 +163,11 @@ function checkRateLimit(
   backoffMax: number
 ): { limited: boolean; retryAfterSeconds: number; remaining: number } {
   const now = Date.now();
-  let state = rateLimitMap.get(key);
+  let state = localRateLimitMap.get(key);
 
   if (!state) {
     state = { count: 1, firstSeen: now, resetTime: now + windowMs, violations: 0, blockedUntil: 0 };
-    rateLimitMap.set(key, state);
+    localRateLimitMap.set(key, state);
     return { limited: false, retryAfterSeconds: 0, remaining: maxLimit - 1 };
   }
 
@@ -70,7 +180,7 @@ function checkRateLimit(
     state.count = 1;
     state.firstSeen = now;
     state.resetTime = now + windowMs;
-    rateLimitMap.set(key, state);
+    localRateLimitMap.set(key, state);
     return { limited: false, retryAfterSeconds: 0, remaining: maxLimit - 1 };
   }
 
@@ -84,12 +194,43 @@ function checkRateLimit(
       Math.pow(backoffBase, state.violations) * baseWindowSec
     );
     state.blockedUntil = now + backoffSeconds * 1000;
-    rateLimitMap.set(key, state);
+    localRateLimitMap.set(key, state);
     return { limited: true, retryAfterSeconds: backoffSeconds, remaining: 0 };
   }
 
-  rateLimitMap.set(key, state);
+  localRateLimitMap.set(key, state);
   return { limited: false, retryAfterSeconds: 0, remaining: Math.max(0, maxLimit - state.count) };
+}
+
+async function checkRateLimit(
+  key: string,
+  maxLimit: number,
+  windowMs: number,
+  backoffBase: number,
+  backoffMax: number
+): Promise<{ limited: boolean; retryAfterSeconds: number; remaining: number }> {
+  const upstash = getUpstashLimiter(maxLimit, windowMs);
+  if (upstash) {
+    try {
+      const result = await upstash.limit(key);
+      if (!result.success) {
+        const retryAfterSeconds = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
+        return { limited: true, retryAfterSeconds, remaining: 0 };
+      }
+      return { limited: false, retryAfterSeconds: 0, remaining: result.remaining };
+    } catch {
+      // In case Upstash Redis encounters a transient error, safely fallback
+    }
+  }
+
+  return checkRateLimitLocal(key, maxLimit, windowMs, backoffBase, backoffMax);
+}
+
+function getEnvNumber(key: string, defaultValue: number): number {
+  const val = process.env[key];
+  if (!val) return defaultValue;
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) || parsed <= 0 ? defaultValue : parsed;
 }
 
 async function extractAccountIdentifier(request: NextRequest): Promise<string | null> {
@@ -144,7 +285,6 @@ export async function middleware(request: NextRequest) {
     return preflightResponse;
   }
 
-
   // ─── 1. RATE LIMITING CONFIGURATION & ENFORCEMENT ──────────────────────────
   const forwarded = request.headers.get('x-forwarded-for');
   const realIp = request.headers.get('x-real-ip');
@@ -159,7 +299,6 @@ export async function middleware(request: NextRequest) {
   let remaining = 999;
 
   // Rate limiting ONLY applies to API routes (/api/*).
-  // Page renders (/login, /signup, /forgot-password, /, /menu/*, etc.) MUST NEVER be rate limited.
   if (pathname.startsWith('/api/')) {
     const isStrictAuthApi = 
       pathname.startsWith('/api/auth/send-otp') ||
@@ -179,11 +318,8 @@ export async function middleware(request: NextRequest) {
 
     const isAuthApi = isStrictAuthApi || pathname.startsWith('/api/auth/');
 
-    const isAuthUser = 
-      request.headers.has('authorization') ||
-      request.cookies.has('sb-access-token') ||
-      request.cookies.has('supabase-auth-token') ||
-      request.cookies.has('next-auth.session-token');
+    // Cryptographically verified authentication check: NEVER trust unverified header or cookie
+    const isAuthUser = await extractAndVerifySession(request);
 
     let accountThreshold = getEnvNumber('RATE_LIMIT_AUTH_PER_ACCOUNT', 5);
 
@@ -203,7 +339,7 @@ export async function middleware(request: NextRequest) {
 
     // Rate check by IP
     const ipKey = `ip:${ip}:${isStrictAuthApi ? 'strict_api' : isPaymentApi ? 'payment_api' : isAuthApi ? 'auth_api' : isAuthUser ? 'authed_api' : 'pub_api'}`;
-    const ipRes = checkRateLimit(ipKey, ipThreshold, windowMs, backoffBase, backoffMax);
+    const ipRes = await checkRateLimit(ipKey, ipThreshold, windowMs, backoffBase, backoffMax);
 
     // Rate check by Account/Email if applicable
     let accountRes = { limited: false, retryAfterSeconds: 0, remaining: 999 };
@@ -211,7 +347,7 @@ export async function middleware(request: NextRequest) {
       const accountId = await extractAccountIdentifier(request);
       if (accountId) {
         const accountKey = `acc:${accountId}:${pathname}`;
-        accountRes = checkRateLimit(accountKey, accountThreshold, windowMs, backoffBase, backoffMax);
+        accountRes = await checkRateLimit(accountKey, accountThreshold, windowMs, backoffBase, backoffMax);
       }
     }
 
@@ -292,4 +428,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ]
 };
-
