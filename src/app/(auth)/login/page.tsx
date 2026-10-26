@@ -7,7 +7,7 @@ import { supabase, clearActiveUserCache } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import MockBanner from '@/components/shared/MockBanner';
-import { Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, Store, Headphones } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -128,10 +128,154 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] dark:bg-slate-950 transition-colors duration-300">
       <MockBanner />
-      
-      <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+
+      {/* ========================================================================= */}
+      {/* 1. MOBILE APP VIEW (md:hidden) — 100% IDENTICAL TO APP SCREENSHOT        */}
+      {/* ========================================================================= */}
+      <div className="md:hidden flex-1 flex flex-col justify-between py-6 px-4 max-w-sm mx-auto w-full">
+        {/* Top Branding */}
+        <div className="flex flex-col items-center mt-2">
+          <img src="/logo.png" alt="CleverOps" className="h-16 w-16 object-contain" />
+          <h1 className="text-2xl font-black text-[#0f172a] tracking-tight mt-3">CleverOps</h1>
+          <p className="text-xs font-semibold text-[#64748b] tracking-normal mt-0.5">Smart Restaurant Operations</p>
+        </div>
+
+        {/* Main White Card Container */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 w-full mt-6">
+          <h2 className="text-xl font-black text-[#0f172a] mb-5">Sign In</h2>
+
+          <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
+            {/* Email Field */}
+            <div>
+              <label htmlFor="mobile-email" className="block text-[11px] font-black text-[#1e293b] tracking-wider uppercase mb-1.5">
+                EMAIL ADDRESS
+              </label>
+              <div className="relative flex items-center bg-[#f8fafc] border border-slate-200 rounded-xl px-3.5 py-3 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                <Mail className="w-5 h-5 text-slate-400 mr-2.5 flex-shrink-0" />
+                <input
+                  id="mobile-email"
+                  type="email"
+                  autoComplete="off"
+                  required
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                  placeholder="staff@restaurant.com"
+                  className="w-full bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label htmlFor="mobile-password" className="block text-[11px] font-black text-[#1e293b] tracking-wider uppercase">
+                  PASSWORD
+                </label>
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors"
+                >
+                  Forgot Password?
+                </Link>
+              </div>
+              <div className="relative flex items-center bg-[#f8fafc] border border-slate-200 rounded-xl px-3.5 py-3 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition-all">
+                <Lock className="w-5 h-5 text-slate-400 mr-2.5 flex-shrink-0" />
+                <input
+                  id="mobile-password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                  placeholder="••••••••"
+                  className="w-full bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none font-medium pr-8"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3.5 text-slate-400 hover:text-slate-600 focus:outline-none p-1 cursor-pointer transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5 text-slate-500" />
+                  ) : (
+                    <Eye className="w-5 h-5 text-slate-500" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Error Banner */}
+            {error && (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-sm"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                <span className="flex-1 leading-relaxed">{error}</span>
+              </div>
+            )}
+
+            {/* Sign In Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#059669] hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-70 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-sm transition-all text-sm mt-5 cursor-pointer"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            {/* Create Restaurant Account Button */}
+            <Link
+              href={`/signup?lang=${activeLang}`}
+              className="w-full bg-[#ecfdf5] hover:bg-emerald-100/70 border border-emerald-200/80 text-[#059669] font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-all text-sm mt-3"
+            >
+              <Store className="w-4 h-4 text-[#059669]" />
+              <span>Create Restaurant Account</span>
+            </Link>
+          </form>
+
+          {/* Dedicated Support Contact Card */}
+          <div className="bg-white rounded-2xl p-3.5 mt-5 border border-slate-200/80 shadow-sm">
+            <div className="flex items-center gap-3 mb-2.5">
+              <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <Headphones className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs font-extrabold text-[#0f172a] leading-tight truncate">CleverOps 24x7 Support</h3>
+                <p className="text-[11px] font-medium text-slate-500 leading-tight truncate">Deepak Kumar Soni · Technical Help</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs font-bold text-slate-700">
+              <a href="tel:8949266064" className="hover:text-blue-600 transition-colors flex items-center gap-1">
+                📞 89492 66064
+              </a>
+              <a href="tel:7742054535" className="hover:text-emerald-600 transition-colors flex items-center gap-1">
+                📞 77420 54535
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <p className="mt-6 mb-2 text-center text-xs font-medium text-slate-400">
+          Powered by CleverOps · cleverops.in
+        </p>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 2. DESKTOP WEB VIEW (hidden md:block) — UNTOUCHED FOR DESKTOP EXPERIENCE   */}
+      {/* ========================================================================= */}
+      <div className="hidden md:flex flex-1 flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="sm:mx-auto w-full sm:max-w-md">
           <div className="flex justify-center">
             <div className="h-14 w-14 rounded-2xl bg-white shadow-md border border-slate-200/80 flex items-center justify-center p-2">
@@ -170,7 +314,7 @@ export default function LoginPage() {
                 autoComplete="off"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
                 placeholder="you@example.com"
               />
 
@@ -194,7 +338,7 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     required
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => { setPassword(e.target.value); setError(''); }}
                     placeholder="••••••••"
                     className="block w-full px-3.5 py-2 pr-11 text-sm text-slate-900 dark:text-white bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
                   />
