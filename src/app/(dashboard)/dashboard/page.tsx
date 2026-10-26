@@ -1057,7 +1057,6 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">Overview Dashboard</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Here is a snapshot of your restaurant today.</p>
         </div>
         <div className="flex items-center gap-3 shrink-0 flex-wrap">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-2xl text-xs md:text-sm font-bold text-slate-600 dark:text-slate-300 shadow-sm shrink-0">
@@ -1200,7 +1199,6 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h3 className="font-bold text-gray-950 dark:text-white text-base">Live Table Occupancy</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Real-time dining room seating and QR status</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -1273,9 +1271,6 @@ export default function DashboardPage() {
                   {activeDiningCards.length}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Click any table card to review & settle bill, or free occupied tables in 1-tap.
-              </p>
             </div>
           </div>
 
@@ -1438,7 +1433,6 @@ export default function DashboardPage() {
               <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                 <div>
                   <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Recent Orders</h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Latest incoming orders across all tables.</p>
                 </div>
                 <Link href="/dashboard/orders">
                   <Button variant="ghost" className="text-xs font-bold gap-1 text-emerald-600 dark:text-emerald-400">
@@ -1495,7 +1489,6 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800">
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 dark:text-white">Top Selling Items</h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Most popular dishes ordered today.</p>
                 </div>
                 <select
                   value={topSellingFilter}
@@ -1561,9 +1554,6 @@ export default function DashboardPage() {
             <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
               Inventory & Menu Stock Alerts
             </h3>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-              Live stock availability & shortage detection across your recipes & menu items.
-            </p>
           </div>
           <Link href="/dashboard/inventory">
             <Button variant="outline" size="sm" className="text-xs font-bold gap-1 self-start sm:self-auto">
@@ -1726,9 +1716,6 @@ export default function DashboardPage() {
           <h3 className="text-sm font-bold text-gray-950 dark:text-white uppercase tracking-wider">
             Order Cancellation & Prepared Food Waste Impact
           </h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Breakdown of today's cancellations by stage, food disposition channels, and net financial loss.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

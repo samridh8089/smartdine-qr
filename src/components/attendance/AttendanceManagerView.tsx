@@ -1874,9 +1874,6 @@ export default function AttendanceManagerView({
               <h3 className="font-bold text-base text-slate-900 dark:text-white">
                 Staff Leave Management & Approvals
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Review employee time-off applications, approved leaves, and leave balances
-              </p>
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
@@ -2020,9 +2017,6 @@ export default function AttendanceManagerView({
                 <span className="font-bold text-sm text-slate-900 dark:text-white block">
                   Punch-Out Mandatory Policy
                 </span>
-                <span className="text-xs text-slate-500">
-                  When enabled, employees must punch out at shift end. Missing punch-outs will trigger employee alerts and require manager approval.
-                </span>
               </div>
               <input
                 type="checkbox"
@@ -2037,9 +2031,6 @@ export default function AttendanceManagerView({
               <div>
                 <span className="font-bold text-sm text-slate-900 dark:text-white block">
                   Enforce Strict Geofencing
-                </span>
-                <span className="text-xs text-slate-500">
-                  Block punch-in when staff is outside restaurant boundary.
                 </span>
               </div>
               <input
@@ -2102,9 +2093,7 @@ export default function AttendanceManagerView({
                 onChange={e => setGeofenceConfig(prev => ({ ...prev, radius_meters: Number(e.target.value) || 150 }))}
                 className="w-48 px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
               />
-              <p className="text-[11px] text-slate-400 mt-1">
-                Recommended: 150m (allows staff to punch anywhere within building or parking lot).
-              </p>
+
             </div>
 
             {/* Save Button */}

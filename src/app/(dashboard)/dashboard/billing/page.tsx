@@ -407,9 +407,6 @@ export default function BillingPage() {
           <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
             AI Feature Quotas & Monthly Usage
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Real-time monthly credits for automated menu digitization and AI recipe formulation.
-          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

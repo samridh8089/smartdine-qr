@@ -283,9 +283,6 @@ export default function OwnerNetMarginCard({
                 <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white leading-tight">
                   Owner Profit & Loss Statement
                 </h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                  Period: <strong className="text-slate-800 dark:text-slate-200">{pnl.periodLabel}</strong> ({pnl.daysCount} {pnl.daysCount === 1 ? 'day' : 'days'}) • {salesSummary.totalOrders || 174} Completed Orders
-                </p>
               </div>
 
               {/* View Switcher: Executive Overview vs Expense Ledger */}
@@ -341,9 +338,6 @@ export default function OwnerNetMarginCard({
                 <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/60 pb-2">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
-                        Unit Economics • Revenue Distribution Per ₹100
-                      </span>
                       <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
                         Where does every ₹100 earned go?
                       </h4>
@@ -448,9 +442,6 @@ export default function OwnerNetMarginCard({
                       <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
                         Itemized Operating Expenses (Every Owner Expense in Separate Card)
                       </h4>
-                      <p className="text-[10px] text-slate-400">
-                        {(pnl.expenseCards || []).length} overhead cards logged with exact amount and sales share
-                      </p>
                     </div>
                     <button
                       type="button"
@@ -589,7 +580,6 @@ export default function OwnerNetMarginCard({
                     <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">
                       Recorded Operating Expenses Ledger ({expenses.length} Total)
                     </h4>
-                    <p className="text-[11px] text-slate-400">Search and manage itemized business overhead invoices</p>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -700,10 +690,7 @@ export default function OwnerNetMarginCard({
             )}
 
             {/* Modal Footer */}
-            <div className="px-5 py-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50/60 dark:bg-slate-800/30 shrink-0">
-              <span className="text-xs text-slate-500 font-semibold">
-                Net Take-Home Profit: <strong className="text-slate-900 dark:text-white">{formatPrice(pnl.netProfit, currency, 0)}</strong> ({pnl.netMarginPercentage}% Net Margin)
-              </span>
+            <div className="px-5 py-2.5 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end bg-slate-50/60 dark:bg-slate-800/30 shrink-0">
               <button
                 type="button"
                 onClick={() => setStatementModalOpen(false)}
