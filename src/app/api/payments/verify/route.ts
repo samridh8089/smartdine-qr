@@ -112,7 +112,8 @@ export async function POST(req: Request) {
     // 3. Inspect Razorpay Order Notes for authentic plan & restaurant
     let orderPlanName = body.plan_name || body.plan || 'pro';
     let orderBillingInterval = (body.billing_interval || body.billingInterval || 'monthly') as 'monthly' | 'yearly';
-    let targetRestaurantId = restaurant_id || restaurantId || '';
+    const bodyRestaurantId = (restaurant_id || restaurantId || '').trim();
+    let targetRestaurantId = '';
 
     const orderRes = await fetchRazorpayOrder(razorpay_order_id, keyId, keySecret);
     if (orderRes.success && orderRes.order?.notes) {
@@ -120,9 +121,20 @@ export async function POST(req: Request) {
       if (notes.plan_name) orderPlanName = notes.plan_name;
       else if (notes.plan) orderPlanName = notes.plan;
       if (notes.billing_interval) orderBillingInterval = notes.billing_interval;
-      if (notes.restaurant_id && !targetRestaurantId) {
-        targetRestaurantId = notes.restaurant_id;
+      
+      const notesRestaurantId = (notes.restaurant_id || notes.restaurantId || '').trim();
+      if (notesRestaurantId) {
+        if (bodyRestaurantId && bodyRestaurantId !== notesRestaurantId) {
+          return NextResponse.json({
+            error: 'Specified restaurant_id does not match the Razorpay order notes.'
+          }, { status: 400 });
+        }
+        targetRestaurantId = notesRestaurantId;
       }
+    }
+
+    if (!targetRestaurantId && bodyRestaurantId) {
+      targetRestaurantId = bodyRestaurantId;
     }
 
     // Resolve restaurant from profile if still missing
