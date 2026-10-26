@@ -12,6 +12,14 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "scripts/**",
+    "tests/**",
+    "e2e/**",
+    "electron/**",
+    "smartdine-mobile/**",
+    "*.mjs",
+    "*.cjs",
+    "*.js"
   ]),
 ]);
 
