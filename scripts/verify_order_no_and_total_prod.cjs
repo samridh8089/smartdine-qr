@@ -20,7 +20,7 @@ async function main() {
   console.log('1. Owner logging in...');
   await page.goto('https://www.cleverops.in/login', { waitUntil: 'domcontentloaded' });
   await page.fill('input[type="email"]', 'dsoni1281@gmail.com');
-  await page.fill('input[type="password"]', '123456');
+  await page.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.E2E_STAFF_PASSWORD || 'test-password');
   await page.click('button[type="submit"]');
   await page.waitForURL(u => u.pathname.includes('/dashboard'), { timeout: 35000, waitUntil: 'domcontentloaded' });
   console.log('Owner logged in!');

@@ -32,7 +32,7 @@ async function measureNavigationSuite(viewport, isMobile = false) {
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('input[type="email"]');
   await page.type('input[type="email"]', 'dsoni1281@gmail.com');
-  await page.type('input[type="password"]', '123456');
+  await page.type('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.E2E_STAFF_PASSWORD || 'test-password');
   await page.click('button[type="submit"]');
   await page.waitForNavigation({ waitUntil: 'networkidle2' });
   await new Promise(r => setTimeout(r, 2000));

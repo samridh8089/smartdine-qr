@@ -1166,20 +1166,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           return;
         }
 
-        console.warn('Fast API order placement fallback to db.createOrder:', apiErr);
-        newOrder = await db.createOrder(
-          restaurant.id,
-          isCounter ? null : table?.id,
-          orderPayload,
-          finalInstructions,
-          isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
-          isTakeaway ? arrivalMinutes : undefined,
-          isTakeaway ? takeawayNotes : undefined,
-          (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
-          idempotencyKey,
-          appliedOffer?.code,
-          discountAmount
-        );
+        console.error('Order placement failed on authoritative server route:', apiErr);
+        showToast(apiErr.message || 'Unable to place order. Please try again or contact staff.');
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        return;
       }
 
       // Immediate Route Navigation & Pre-seeded Order Cache (<5ms first paint)

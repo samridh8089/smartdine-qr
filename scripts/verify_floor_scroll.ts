@@ -12,7 +12,7 @@ async function verifyScrollAndCards() {
   try {
     await page.goto('http://localhost:3000/login', { waitUntil: 'networkidle' });
     await page.fill('input[type="email"]', 'dsoni1281@gmail.com');
-    await page.fill('input[type="password"]', '123456');
+    await page.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.E2E_STAFF_PASSWORD || 'test-password');
     await page.click('button[type="submit"]');
     await page.waitForURL((url) => url.pathname.includes('/dashboard'), { timeout: 20000 });
 

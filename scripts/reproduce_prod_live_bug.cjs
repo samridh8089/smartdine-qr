@@ -46,7 +46,7 @@ async function main() {
   console.log('Logging in as owner dsoni1281@gmail.com...');
   await ownerPage.goto('https://www.cleverops.in/login', { waitUntil: 'domcontentloaded' });
   await ownerPage.fill('input[type="email"]', 'dsoni1281@gmail.com');
-  await ownerPage.fill('input[type="password"]', '123456');
+  await ownerPage.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || 'test-password');
   await ownerPage.click('button[type="submit"]');
   await ownerPage.waitForURL(u => u.pathname.includes('/dashboard'), { timeout: 30000 });
   console.log('Owner logged in successfully!');
