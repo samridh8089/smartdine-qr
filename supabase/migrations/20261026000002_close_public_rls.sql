@@ -178,95 +178,103 @@ FROM public.restaurants r;
 GRANT SELECT ON public.public_restaurants TO anon, authenticated, service_role;
 
 -- ------------------------------------------------------------------------------
--- 5. SCOPE MERGE TABLES & QR DESIGN TO AUTHENTICATED RESTAURANT STAFF
+-- 5. SCOPE MERGE TABLES & QR DESIGN TO AUTHENTICATED RESTAURANT STAFF (RESILIENT)
 -- ------------------------------------------------------------------------------
--- 5.1 table_merge_groups
-ALTER TABLE public.table_merge_groups ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon read/write table_merge_groups" ON public.table_merge_groups;
-DROP POLICY IF EXISTS "staff_table_merge_groups_policy" ON public.table_merge_groups;
+DO $$ 
+BEGIN
+  -- 5.1 table_merge_groups
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'table_merge_groups') THEN
+    ALTER TABLE public.table_merge_groups ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Allow anon read/write table_merge_groups" ON public.table_merge_groups;
+    DROP POLICY IF EXISTS "staff_table_merge_groups_policy" ON public.table_merge_groups;
+    EXECUTE 'CREATE POLICY "staff_table_merge_groups_policy" ON public.table_merge_groups
+    FOR ALL TO authenticated
+    USING (
+      restaurant_id IN (
+        SELECT p.restaurant_id FROM public.profiles p 
+        WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = ''super_admin'')
+      )
+    )
+    WITH CHECK (
+      restaurant_id IN (
+        SELECT p.restaurant_id FROM public.profiles p 
+        WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = ''super_admin'')
+      )
+    )';
+  END IF;
 
-CREATE POLICY "staff_table_merge_groups_policy" ON public.table_merge_groups
-FOR ALL TO authenticated
-USING (
-  restaurant_id IN (
-    SELECT p.restaurant_id FROM public.profiles p 
-    WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = 'super_admin')
-  )
-)
-WITH CHECK (
-  restaurant_id IN (
-    SELECT p.restaurant_id FROM public.profiles p 
-    WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = 'super_admin')
-  )
-);
+  -- 5.2 table_merge_members
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'table_merge_members') THEN
+    ALTER TABLE public.table_merge_members ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Allow anon read/write table_merge_members" ON public.table_merge_members;
+    DROP POLICY IF EXISTS "staff_table_merge_members_policy" ON public.table_merge_members;
+    EXECUTE 'CREATE POLICY "staff_table_merge_members_policy" ON public.table_merge_members
+    FOR ALL TO authenticated
+    USING (
+      merge_group_id IN (
+        SELECT g.id FROM public.table_merge_groups g
+        JOIN public.profiles p ON p.restaurant_id = g.restaurant_id OR p.role = ''super_admin''
+        WHERE p.id = auth.uid()
+      )
+    )';
+  END IF;
 
--- 5.2 table_merge_members
-ALTER TABLE public.table_merge_members ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon read/write table_merge_members" ON public.table_merge_members;
-DROP POLICY IF EXISTS "staff_table_merge_members_policy" ON public.table_merge_members;
+  -- 5.3 table_merge_sessions
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'table_merge_sessions') THEN
+    ALTER TABLE public.table_merge_sessions ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Allow anon read/write table_merge_sessions" ON public.table_merge_sessions;
+    DROP POLICY IF EXISTS "staff_table_merge_sessions_policy" ON public.table_merge_sessions;
+    EXECUTE 'CREATE POLICY "staff_table_merge_sessions_policy" ON public.table_merge_sessions
+    FOR ALL TO authenticated
+    USING (
+      restaurant_id IN (
+        SELECT p.restaurant_id FROM public.profiles p 
+        WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = ''super_admin'')
+      )
+    )
+    WITH CHECK (
+      restaurant_id IN (
+        SELECT p.restaurant_id FROM public.profiles p 
+        WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = ''super_admin'')
+      )
+    )';
+  END IF;
 
-CREATE POLICY "staff_table_merge_members_policy" ON public.table_merge_members
-FOR ALL TO authenticated
-USING (
-  merge_group_id IN (
-    SELECT g.id FROM public.table_merge_groups g
-    JOIN public.profiles p ON p.restaurant_id = g.restaurant_id OR p.role = 'super_admin'
-    WHERE p.id = auth.uid()
-  )
-);
+  -- 5.4 table_merge_session_members
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'table_merge_session_members') THEN
+    ALTER TABLE public.table_merge_session_members ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "Allow anon read/write table_merge_session_members" ON public.table_merge_session_members;
+    DROP POLICY IF EXISTS "staff_table_merge_session_members_policy" ON public.table_merge_session_members;
+    EXECUTE 'CREATE POLICY "staff_table_merge_session_members_policy" ON public.table_merge_session_members
+    FOR ALL TO authenticated
+    USING (
+      session_id IN (
+        SELECT s.id FROM public.table_merge_sessions s
+        JOIN public.profiles p ON p.restaurant_id = s.restaurant_id OR p.role = ''super_admin''
+        WHERE p.id = auth.uid()
+      )
+    )';
+  END IF;
 
--- 5.3 table_merge_sessions
-ALTER TABLE public.table_merge_sessions ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon read/write table_merge_sessions" ON public.table_merge_sessions;
-DROP POLICY IF EXISTS "staff_table_merge_sessions_policy" ON public.table_merge_sessions;
-
-CREATE POLICY "staff_table_merge_sessions_policy" ON public.table_merge_sessions
-FOR ALL TO authenticated
-USING (
-  restaurant_id IN (
-    SELECT p.restaurant_id FROM public.profiles p 
-    WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = 'super_admin')
-  )
-)
-WITH CHECK (
-  restaurant_id IN (
-    SELECT p.restaurant_id FROM public.profiles p 
-    WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = 'super_admin')
-  )
-);
-
--- 5.4 table_merge_session_members
-ALTER TABLE public.table_merge_session_members ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow anon read/write table_merge_session_members" ON public.table_merge_session_members;
-DROP POLICY IF EXISTS "staff_table_merge_session_members_policy" ON public.table_merge_session_members;
-
-CREATE POLICY "staff_table_merge_session_members_policy" ON public.table_merge_session_members
-FOR ALL TO authenticated
-USING (
-  session_id IN (
-    SELECT s.id FROM public.table_merge_sessions s
-    JOIN public.profiles p ON p.restaurant_id = s.restaurant_id OR p.role = 'super_admin'
-    WHERE p.id = auth.uid()
-  )
-);
-
--- 5.5 qr_design_settings
-ALTER TABLE public.qr_design_settings ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "qr_design_read_all" ON public.qr_design_settings;
-DROP POLICY IF EXISTS "qr_design_write_auth" ON public.qr_design_settings;
-DROP POLICY IF EXISTS "staff_qr_design_policy" ON public.qr_design_settings;
-
-CREATE POLICY "staff_qr_design_policy" ON public.qr_design_settings
-FOR ALL TO authenticated
-USING (
-  restaurant_id IN (
-    SELECT p.restaurant_id FROM public.profiles p 
-    WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = 'super_admin')
-  )
-)
-WITH CHECK (
-  restaurant_id IN (
-    SELECT p.restaurant_id FROM public.profiles p 
-    WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = 'super_admin')
-  )
-);
+  -- 5.5 qr_design_settings
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'qr_design_settings') THEN
+    ALTER TABLE public.qr_design_settings ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS "qr_design_read_all" ON public.qr_design_settings;
+    DROP POLICY IF EXISTS "qr_design_write_auth" ON public.qr_design_settings;
+    DROP POLICY IF EXISTS "staff_qr_design_policy" ON public.qr_design_settings;
+    EXECUTE 'CREATE POLICY "staff_qr_design_policy" ON public.qr_design_settings
+    FOR ALL TO authenticated
+    USING (
+      restaurant_id IN (
+        SELECT p.restaurant_id FROM public.profiles p 
+        WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = ''super_admin'')
+      )
+    )
+    WITH CHECK (
+      restaurant_id IN (
+        SELECT p.restaurant_id FROM public.profiles p 
+        WHERE p.id = auth.uid() AND (p.restaurant_id IS NOT NULL OR p.role = ''super_admin'')
+      )
+    )';
+  END IF;
+END $$;
