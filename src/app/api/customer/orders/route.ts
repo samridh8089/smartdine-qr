@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { calculateOrderTax } from '@/lib/tax';
@@ -178,21 +179,26 @@ export async function POST(req: Request) {
       const maxRadius = Number(restaurant.settings.geofence.radius_meters) || 100;
       // 100m buffer for indoor GPS & Wi-Fi triangulation drift
       const indoorDriftBuffer = 100;
-      
-      if (custLat !== null && custLng !== null && !isNaN(custLat) && !isNaN(custLng)) {
-        const distance = calculateHaversineDistanceMeters(
-          restaurant.settings.geofence.latitude,
-          restaurant.settings.geofence.longitude,
-          custLat,
-          custLng
-        );
-        if (distance > (maxRadius + indoorDriftBuffer)) {
-          timer.end('inventory');
-          return NextResponse.json({
-            error: `Dine-in orders are restricted to the restaurant premises. Detected distance is ~${Math.round(distance)}m (allowed radius is ${maxRadius}m). If you wish to order from elsewhere, please choose Takeaway.`,
-            code: 'GEOFENCE_RESTRICTION'
-          }, { status: 403 });
-        }
+      if (custLat === null || custLng === null || isNaN(custLat) || isNaN(custLng)) {
+        timer.end('inventory');
+        return NextResponse.json({
+          error: 'Location verification is required for Dine-in orders at this restaurant. Please enable device location access to proceed.',
+          code: 'GEOFENCE_LOCATION_REQUIRED'
+        }, { status: 403 });
+      }
+
+      const distance = calculateHaversineDistanceMeters(
+        restaurant.settings.geofence.latitude,
+        restaurant.settings.geofence.longitude,
+        custLat,
+        custLng
+      );
+      if (distance > (maxRadius + indoorDriftBuffer)) {
+        timer.end('inventory');
+        return NextResponse.json({
+          error: 'Dine-in orders are restricted to the restaurant premises. If you wish to order from elsewhere, please choose Takeaway.',
+          code: 'GEOFENCE_RESTRICTION'
+        }, { status: 403 });
       }
     }
 
@@ -557,6 +563,7 @@ export async function POST(req: Request) {
         service_charge: serviceCharge,
         total: grandTotal,
         grand_total: grandTotal,
+        tracking_token: crypto.randomBytes(16).toString('hex'),
         takeaway_notes: takeawayNotes || null,
         customer_arrival_minutes: customerArrivalMinutes || null,
         created_at: new Date().toISOString(),
@@ -590,7 +597,7 @@ export async function POST(req: Request) {
           }
         }
         timer.end('order_insert');
-        return NextResponse.json({ error: orderInsertErr.message }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
       }
 
       createdOrder = {

@@ -70,7 +70,8 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
   const loadOrderData = async () => {
     try {
-      const o = await db.getOrderById(orderId);
+      const token = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('token') || sessionStorage.getItem(`smartdine_order_token_${orderId}`)) : null;
+      const o = await db.getOrderById(orderId, undefined, token);
       if (!o) {
         setOrder(null);
         setLoading(false);
