@@ -4352,6 +4352,21 @@ export const db = {
   },
 
   async createCustomerRequest(restaurantId: string, tableId: string, type: 'call_waiter' | 'request_bill'): Promise<CustomerRequest> {
+    if (typeof window !== 'undefined') {
+      try {
+        const res = await fetch('/api/customer/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ restaurantId, tableId, type })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.request) return json.request as CustomerRequest;
+        }
+      } catch (err) {
+        console.warn('[db.createCustomerRequest] API fallback to direct insert:', err);
+      }
+    }
     const isEnabled = await isFeatureEnabledForRestaurant(restaurantId, type);
     if (!isEnabled) {
       throw new Error(`${type === 'call_waiter' ? 'Call Waiter' : 'Request Bill'} functionality is disabled for this restaurant's plan.`);

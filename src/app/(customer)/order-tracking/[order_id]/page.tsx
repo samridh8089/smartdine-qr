@@ -301,21 +301,17 @@ export default function OrderTrackingPage({ params }: PageProps) {
     if (!order?.table_id || !order?.restaurant_id) return;
 
     // 1. Initial check for existing active waiter call on this table
-    supabase
-      .from('customer_requests')
-      .select('*')
-      .eq('restaurant_id', order.restaurant_id)
-      .eq('table_id', order.table_id)
-      .eq('type', 'call_waiter')
-      .in('status', ['pending', 'accepted'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setActiveWaiterRequest(data[0]);
+    fetch('/api/customer/request?restaurantId=' + encodeURIComponent(order.restaurant_id) + '&tableId=' + encodeURIComponent(order.table_id))
+      .then(res => res.json())
+      .then(json => {
+        if (json.request) {
+          setActiveWaiterRequest(json.request);
         } else {
           setActiveWaiterRequest(null);
         }
+      })
+      .catch(() => {
+        setActiveWaiterRequest(null);
       });
 
     // 2. Realtime listener on customer_requests for this table
