@@ -922,30 +922,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-full">
             {/* Dashboard Header */}
-            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 flex items-center justify-between px-6 shrink-0 sticky top-0 z-30 transition-colors">
-              <div className="flex items-center gap-4">
+            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 flex items-center justify-between px-3.5 sm:px-6 shrink-0 sticky top-0 z-30 transition-colors">
+              <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  aria-label="Open sidebar"
+                  className="lg:hidden px-3 py-1.5 text-slate-800 dark:text-slate-100 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all font-extrabold text-xs shadow-2xs active:scale-95 shrink-0 cursor-pointer"
+                  aria-label="Manage restaurant"
                 >
-                  <MenuIcon className="h-6 w-6" />
+                  Manage
                 </button>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {restaurant?.logo_url && !logoError ? (
                     <img 
                       src={restaurant.logo_url} 
                       alt={restaurant.name || 'Restaurant Logo'} 
                       onError={() => setLogoError(true)}
-                      className="h-8 w-8 rounded-lg object-cover border border-slate-100 dark:border-slate-800" 
+                      className="h-8 w-8 rounded-lg object-cover border border-slate-100 dark:border-slate-800 shrink-0" 
                     />
                   ) : (
-                    <div className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center font-black text-sm shadow-xs select-none">
+                    <div className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center font-black text-sm shadow-xs select-none shrink-0">
                       {restaurant?.name?.replace(/^(The\s+)/i, '').charAt(0) || restaurant?.name?.charAt(0) || 'R'}
                     </div>
                   )}
                   <div className="min-w-0">
-                    <h1 className="text-sm font-bold text-slate-950 dark:text-white leading-none truncate max-w-[180px] sm:max-w-[280px] md:max-w-[400px]" title={restaurant?.name}>{restaurant?.name}</h1>
+                    <h1 className="text-sm font-bold text-slate-950 dark:text-white leading-none truncate max-w-[140px] xs:max-w-[180px] sm:max-w-[280px] md:max-w-[400px]" title={restaurant?.name}>{restaurant?.name}</h1>
                   </div>
                 </div>
               </div>
