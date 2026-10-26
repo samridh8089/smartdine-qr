@@ -45,7 +45,7 @@ async function runVisualVerification() {
 
     // Fill login form
     await page.type('input[type="email"], input[name="email"]', 'you@gmail.com');
-    await page.type('input[type="password"], input[name="password"]', 'Password123!');
+    await page.type('input[type="password"], input[name="password"]', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '');
     await page.click('button[type="submit"]');
     await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
 

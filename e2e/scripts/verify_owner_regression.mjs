@@ -52,7 +52,7 @@ async function testEnvironment(baseUrl, envName) {
 
     // 2. Perform Login
     await page.fill('input[type="email"]', 'you@gmail.com');
-    await page.fill('input[type="password"]', 'Password123!');
+    await page.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '');
     await page.click('button[type="submit"]');
     await page.waitForTimeout(3000);
 

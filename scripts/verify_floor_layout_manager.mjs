@@ -6,7 +6,7 @@ const ARTIFACTS = 'C:/Users/admin/.gemini/antigravity-ide/brain/63be691e-3623-41
 const BASE_URL = 'http://localhost:3000';
 const CHROME = 'C:/Users/admin/.cache/puppeteer/chrome/win64-150.0.7871.24/chrome-win64/chrome.exe';
 const EMAIL = 'dsoni1281@gmail.com';
-const PASS = '123456';
+const PASS = (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || '');
 
 async function run() {
   console.log('=== VERIFYING FLOOR LAYOUT MANAGER ON LOCALHOST ===');

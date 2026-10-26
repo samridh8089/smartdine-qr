@@ -25,9 +25,9 @@ const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process
 
 async function syncPasswords() {
   const staff = [
-    { email: 'you@gmail.com', pass: 'Password123!' },
-    { email: 'youk@gmail.com', pass: 'Password123!' },
-    { email: 'youw@gmail.com', pass: 'Password123!' }
+    { email: 'you@gmail.com', pass: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '' },
+    { email: 'youk@gmail.com', pass: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '' },
+    { email: 'youw@gmail.com', pass: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '' }
   ];
 
   for (const s of staff) {

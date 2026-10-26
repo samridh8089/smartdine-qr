@@ -1,8 +1,52 @@
+import dns from 'dns';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { validateMagicBytes, ALLOWED_IMAGE_MIMES, MAX_FILE_SIZE_BYTES, sanitizeFilename } from '@/lib/fileValidation';
 import { handleApiError } from '@/lib/errors';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
+
+function isPrivateIp(ip: string): boolean {
+  if (!ip) return true;
+  // IPv4 check
+  if (ip.includes('.')) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length === 4 && parts.every(p => !isNaN(p) && p >= 0 && p <= 255)) {
+      if (parts[0] === 127) return true; // 127.0.0.0/8 loopback
+      if (parts[0] === 10) return true;  // 10.0.0.0/8 private
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true; // 172.16.0.0/12 private
+      if (parts[0] === 192 && parts[1] === 168) return true; // 192.168.0.0/16 private
+      if (parts[0] === 169 && parts[1] === 254) return true; // 169.254.0.0/16 link-local
+      if (parts[0] === 0) return true; // 0.0.0.0/8
+    }
+    return false;
+  }
+  // IPv6 check
+  const normalized = ip.toLowerCase().trim();
+  if (normalized === '::1' || normalized === '::') return true;
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // fc00::/7
+  if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true; // fe80::/10
+  return false;
+}
+
+async function isSafeExternalImageUrl(rawUrl: string): Promise<boolean> {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return false;
+    const hostname = parsed.hostname.toLowerCase().trim();
+    if (!hostname || hostname === 'localhost') return false;
+
+    if (isPrivateIp(hostname)) return false;
+
+    const addresses = await dns.promises.lookup(hostname, { all: true });
+    if (!addresses || addresses.length === 0) return false;
+    for (const addr of addresses) {
+      if (isPrivateIp(addr.address)) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
@@ -16,7 +60,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing restaurantId or imageUrl' }, { status: 400 });
     }
 
-    // Enforce Staff Authorization & Tenant Isolation (Finding C6)
+    // Enforce Staff Authorization & Tenant Isolation
     const authCheck = await verifyStaffRequest(
       req,
       ['owner', 'manager', 'supervisor', 'head_chef', 'super_admin'],
@@ -57,18 +101,37 @@ export async function POST(req: Request) {
       }
       ext = mimeType.split('/')[1] || 'jpg';
       buffer = Buffer.from(matches[2], 'base64');
-    } else if (typeof imageUrl === 'string' && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
-      // 3. External HTTP URL handling
-      const fetchRes = await fetch(imageUrl, {
-        headers: {
-          'Accept': 'image/jpeg,image/png,image/webp,*/*;q=0.8',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        }
-      });
+    } else if (typeof imageUrl === 'string' && imageUrl.startsWith('https://')) {
+      const isSafe = await isSafeExternalImageUrl(imageUrl);
+      if (!isSafe) {
+        return NextResponse.json({ error: 'Invalid or restricted image URL.' }, { status: 400 });
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout limit
+
+      let fetchRes: Response;
+      try {
+        fetchRes = await fetch(imageUrl, {
+          redirect: 'manual',
+          signal: controller.signal,
+          headers: {
+            'Accept': 'image/jpeg,image/png,image/webp,*/*;q=0.8',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+          }
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!fetchRes.ok) {
         console.error(`[Upload Image Error] Failed to fetch external image: ${fetchRes.status}`);
         return NextResponse.json({ error: 'Image could not be saved. Please try again or select another image.' }, { status: 422 });
+      }
+
+      const contentLength = fetchRes.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE_BYTES) {
+        return NextResponse.json({ error: 'File size exceeds 5 MB limit.' }, { status: 400 });
       }
 
       const contentType = (fetchRes.headers.get('content-type') || 'image/jpeg').toLowerCase();
@@ -78,9 +141,12 @@ export async function POST(req: Request) {
       }
       ext = mimeType.split('/')[1] || 'jpg';
       const arrayBuf = await fetchRes.arrayBuffer();
+      if (arrayBuf.byteLength > MAX_FILE_SIZE_BYTES) {
+        return NextResponse.json({ error: 'File size exceeds 5 MB limit.' }, { status: 400 });
+      }
       buffer = Buffer.from(arrayBuf);
     } else {
-      return NextResponse.json({ error: 'Invalid image URL format.' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid image URL format. Only HTTPS URLs are permitted.' }, { status: 400 });
     }
 
     // 4. File Size & Magic Bytes Binary Verification
@@ -208,8 +274,6 @@ async function deleteStorageObjectIfUnshared(
     return { deleted: false, bucket: bucketName, path: '', reason: 'Empty or invalid file path' };
   }
 
-  // Safety Guard: Never delete another dish's image!
-  // Check if any dish in menu_items references this image URL or filePath
   try {
     const res = await supabaseAdmin
       .from('menu_items')
@@ -245,7 +309,6 @@ async function deleteStorageObjectIfUnshared(
     console.warn('[Upload Image Clean] Referencing check notice:', checkErr);
   }
 
-  // If unreferenced by other dishes, safely delete from storage bucket
   const { error: removeErr } = await supabaseAdmin.storage
     .from(bucketName)
     .remove([filePath]);
@@ -299,5 +362,3 @@ export async function DELETE(req: Request) {
     return handleApiError('Upload-Image DELETE', err, 'Failed to remove image from storage.', 500);
   }
 }
-
-

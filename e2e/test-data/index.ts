@@ -10,19 +10,19 @@ export const SEED_DATA = {
   tableSlug: 'table-1',
   owner: {
     email: process.env.E2E_OWNER_EMAIL || 'owner@test.com',
-    password: process.env.E2E_OWNER_PASSWORD || 'TestOwner123!',
+    password: process.env.E2E_OWNER_PASSWORD || '',
   },
   waiter: {
     email: process.env.E2E_WAITER_EMAIL || 'waiter@test.com',
-    password: process.env.E2E_WAITER_PASSWORD || 'TestWaiter123!',
+    password: process.env.E2E_WAITER_PASSWORD || '',
   },
   kitchen: {
     email: process.env.E2E_KITCHEN_EMAIL || 'kitchen@test.com',
-    password: process.env.E2E_KITCHEN_PASSWORD || 'TestKitchen123!',
+    password: process.env.E2E_KITCHEN_PASSWORD || '',
   },
   superAdmin: {
     email: process.env.E2E_SUPER_ADMIN_EMAIL || 'superadmin@test.com',
-    password: process.env.E2E_SUPER_ADMIN_PASSWORD || 'Test***REMOVED***',
+    password: process.env.E2E_SUPER_ADMIN_PASSWORD || '',
   },
   billingTestItem: {
     name: 'Item For Billing Test',

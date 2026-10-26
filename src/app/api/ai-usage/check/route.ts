@@ -1,3 +1,4 @@
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 import { NextResponse } from 'next/server';
 import { consumeAICreditForRestaurant, getAIUsageForRestaurant } from '@/lib/entitlements';
 
@@ -9,6 +10,12 @@ export async function GET(req: Request) {
 
     if (!restaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    // Enforce Staff Authorization & Tenant Isolation (restaurantId must match caller's restaurant)
+    const auth = await verifyStaffRequest(req, undefined, restaurantId);
+    if (!auth.isAuthorized) {
+      return auth.response || NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const usage = await getAIUsageForRestaurant(restaurantId, featureKey);
@@ -32,6 +39,12 @@ export async function POST(req: Request) {
 
     if (!restaurantId || !featureKey) {
       return NextResponse.json({ error: 'Restaurant ID and feature key required' }, { status: 400 });
+    }
+
+    // Enforce Staff Authorization & Tenant Isolation (restaurantId must match caller's restaurant)
+    const auth = await verifyStaffRequest(req, undefined, restaurantId);
+    if (!auth.isAuthorized) {
+      return auth.response || NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (consume && itemCount > 0) {

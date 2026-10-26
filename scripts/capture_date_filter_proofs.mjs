@@ -35,7 +35,7 @@ async function captureProofs() {
   console.log('1. Signing in with Supabase to get session token...');
   const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
     email: 'dsoni1281@gmail.com',
-    password: '123456'
+    password: (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || '')
   });
 
   if (authErr || !authData?.session) {

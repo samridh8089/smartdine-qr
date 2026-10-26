@@ -6,7 +6,7 @@ const ARTIFACT_DIR = 'C:\\Users\\admin\\.gemini\\antigravity-ide\\brain\\b2c2e28
 const REST_ID = '81fa8201-51d7-4da5-98f5-a52dbff4e6ae';
 const TABLE_ID_MAHARAJA = '7bd76bbf-34cf-4ac5-97af-2fac1efad753';
 const REST_SLUG = 'foodyhub';
-const ANON_KEY = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+const ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 const SUPABASE_URL = 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
 
 async function safeFetch(url, opts = {}, retries = 3) {

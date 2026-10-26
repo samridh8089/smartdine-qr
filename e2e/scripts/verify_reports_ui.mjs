@@ -65,7 +65,7 @@ async function verifyReportsUI() {
     await page.goto(`${BASE_URL}/login`);
     await page.waitForLoadState('domcontentloaded');
     await page.fill('input[type="email"]', 'you@gmail.com');
-    await page.fill('input[type="password"]', 'Password123!');
+    await page.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '');
     await page.click('button[type="submit"]');
     await page.waitForTimeout(4000);
     console.log(`URL after login click: ${page.url()}`);

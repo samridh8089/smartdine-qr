@@ -24,6 +24,8 @@
     "@supabase/supabase-js": "^2.108.2",
     "@types/three": "^0.186.0",
     "@types/web-push": "^3.6.4",
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.40.0",
     "firebase-admin": "^14.3.0",
     "jszip": "^3.10.2",
     "konva": "^10.5.0",

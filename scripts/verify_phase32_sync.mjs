@@ -57,7 +57,7 @@ async function run() {
   console.log('3. Logging in at /login...');
   await page.goto(`${PROD_URL}/login`, { waitUntil: 'networkidle' });
   await page.fill('input[type=email]', 'dsoni1281@gmail.com');
-  await page.fill('input[type=password]', '123456');
+  await page.fill('input[type=password]', (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || ''));
   await page.click('button[type=submit]');
   await page.waitForURL('**/dashboard', { timeout: 30000 });
   console.log('Logged in successfully! Current URL:', page.url());

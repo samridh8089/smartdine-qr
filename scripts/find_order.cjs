@@ -2,7 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 const supabase = createClient(
   'https://tiuwfhkrjvtkshebdwlp.supabase.co',
-  'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-'
+  (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '')
 );
 
 async function find() {

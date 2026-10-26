@@ -33,7 +33,7 @@ async function verifyProdReports() {
 
   const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
     email: 'you@gmail.com',
-    password: 'Password123!'
+    password: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || ''
   });
 
   if (authErr || !authData.session) {
