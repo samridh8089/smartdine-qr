@@ -355,13 +355,18 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
     if (savedReqStr) {
       try {
         const savedReq = JSON.parse(savedReqStr) as CustomerRequest;
-        supabase.from('customer_requests').select('*').eq('id', savedReq.id).then(({ data }) => {
-          if (data && data.length > 0 && data[0].status !== 'completed') {
-            setActiveRequest(data[0] as CustomerRequest);
-          } else {
+        fetch('/api/customer/request?requestId=' + encodeURIComponent(savedReq.id))
+          .then(res => res.json())
+          .then(json => {
+            if (json.request && json.request.status !== 'completed') {
+              setActiveRequest(json.request as CustomerRequest);
+            } else {
+              sessionStorage.removeItem(reqKey);
+            }
+          })
+          .catch(() => {
             sessionStorage.removeItem(reqKey);
-          }
-        });
+          })
       } catch (e) {
         sessionStorage.removeItem(reqKey);
       }
