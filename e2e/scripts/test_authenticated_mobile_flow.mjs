@@ -24,10 +24,10 @@ loadEnv('.env.local');
 const supabaseAnon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 async function testAuthMobileFlow() {
-  console.log('--- TEST 1: LOGIN WITH Password123! ---');
+  console.log('--- TEST 1: LOGIN WITH [REDACTED_PASSWORD] ---');
   const { data: authData, error: authErr } = await supabaseAnon.auth.signInWithPassword({
     email: 'you@gmail.com',
-    password: 'Password123!'
+    password: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || ''
   });
 
   if (authErr) {

@@ -173,7 +173,12 @@ export async function POST(req: Request) {
         timer.end('inventory');
         return NextResponse.json({ error: `Item "${menuItem?.name || 'Selected'}" is out of stock.` }, { status: 400 });
       }
-      const qty = Number(entry.quantity || 1);
+      const rawQty = (entry.quantity !== undefined && entry.quantity !== null && entry.quantity !== '') ? Number(entry.quantity) : 1;
+      const qty = Math.floor(rawQty);
+      if (isNaN(qty) || qty < 1 || qty > 50 || rawQty !== qty) {
+        timer.end('inventory');
+        return NextResponse.json({ error: 'Invalid quantity for item. Quantity must be a whole number between 1 and 50.' }, { status: 400 });
+      }
       
       const rawVariantId = entry.variantId || entry.variant_id || null;
       const validVariantId = (typeof rawVariantId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawVariantId.trim())) ? rawVariantId.trim() : null;

@@ -867,6 +867,16 @@ export const db = {
     if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
     }
+    // Query safe public_restaurants view first (no passwords/internal metadata)
+    const { data: pubData, error: pubErr } = await supabase
+      .from('public_restaurants')
+      .select('*')
+      .eq('slug', cleanSlug);
+    if (!pubErr && pubData && pubData.length > 0) {
+      const res = pubData[0] as Restaurant;
+      restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
+      return res;
+    }
     const { data, error } = await supabase
       .from('restaurants')
       .select('*')
@@ -885,6 +895,16 @@ export const db = {
     const cached = restaurantMemoryCache.get(id);
     if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
+    }
+    // Query safe public_restaurants view first
+    const { data: pubData, error: pubErr } = await supabase
+      .from('public_restaurants')
+      .select('*')
+      .eq('id', id);
+    if (!pubErr && pubData && pubData.length > 0) {
+      const res = pubData[0] as Restaurant;
+      restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
+      return res;
     }
     const { data, error } = await supabase
       .from('restaurants')
@@ -2057,19 +2077,30 @@ export const db = {
     }) as Order[];
   },
 
-  async getOrderById(id: string, client?: any): Promise<Order | null> {
+  async getOrderById(id: string, client?: any, token?: string | null): Promise<Order | null> {
     if (!id) return null;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     if (!isUuid) return null;
 
     const activeClient = client || supabase;
+    let o: any = null;
     const { data, error } = await activeClient
       .from('orders')
       .select('*, order_items(*), order_batches(*)')
       .eq('id', id);
-    if (error || !data || data.length === 0) return null;
 
-    const o = data[0];
+    if (!error && data && data.length > 0) {
+      o = data[0];
+    } else {
+      // Secure single-order RPC fallback for anonymous customer tracking under strict RLS
+      const { data: rpcData, error: rpcErr } = await activeClient
+        .rpc('get_order_tracking', { p_order_id: id, p_token: token || null });
+      if (!rpcErr && rpcData) {
+        o = rpcData;
+      }
+    }
+
+    if (!o) return null;
     const items = (o.order_items || []).map((oi: any) => ({
       id: oi.id,
       order_id: oi.order_id,

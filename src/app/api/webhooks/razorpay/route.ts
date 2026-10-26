@@ -3,11 +3,16 @@ import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabaseAdmin = createClient(supabaseUrl, serviceKey);
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let _admin: any = null;
+function getAdmin() {
+  if (_admin) return _admin;
+  if (!serviceKey) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
+  _admin = createClient(supabaseUrl, serviceKey);
+  return _admin;
+}
 
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
-const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || RAZORPAY_KEY_SECRET;
+const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || '';
 
 export async function POST(req: Request) {
   try {
@@ -29,12 +34,29 @@ export async function POST(req: Request) {
       .update(rawBody)
       .digest('hex');
 
-    if (expectedSignature !== signature) {
+    const sigBuf = Buffer.from(signature, 'utf8');
+    const expBuf = Buffer.from(expectedSignature, 'utf8');
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
       console.error('[Razorpay Webhook] Invalid signature rejected');
       return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 400 });
     }
 
     const event = JSON.parse(rawBody);
+        // Strict Event Idempotency Check in DB Table
+        const eventId = String(event.id || event.payload?.payment?.entity?.id || event.payload?.order?.entity?.id || '').trim();
+        if (eventId) {
+          const { data: existingEvent } = await getAdmin()
+            .from('processed_webhook_events')
+            .select('id')
+            .eq('source', 'razorpay')
+            .eq('event_id', eventId)
+            .maybeSingle();
+    
+          if (existingEvent) {
+            console.log('[Razorpay Webhook] Duplicate webhook event ignored.');
+            return NextResponse.json({ success: true, message: 'Event already processed' }, { status: 200 });
+          }
+        }
     console.log(`[Razorpay Webhook] Verified event: ${event.event}`);
 
     const payload = event.payload || {};
@@ -51,7 +73,7 @@ export async function POST(req: Request) {
     // Fallback: If restaurantId not in notes, resolve via customerEmail
     if (!restaurantId && customerEmail) {
       try {
-        const { data: prof } = await supabaseAdmin
+        const { data: prof } = await getAdmin()
           .from('profiles')
           .select('restaurant_id')
           .ilike('email', customerEmail)
@@ -59,7 +81,7 @@ export async function POST(req: Request) {
         if (prof?.restaurant_id) {
           restaurantId = prof.restaurant_id;
         } else {
-          const { data: restByEmail } = await supabaseAdmin
+          const { data: restByEmail } = await getAdmin()
             .from('restaurants')
             .select('id')
             .eq('settings->>owner_email', customerEmail)
@@ -90,28 +112,34 @@ export async function POST(req: Request) {
 
       // Fallback: If restaurantId wasn't passed in order notes (initial new signup), resolve or create
       if (!targetRestId && cleanEmail) {
-        const { data: prof } = await supabaseAdmin.from('profiles').select('restaurant_id, id').eq('email', cleanEmail).maybeSingle();
+        const { data: prof } = await getAdmin().from('profiles').select('restaurant_id, id').eq('email', cleanEmail).maybeSingle();
         if (prof?.restaurant_id) {
           targetRestId = prof.restaurant_id;
         } else {
-          const { data: restByEmail } = await supabaseAdmin.from('restaurants').select('id').eq('settings->>owner_email', cleanEmail).maybeSingle();
+          const { data: restByEmail } = await getAdmin().from('restaurants').select('id').eq('settings->>owner_email', cleanEmail).maybeSingle();
           if (restByEmail?.id) {
             targetRestId = restByEmail.id;
           } else {
             // Provision new restaurant via RPC fallback
             let userId = prof?.id;
             if (!userId) {
-              const { data: authUser } = await supabaseAdmin.auth.admin.createUser({
+              const { data: authUser } = await getAdmin().auth.admin.createUser({
                 email: cleanEmail,
-                password: 'ChangeMe@123456',
+                password: crypto.randomBytes(32).toString('hex') + '!Aa1',
                 email_confirm: true,
                 user_metadata: { role: 'owner', restaurantName: cleanRestName }
               });
               userId = authUser?.user?.id;
-            }
+                          if (userId) {
+                            await getAdmin().auth.admin.generateLink({
+                              type: 'recovery',
+                              email: cleanEmail
+                            }).catch((e: any) => console.warn('[Razorpay Webhook] Invite/recovery link dispatch error:', e?.message));
+                          }
+                        }
             if (userId) {
               const cleanSlug = cleanRestName.toLowerCase().replace(/[^a-z0-9]/g, '') || `rest${Date.now().toString().slice(-4)}`;
-              const { data: rpcRes } = await supabaseAdmin.rpc('create_restaurant_and_link', {
+              const { data: rpcRes } = await getAdmin().rpc('create_restaurant_and_link', {
                 p_owner_id: userId,
                 p_owner_email: cleanEmail,
                 p_owner_name: cleanRestName,
@@ -142,7 +170,7 @@ export async function POST(req: Request) {
 
       if (targetRestId) {
         // Fetch current settings
-        const { data: rest } = await supabaseAdmin
+        const { data: rest } = await getAdmin()
           .from('restaurants')
           .select('settings')
           .eq('id', targetRestId)
@@ -150,6 +178,11 @@ export async function POST(req: Request) {
 
         const currentSettings = (rest as any)?.settings || {};
         const paymentHistory = currentSettings.payment_history || [];
+
+        if (paymentId && Array.isArray(paymentHistory) && paymentHistory.some((p: any) => p.payment_id === paymentId)) {
+          console.log('[Razorpay Webhook] Payment already processed (idempotent skip).');
+          return NextResponse.json({ success: true, message: 'Payment already processed' }, { status: 200 });
+        }
 
         paymentHistory.unshift({
           payment_id: paymentId,
@@ -176,7 +209,7 @@ export async function POST(req: Request) {
         currentSettings.last_order_id = orderId;
         currentSettings.payment_history = paymentHistory;
 
-        await supabaseAdmin
+        await getAdmin()
           .from('restaurants')
           .update({
             subscription_plan: planName,
@@ -196,7 +229,7 @@ export async function POST(req: Request) {
     if (event.event === 'payment.failed') {
       console.warn(`[Razorpay Webhook] Payment failed for restaurant ${restaurantId || 'unknown'}`);
       if (restaurantId) {
-        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
+        const { data: rest } = await getAdmin().from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
         const currentSettings = (rest as any)?.settings || {};
         currentSettings.last_payment_error = {
           payment_id: payment?.id,
@@ -204,7 +237,7 @@ export async function POST(req: Request) {
           error_description: payment?.error_description,
           failed_at: nowIso
         };
-        await supabaseAdmin.from('restaurants').update({
+        await getAdmin().from('restaurants').update({
           subscription_status: 'pending_payment',
           settings: currentSettings,
           updated_at: nowIso
@@ -222,7 +255,7 @@ export async function POST(req: Request) {
         : nextBillingDate;
 
       if (restaurantId) {
-        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
+        const { data: rest } = await getAdmin().from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
         const currentSettings = (rest as any)?.settings || {};
         currentSettings.subscription_details = {
           subscription_id: subId,
@@ -234,7 +267,7 @@ export async function POST(req: Request) {
           updated_at: nowIso
         };
 
-        await supabaseAdmin
+        await getAdmin()
           .from('restaurants')
           .update({
             subscription_plan: subPlan,
@@ -254,7 +287,7 @@ export async function POST(req: Request) {
     else if (event.event === 'subscription.cancelled') {
       const subId = subscription?.id;
       if (restaurantId) {
-        const { data: rest } = await supabaseAdmin.from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
+        const { data: rest } = await getAdmin().from('restaurants').select('settings').eq('id', restaurantId).maybeSingle();
         const currentSettings = (rest as any)?.settings || {};
         currentSettings.subscription_details = {
           ...(currentSettings.subscription_details || {}),
@@ -263,7 +296,7 @@ export async function POST(req: Request) {
           cancelled_at: nowIso
         };
 
-        await supabaseAdmin
+        await getAdmin()
           .from('restaurants')
           .update({
             subscription_status: 'cancelled',

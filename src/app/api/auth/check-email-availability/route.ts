@@ -1,67 +1,72 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-
 import type { SupabaseClient } from '@supabase/supabase-js';
+
 let _adminClient: SupabaseClient | null = null;
 function getAdmin(): SupabaseClient {
   if (!_adminClient) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!url) {
+      throw new Error('NEXT_PUBLIC_SUPABASE_URL environment variable is required');
+    }
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!key) {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable is required');
+    }
     _adminClient = createClient(url, key);
   }
   return _adminClient;
 }
 
+// In-route rate limit map: 10 requests per IP per minute
+const checkEmailRateLimits = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = checkEmailRateLimits.get(ip);
+  if (!entry || now > entry.resetAt) {
+    checkEmailRateLimits.set(ip, { count: 1, resetAt: now + 60000 });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > 10;
+}
+
 export async function POST(req: Request) {
   try {
-    const supabaseAdmin = getAdmin();
+    const forwarded = req.headers.get('x-forwarded-for');
+    const ip = forwarded ? forwarded.split(',')[0].trim() : '127.0.0.1';
+
+    if (isRateLimited(ip)) {
+      return NextResponse.json({
+        error: 'Too many requests. Please wait a minute and try again.',
+        available: false
+      }, { status: 429 });
+    }
+
     const { email } = await req.json();
 
-    if (!email || !email.trim()) {
+    if (!email || typeof email !== 'string' || !email.trim()) {
       return NextResponse.json({ error: 'Email or username is required' }, { status: 400 });
     }
 
     const cleanInput = email.trim().toLowerCase();
+    const supabaseAdmin = getAdmin();
 
-    // 1. Check profiles table by email or username
+    // Look up directly in profiles table by email or username (indexed lookup, never listUsers)
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
-      .select('id, user_id, email, restaurant_id, restaurants(name)')
+      .select('id, email')
       .or(`email.ilike.${cleanInput},id.eq.${cleanInput}`)
       .maybeSingle();
 
-    if (existingProfile && existingProfile.restaurant_id) {
-      const restName = (existingProfile.restaurants as any)?.name || 'an existing restaurant';
+    if (existingProfile) {
+      // Generic response: Never leak tenant, restaurant name, or internal user details
       return NextResponse.json({
         available: false,
         exists: true,
-        error: `An account with this email/username (${cleanInput}) is already linked to ${restName}. Please log in.`
+        message: 'This email is already registered. Please log in or use another email.'
       }, { status: 200 });
-    }
-
-    // 2. Check auth users list
-    const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const matchedUser = (users || []).find((u: any) => 
-      u.email?.toLowerCase().trim() === cleanInput ||
-      u.id === cleanInput ||
-      u.email?.toLowerCase().startsWith(cleanInput)
-    );
-
-    if (matchedUser) {
-      // Check if user owns a restaurant
-      const { data: userRest } = await supabaseAdmin
-        .from('restaurants')
-        .select('id, name')
-        .eq('owner_id', matchedUser.id)
-        .maybeSingle();
-
-      if (userRest) {
-        return NextResponse.json({
-          available: false,
-          exists: true,
-          error: `Account (${matchedUser.email}) already owns restaurant ${userRest.name}. Please log in.`
-        }, { status: 200 });
-      }
     }
 
     return NextResponse.json({ available: true, exists: false });

@@ -6,7 +6,7 @@ const bundleJs = path.resolve('smartdine-mobile/dist-android/index.android.bundl
 const bundleHbc = path.resolve('smartdine-mobile/dist-android/index.android.bundle.hbc');
 const hermescExe = path.resolve('smartdine-mobile/node_modules/react-native/sdks/hermesc/win64-bin/hermesc.exe');
 
-const REAL_KEY = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+const REAL_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 console.log('Reading Metro bundle...');
 let code = fs.readFileSync(bundleJs, 'utf8');

@@ -215,61 +215,23 @@ export async function fetchRestaurantExpenses(
   startDate?: string,
   endDate?: string
 ): Promise<RestaurantExpense[]> {
-  try {
-    const { data, error } = await supabase
-      .from('restaurant_expenses')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .order('expense_date', { ascending: false });
+  const { data, error } = await supabase
+    .from('restaurant_expenses')
+    .select('*')
+    .eq('restaurant_id', restaurantId)
+    .order('expense_date', { ascending: false });
 
-    if (!error && data) {
-      return (data as RestaurantExpense[]).filter(e => {
-        if (e.is_recurring) return true;
-        if (startDate && e.expense_date < startDate) return false;
-        if (endDate && e.expense_date > endDate) return false;
-        return true;
-      });
-    }
-
-    // Fallback: If table doesn't exist yet, read from restaurant settings
-    const { data: rest } = await supabase
-      .from('restaurants')
-      .select('settings')
-      .eq('id', restaurantId)
-      .single();
-
-    const rawList: RestaurantExpense[] = (rest?.settings as any)?.expenses || [];
-    
-    // Maintain standard operating overheads (Rent, Electricity, LPG Gas, AMC, Marketing, Packaging)
-    // as base items and smoothly merge any custom expenses added by the restaurant owner
-    const standardMap = new Map<string, RestaurantExpense>();
-    DEFAULT_STANDARD_BISTRO_EXPENSES.forEach(e => {
-      standardMap.set(e.id, { ...e, restaurant_id: restaurantId });
-    });
-
-    const customExpenses: RestaurantExpense[] = [];
-    rawList.forEach(e => {
-      if (standardMap.has(e.id)) {
-        // User updated a standard expense
-        standardMap.set(e.id, e);
-      } else {
-        // Custom expense added by user
-        customExpenses.push(e);
-      }
-    });
-
-    const fallbackList = [...Array.from(standardMap.values()), ...customExpenses];
-
-    return fallbackList.filter(e => {
-      if (e.is_recurring) return true;
-      if (startDate && e.expense_date < startDate) return false;
-      if (endDate && e.expense_date > endDate) return false;
-      return true;
-    });
-  } catch (err) {
-    console.warn('[PnL] fetchRestaurantExpenses error:', err);
-    return [];
+  if (error) {
+    console.error('[PnL] fetchRestaurantExpenses error:', error);
+    throw new Error(`Failed to fetch expenses: ${error.message}`);
   }
+
+  return ((data as RestaurantExpense[]) || []).filter(e => {
+    if (e.is_recurring) return true;
+    if (startDate && e.expense_date < startDate) return false;
+    if (endDate && e.expense_date > endDate) return false;
+    return true;
+  });
 }
 
 export async function saveRestaurantExpense(
@@ -300,35 +262,12 @@ export async function saveRestaurantExpense(
       .select('*')
       .single();
 
-    if (!error && data) {
-      return { success: true, data: data as RestaurantExpense };
+    if (error) {
+      console.error('[PnL] saveRestaurantExpense error:', error);
+      return { success: false, error: error.message };
     }
 
-    // Graceful fallback: Update restaurant settings
-    console.warn('[PnL] Saving expense to restaurant.settings fallback');
-    const { data: rest } = await supabase
-      .from('restaurants')
-      .select('settings')
-      .eq('id', restaurantId)
-      .single();
-
-    const currentSettings = rest?.settings || {};
-    const existingExpenses: RestaurantExpense[] = (currentSettings as any)?.expenses || [];
-    const newRecord: RestaurantExpense = {
-      ...payload,
-      id: crypto.randomUUID ? crypto.randomUUID() : `exp_${Date.now()}`,
-      created_at: new Date().toISOString(),
-    };
-
-    const updatedExpenses = [newRecord, ...existingExpenses];
-    await supabase
-      .from('restaurants')
-      .update({
-        settings: { ...currentSettings, expenses: updatedExpenses },
-      })
-      .eq('id', restaurantId);
-
-    return { success: true, data: newRecord };
+    return { success: true, data: data as RestaurantExpense };
   } catch (err: any) {
     console.error('[PnL] saveRestaurantExpense err:', err);
     return { success: false, error: err?.message || 'Failed to save expense' };
@@ -350,25 +289,10 @@ export async function updateRestaurantExpense(
       .eq('id', expenseId)
       .eq('restaurant_id', restaurantId);
 
-    if (!error) return { success: true };
-
-    // Fallback in settings
-    const { data: rest } = await supabase
-      .from('restaurants')
-      .select('settings')
-      .eq('id', restaurantId)
-      .single();
-
-    const currentSettings = rest?.settings || {};
-    const existingExpenses: RestaurantExpense[] = (currentSettings as any)?.expenses || [];
-    const updated = existingExpenses.map(e => (e.id === expenseId ? { ...e, ...updates } : e));
-
-    await supabase
-      .from('restaurants')
-      .update({
-        settings: { ...currentSettings, expenses: updated },
-      })
-      .eq('id', restaurantId);
+    if (error) {
+      console.error('[PnL] updateRestaurantExpense error:', error);
+      return { success: false, error: error.message };
+    }
 
     return { success: true };
   } catch (err: any) {
@@ -387,25 +311,10 @@ export async function deleteRestaurantExpense(
       .eq('id', expenseId)
       .eq('restaurant_id', restaurantId);
 
-    if (!error) return { success: true };
-
-    // Fallback in settings
-    const { data: rest } = await supabase
-      .from('restaurants')
-      .select('settings')
-      .eq('id', restaurantId)
-      .single();
-
-    const currentSettings = rest?.settings || {};
-    const existingExpenses: RestaurantExpense[] = (currentSettings as any)?.expenses || [];
-    const filtered = existingExpenses.filter(e => e.id !== expenseId);
-
-    await supabase
-      .from('restaurants')
-      .update({
-        settings: { ...currentSettings, expenses: filtered },
-      })
-      .eq('id', restaurantId);
+    if (error) {
+      console.error('[PnL] deleteRestaurantExpense error:', error);
+      return { success: false, error: error.message };
+    }
 
     return { success: true };
   } catch (err: any) {

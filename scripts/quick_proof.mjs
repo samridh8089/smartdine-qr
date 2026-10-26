@@ -5,7 +5,7 @@ const ARTIFACTS = 'C:/Users/admin/.gemini/antigravity/brain/ae77057e-5d8c-4a8f-b
 const BASE_URL = 'https://www.cleverops.in';
 const CHROME = 'C:/Users/admin/.cache/puppeteer/chrome/win64-150.0.7871.24/chrome-win64/chrome.exe';
 const EMAIL = 'dsoni1281@gmail.com';
-const PASS  = '123456';
+const PASS  = (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || '');
 
 async function main() {
   console.log('=== VERIFYING NEW BROADCAST BANNER ===');
