@@ -810,7 +810,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Sidebar - Sticky on desktop */}
           <aside className={`
-            fixed lg:sticky top-0 inset-y-0 left-0 z-40 w-64 h-full max-h-screen overflow-hidden bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
+            fixed lg:sticky top-0 inset-y-0 left-0 z-40 w-72 lg:w-64 h-full max-h-screen overflow-hidden bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-xl text-white flex flex-col transform transition-transform duration-300 ease-in-out shrink-0 border-r border-slate-800/80 shadow-2xl shadow-slate-950/50
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
           `}>
 
@@ -851,7 +851,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Navigation Links */}
-            <nav className="flex-1 px-4 py-3 space-y-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <nav className="flex-1 px-3.5 sm:px-4 py-3 space-y-2.5 lg:space-y-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {filteredMenuItems.map((item) => {
                 const isActive = pathname === item.href;
                 const itemLockInfo = ROUTE_FEATURE_KEYS[item.href];
@@ -880,12 +880,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       if (sidebarOpen) setSidebarOpen(false);
                     }}
                     className={`
-                      flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all group
+                      flex items-center justify-between px-4 py-3.5 lg:py-2.5 rounded-xl lg:rounded-lg text-[17px] sm:text-[17.5px] lg:text-sm font-bold lg:font-medium transition-all group
                       ${isActive 
-                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10 font-bold' 
+                        ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10 font-extrabold lg:font-bold' 
                         : isLocked
                         ? 'text-slate-500 hover:bg-slate-800/60 hover:text-slate-300'
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'}
+                        : 'text-slate-300 hover:bg-slate-800 hover:text-white'}
                     `}
                   >
                     <div className="flex items-center min-w-0">
