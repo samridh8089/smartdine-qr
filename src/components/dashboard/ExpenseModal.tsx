@@ -218,9 +218,6 @@ export default function ExpenseModal({
             <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white leading-tight">
               {initialExpense ? 'Edit Operating Expense' : 'Add Operating Expense'}
             </h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Rent, electricity, fuel, repairs and restaurant overheads
-            </p>
           </div>
           <button
             type="button"

@@ -179,9 +179,6 @@ export function OffersSettings({ restaurant }: { restaurant: Restaurant }) {
               {activeCount} Active
             </Badge>
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Configure discount banners and promo codes displayed to customers on your digital menu.
-          </p>
         </div>
 
         <Button 

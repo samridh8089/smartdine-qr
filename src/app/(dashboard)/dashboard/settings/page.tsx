@@ -1876,7 +1876,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   <div className="space-y-3 pt-2">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Active Charges List</span>
                     {customCharges.length === 0 ? (
-                      <p className="text-xs text-slate-400 italic">No custom charges added yet. Click above to add packaging fees, delivery fees, dynamic tips, etc.</p>
+                      <p className="text-xs text-slate-400 italic">No custom charges added yet.</p>
                     ) : (
                       <div className="border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
                         {customCharges.map(charge => {
@@ -1956,7 +1956,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl">
                     <div>
                       <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Show Customer Name & Mobile on Bills</span>
-                      <span className="text-xs text-slate-400 mt-0.5 block">When enabled, customer name and phone number fields will be included on printed thermal bills and PDF downloads. Both fields remain optional so bills can still be printed instantly.</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
                       <input 
@@ -1977,7 +1976,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-400">Dine-In QR Premises Security & Geofence</h3>
-                      <p className="text-xs text-slate-500 mt-0.5">Protect against remote prank orders. When enabled, Dine-In QR table orders can only be placed within the restaurant premises.</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
                       <input 
@@ -1996,7 +1994,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-200/60 dark:border-emerald-800/60">
                         <div>
                           <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider block">Restaurant GPS Location</span>
-                          <span className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 block">Auto-detect from this device or enter restaurant coordinates manually.</span>
                         </div>
                         <Button
                           type="button"
@@ -2042,10 +2039,7 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-emerald-800/90 dark:text-emerald-300/90 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-emerald-200/50 dark:border-emerald-800/50 flex items-start gap-2">
-                        <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <span><strong>Protection Active:</strong> If someone takes a picture of a table QR and tries to order from home, order placement will be blocked. Takeaway and Table Reservations are never blocked by this rule.</span>
-                      </div>
+
                     </div>
                   )}
                 </CardContent>
@@ -2533,7 +2527,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                     <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
                       <div>
                         <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Print GSTIN on Bill</span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">Include restaurant GST number in receipt header</span>
                       </div>
                       <input
                         type="checkbox"
@@ -2546,7 +2539,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                     <div className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
                       <div>
                         <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block">Print Customer Details</span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">Print customer name & mobile number when available</span>
                       </div>
                       <input
                         type="checkbox"
@@ -2688,9 +2680,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 dark:text-white text-lg">Export Menu Template</h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    Download your entire menu architecture, including all food categories, pricing rules, descriptions, tags, and images as a structured JSON file.
-                  </p>
                 </div>
                 <div className="pt-2">
                   <Button variant="outline" onClick={handleExportMenu} className="w-full justify-center">
@@ -2708,9 +2697,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 dark:text-white text-lg">Import Menu Template</h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    Upload a previously exported JSON backup file to load categories and dishes instantly. This will append new items to your menu layout.
-                  </p>
                 </div>
                 <div className="pt-2 space-y-2">
                   <label className="w-full flex items-center justify-center border border-dashed border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 p-4 rounded-xl cursor-pointer text-xs font-semibold text-slate-500 transition-colors">
@@ -2824,7 +2810,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                 <div className="p-4 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl flex items-center justify-between">
                   <div>
                     <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Background Push Notifications</span>
-                    <span className="text-xs text-slate-400 mt-1 block">Receive browser notifications when the app is minimized or hidden.</span>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input 
@@ -2854,7 +2839,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                     </div>
                     <div>
                       <span className="font-extrabold text-sm text-slate-900 dark:text-white block">Owner Bell Alerts (Sound & Push)</span>
-                      <span className="text-xs text-slate-400 mt-1 block">Toggle on/off live audio chimes and mobile push rings for owner login.</span>
                     </div>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -2883,7 +2867,6 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                     </div>
                     <div>
                       <span className="font-extrabold text-sm text-emerald-900 dark:text-emerald-100 block">Smart Anti-Fatigue Chime Active</span>
-                      <span className="text-xs text-emerald-700 dark:text-emerald-400 mt-1 block">Rings a crisp 5-second chime with an automatic 15-second queue cooldown to prevent continuous ringing when multiple orders arrive in rapid succession.</span>
                     </div>
                   </div>
                   <Button

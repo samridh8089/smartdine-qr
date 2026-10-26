@@ -860,7 +860,6 @@ export default function TablesPage() {
                   Takeaway
                 </span>
               </h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Scans directly to menu in takeaway mode without physical table mapping.</p>
             </div>
           </div>
         </div>
@@ -969,7 +968,6 @@ export default function TablesPage() {
                   Reservation
                 </span>
               </h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Allows guests to book tables & pre-order dishes online directly from your website or social media.</p>
             </div>
           </div>
         </div>
@@ -1073,9 +1071,6 @@ export default function TablesPage() {
                   Counter / Bar
                 </span>
               </h3>
-              <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">
-                Single QR for billing counters and bar tables. Multiple customers scan independently with their own names. Complete orders in 1-click on the dashboard!
-              </p>
             </div>
           </div>
         </div>

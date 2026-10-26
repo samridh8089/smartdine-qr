@@ -1837,9 +1837,6 @@ export default function InventoryDashboardPage() {
                       Live
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-medium">
-                    {restaurant?.name || 'Restaurant'} • Stock Deductions &amp; Costing
-                  </p>
                 </div>
               </div>
 
@@ -2351,7 +2348,6 @@ export default function InventoryDashboardPage() {
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Menu Item Recipe Costing & Portion Costing</h3>
-                <p className="text-xs text-slate-500">Configure distinct raw ingredients and quantities for each portion size</p>
               </div>
               <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl self-start sm:self-auto">
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Min Margin Alert:</span>
@@ -2640,7 +2636,6 @@ export default function InventoryDashboardPage() {
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
             <div>
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Prepared Food Disposition & Safety Audit Log</h3>
-              <p className="text-xs text-slate-500">Tracking food cancelled after cooking: reallocations, staff meals, complimentary, owner use, and waste discards</p>
             </div>
           </div>
 
@@ -2726,7 +2721,6 @@ export default function InventoryDashboardPage() {
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800">
             <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Immutable Inventory Transaction Ledger</h3>
-            <p className="text-xs text-slate-500">Auditable history of every automatic order consumption, purchase, and cancellation reversal</p>
           </div>
 
           <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-700 pb-1">
@@ -2806,7 +2800,6 @@ export default function InventoryDashboardPage() {
           <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
             <div>
               <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Stock Purchase & Inward Entries</h3>
-              <p className="text-xs text-slate-500">Record supplier purchases to automatically update inventory stock and unit costs</p>
             </div>
             <button
               onClick={() => {
@@ -2947,7 +2940,6 @@ export default function InventoryDashboardPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
                 <h3 className="font-extrabold text-sm text-slate-900 dark:text-white">Dish-Wise Real Ingredient Consumption Analytics</h3>
-                <p className="text-xs text-slate-500">Trace exact ingredient usage per menu dish derived from actual order batches</p>
               </div>
 
               <select
