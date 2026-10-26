@@ -1,5 +1,5 @@
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 import { createClient } from '@supabase/supabase-js';
 import { PromotionEngine, EvaluatedDiscount } from './promotionEngine';
@@ -8,7 +8,7 @@ import { db } from './db';
 import * as fs from 'fs';
 
 const supabaseUrl = 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const supabaseKey = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+const supabaseKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function runPostImplementationValidation() {

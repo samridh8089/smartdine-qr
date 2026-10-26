@@ -3,7 +3,7 @@ import { db } from './src/lib/db';
 
 const supabase = createClient(
   'https://tiuwfhkrjvtkshebdwlp.supabase.co',
-  'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-'
+  ''
 );
 
 async function runAuthoritativeAudit() {

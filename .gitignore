@@ -25,11 +25,8 @@ release-rc1/
 release-rc2/
 tsconfig.tsbuildinfo
 .vercel/
-*.png
-!public/**/*.png
-!public/**/*.jpg
-!public/**/*.jpeg
-!public/**/*.webp
+
+# Keystores & Signatures
 *.idsig
 *.jks
 /tools/
@@ -41,7 +38,6 @@ tsconfig.tsbuildinfo
 
 firebase-service-account*.json
 *.keystore
-*.jks
 
 # Logs, Dumps & Temporary diagnostics
 *.log
@@ -50,6 +46,7 @@ yarn-debug.log*
 yarn-error.log*
 dump_*.xml
 dumpsys_*.txt
+dumpsys_full.txt
 logcat_*.txt
 noti_dumpsys.txt
 diagnostic_report.json
@@ -65,30 +62,10 @@ META-INF/
 *.mp4
 *.exe
 live_*.png
-!public/**/*.png
-!public/**/*.jpg
-!public/**/*.jpeg
-!public/**/*.webp
 screenshot_*.png
-!public/**/*.png
-!public/**/*.jpg
-!public/**/*.jpeg
-!public/**/*.webp
 apk_*.png
-!public/**/*.png
-!public/**/*.jpg
-!public/**/*.jpeg
-!public/**/*.webp
 proof_*.png
-!public/**/*.png
-!public/**/*.jpg
-!public/**/*.jpeg
-!public/**/*.webp
 test_*.png
-!public/**/*.png
-!public/**/*.jpg
-!public/**/*.jpeg
-!public/**/*.webp
 test_*.jpg
 test_*.webp
 app_screen.png
@@ -99,12 +76,7 @@ user_shade.png
 *.pem
 .vscode/
 .idea/
-.vercel
-*.xml
-*.apks
-*.txt
 temp_*.*
-*.cjs
 browser_role_audit_report.json
 cleverops_audit_summary.json
 customer_flow_events.json
@@ -112,3 +84,9 @@ device_bundle.js
 module_*_dump.js
 parse_ui.js
 window_dump.xml
+
+# Root-level scratch scripts (never commit root scratch scripts)
+/*.mjs
+/*.cjs
+!eslint.config.mjs
+!postcss.config.mjs

@@ -34,7 +34,7 @@ async function runSuite() {
   console.log('--- 1. Authenticating as Owner ---');
   const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
     email: 'dsoni1281@gmail.com',
-    password: '123456'
+    password: (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || '')
   });
 
   let session = authData?.session;

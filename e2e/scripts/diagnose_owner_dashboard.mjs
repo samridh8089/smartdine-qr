@@ -68,9 +68,9 @@ async function diagnoseOwnerDashboard() {
     const loginResp = await page.goto(`${BASE_URL}/login`);
     console.log(`Login page load status: ${loginResp.status()}`);
 
-    console.log('Step 2: Filling credentials you@gmail.com / Password123!');
+    console.log('Step 2: Filling credentials you@gmail.com / [REDACTED_PASSWORD]');
     await page.fill('input[type="email"]', 'you@gmail.com');
-    await page.fill('input[type="password"]', 'Password123!');
+    await page.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '');
 
     console.log('Step 3: Submitting login form');
     await page.click('button[type="submit"]');

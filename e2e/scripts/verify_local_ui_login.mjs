@@ -48,7 +48,7 @@ async function verifyLocalUI() {
     await page.waitForTimeout(4000);
 
     await page.fill('input[type="email"]', 'you@gmail.com');
-    await page.fill('input[type="password"]', 'Password123!');
+    await page.fill('input[type="password"]', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '');
     await page.keyboard.press('Enter');
     await page.waitForTimeout(4000);
 

@@ -25,7 +25,7 @@ async function captureAllProofs() {
   console.log('Navigating to login page...');
   await page.goto(`${PROD_URL}/login`, { waitUntil: 'networkidle2' });
   await page.type('input[type=email]', 'dsoni1281@gmail.com');
-  await page.type('input[type=password]', '123456');
+  await page.type('input[type=password]', (process.env.E2E_STAFF_PASSWORD || process.env.TEST_PASSWORD || ''));
   await page.click('button[type=submit]');
   await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 });
   console.log('Logged in successfully! Current URL:', page.url());

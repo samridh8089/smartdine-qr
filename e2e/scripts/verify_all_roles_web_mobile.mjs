@@ -83,9 +83,9 @@ async function runAllAuthTests() {
   console.log('STARTING WEB & MOBILE AUTHENTICATION VERIFICATION');
   console.log('==================================================');
 
-  const ownerRes = await testWebAuth('you@gmail.com', 'Password123!', 'owner');
-  const kitchenRes = await testWebAuth('youk@gmail.com', 'Password123!', 'kitchen');
-  const waiterRes = await testWebAuth('youw@gmail.com', 'Password123!', 'waiter');
+  const ownerRes = await testWebAuth('you@gmail.com', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '', 'owner');
+  const kitchenRes = await testWebAuth('youk@gmail.com', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '', 'kitchen');
+  const waiterRes = await testWebAuth('youw@gmail.com', process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '', 'waiter');
 
   console.log('\n==================================================');
   console.log('WEB AUTH RESULTS SUMMARY');

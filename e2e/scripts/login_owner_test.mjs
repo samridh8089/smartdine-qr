@@ -26,19 +26,19 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 async function loginOwner() {
   const { data: user, error: adminErr } = await supabase.auth.admin.updateUserById(
     '4bc2a7cc-72c2-4e09-b253-193f3f45f431',
-    { password: 'Password123!' }
+    { password: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || '' }
   );
 
   if (adminErr) {
     console.error('Admin update password error:', adminErr.message);
   } else {
-    console.log('✅ Set owner password for you@gmail.com to Password123!');
+    console.log('✅ Set owner password for you@gmail.com to [REDACTED_PASSWORD]');
   }
 
   const clientSupabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   const { data, error } = await clientSupabase.auth.signInWithPassword({
     email: 'you@gmail.com',
-    password: 'Password123!'
+    password: process.env.E2E_OWNER_PASSWORD || process.env.TEST_PASSWORD || ''
   });
 
   if (error) {

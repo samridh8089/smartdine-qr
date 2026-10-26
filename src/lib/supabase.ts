@@ -9,11 +9,15 @@ const rawKey = (isServer && serviceKey && serviceKey !== '[SENSITIVE]')
   ? serviceKey
   : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
-const DEFAULT_SUPABASE_URL = 'https://tiuwfhkrjvtkshebdwlp.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+if (!rawUrl) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL environment variable is required');
+}
+if (!rawKey) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable is required');
+}
 
-const supabaseUrl = rawUrl.startsWith('http') ? rawUrl : DEFAULT_SUPABASE_URL;
-const supabaseAnonKey = rawKey || DEFAULT_SUPABASE_ANON_KEY;
+const supabaseUrl = rawUrl;
+const supabaseAnonKey = rawKey;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

@@ -31,7 +31,7 @@ async function main() {
   let code = fs.readFileSync(bundleJsPath, 'utf8');
 
   // Replace mock-anon-key with real publishable key if present
-  const REAL_KEY = 'sb_publishable_YhLxIyNN7tsS2ixSnGfRUw_TF4EsRf-';
+  const REAL_KEY = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
   code = code.replaceAll("'mock-anon-key'", `'${REAL_KEY}'`);
   code = code.replaceAll('"mock-anon-key"', `"${REAL_KEY}"`);
 
