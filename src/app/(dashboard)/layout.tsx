@@ -55,7 +55,7 @@ const ALLOWED_PATHS: Record<string, string[]> = {
   owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
   manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
   supervisor: ['/dashboard', '/dashboard/orders', '/dashboard/tables', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
-  head_chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/orders', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  head_chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen_helper: ['/dashboard/kds', '/dashboard/attendance', '/dashboard/attendance/punch'],
@@ -69,7 +69,7 @@ const ALLOWED_PATHS: Record<string, string[]> = {
 
 const ALL_MENU_ITEMS = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager', 'supervisor'] },
-  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'captain', 'waiter', 'cashier', 'kitchen'] },
+  { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'captain', 'waiter', 'cashier'] },
   { name: 'Kitchen KDS', href: '/dashboard/kds', icon: ChefHat, roles: ['head_chef', 'chef', 'kitchen', 'kitchen_helper'] },
   { name: 'Tables', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'captain', 'waiter', 'cashier'] },
   { name: 'Smart Menu by Clever Ops', href: '/dashboard/menu', icon: Sparkles, roles: ['owner', 'manager', 'head_chef', 'chef', 'kitchen', 'supervisor', 'captain'] },

@@ -5,7 +5,7 @@
  * NOTE: INVENTORY ENGINE IS FROZEN. This module does not touch inventory.
  */
 
-import { supabase } from './supabase';
+import { supabase, getClientAuthToken } from './supabase';
 import { db, Restaurant, Profile } from './db';
 
 export interface StaffProfile {
@@ -661,7 +661,41 @@ export async function punchIn(params: {
     updated_at: now.toISOString()
   };
 
-  // Try DB upsert
+  // 1. Post to backend punch endpoint with admin authority bypassing RLS
+  try {
+    const token = await getClientAuthToken().catch(() => '');
+    const apiRes = await fetch('/api/attendance/punch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        restaurantId,
+        staffId,
+        date,
+        latitude,
+        longitude,
+        accuracy,
+        selfieUrl,
+        notes,
+        assignedShift,
+        punchType: 'in'
+      })
+    });
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.success && data.attendance) {
+        db.clearRestaurantCache(restaurantId);
+        return { success: true, attendance: data.attendance };
+      }
+    }
+  } catch (apiErr) {
+    console.warn('[Attendo] Backend punch API failed, attempting direct DB:', apiErr);
+  }
+
+  // 2. Direct DB fallback if API unreachable
   try {
     await supabase.from('staff_attendance').upsert(attendanceRecord, { onConflict: 'staff_id,date' });
   } catch (_) {}
@@ -720,6 +754,36 @@ export async function punchOut(params: {
     updated_at: now.toISOString()
   };
 
+  // 1. Post to backend punch endpoint with admin authority bypassing RLS
+  try {
+    const token = await getClientAuthToken().catch(() => '');
+    const apiRes = await fetch('/api/attendance/punch', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        restaurantId,
+        staffId,
+        date,
+        punchType: 'out',
+        existingAttendance
+      })
+    });
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.success && data.attendance) {
+        db.clearRestaurantCache(restaurantId);
+        return { success: true, attendance: data.attendance };
+      }
+    }
+  } catch (apiErr) {
+    console.warn('[Attendo] Backend punchOut API failed, attempting direct DB:', apiErr);
+  }
+
+  // 2. Direct DB fallback if API unreachable
   try {
     await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
   } catch (_) {}
