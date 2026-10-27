@@ -5241,6 +5241,7 @@ export default function OrdersPage() {
               <h3 className="font-bold text-sm text-slate-900 dark:text-white">Customer Requests & Waiter Calls</h3>
               <p className="text-xs text-slate-500">Live notifications and waiter calls from dining tables</p>
             </div>
+            {process.env.NODE_ENV === 'development' && (
             <Button
               size="sm"
               onClick={handleSeedTestRequest}
@@ -5248,6 +5249,7 @@ export default function OrdersPage() {
             >
               <Plus className="h-3.5 w-3.5" /> Seed Test Request
             </Button>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto">
             {customerRequests.length === 0 ? (
@@ -5255,6 +5257,7 @@ export default function OrdersPage() {
                 <CheckCircle className="h-10 w-10 text-emerald-500" />
                 <span className="font-semibold text-slate-600 dark:text-slate-400">All customer requests resolved!</span>
                 <span className="text-xs text-slate-400">Notifications from customers at tables will appear here in real time.</span>
+                {process.env.NODE_ENV === 'development' && (
                 <Button
                   size="sm"
                   onClick={handleSeedTestRequest}
@@ -5262,6 +5265,7 @@ export default function OrdersPage() {
                 >
                   + Seed Test Request Now
                 </Button>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
