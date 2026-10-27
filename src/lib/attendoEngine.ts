@@ -299,6 +299,18 @@ export async function getStaffProfiles(restaurantId: string, forceRefresh: boole
     const savedStaff: any[] = (rest?.settings as any)?.attendo?.staff_profiles || [];
     const salaryMap = new Map(savedStaff.map(s => [s.profile_id || s.id, s]));
 
+    // 2b. Also merge from direct staff_profiles table if present
+    try {
+      const { data: dbProfiles } = await supabase.from('staff_profiles').select('*').eq('restaurant_id', restaurantId);
+      if (dbProfiles && Array.isArray(dbProfiles)) {
+        dbProfiles.forEach((dp: any) => {
+          const key = dp.profile_id || dp.id;
+          const existing = salaryMap.get(key) || {};
+          salaryMap.set(key, { ...existing, ...dp });
+        });
+      }
+    } catch (_) {}
+
     // 3. Map ONLY genuine registered staff accounts
     const verifiedStaff: StaffProfile[] = nonOwnerStaff.map(p => {
       const saved = salaryMap.get(p.id);
@@ -353,40 +365,41 @@ export async function saveStaffProfile(profile: Partial<StaffProfile> & { restau
     updated_at: new Date().toISOString()
   };
 
+  // 1. Upsert to staff_profiles table if available
   try {
-    const { data, error } = await supabase
-      .from('staff_profiles')
-      .upsert(payload)
-      .select()
-      .maybeSingle();
-
-    if (!error && data) return data as StaffProfile;
+    await supabase.from('staff_profiles').upsert(payload);
   } catch (_) {}
 
-  // Sync to restaurant.settings.attendo.staff_profiles fallback
-  const rest = await db.getRestaurantById(profile.restaurant_id);
-  if (rest) {
-    const currentList: StaffProfile[] = (rest.settings as any)?.attendo?.staff_profiles || [];
-    const index = currentList.findIndex(s => s.id === payload.id || (payload.profile_id && s.profile_id === payload.profile_id));
-    let updatedList = [...currentList];
-    if (index >= 0) {
-      updatedList[index] = { ...updatedList[index], ...payload };
-    } else {
-      updatedList.push(payload as StaffProfile);
-    }
-
-    await supabase.from('restaurants').update({
-      settings: {
-        ...rest.settings,
-        attendo: {
-          ...((rest.settings as any)?.attendo || {}),
-          staff_profiles: updatedList
-        }
+  // 2. ALWAYS sync to restaurant.settings.attendo.staff_profiles via authoritative db.updateRestaurant
+  try {
+    const rest = await db.getRestaurantById(profile.restaurant_id);
+    if (rest) {
+      const currentList: StaffProfile[] = (rest.settings as any)?.attendo?.staff_profiles || [];
+      const index = currentList.findIndex(s => s.id === payload.id || (payload.profile_id && s.profile_id === payload.profile_id));
+      let updatedList = [...currentList];
+      if (index >= 0) {
+        updatedList[index] = { ...updatedList[index], ...payload };
+      } else {
+        updatedList.push(payload as StaffProfile);
       }
-    }).eq('id', profile.restaurant_id);
-    db.clearRestaurantCache(profile.restaurant_id);
-    invalidateStaffProfilesCache(profile.restaurant_id);
+
+      await db.updateRestaurant(profile.restaurant_id, {
+        settings: ({
+          ...rest.settings,
+          attendo: {
+            ...((rest.settings as any)?.attendo || {}),
+            staff_profiles: updatedList
+          }
+        } as any)
+      });
+    }
+  } catch (err) {
+    console.warn('[Attendo] Failed saving staff profile to settings:', err);
   }
+
+  // 3. Immediately invalidate memory + localStorage staff caches
+  invalidateStaffProfilesCache(profile.restaurant_id);
+  db.clearRestaurantCache(profile.restaurant_id);
 
   return payload as StaffProfile;
 }
@@ -505,14 +518,46 @@ export async function deleteShift(restaurantId: string, shiftId: string): Promis
  * Get Staff Roster assignments for a date
  */
 export async function getStaffShiftsForDate(restaurantId: string, date: string): Promise<StaffShift[]> {
+  const mergedMap = new Map<string, StaffShift>();
+
+  // 1. Try DB table
+  try {
+    const { data: dbShifts } = await supabase
+      .from('staff_shifts')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .eq('assigned_date', date);
+    if (dbShifts && Array.isArray(dbShifts)) {
+      dbShifts.forEach((s: any) => mergedMap.set(s.staff_id, s));
+    }
+  } catch (_) {}
+
+  // 2. Try restaurant settings
   try {
     const rest = await db.getRestaurantById(restaurantId);
     const allAssignments: StaffShift[] = (rest?.settings as any)?.attendo?.staff_shifts || [];
-    return allAssignments.filter(a => a.assigned_date === date);
+    allAssignments.filter(a => a.assigned_date === date).forEach(s => {
+      if (!mergedMap.has(s.staff_id)) mergedMap.set(s.staff_id, s);
+    });
   } catch (err) {
     console.warn('[Attendo] getStaffShiftsForDate err:', err);
-    return [];
   }
+
+  // 3. Fallback to localStorage cache
+  if (typeof window !== 'undefined') {
+    try {
+      const key = `smartdine_roster_${restaurantId}_${date}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const localList: StaffShift[] = JSON.parse(raw);
+        localList.forEach(s => {
+          if (!mergedMap.has(s.staff_id)) mergedMap.set(s.staff_id, s);
+        });
+      }
+    } catch (_) {}
+  }
+
+  return Array.from(mergedMap.values());
 }
 
 /**
@@ -524,7 +569,7 @@ export async function assignStaffShift(
   shiftId: string,
   assignedDate: string
 ): Promise<StaffShift> {
-  const payload = {
+  const payload: StaffShift = {
     id: `roster_${staffId}_${assignedDate}`,
     restaurant_id: restaurantId,
     staff_id: staffId,
@@ -533,25 +578,48 @@ export async function assignStaffShift(
     created_at: new Date().toISOString()
   };
 
+  // 1. Try DB table
   try {
-    await supabase.from('staff_shifts').upsert(payload, { onConflict: 'staff_id,assigned_date,shift_id' });
+    if (shiftId) {
+      await supabase.from('staff_shifts').upsert(payload, { onConflict: 'staff_id,assigned_date' });
+    } else {
+      await supabase.from('staff_shifts').delete().match({ staff_id: staffId, assigned_date: assignedDate });
+    }
   } catch (_) {}
 
-  const rest = await db.getRestaurantById(restaurantId);
-  if (rest) {
-    const roster: StaffShift[] = (rest.settings as any)?.attendo?.staff_shifts || [];
-    const filtered = roster.filter(r => !(r.staff_id === staffId && r.assigned_date === assignedDate));
-    filtered.push(payload);
-    await supabase.from('restaurants').update({
-      settings: {
-        ...rest.settings,
-        attendo: {
-          ...((rest.settings as any)?.attendo || {}),
-          staff_shifts: filtered
-        }
+  // 2. Update settings via authoritative db.updateRestaurant
+  try {
+    const rest = await db.getRestaurantById(restaurantId);
+    if (rest) {
+      const roster: StaffShift[] = (rest.settings as any)?.attendo?.staff_shifts || [];
+      const filtered = roster.filter(r => !(r.staff_id === staffId && r.assigned_date === assignedDate));
+      if (shiftId) {
+        filtered.push(payload);
       }
-    }).eq('id', restaurantId);
-    db.clearRestaurantCache(restaurantId);
+      await db.updateRestaurant(restaurantId, {
+        settings: ({
+          ...rest.settings,
+          attendo: {
+            ...((rest.settings as any)?.attendo || {}),
+            staff_shifts: filtered
+          }
+        } as any)
+      });
+    }
+  } catch (err) {
+    console.warn('[Attendo] assignStaffShift settings update err:', err);
+  }
+
+  // 3. LocalStorage persistence for instant resilience
+  if (typeof window !== 'undefined') {
+    try {
+      const key = `smartdine_roster_${restaurantId}_${assignedDate}`;
+      const existingRaw = localStorage.getItem(key);
+      const existingList: StaffShift[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const updatedList = existingList.filter(r => r.staff_id !== staffId);
+      if (shiftId) updatedList.push(payload);
+      localStorage.setItem(key, JSON.stringify(updatedList));
+    } catch (_) {}
   }
 
   return payload;
@@ -659,19 +727,13 @@ export async function getStaffMonthlyAttendance(
   year: number,
   month: number
 ): Promise<StaffAttendance[]> {
-  try {
-    const monthStr = String(month).padStart(2, '0');
-    const rest = await db.getRestaurantById(restaurantId);
-    const attendanceList: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
-    return attendanceList.filter(a => a.staff_id === staffId && a.date && a.date.startsWith(`${year}-${monthStr}`));
-  } catch (err) {
-    console.warn('[Attendo] getStaffMonthlyAttendance err:', err);
-    return [];
-  }
+  const all = await getMonthlyAttendanceForRestaurant(restaurantId, year, month);
+  return all.filter(a => a.staff_id === staffId);
 }
 
 /**
- * Get all attendance records for a restaurant across all staff for a specific month
+ * Get all attendance records for a restaurant across all staff for a specific month.
+ * Merges Supabase staff_attendance table, restaurants settings, and localStorage for total history resilience.
  */
 export async function getMonthlyAttendanceForRestaurant(
   restaurantId: string,
@@ -680,9 +742,74 @@ export async function getMonthlyAttendanceForRestaurant(
 ): Promise<StaffAttendance[]> {
   try {
     const monthStr = String(month).padStart(2, '0');
-    const rest = await db.getRestaurantById(restaurantId);
-    const attendanceList: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
-    return attendanceList.filter(a => a.date && a.date.startsWith(`${year}-${monthStr}`));
+    const prefix = `${year}-${monthStr}`;
+    const mergedMap = new Map<string, StaffAttendance>();
+
+    // 1. Fetch from staff_attendance table in Supabase
+    try {
+      const { data: dbAtts } = await supabase
+        .from('staff_attendance')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .gte('date', `${prefix}-01`)
+        .lte('date', `${prefix}-31`);
+
+      if (dbAtts && Array.isArray(dbAtts)) {
+        dbAtts.forEach((a: any) => mergedMap.set(`${a.staff_id}_${a.date}`, a as StaffAttendance));
+      }
+    } catch (_) {}
+
+    // 2. Fetch from restaurant.settings.attendo.attendance
+    try {
+      const rest = await db.getRestaurantById(restaurantId);
+      const attendanceList: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
+      attendanceList
+        .filter(a => a.date && a.date.startsWith(prefix))
+        .forEach(a => {
+          const key = `${a.staff_id}_${a.date}`;
+          if (!mergedMap.has(key)) {
+            mergedMap.set(key, a);
+          } else {
+            const existing = mergedMap.get(key)!;
+            mergedMap.set(key, {
+              ...existing,
+              ...a,
+              punch_in_time: existing.punch_in_time || a.punch_in_time,
+              punch_out_time: existing.punch_out_time || a.punch_out_time,
+              selfie_url: existing.selfie_url || a.selfie_url
+            });
+          }
+        });
+    } catch (_) {}
+
+    // 3. Fetch from localStorage recent attendance records
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem(`smartdine_attendo_recent_${restaurantId}`);
+        if (raw) {
+          const localList: StaffAttendance[] = JSON.parse(raw);
+          localList
+            .filter(a => a.date && a.date.startsWith(prefix))
+            .forEach(a => {
+              const key = `${a.staff_id}_${a.date}`;
+              if (!mergedMap.has(key)) {
+                mergedMap.set(key, a);
+              } else {
+                const existing = mergedMap.get(key)!;
+                mergedMap.set(key, {
+                  ...existing,
+                  ...a,
+                  punch_in_time: existing.punch_in_time || a.punch_in_time,
+                  punch_out_time: existing.punch_out_time || a.punch_out_time,
+                  selfie_url: existing.selfie_url || a.selfie_url
+                });
+              }
+            });
+        }
+      } catch (_) {}
+    }
+
+    return Array.from(mergedMap.values());
   } catch (err) {
     console.warn('[Attendo] getMonthlyAttendanceForRestaurant err:', err);
     return [];

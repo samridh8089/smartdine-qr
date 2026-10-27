@@ -459,9 +459,12 @@ export default function AttendanceManagerView({
     setShifts(updated);
   };
 
-  // Quick 1-click update of Weekly Off after account creation
+  // Quick 1-click update of Weekly Off with optimistic UI
   const handleQuickUpdateWeeklyOff = async (staffMember: StaffProfile, newWeeklyOff: string) => {
     if (!restaurant) return;
+    // Immediate optimistic update so dropdown never snaps back or requires multiple clicks
+    setStaffList(prev => prev.map(s => s.id === staffMember.id ? { ...s, weekly_off: newWeeklyOff as any } : s));
+
     try {
       await saveStaffProfile({
         id: staffMember.id,
@@ -474,7 +477,6 @@ export default function AttendanceManagerView({
         salary_type: staffMember.salary_type,
         weekly_off: newWeeklyOff as any
       });
-      await loadAllData();
     } catch (e) {
       console.error('Failed updating weekly off:', e);
     }
@@ -847,10 +849,24 @@ export default function AttendanceManagerView({
   };
 
   const handleAssignRoster = async (staffId: string, shiftId: string) => {
+    // Immediate optimistic UI update so shift assigns instantly in 1-click
+    setDateRoster(prev => {
+      const filtered = prev.filter(r => !(r.staff_id === staffId && r.assigned_date === selectedDate));
+      if (shiftId) {
+        filtered.push({
+          id: `roster_${staffId}_${selectedDate}`,
+          restaurant_id: restaurant.id,
+          staff_id: staffId,
+          shift_id: shiftId,
+          assigned_date: selectedDate,
+          created_at: new Date().toISOString()
+        });
+      }
+      return filtered;
+    });
+
     try {
       await assignStaffShift(restaurant.id, staffId, shiftId, selectedDate);
-      const updatedRoster = await getStaffShiftsForDate(restaurant.id, selectedDate);
-      setDateRoster(updatedRoster);
     } catch (e) {
       console.error('Failed assigning shift:', e);
     }
@@ -1407,23 +1423,15 @@ export default function AttendanceManagerView({
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
-                        {att?.selfie_url ? (
-                          <img
-                            src={att.selfie_url}
-                            alt={staff.name}
-                            className="w-11 h-11 rounded-full object-cover border border-slate-300 dark:border-slate-700 shadow-sm"
-                          />
-                        ) : (
-                          <div className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-black text-sm">
-                            {staff.name.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
+                        <div className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-black text-sm border border-slate-200 dark:border-slate-700 shadow-2xs">
+                          {staff.name.slice(0, 2).toUpperCase()}
+                        </div>
                         <div>
                           <h4 className="font-extrabold text-sm text-slate-900 dark:text-white leading-tight">
                             {staff.name}
                           </h4>
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mt-0.5">
-                            {staff.role} • {staff.phone || 'No phone'}
+                            {staff.role}{staff.phone ? ` • ${staff.phone}` : ''}
                           </span>
                         </div>
                       </div>
@@ -1450,11 +1458,21 @@ export default function AttendanceManagerView({
 
                     {/* Shift & Time Details */}
                     <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-2.5 text-xs space-y-1">
-                      <div className="flex justify-between text-slate-600 dark:text-slate-400">
-                        <span>Shift:</span>
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">
-                          {assignedShift?.shift_name || 'Not Scheduled'}
-                        </span>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600 dark:text-slate-400 font-medium">Shift:</span>
+                        <select
+                          value={assignedShiftRef?.shift_id || ''}
+                          onChange={e => handleAssignRoster(staff.id, e.target.value)}
+                          className="px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                          title="Assign shift for this date in 1-click"
+                        >
+                          <option value="">Not Scheduled</option>
+                          {shifts.map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.shift_name} ({formatTimeAmPm(s.start_time)} - {formatTimeAmPm(s.end_time)})
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div className="flex justify-between text-slate-600 dark:text-slate-400">
                         <span>Punch In:</span>
@@ -2764,7 +2782,7 @@ export default function AttendanceManagerView({
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {MONTH_NAMES[selectedMonth - 1]} {selectedYear} • {historyStaff.phone || 'No phone'}
+                      {MONTH_NAMES[selectedMonth - 1]} {selectedYear}{historyStaff.phone ? ` • ${historyStaff.phone}` : ''}
                     </p>
                   </div>
                 </div>
