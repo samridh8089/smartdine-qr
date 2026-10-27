@@ -36,13 +36,21 @@ export default function OrderTrackingPage({ params }: PageProps) {
   const [order, setOrder] = useState<Order | null>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = sessionStorage.getItem(`smartdine_order_cache_${orderId}`);
+        const cached = sessionStorage.getItem(`smartdine_order_cache_${orderId}`) || localStorage.getItem(`smartdine_order_cache_${orderId}`);
         if (cached) return JSON.parse(cached);
       } catch (e) {}
     }
     return null;
   });
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem('smartdine_active_restaurant') || localStorage.getItem('smartdine_active_restaurant');
+        if (cached) return JSON.parse(cached);
+      } catch (e) {}
+    }
+    return null;
+  });
   const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec | null>(null);
   const [loading, setLoading] = useState(true);
   const [callLoading, setCallLoading] = useState(false);
@@ -70,16 +78,45 @@ export default function OrderTrackingPage({ params }: PageProps) {
 
   const loadOrderData = async () => {
     try {
-      const token = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('token') || sessionStorage.getItem(`smartdine_order_token_${orderId}`)) : null;
+      const urlToken = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('token') : null;
+      const token = typeof window !== 'undefined'
+        ? (urlToken ||
+           sessionStorage.getItem(`smartdine_order_token_${orderId}`) ||
+           localStorage.getItem(`smartdine_order_token_${orderId}`) ||
+           localStorage.getItem('smartdine_active_token') ||
+           (restaurant?.id ? localStorage.getItem(`smartdine_latest_order_token_${restaurant.id}`) : null))
+        : null;
+
+      if (token && typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(`smartdine_order_token_${orderId}`, token);
+          localStorage.setItem(`smartdine_order_token_${orderId}`, token);
+        } catch (e) {}
+      }
+
       const o = await db.getOrderById(orderId, undefined, token);
       if (!o) {
-        setOrder(null);
+        setOrder(prev => {
+          if (prev) return prev;
+          if (typeof window !== 'undefined') {
+            try {
+              const cached = localStorage.getItem(`smartdine_order_cache_${orderId}`);
+              if (cached) return JSON.parse(cached);
+            } catch (e) {}
+          }
+          return null;
+        });
         setLoading(false);
         return;
       }
       setOrder(o);
       try {
         sessionStorage.setItem(`smartdine_order_cache_${orderId}`, JSON.stringify(o));
+        localStorage.setItem(`smartdine_order_cache_${orderId}`, JSON.stringify(o));
+        if (o.tracking_token) {
+          sessionStorage.setItem(`smartdine_order_token_${orderId}`, o.tracking_token);
+          localStorage.setItem(`smartdine_order_token_${orderId}`, o.tracking_token);
+        }
       } catch (e) {}
 
       // Resolve restaurant branding before ending loading state to prevent flash
@@ -87,6 +124,8 @@ export default function OrderTrackingPage({ params }: PageProps) {
       if (rest) {
         setRestaurant(rest);
         try {
+          sessionStorage.setItem('smartdine_active_restaurant', JSON.stringify(rest));
+          localStorage.setItem('smartdine_active_restaurant', JSON.stringify(rest));
           sessionStorage.setItem('smartdine_active_restaurant_slug', rest.slug);
           if (o.status === 'completed' || o.status === 'cancelled') {
             sessionStorage.removeItem(`smartdine_latest_order_${rest.id}`);

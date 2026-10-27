@@ -335,11 +335,10 @@ export default function AttendanceManagerView({
     if (!restaurant?.id) return;
     const restId = restaurant.id;
 
-    // 15-second polling interval for robust background sync across mobile devices
+    // 60-second polling interval for robust background sync (silent without UI flicker)
     const interval = setInterval(() => {
-      db.clearRestaurantCache(restId);
-      loadAllData();
-    }, 15000);
+      loadAllData(true);
+    }, 60000);
 
     // Supabase Realtime Channel for live attendance punches from staff phones
     const channel = supabase
@@ -348,16 +347,17 @@ export default function AttendanceManagerView({
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'restaurants', filter: `id=eq.${restId}` },
         () => {
-          db.clearRestaurantCache(restId);
-          loadAllData();
+          loadAllData(true);
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'staff_attendance', filter: `restaurant_id=eq.${restId}` },
-        () => {
-          db.clearRestaurantCache(restId);
-          loadAllData();
+        async () => {
+          try {
+            const attendances = await getAttendanceForDate(restId, selectedDate);
+            setTodayAttendances(attendances);
+          } catch (_) {}
         }
       )
       .subscribe();
@@ -371,10 +371,11 @@ export default function AttendanceManagerView({
   // Conditional early return AFTER all hooks
   if (!restaurant || !profile) return null;
 
-  async function loadAllData() {
-    setLoading(true);
+  async function loadAllData(isSilent: boolean = false) {
+    if (!isSilent && staffList.length === 0) {
+      setLoading(true);
+    }
     try {
-      db.clearRestaurantCache(restaurant.id);
       const [profiles, shiftList, attendances, roster, leaves] = await Promise.all([
         getStaffProfiles(restaurant.id),
         getShifts(restaurant.id),
@@ -391,7 +392,9 @@ export default function AttendanceManagerView({
     } catch (e) {
       console.warn('Error loading attendo data:', e);
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   }
 
@@ -1291,7 +1294,7 @@ export default function AttendanceManagerView({
           />
           <button
             type="button"
-            onClick={loadAllData}
+            onClick={() => loadAllData(false)}
             className="p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl cursor-pointer transition"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

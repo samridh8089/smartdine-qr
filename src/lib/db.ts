@@ -1,3 +1,5 @@
+const dbStaffCache = new Map<string, { timestamp: number; data: Profile[] }>();
+
 import { supabase } from './supabase';
 import { calculateBillingTotals } from './billingEngine';
 import { calculateOrderTax } from './tax';
@@ -432,6 +434,7 @@ export interface Order {
   display_order_id?: string;
   customer_name?: string;
   customer_phone?: string;
+  tracking_token?: string;
 }
 
 import {
@@ -2102,6 +2105,22 @@ export const db = {
         .rpc('get_order_tracking', { p_order_id: id, p_token: token || null });
       if (!rpcErr && rpcData) {
         o = rpcData;
+      }
+    }
+
+    // High availability fallback: Authoritative server route for customer order tracking
+    if (!o && typeof window !== 'undefined') {
+      try {
+        const queryToken = token ? `&token=${encodeURIComponent(token)}` : '';
+        const apiRes = await fetch(`/api/customer/orders?orderId=${encodeURIComponent(id)}${queryToken}`);
+        if (apiRes.ok) {
+          const json = await apiRes.json();
+          if (json?.order) {
+            o = json.order;
+          }
+        }
+      } catch (e) {
+        console.warn('[db.getOrderById] Server API fallback failed:', e);
       }
     }
 
@@ -4546,7 +4565,13 @@ export const db = {
   },
 
   // --- Staff Management ---
-  async getStaffProfiles(restaurantId: string): Promise<Profile[]> {
+  async getStaffProfiles(restaurantId: string, force: boolean = false): Promise<Profile[]> {
+    if (!force && dbStaffCache.has(restaurantId)) {
+      const entry = dbStaffCache.get(restaurantId)!;
+      if (Date.now() - entry.timestamp < 120000) {
+        return entry.data;
+      }
+    }
     try {
       const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
       const { data: sessionData } = await supabase.auth.getSession();
@@ -4565,6 +4590,7 @@ export const db = {
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.staff)) {
+          dbStaffCache.set(restaurantId, { timestamp: Date.now(), data: json.staff as Profile[] });
           return json.staff as Profile[];
         }
       }

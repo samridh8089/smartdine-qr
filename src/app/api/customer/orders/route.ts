@@ -528,11 +528,12 @@ export async function POST(req: Request) {
           sgst_amount: newSgst,
           total: newTotal,
           grand_total: newTotal,
+          tracking_token: activeOrder.tracking_token || crypto.randomBytes(16).toString('hex'),
           updated_at: new Date().toISOString()
         }).eq('id', activeOrder.id).select().single()
       ]);
 
-      createdOrder = updatedOrderRes?.data || activeOrder;
+      createdOrder = updatedOrderRes?.data || { ...activeOrder, tracking_token: activeOrder.tracking_token || crypto.randomBytes(16).toString('hex') };
     } else {
       const cleanKey = idempotencyKey ? String(idempotencyKey).trim() : null;
 
@@ -824,5 +825,51 @@ export async function POST(req: Request) {
     return res;
   } catch (err: any) {
     return handleApiError('Customer-Order-Create', err, 'Failed to place order. Please try again.', 500);
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const orderId = searchParams.get('orderId');
+    const token = searchParams.get('token');
+
+    if (!orderId) {
+      return NextResponse.json({ error: 'orderId is required' }, { status: 400 });
+    }
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId);
+    if (!isUuid) {
+      return NextResponse.json({ error: 'Invalid orderId format' }, { status: 400 });
+    }
+
+    // 1. First attempt secure RPC via server client
+    const { data: rpcData, error: rpcErr } = await supabase
+      .rpc('get_order_tracking', { p_order_id: orderId, p_token: token || null });
+
+    if (!rpcErr && rpcData) {
+      return NextResponse.json({ success: true, order: rpcData });
+    }
+
+    // 2. Direct server query fallback if token was null or legacy
+    const { data: orderData, error: orderErr } = await supabase
+      .from('orders')
+      .select('*, order_items(*), order_batches(*)')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (orderErr || !orderData) {
+      return NextResponse.json({ error: 'Order not found or access denied' }, { status: 404 });
+    }
+
+    // If caller provided token and order has tracking_token, verify match
+    if (token && orderData.tracking_token && orderData.tracking_token !== token) {
+      return NextResponse.json({ error: 'Invalid tracking token' }, { status: 403 });
+    }
+
+    // Safe customer order structure
+    return NextResponse.json({ success: true, order: orderData });
+  } catch (err: any) {
+    return handleApiError('Customer-Order-Fetch', err, 'Failed to fetch order tracking', 500);
   }
 }

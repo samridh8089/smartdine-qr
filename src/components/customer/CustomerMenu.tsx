@@ -1181,11 +1181,18 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       // Immediate Route Navigation & Pre-seeded Order Cache (<5ms first paint)
       try {
         sessionStorage.setItem(`smartdine_order_cache_${newOrder.id}`, JSON.stringify(newOrder));
+        localStorage.setItem(`smartdine_order_cache_${newOrder.id}`, JSON.stringify(newOrder));
         sessionStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
         localStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
         sessionStorage.removeItem('smartdine_latest_order_id');
         localStorage.removeItem('smartdine_latest_order_id');
         setActiveOrderId(newOrder.id);
+        if (newOrder?.tracking_token) {
+          sessionStorage.setItem(`smartdine_order_token_${newOrder.id}`, newOrder.tracking_token);
+          localStorage.setItem(`smartdine_order_token_${newOrder.id}`, newOrder.tracking_token);
+          localStorage.setItem(`smartdine_latest_order_token_${restaurant.id}`, newOrder.tracking_token);
+          localStorage.setItem('smartdine_active_token', newOrder.tracking_token);
+        }
       } catch (e) {}
 
       // Close cart before navigating away — clean exit
@@ -1193,9 +1200,6 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       saveCart([]);
       setSpecialInstructions('');
       setIdempotencyKey(crypto.randomUUID());
-      if (newOrder?.tracking_token && typeof window !== 'undefined') {
-        sessionStorage.setItem(`smartdine_order_token_${newOrder.id}`, newOrder.tracking_token);
-      }
       const trackingQuery = newOrder?.tracking_token ? `?token=${encodeURIComponent(newOrder.tracking_token)}` : '';
       router.push(`/order-tracking/${newOrder.id}${trackingQuery}`);
 
@@ -1572,14 +1576,23 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
               </button>
             )}
 
-            {activeOrderId && planSpec?.features.live_order_tracking !== false && (
-              <Link href={`/order-tracking/${activeOrderId}`} className="flex-1 sm:flex-initial">
-                <button className="w-full sm:w-auto px-4 py-2 sm:py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200/70 dark:border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
-                  <ClipboardList className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span className="whitespace-nowrap">Track Order</span>
-                </button>
-              </Link>
-            )}
+            {activeOrderId && planSpec?.features.live_order_tracking !== false && (() => {
+              const savedToken = typeof window !== 'undefined'
+                ? (sessionStorage.getItem(`smartdine_order_token_${activeOrderId}`) ||
+                   localStorage.getItem(`smartdine_order_token_${activeOrderId}`) ||
+                   (restaurant?.id ? localStorage.getItem(`smartdine_latest_order_token_${restaurant.id}`) : null) ||
+                   localStorage.getItem('smartdine_active_token'))
+                : null;
+              const tokenQuery = savedToken ? `?token=${encodeURIComponent(savedToken)}` : '';
+              return (
+                <Link href={`/order-tracking/${activeOrderId}${tokenQuery}`} className="flex-1 sm:flex-initial">
+                  <button className="w-full sm:w-auto px-4 py-2 sm:py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200/70 dark:border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0">
+                    <ClipboardList className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="whitespace-nowrap">Track Order</span>
+                  </button>
+                </Link>
+              );
+            })()}
           </div>
         </div>
       </header>

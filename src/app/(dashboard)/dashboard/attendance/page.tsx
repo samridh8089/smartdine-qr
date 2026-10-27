@@ -166,13 +166,13 @@ export default function AttendancePage() {
         )}
       </div>
 
-      {loading ? (
+      {viewMode === 'manager' && isManagementRole ? (
+        <AttendanceManagerView restaurant={restaurant} profile={profile} activeRole={activeRole} />
+      ) : loading ? (
         <div className="min-h-[40vh] flex flex-col items-center justify-center gap-3">
           <div className="h-8 w-8 border-4 border-slate-900 dark:border-white border-t-transparent rounded-full animate-spin" />
           <p className="text-xs font-semibold text-slate-400">Loading attendance records...</p>
         </div>
-      ) : viewMode === 'manager' && isManagementRole ? (
-        <AttendanceManagerView restaurant={restaurant} profile={profile} activeRole={activeRole} />
       ) : (
         currentStaffProfile ? (
           <StaffPunchCard

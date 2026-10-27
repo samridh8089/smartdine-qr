@@ -248,12 +248,48 @@ export async function updateAttendoSettings(
   db.clearRestaurantCache(restaurantId);
 }
 
+const STAFF_PROFILES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes fast cache
+const _attendoStaffCache = new Map<string, { timestamp: number; data: StaffProfile[] }>();
+
+export function invalidateStaffProfilesCache(restaurantId?: string) {
+  if (restaurantId) {
+    _attendoStaffCache.delete(restaurantId);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(`smartdine_staff_cache_${restaurantId}`);
+      } catch (_) {}
+    }
+  } else {
+    _attendoStaffCache.clear();
+  }
+}
+
 /**
- * Load staff profiles. ONLY returns staff who have an actual created account in the restaurant.
+ * Load staff profiles with in-memory + localStorage fast caching.
+ * ONLY returns staff who have an actual created account in the restaurant.
  * Bridges salary configurations from restaurant.settings.attendo.staff_profiles.
  */
-export async function getStaffProfiles(restaurantId: string): Promise<StaffProfile[]> {
+export async function getStaffProfiles(restaurantId: string, forceRefresh: boolean = false): Promise<StaffProfile[]> {
   try {
+    if (!forceRefresh) {
+      const cached = _attendoStaffCache.get(restaurantId);
+      if (cached && Date.now() - cached.timestamp < STAFF_PROFILES_CACHE_TTL) {
+        return cached.data;
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem(`smartdine_staff_cache_${restaurantId}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.data) && Date.now() - parsed.timestamp < STAFF_PROFILES_CACHE_TTL) {
+              _attendoStaffCache.set(restaurantId, parsed);
+              return parsed.data;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     // 1. Fetch real registered staff profiles in the restaurant
     const registeredProfiles = await db.getStaffProfiles(restaurantId);
     const nonOwnerStaff = (registeredProfiles || []).filter(p => p.role !== 'owner' && p.role !== 'super_admin');
@@ -284,6 +320,13 @@ export async function getStaffProfiles(restaurantId: string): Promise<StaffProfi
         updated_at: saved?.updated_at
       };
     });
+
+    _attendoStaffCache.set(restaurantId, { timestamp: Date.now(), data: verifiedStaff });
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`smartdine_staff_cache_${restaurantId}`, JSON.stringify({ timestamp: Date.now(), data: verifiedStaff }));
+      } catch (_) {}
+    }
 
     return verifiedStaff;
   } catch (err) {
@@ -342,6 +385,7 @@ export async function saveStaffProfile(profile: Partial<StaffProfile> & { restau
       }
     }).eq('id', profile.restaurant_id);
     db.clearRestaurantCache(profile.restaurant_id);
+    invalidateStaffProfilesCache(profile.restaurant_id);
   }
 
   return payload as StaffProfile;

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 let _supabaseAdmin: any = null;
 function getSupabaseAdmin() {
@@ -11,16 +12,49 @@ function getSupabaseAdmin() {
   return _supabaseAdmin;
 }
 
-import { verifyStaffRequest } from '@/lib/staffAuthGuard';
+// In-memory staff list cache (60s TTL)
+interface StaffCacheEntry {
+  timestamp: number;
+  staff: any[];
+}
+const staffListCache = new Map<string, StaffCacheEntry>();
+
+// In-memory auth users cache (5 min TTL) to avoid heavy 1000-user scan on every call
+let authUsersCache: { timestamp: number; map: Map<string, any> } | null = null;
+async function getCachedAuthUsers(admin: any): Promise<Map<string, any>> {
+  if (authUsersCache && Date.now() - authUsersCache.timestamp < 300000) {
+    return authUsersCache.map;
+  }
+  try {
+    const { data: authData } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => ({ data: null }));
+    const map = new Map<string, any>((authData?.users || []).map((u: any) => [u.id, u]));
+    authUsersCache = { timestamp: Date.now(), map };
+    return map;
+  } catch {
+    return authUsersCache?.map || new Map();
+  }
+}
 
 export async function GET(req: Request) {
   try {
     const supabaseAdmin = getSupabaseAdmin();
     const { searchParams } = new URL(req.url);
     const restaurantId = searchParams.get('restaurantId');
+    const isRefresh = searchParams.get('refresh') === 'true';
 
     if (!restaurantId) {
       return NextResponse.json({ error: 'restaurantId is required' }, { status: 400 });
+    }
+
+    // Return instant cached staff list if available and fresh
+    if (!isRefresh) {
+      const cached = staffListCache.get(restaurantId);
+      if (cached && Date.now() - cached.timestamp < 60000) {
+        return NextResponse.json({
+          success: true,
+          staff: cached.staff
+        });
+      }
     }
 
     // Enforce mandatory staff authentication & multi-tenant isolation
@@ -54,9 +88,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Fetch auth users to inspect email_confirmed_at & user_metadata
-    const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 }).catch(() => ({ data: null }));
-    const authUsersMap = new Map<string, any>((authData?.users || []).map((u: any) => [u.id, u]));
+    // Fetch auth users from fast memory cache
+    const authUsersMap = await getCachedAuthUsers(supabaseAdmin);
 
     const rawProfiles = profiles || [];
     const foundIds = new Set(rawProfiles.map((p: any) => p.id));
@@ -116,7 +149,13 @@ export async function GET(req: Request) {
       }
     });
 
-    // Passwords are never returned over API in modern secure design (Finding C5)
+    // Cache the merged result
+    staffListCache.set(restaurantId, {
+      timestamp: Date.now(),
+      staff: mergedProfiles
+    });
+
+    // Passwords are never returned over API in modern secure design
     return NextResponse.json({
       success: true,
       staff: mergedProfiles
