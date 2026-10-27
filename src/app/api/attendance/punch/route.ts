@@ -2,14 +2,19 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-let _adminClient: any = null;
-function getSupabaseAdmin() {
-  if (_adminClient) return _adminClient;
+function getSupabaseAdmin(req?: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error('Missing Supabase configuration');
-  _adminClient = createClient(url, key);
-  return _adminClient;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (serviceKey && serviceKey.length > 20) {
+    return createClient(url!, serviceKey);
+  }
+  const authHeader = req?.headers.get('Authorization') || req?.headers.get('authorization');
+  const token = authHeader ? authHeader.replace('Bearer ', '').trim() : '';
+  return createClient(url!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    global: {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    }
+  });
 }
 
 export async function POST(req: Request) {
@@ -47,7 +52,7 @@ export async function POST(req: Request) {
     // If auth fails, allow if token matches user or proceed safely with restaurant membership
     if (!authCheck.isAuthorized && authCheck.response) {
       // In local/testing mode or valid bearer header, verify profile directly
-      const supabaseAdmin = getSupabaseAdmin();
+      const supabaseAdmin = getSupabaseAdmin(req);
       const { data: profileCheck } = await supabaseAdmin
         .from('profiles')
         .select('id, restaurant_id, role')
@@ -59,7 +64,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const supabaseAdmin = getSupabaseAdmin();
+    const supabaseAdmin = getSupabaseAdmin(req);
     const now = new Date();
 
     let record: any;

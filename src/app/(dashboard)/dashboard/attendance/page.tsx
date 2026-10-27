@@ -12,7 +12,8 @@ import {
   getShifts,
   getAttendanceForDate,
   getStaffShiftsForDate,
-  cleanupOldAttendanceSelfies
+  cleanupOldAttendanceSelfies,
+  getLocalDateString
 } from '@/lib/attendoEngine';
 
 export default function AttendancePage() {
@@ -43,7 +44,7 @@ export default function AttendancePage() {
   }, [profile, staffList]);
 
   // 3. useMemo: Today's date string
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => getLocalDateString(), []);
 
   // 4. useMemo: Current staff member's attendance today
   const myAttendanceToday = useMemo(() => {

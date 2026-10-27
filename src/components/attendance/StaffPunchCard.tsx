@@ -16,6 +16,9 @@ import {
   getSalaryRecords,
   formatTimeAmPm,
   formatWorkingDuration,
+  calculateHoursWorked,
+  formatHoursWorkedText,
+  getLocalDateString,
   GeofenceConfig,
   getAttendoSettings,
   calculateHaversineDistanceMeters,
@@ -61,10 +64,11 @@ export default function StaffPunchCard({
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
   const [workingSeconds, setWorkingSeconds] = useState<number>(0);
   const [activeSubTab, setActiveSubTab] = useState<'punch' | 'history' | 'leaves' | 'slips'>('punch');
+  const [periodicTicker, setPeriodicTicker] = useState(0);
   
   // Past Attendance Request State
   const [pastReqModalOpen, setPastReqModalOpen] = useState(false);
-  const [pastReqDate, setPastReqDate] = useState(() => new Date(Date.now() - 86400000).toISOString().split('T')[0]);
+  const [pastReqDate, setPastReqDate] = useState(() => getLocalDateString(new Date(Date.now() - 86400000)));
   const [pastReqInTime, setPastReqInTime] = useState('09:00');
   const [pastReqOutTime, setPastReqOutTime] = useState('18:00');
   const [pastReqNotes, setPastReqNotes] = useState('');
@@ -74,8 +78,8 @@ export default function StaffPunchCard({
   // Leave Request State
   const [leaveModalOpen, setLeaveModalOpen] = useState(false);
   const [leaveType, setLeaveType] = useState<StaffLeaveRequest['leave_type']>('casual');
-  const [leaveStartDate, setLeaveStartDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [leaveEndDate, setLeaveEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [leaveStartDate, setLeaveStartDate] = useState(() => getLocalDateString());
+  const [leaveEndDate, setLeaveEndDate] = useState(() => getLocalDateString());
   const [leaveReason, setLeaveReason] = useState('');
   const [leaveSubmitting, setLeaveSubmitting] = useState(false);
   const [leaveSuccess, setLeaveSuccess] = useState<string | null>(null);
@@ -160,12 +164,33 @@ export default function StaffPunchCard({
     return 'Tap refresh icon to detect coordinates';
   }, [gpsLoading, geofenceConfig, geofenceDistance, gpsCoords?.accuracy, gpsError]);
 
+  const historySummary = useMemo(() => {
+    let daysWorked = 0;
+    let totalHours = 0;
+    for (const att of monthlyHistory) {
+      if (att.status === 'present' || att.status === 'late' || att.status === 'half_day' || att.punch_in_time) {
+        daysWorked += 1;
+      }
+      totalHours += calculateHoursWorked(att.punch_in_time, att.punch_out_time);
+    }
+    return {
+      daysWorked,
+      totalHours: Math.round(totalHours * 10) / 10
+    };
+  }, [monthlyHistory]);
   const todayStatus = useMemo(() => {
     if (!todayAttendance || !todayAttendance.punch_in_time) return 'not_punched';
     if (todayAttendance.punch_out_time) return 'completed';
     return 'on_duty';
   }, [todayAttendance]);
 
+  // Periodic update every 60 seconds for hours worked
+  useEffect(() => {
+    const ticker = setInterval(() => {
+      setPeriodicTicker(prev => prev + 1);
+    }, 60000);
+    return () => clearInterval(ticker);
+  }, []);
   // 4. useEffect: Live clock ticker
   useEffect(() => {
     const clockInterval = setInterval(() => {
@@ -300,7 +325,7 @@ export default function StaffPunchCard({
     setActionLoading(true);
     setErrorMessage(null);
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getLocalDateString();
       const res = await punchIn({
         restaurantId: restaurant.id,
         staffId: staff.id,
@@ -334,7 +359,7 @@ export default function StaffPunchCard({
     setActionLoading(true);
     setErrorMessage(null);
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getLocalDateString();
       const res = await punchOut({
         restaurantId: restaurant.id,
         staffId: staff.id,
@@ -465,14 +490,14 @@ export default function StaffPunchCard({
             </div>
           </div>
 
-          {/* Live Duty Stopwatch (When On Duty) */}
+          {/* Time Worked Today (When On Duty) */}
           {todayStatus === 'on_duty' && (
             <div className="bg-slate-900 text-white dark:bg-slate-800 rounded-2xl p-5 text-center shadow-sm space-y-1">
               <span className="text-[11px] font-bold uppercase tracking-widest text-slate-300">
-                Elapsed Shift Duration
+                Time Worked Today
               </span>
-              <div className="text-3xl font-black font-mono tracking-tight">
-                {formatWorkingDuration(workingSeconds)}
+              <div className="text-3xl font-black font-mono tracking-tight text-white">
+                {formatHoursWorkedText(todayAttendance?.punch_in_time, null)}
               </div>
               <p className="text-[11px] text-slate-300 font-medium">
                 Punched In at: {formatTimeAmPm(todayAttendance?.punch_in_time)}
@@ -491,6 +516,10 @@ export default function StaffPunchCard({
               <div className="flex justify-between text-slate-600 dark:text-slate-300">
                 <span>Punch-Out Time:</span>
                 <span className="font-bold text-slate-800 dark:text-white">{formatTimeAmPm(todayAttendance?.punch_out_time)}</span>
+              </div>
+              <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                <span>Total Hours Worked:</span>
+                <span className="font-bold text-slate-900 dark:text-white">{formatHoursWorkedText(todayAttendance?.punch_in_time, todayAttendance?.punch_out_time)}</span>
               </div>
               <div className="flex justify-between text-slate-600 dark:text-slate-300 border-t border-slate-200 dark:border-slate-700 pt-1.5 font-bold">
                 <span>Shift Status:</span>
@@ -596,8 +625,20 @@ export default function StaffPunchCard({
               My Attendance Timeline
             </h4>
             <span className="text-[11px] text-slate-500 font-semibold">
-              This Month ({monthlyHistory.length} Days Logged)
+              This Month
             </span>
+          </div>
+
+          {/* Clean Metric Summary Bar for Staff */}
+          <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Days Worked</span>
+              <span className="text-base font-black text-slate-900 dark:text-white">{historySummary.daysWorked} Days</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Hours Worked</span>
+              <span className="text-base font-black text-slate-900 dark:text-white">{historySummary.totalHours} hrs</span>
+            </div>
           </div>
 
           {monthlyHistory.length === 0 ? (
@@ -606,45 +647,43 @@ export default function StaffPunchCard({
             </div>
           ) : (
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-              {monthlyHistory.map(att => (
-                <div
-                  key={att.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800"
-                >
-                  <div className="flex items-center gap-2.5">
-                    {att.selfie_url ? (
-                      <img
-                        src={att.selfie_url}
-                        alt="Selfie"
-                        className="w-8 h-8 rounded-full object-cover border border-slate-300 dark:border-slate-600"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-slate-600">
+              {monthlyHistory.map(att => {
+                const hoursText = formatHoursWorkedText(att.punch_in_time, att.punch_out_time);
+                return (
+                  <div
+                    key={att.id}
+                    className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 text-xs">
                         {att.date.slice(-2)}
                       </div>
-                    )}
-                    <div>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 block">
-                        {new Date(att.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                      <div>
+                        <span className="font-bold text-slate-800 dark:text-slate-200 block">
+                          {new Date(att.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          In: {formatTimeAmPm(att.punch_in_time)} • Out: {att.punch_out_time ? formatTimeAmPm(att.punch_out_time) : 'On Duty'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                        {hoursText}
                       </span>
-                      <span className="text-[10px] text-slate-500">
-                        In: {formatTimeAmPm(att.punch_in_time)} • Out: {formatTimeAmPm(att.punch_out_time)}
+                      <span
+                        className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                          att.status === 'present'
+                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {att.status}
                       </span>
                     </div>
                   </div>
-                  <div>
-                    <span
-                      className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                        att.status === 'present'
-                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
-                          : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                      }`}
-                    >
-                      {att.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -901,7 +901,10 @@ export default function OrdersPage() {
         setSelectedOrderId(cleanParam);
       }
     } else if (filteredForRole.length > 0 && !selectedOrderIdRef.current) {
-      setSelectedOrderId(filteredForRole[0].id);
+      // Only auto-select on desktop (>= 768px). On mobile, always open Orders List (SS1) first!
+      if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+        setSelectedOrderId(filteredForRole[0].id);
+      }
     }
 
     setLoading(false);
@@ -2748,7 +2751,7 @@ export default function OrdersPage() {
           {/* Left Side: Order List (Independent Sticky Scroll) */}
           <div
             ref={orderListContainerRef}
-            className={`${selectedOrderId ? 'hidden md:flex' : 'flex'} w-full md:w-5/12 lg:w-4/12 flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:sticky md:top-6 md:max-h-[calc(100vh-140px)] md:overflow-y-auto`}
+            className={`${selectedOrderId ? 'hidden md:flex' : 'flex'} w-full md:w-5/12 lg:w-4/12 flex-col space-y-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-xs md:sticky md:top-6 md:max-h-[calc(100vh-140px)] md:overflow-y-auto overflow-x-hidden max-w-full`}
           >
             {/* 4 Dedicated Queues Tabs (2 on top, 2 on bottom: Dine-In, Takeaway, Booking, Counter) */}
             <div className="grid grid-cols-2 gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700/80">
@@ -2757,8 +2760,10 @@ export default function OrdersPage() {
                 onClick={() => {
                   setOrderQueue('dine_in');
                   const nextOrders = effectiveOrders.filter(o => o.order_type !== 'takeaway' && (o.order_type !== 'reservation' || Boolean(o.table_id)));
-                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
-                    setSelectedOrderId(nextOrders[0].id);
+                  if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                    if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                      setSelectedOrderId(nextOrders[0].id);
+                    }
                   }
                 }}
                 className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
@@ -2791,8 +2796,10 @@ export default function OrdersPage() {
                 onClick={() => {
                   setOrderQueue('takeaway');
                   const nextOrders = effectiveOrders.filter(o => o.order_type === 'takeaway');
-                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
-                    setSelectedOrderId(nextOrders[0].id);
+                  if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                    if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                      setSelectedOrderId(nextOrders[0].id);
+                    }
                   }
                 }}
                 className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
@@ -2825,8 +2832,10 @@ export default function OrdersPage() {
                 onClick={() => {
                   setOrderQueue('reservations');
                   const nextOrders = effectiveOrders.filter(o => isOrderReservation(o));
-                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
-                    setSelectedOrderId(nextOrders[0].id);
+                  if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                    if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                      setSelectedOrderId(nextOrders[0].id);
+                    }
                   }
                 }}
                 className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
@@ -2859,8 +2868,10 @@ export default function OrdersPage() {
                 onClick={() => {
                   setOrderQueue('counter');
                   const nextOrders = effectiveOrders.filter(o => o.order_type === 'counter' || o.table_name?.toLowerCase().includes('counter') || o.table_name?.toLowerCase().includes('bar'));
-                  if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
-                    setSelectedOrderId(nextOrders[0].id);
+                  if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                    if (nextOrders.length > 0 && (!selectedOrderId || !nextOrders.some(o => o.id === selectedOrderId))) {
+                      setSelectedOrderId(nextOrders[0].id);
+                    }
                   }
                 }}
                 className={`relative flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-bold text-xs transition-all cursor-pointer whitespace-nowrap w-full ${
@@ -2889,7 +2900,7 @@ export default function OrdersPage() {
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 w-full max-w-full overflow-x-auto no-scrollbar py-0.5 shrink-0" style={{ WebkitOverflowScrolling: 'touch' }}>
               {isBellRinging && (
                 <button
                   type="button"
@@ -3104,7 +3115,7 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Table-Wise Hierarchical Breakdown & Orders with Compact Selector */}
-                <div className="p-4 sm:p-5 space-y-4">
+                <div className="p-4 sm:p-5 flex flex-col space-y-4">
                   {/* Compact Table Selector Buttons */}
                   <div className="space-y-2 border-b border-indigo-100 dark:border-indigo-950/50 pb-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Physical Tables in Group (Click to Filter)</p>
@@ -3285,15 +3296,17 @@ export default function OrdersPage() {
                 <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
                   <div className="space-y-1">
                     {/* Mobile Back Button */}
-                    <div className="md:hidden pb-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="gap-1 text-xs text-slate-600 dark:text-slate-400 -ml-2 h-7 cursor-pointer"
+                    <div className="md:hidden w-full pb-2">
+                      <button
+                        type="button"
                         onClick={() => setSelectedOrderId(null)}
+                        className="flex items-center gap-2.5 w-full bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-xl py-2.5 px-3.5 text-sm font-bold text-slate-900 dark:text-white shadow-xs hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-[0.99] transition-all cursor-pointer"
                       >
-                        <ArrowLeft className="h-3.5 w-3.5" /> Back to Orders List
-                      </Button>
+                        <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-800 dark:text-slate-100 shrink-0">
+                          <ArrowLeft className="h-4 w-4" />
+                        </div>
+                        <span>Back to Orders List</span>
+                      </button>
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">
@@ -3611,7 +3624,7 @@ export default function OrdersPage() {
                   )}
 
                   {/* Collapsible Order & Batch Lifecycle Timeline */}
-                  <div className="space-y-3">
+                  <div className="space-y-3 order-5 md:order-none">
                     <button
                       type="button"
                       onClick={() => setShowOwnerTimeline(!showOwnerTimeline)}
@@ -3787,7 +3800,7 @@ export default function OrdersPage() {
                     const isCounterOrder = Boolean(selectedOrder.order_type === 'counter' || selectedOrder.table_name?.toLowerCase().includes('counter') || selectedOrder.table_name?.toLowerCase().includes('bar'));
 
                     return (
-                      <div className="sticky bottom-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs border-t border-slate-200 dark:border-slate-800 p-4 -mx-6 -mb-6 mt-4 shadow-lg md:static md:bg-slate-50 md:dark:bg-slate-950/20 md:border md:border-slate-100 md:dark:border-slate-800 md:rounded-xl md:p-4 md:m-0 md:shadow-none flex flex-col gap-3">
+                      <div className="order-3 md:order-none static bg-slate-50/90 dark:bg-slate-950/30 border border-slate-200 dark:border-slate-800 rounded-xl p-4 m-0 shadow-none flex flex-col gap-3">
                         <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Quick Action to Update Status:</span>
                         <div className="flex flex-wrap gap-2">
                           {isCounterOrder ? (
@@ -5017,7 +5030,7 @@ export default function OrdersPage() {
                 );
               })()}
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 order-2 md:order-none">
                     <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Ordered Items</h4>
                     {(!selectedOrder.items || selectedOrder.items.length === 0) ? (
                       <div className="p-6 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/30">
@@ -5093,7 +5106,7 @@ export default function OrdersPage() {
 
                   {/* Order Activity Log */}
                   {((selectedOrder.batches || []).some((b: any) => b.accepted_by || b.preparing_by || b.ready_by || b.served_by) || selectedOrder.completed_by || selectedOrder.cancelled_by) && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 order-6 md:order-none">
                       <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Order Activity Log</h4>
                       <div className="bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-800 rounded-xl p-4 flex flex-col gap-2.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
                         {selectedOrder.batches?.map((b: any) => (

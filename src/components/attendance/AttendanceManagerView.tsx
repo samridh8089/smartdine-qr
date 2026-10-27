@@ -37,7 +37,10 @@ import {
   getRestaurantLeaveRequests,
   reviewLeaveRequest,
   submitLeaveRequest,
-  cleanupOldAttendanceSelfies
+  cleanupOldAttendanceSelfies,
+  calculateHoursWorked,
+  formatHoursWorkedText,
+  getLocalDateString
 } from '@/lib/attendoEngine';
 import { supabase } from '@/lib/supabase';
 import { db, Restaurant, Profile } from '@/lib/db';
@@ -114,7 +117,7 @@ export default function AttendanceManagerView({
   // 1. useState
   const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'logs' | 'payroll' | 'leaves' | 'settings'>('live');
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString());
   const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
 
@@ -210,6 +213,13 @@ export default function AttendanceManagerView({
   const [calendarModalStaff, setCalendarModalStaff] = useState<StaffProfile | null>(null);
   const [calendarModalAttendances, setCalendarModalAttendances] = useState<StaffAttendance[]>([]);
 
+  // Employee Attendance History & Selfie Modal State
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyStaff, setHistoryStaff] = useState<StaffProfile | null>(null);
+  const [historyAttendances, setHistoryAttendances] = useState<StaffAttendance[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [previewSelfieUrl, setPreviewSelfieUrl] = useState<string | null>(null);
+  const [managerLiveTicker, setManagerLiveTicker] = useState(0);
   // Storage & Selfie Optimizer State
   const [cleaningSelfies, setCleaningSelfies] = useState(false);
   const [cleanupResultNotice, setCleanupResultNotice] = useState<string | null>(null);
@@ -299,6 +309,13 @@ export default function AttendanceManagerView({
     return leaveRequests.filter(l => l.status === 'pending').length;
   }, [leaveRequests]);
 
+  // Periodic update every 60s for live hours calculation
+  useEffect(() => {
+    const t = setInterval(() => {
+      setManagerLiveTicker(prev => prev + 1);
+    }, 60000);
+    return () => clearInterval(t);
+  }, []);
   // 9. useEffect: Initial Data Loading
   useEffect(() => {
     if (!restaurant?.id) return;
@@ -1040,6 +1057,22 @@ export default function AttendanceManagerView({
     setStaffOtpModalOpen(true);
   };
 
+  // --- EMPLOYEE ATTENDANCE HISTORY & SELFIE MODAL HANDLER ---
+  const handleOpenStaffHistory = async (staffMember: StaffProfile) => {
+    setHistoryStaff(staffMember);
+    setHistoryModalOpen(true);
+    setHistoryLoading(true);
+    try {
+      const monthAtts = await getMonthlyAttendanceForRestaurant(restaurant.id, selectedYear, selectedMonth);
+      const filtered = monthAtts.filter(a => a.staff_id === staffMember.id);
+      filtered.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      setHistoryAttendances(filtered);
+    } catch (e) {
+      console.warn('Failed loading employee history:', e);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
   // --- EMPLOYEE CALENDAR MODAL HANDLER ---
   const handleOpenEmployeeCalendar = async (staffMember: StaffProfile) => {
     setCalendarModalStaff(staffMember);
@@ -1434,6 +1467,14 @@ export default function AttendanceManagerView({
                           </span>
                         </div>
                       )}
+                      {isPunchedIn && (
+                        <div className="flex justify-between text-slate-600 dark:text-slate-400 border-t border-slate-200/60 dark:border-slate-700/60 pt-1 mt-1">
+                          <span className="font-medium">Worked Today:</span>
+                          <span className="font-bold text-slate-900 dark:text-white bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 rounded text-[11px]">
+                            {formatHoursWorkedText(att?.punch_in_time, att?.punch_out_time)} {isOnDuty ? '(Active)' : '(Completed)'}
+                          </span>
+                        </div>
+                      )}
                       {att?.status === 'late' && (
                         <div className="text-[10px] font-semibold text-slate-500">
                           Late punch-in detected
@@ -1482,13 +1523,24 @@ export default function AttendanceManagerView({
                           {(staff.salary_type || 'fixed') === 'fixed' ? 'Fixed' : 'Per-Day'}
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenOverride(staff)}
-                        className="px-2.5 py-1 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold text-xs cursor-pointer transition"
-                      >
-                        Override
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStaffHistory(staff)}
+                          className="px-2.5 py-1 text-slate-900 dark:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-lg font-bold text-xs flex items-center gap-1 cursor-pointer transition border border-slate-300 dark:border-slate-700 shadow-2xs"
+                          title="View complete login/logout history and selfies"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>History</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenOverride(staff)}
+                          className="px-2.5 py-1 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold text-xs cursor-pointer transition"
+                        >
+                          Override
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -2686,6 +2738,208 @@ export default function AttendanceManagerView({
         record={editingSalaryRecord}
         onSave={handleSaveSalaryRecord}
       />
+
+
+      {/* EMPLOYEE ATTENDANCE HISTORY & SELFIE MODAL */}
+      {historyModalOpen && historyStaff && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[9999] overflow-y-auto p-4 bg-slate-950/85 backdrop-blur-sm flex justify-center items-center">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl max-w-2xl w-full my-auto overflow-hidden text-slate-900 dark:text-slate-100 flex flex-col max-h-[90vh]">
+              {/* Modal Header */}
+              <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/60 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center font-black text-sm">
+                    {historyStaff.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                        {historyStaff.name} — Attendance History
+                      </h3>
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {historyStaff.role}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {MONTH_NAMES[selectedMonth - 1]} {selectedYear} • {historyStaff.phone || 'No phone'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHistoryModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Summary Strip */}
+              <div className="p-4 bg-slate-900 text-white dark:bg-slate-950 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3 shrink-0">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Days Logged</span>
+                  <span className="text-lg font-black text-white">
+                    {historyAttendances.length} Days
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Hours Worked</span>
+                  <span className="text-lg font-black text-emerald-400">
+                    {Math.round(historyAttendances.reduce((acc, a) => acc + calculateHoursWorked(a.punch_in_time, a.punch_out_time), 0) * 10) / 10} hrs
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Base Salary</span>
+                  <span className="text-lg font-black text-slate-200">
+                    ₹{Number(historyStaff.base_salary).toLocaleString('en-IN')}/mo
+                  </span>
+                </div>
+              </div>
+
+              {/* Records List */}
+              <div className="p-5 overflow-y-auto flex-1 space-y-3">
+                {historyLoading ? (
+                  <div className="py-12 text-center text-slate-400 text-xs">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-400" />
+                    Loading attendance history...
+                  </div>
+                ) : historyAttendances.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 text-xs">
+                    No attendance records found for this employee this month.
+                  </div>
+                ) : (
+                  historyAttendances.map(att => {
+                    const hoursWorked = formatHoursWorkedText(att.punch_in_time, att.punch_out_time);
+                    const isToday = att.date === selectedDate;
+                    const isOnDuty = !!att.punch_in_time && !att.punch_out_time;
+
+                    return (
+                      <div
+                        key={att.id || att.date}
+                        className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Selfie Thumbnail with Zoom on Click */}
+                          {att.selfie_url ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewSelfieUrl(att.selfie_url || null)}
+                              className="relative group shrink-0 cursor-pointer"
+                              title="Click to view full selfie photo"
+                            >
+                              <img
+                                src={att.selfie_url}
+                                alt="Selfie"
+                                className="w-12 h-12 rounded-xl object-cover border-2 border-slate-300 dark:border-slate-700 group-hover:scale-105 transition shadow-sm"
+                              />
+                              <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                                <Eye className="w-4 h-4 text-white" />
+                              </div>
+                            </button>
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-400 text-[10px] font-bold shrink-0">
+                              No Photo
+                            </div>
+                          )}
+
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                                {new Date(att.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                              {isToday && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+                                  Today
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                              <span>In: <strong>{formatTimeAmPm(att.punch_in_time)}</strong></span>
+                              <span className="mx-1.5">•</span>
+                              <span>Out: <strong>{att.punch_out_time ? formatTimeAmPm(att.punch_out_time) : (isOnDuty ? 'On Duty' : '--')}</strong></span>
+                            </div>
+                            {att.notes && (
+                              <div className="text-[10px] text-slate-400 mt-0.5 italic">
+                                Note: {att.notes}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-black text-slate-900 dark:text-white block">
+                            {hoursWorked}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block mt-1 ${
+                              att.status === 'present'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                : att.status === 'late'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                                : att.status === 'half_day'
+                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                            }`}
+                          >
+                            {att.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setHistoryModalOpen(false)}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold rounded-xl text-xs cursor-pointer transition shadow-sm"
+                >
+                  Close History
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
+
+      {/* FULL SELFIE PHOTO LIGHTBOX PREVIEW */}
+      {previewSelfieUrl && (
+        <ModalPortal>
+          <div className="fixed inset-0 z-[10000] p-4 bg-slate-950/90 backdrop-blur-md flex justify-center items-center">
+            <div className="relative bg-white dark:bg-slate-900 rounded-3xl p-4 shadow-2xl max-w-sm w-full border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                  Punch Selfie Verification
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPreviewSelfieUrl(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="w-full aspect-square rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-inner">
+                <img
+                  src={previewSelfieUrl}
+                  alt="Full Selfie Verification"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewSelfieUrl(null)}
+                className="w-full py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs rounded-xl cursor-pointer transition"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       {/* Printable Salary Slip Modal */}
       <SalarySlipModal

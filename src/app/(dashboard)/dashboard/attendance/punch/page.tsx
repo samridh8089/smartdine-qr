@@ -10,7 +10,8 @@ import {
   getStaffProfiles,
   getShifts,
   getAttendanceForDate,
-  getStaffShiftsForDate
+  getStaffShiftsForDate,
+  getLocalDateString
 } from '@/lib/attendoEngine';
 
 export default function AttendancePunchPage() {
@@ -24,7 +25,7 @@ export default function AttendancePunchPage() {
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
 
   // 2. useMemo: Today's date string
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => getLocalDateString(), []);
 
   // 3. useMemo: Find current staff profile (with selector fallback)
   const currentStaffProfile = useMemo(() => {

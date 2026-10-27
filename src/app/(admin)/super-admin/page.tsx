@@ -123,6 +123,17 @@ export default function SuperAdminPage() {
     isTrial: false
   });
 
+  // Two-Factor Authentication (MFA) State
+  const [mfaModalOpen, setMfaModalOpen] = useState(false);
+  const [mfaEnrolledFactor, setMfaEnrolledFactor] = useState<any | null>(null);
+  const [mfaQrCode, setMfaQrCode] = useState<string | null>(null);
+  const [mfaSecret, setMfaSecret] = useState<string | null>(null);
+  const [mfaEnrollId, setMfaEnrollId] = useState<string | null>(null);
+  const [mfaVerificationCode, setMfaVerificationCode] = useState('');
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+  const [mfaSuccessMsg, setMfaSuccessMsg] = useState<string | null>(null);
+
   // 3. Owner Edit
   const [editOwnerModalOpen, setEditOwnerModalOpen] = useState(false);
   const [editingOwnerProfile, setEditingOwnerProfile] = useState<any>(null);
@@ -647,6 +658,108 @@ export default function SuperAdminPage() {
         supabase.removeChannel(channel);
       };
     }, []);
+
+
+  const loadMfaStatus = useCallback(async () => {
+    try {
+      setMfaLoading(true);
+      setMfaError(null);
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      const verified = data?.totp?.find((f: any) => f.status === 'verified');
+      setMfaEnrolledFactor(verified || null);
+    } catch (err: any) {
+      console.warn('Error loading MFA factors:', err);
+    } finally {
+      setMfaLoading(false);
+    }
+  }, []);
+
+  const startMfaEnrollment = async () => {
+    try {
+      setMfaLoading(true);
+      setMfaError(null);
+      setMfaSuccessMsg(null);
+      const { data: existing } = await supabase.auth.mfa.listFactors();
+      if (existing?.all) {
+        for (const factor of existing.all) {
+          if (factor.status === 'unverified') {
+            await supabase.auth.mfa.unenroll({ factorId: factor.id }).catch(() => {});
+          }
+        }
+      }
+
+      const { data, error } = await supabase.auth.mfa.enroll({
+        factorType: 'totp',
+        issuer: 'CleverOps',
+        friendlyName: adminUser?.email || 'admin@cleverops.in'
+      });
+
+      if (error || !data) {
+        throw new Error(error?.message || 'Could not initiate MFA enrollment');
+      }
+
+      setMfaEnrollId(data.id);
+      setMfaQrCode(data.totp.qr_code);
+      setMfaSecret(data.totp.secret);
+    } catch (err: any) {
+      setMfaError(err?.message || 'Failed to start MFA enrollment');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const confirmMfaEnrollment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaEnrollId || !mfaVerificationCode.trim()) return;
+    try {
+      setMfaLoading(true);
+      setMfaError(null);
+      const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({
+        factorId: mfaEnrollId
+      });
+      if (challengeErr || !challengeData) {
+        throw new Error(challengeErr?.message || 'Failed to create challenge');
+      }
+
+      const { error: verifyErr } = await supabase.auth.mfa.verify({
+        factorId: mfaEnrollId,
+        challengeId: challengeData.id,
+        code: mfaVerificationCode.trim()
+      });
+
+      if (verifyErr) {
+        throw new Error(verifyErr.message || 'Invalid verification code. Check your Authenticator app.');
+      }
+
+      setMfaSuccessMsg('Two-Factor Authentication is now ACTIVE on this account!');
+      setMfaQrCode(null);
+      setMfaSecret(null);
+      setMfaVerificationCode('');
+      await loadMfaStatus();
+    } catch (err: any) {
+      setMfaError(err?.message || 'Verification failed');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    if (!mfaEnrolledFactor?.id) return;
+    if (!confirm('Are you sure you want to disable 2FA? This will remove Authenticator protection from your account.')) return;
+    try {
+      setMfaLoading(true);
+      setMfaError(null);
+      const { error } = await supabase.auth.mfa.unenroll({ factorId: mfaEnrolledFactor.id });
+      if (error) throw error;
+      setMfaSuccessMsg('Two-Factor Authentication has been disabled.');
+      setMfaEnrolledFactor(null);
+    } catch (err: any) {
+      setMfaError(err?.message || 'Failed to disable 2FA');
+    } finally {
+      setMfaLoading(false);
+    }
+  };
 
   // Auth & Admin Access Check
   useEffect(() => {
@@ -1384,6 +1497,19 @@ export default function SuperAdminPage() {
           </button>
 
           <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+
+          {/* MFA / 2FA Security Button */}
+          <button
+            onClick={() => {
+              setMfaModalOpen(true);
+              loadMfaStatus();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer"
+            title="Two-Factor Authentication (2FA) Security Settings"
+          >
+            <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <span className="hidden sm:inline">2FA Security</span>
+          </button>
 
           {/* Founder Profile Pill */}
           <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">

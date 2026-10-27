@@ -7,13 +7,13 @@ function getSupabaseAdmin(): SupabaseClient {
   if (_supabaseAdminInstance) return _supabaseAdminInstance;
 
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!rawUrl) {
     throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable');
   }
   if (!serviceKey) {
-    throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY environment variable');
+    throw new Error('Missing Supabase key environment variable');
   }
 
   _supabaseAdminInstance = createClient(rawUrl, serviceKey);

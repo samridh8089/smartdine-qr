@@ -867,7 +867,18 @@ export const db = {
     if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
     }
-    // Query safe public_restaurants view first (no passwords/internal metadata)
+    // Try full restaurants table first (authenticated users have full settings access)
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select('*')
+      .eq('slug', cleanSlug);
+    if (!error && data && data.length > 0) {
+      const res = data[0] as Restaurant;
+      restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
+      restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
+      return res;
+    }
+    // Fallback to safe public_restaurants view for customer menu views
     const { data: pubData, error: pubErr } = await supabase
       .from('public_restaurants')
       .select('*')
@@ -877,18 +888,8 @@ export const db = {
       restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
       return res;
     }
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('slug', cleanSlug);
-    if (error || !data || data.length === 0) {
-      if (cached?.data) return cached.data;
-      return null;
-    }
-    const res = data[0] as Restaurant;
-    restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
-    restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
-    return res;
+    if (cached?.data) return cached.data;
+    return null;
   },
 
   async getRestaurantById(id: string): Promise<Restaurant | null> {
@@ -896,7 +897,17 @@ export const db = {
     if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
     }
-    // Query safe public_restaurants view first
+    // Try full restaurants table first (authenticated users have access to complete settings)
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select('*')
+      .eq('id', id);
+    if (!error && data && data.length > 0) {
+      const res = data[0] as Restaurant;
+      restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
+      return res;
+    }
+    // Fallback to safe public_restaurants view for customer queries
     const { data: pubData, error: pubErr } = await supabase
       .from('public_restaurants')
       .select('*')
@@ -906,14 +917,8 @@ export const db = {
       restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
       return res;
     }
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('id', id);
-    if (error || !data || data.length === 0) return null;
-    const res = data[0] as Restaurant;
-    restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
-    return res;
+    if (cached?.data) return cached.data;
+    return null;
   },
 
   async updateRestaurant(id: string, data: Partial<Restaurant>): Promise<Restaurant> {

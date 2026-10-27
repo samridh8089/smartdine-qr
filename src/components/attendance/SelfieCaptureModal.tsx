@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Camera, RefreshCw, Check, X, AlertCircle, Upload } from 'lucide-react';
+import { Camera, RefreshCw, Check, X, AlertCircle, Upload, SwitchCamera } from 'lucide-react';
 
 interface SelfieCaptureModalProps {
   isOpen: boolean;
@@ -14,40 +14,68 @@ export default function SelfieCaptureModal({
   onClose,
   onCapture
 }: SelfieCaptureModalProps) {
-  // STRICT HOOK DECLARATION ORDER: useState
+  // 1. useState
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedSizeKb, setCapturedSizeKb] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraLoading, setCameraLoading] = useState(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
-  // useRef
+  // 2. useRef
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // useEffect: Start camera when modal opens
+  // 3. useEffect: Start camera when modal opens or facing mode toggles
   useEffect(() => {
     let activeStream: MediaStream | null = null;
+    let isCancelled = false;
 
     async function startCamera() {
       if (!isOpen || capturedImage) return;
       setCameraLoading(true);
       setCameraError(null);
 
+      // Stop any existing stream before starting a new one
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
+
       try {
         if (!navigator?.mediaDevices?.getUserMedia) {
           throw new Error('Camera API is not supported on this browser/device.');
         }
 
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user', // Front camera
-            width: { ideal: 640 },
-            height: { ideal: 640 }
-          },
-          audio: false
-        });
+        let mediaStream: MediaStream | null = null;
+
+        // Try exact facingMode constraint first for guaranteed front camera
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { exact: facingMode },
+              width: { ideal: 640 },
+              height: { ideal: 640 }
+            },
+            audio: false
+          });
+        } catch (exactErr) {
+          // Fallback to relaxed facingMode constraint
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: facingMode,
+              width: { ideal: 640 },
+              height: { ideal: 640 }
+            },
+            audio: false
+          });
+        }
+
+        if (isCancelled) {
+          mediaStream.getTracks().forEach(track => track.stop());
+          return;
+        }
 
         activeStream = mediaStream;
         setStream(mediaStream);
@@ -57,12 +85,15 @@ export default function SelfieCaptureModal({
           videoRef.current.play().catch(() => {});
         }
       } catch (err: any) {
+        if (isCancelled) return;
         console.warn('Failed to access camera:', err);
         setCameraError(
           err?.message || 'Unable to access front camera. Please allow camera permissions or upload a selfie below.'
         );
       } finally {
-        setCameraLoading(false);
+        if (!isCancelled) {
+          setCameraLoading(false);
+        }
       }
     }
 
@@ -71,22 +102,26 @@ export default function SelfieCaptureModal({
     }
 
     return () => {
+      isCancelled = true;
       if (activeStream) {
         activeStream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [isOpen, capturedImage]);
+  }, [isOpen, capturedImage, facingMode]);
 
   // Clean up stream when closing
   useEffect(() => {
-    if (!isOpen && stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+    if (!isOpen) {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
       setCapturedImage(null);
       setCapturedSizeKb(null);
       setCameraError(null);
+      setFacingMode('user');
     }
-  }, [isOpen, stream]);
+  }, [isOpen]);
 
   // Conditional early return AFTER all hooks
   if (!isOpen) return null;
@@ -111,9 +146,11 @@ export default function SelfieCaptureModal({
     const sx = (srcWidth - minDim) / 2;
     const sy = (srcHeight - minDim) / 2;
 
-    // Draw and mirror image horizontally so it looks natural like a mirror
-    ctx.translate(TARGET_SIZE, 0);
-    ctx.scale(-1, 1);
+    // Only mirror horizontally when front camera is active
+    if (facingMode === 'user') {
+      ctx.translate(TARGET_SIZE, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.drawImage(video, sx, sy, minDim, minDim, 0, 0, TARGET_SIZE, TARGET_SIZE);
 
     // Highly compressed JPEG at 0.55 quality (< 15-20 KB)
@@ -139,6 +176,10 @@ export default function SelfieCaptureModal({
       onCapture(capturedImage);
       onClose();
     }
+  };
+
+  const handleToggleCamera = () => {
+    setFacingMode(prev => (prev === 'user' ? 'environment' : 'user'));
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,7 +232,7 @@ export default function SelfieCaptureModal({
 
         {/* Viewfinder Canvas */}
         <div className="p-5 flex flex-col items-center">
-          <div className="relative w-64 h-64 rounded-full overflow-hidden border-4 border-slate-700 shadow-inner bg-slate-900 flex items-center justify-center">
+          <div className="relative w-60 h-60 sm:w-64 sm:h-64 aspect-square rounded-full overflow-hidden border-4 border-slate-700 shadow-inner bg-slate-900 flex items-center justify-center">
             {capturedImage ? (
               <img
                 src={capturedImage}
@@ -212,7 +253,9 @@ export default function SelfieCaptureModal({
                   autoPlay
                   playsInline
                   muted
-                  className="w-full h-full object-cover transform -scale-x-100"
+                  className={`w-full h-full object-cover transform ${
+                    facingMode === 'user' ? '-scale-x-100' : 'scale-x-100'
+                  }`}
                 />
                 {cameraLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80">
@@ -221,6 +264,17 @@ export default function SelfieCaptureModal({
                 )}
                 {/* Face Guide Overlay Ring */}
                 <div className="absolute inset-3 border-2 border-dashed border-slate-500/50 rounded-full pointer-events-none" />
+
+                {/* Camera Flip Switch Button */}
+                <button
+                  type="button"
+                  onClick={handleToggleCamera}
+                  disabled={cameraLoading}
+                  className="absolute bottom-3 right-3 p-2 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full shadow-md cursor-pointer transition border border-slate-700/80 active:scale-95"
+                  title="Switch Front/Rear Camera"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
               </>
             )}
           </div>
@@ -234,7 +288,7 @@ export default function SelfieCaptureModal({
           {capturedImage && capturedSizeKb !== null && (
             <div className="mt-1.5 flex items-center justify-center">
               <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800/60 shadow-2xs">
-                ⚡ Ultra-Light Selfie: {capturedSizeKb} KB
+                Ultra-Light Selfie: {capturedSizeKb} KB
               </span>
             </div>
           )}
@@ -249,11 +303,12 @@ export default function SelfieCaptureModal({
             className="hidden"
           />
 
-          <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 mb-1 select-none">
-            🔒 <strong>DPDP Notice:</strong> Selfie is captured solely to verify shift attendance and is securely pruned periodically.
+          <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 mt-2 mb-1 select-none">
+            DPDP Notice: Selfie is captured solely to verify shift attendance and is securely pruned periodically.
           </p>
+
           {/* Action Buttons */}
-          <div className="w-full mt-5 space-y-2">
+          <div className="w-full mt-4 space-y-2">
             {!capturedImage ? (
               <>
                 <button

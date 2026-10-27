@@ -7,7 +7,7 @@ import { supabase, clearActiveUserCache } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import MockBanner from '@/components/shared/MockBanner';
-import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, Store, Headphones } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, Store, Headphones, ShieldCheck, KeyRound } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,6 +17,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeLang, setActiveLang] = useState<string>('hi');
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
+  const [pendingUserRole, setPendingUserRole] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -37,6 +40,46 @@ export default function LoginPage() {
       }
     }
   }, []);
+
+
+  const handleVerifyMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaFactorId || !mfaCode.trim()) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const { data: challengeData, error: challengeErr } = await supabase.auth.mfa.challenge({
+        factorId: mfaFactorId
+      });
+      if (challengeErr || !challengeData?.id) {
+        throw new Error(challengeErr?.message || 'Failed to create MFA challenge');
+      }
+
+      const { error: verifyErr } = await supabase.auth.mfa.verify({
+        factorId: mfaFactorId,
+        challengeId: challengeData.id,
+        code: mfaCode.trim()
+      });
+
+      if (verifyErr) {
+        throw new Error(verifyErr.message || 'Invalid 6-digit authenticator code. Please check your authenticator app.');
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cleverops_auth_timestamp', String(Date.now()));
+      }
+
+      if (pendingUserRole === 'super_admin') {
+        router.push('/super-admin');
+      } else {
+        router.push('/dashboard');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Verification failed. Please try again.');
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +129,23 @@ export default function LoginPage() {
       .maybeSingle();
 
     const userRole = profileData?.role || data.user.user_metadata?.role || 'owner';
+
+
+    // Check if MFA (TOTP) is required
+    try {
+      const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const { data: factorsData } = await supabase.auth.mfa.listFactors();
+      const verifiedTotp = factorsData?.totp?.find((f: any) => f.status === 'verified');
+
+      if (verifiedTotp && (aalData?.currentLevel === 'aal1' || aalData?.nextLevel === 'aal2')) {
+        setMfaFactorId(verifiedTotp.id);
+        setPendingUserRole(userRole);
+        setLoading(false);
+        return;
+      }
+    } catch (mfaCheckErr) {
+      console.warn('[Login MFA check notice]:', mfaCheckErr);
+    }
 
     // Super Admin routing
     if (userRole === 'super_admin') {
@@ -146,6 +206,69 @@ export default function LoginPage() {
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/80 w-full mt-6">
           <h2 className="text-xl font-black text-[#0f172a] mb-5">Sign In</h2>
 
+          
+          {mfaFactorId ? (
+            <form onSubmit={handleVerifyMfa} autoComplete="off" className="space-y-4">
+              <div className="flex flex-col items-center text-center mb-4">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-2">
+                  <ShieldCheck className="h-6 w-6" />
+                </div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">Two-Factor Authentication</h3>
+                <p className="text-xs text-slate-500 mt-1">Enter the 6-digit code from Google Authenticator to verify your Super Admin access.</p>
+              </div>
+
+              <div>
+                <label htmlFor="mobile-mfa" className="block text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 text-center">
+                  6-DIGIT AUTHENTICATOR CODE
+                </label>
+                <div className="relative flex items-center bg-[#f8fafc] dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+                  <KeyRound className="w-5 h-5 text-slate-400 mr-2.5 flex-shrink-0" />
+                  <input
+                    id="mobile-mfa"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    required
+                    value={mfaCode}
+                    onChange={(e) => { setMfaCode(e.target.value.replace(/\D/g, '')); setError(''); }}
+                    placeholder="123456"
+                    className="w-full bg-transparent text-center tracking-widest text-lg font-mono font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div role="alert" className="flex items-start gap-2.5 bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-sm">
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <span className="flex-1 leading-relaxed">{error}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || mfaCode.length < 6}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 text-sm cursor-pointer shadow-sm transition-all mt-4"
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span>Verify Code & Continue</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setMfaFactorId(null); setMfaCode(''); setError(''); }}
+                className="w-full text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 py-2 text-center transition-colors cursor-pointer"
+              >
+                ← Back to Login
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
             {/* Email Field */}
             <div>
@@ -243,6 +366,7 @@ export default function LoginPage() {
               <span>Create Restaurant Account</span>
             </Link>
           </form>
+          )}
 
           {/* Dedicated Support Contact Card */}
           <div className="bg-white rounded-2xl p-3.5 mt-5 border border-slate-200/80 shadow-sm">
@@ -305,6 +429,51 @@ export default function LoginPage() {
               </div>
             )}
 
+            
+            {mfaFactorId ? (
+              <form onSubmit={handleVerifyMfa} autoComplete="off" className="space-y-6">
+                <div className="flex flex-col items-center text-center mb-4">
+                  <div className="h-14 w-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-2">
+                    <ShieldCheck className="h-7 w-7" />
+                  </div>
+                  <h3 className="font-bold text-lg text-slate-900 dark:text-white">Two-Factor Authentication</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Enter the 6-digit code from Google Authenticator to verify your Super Admin access.</p>
+                </div>
+
+                <div>
+                  <label htmlFor="desktop-mfa" className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 text-center">
+                    6-DIGIT AUTHENTICATOR CODE
+                  </label>
+                  <div className="relative flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20">
+                    <KeyRound className="w-5 h-5 text-slate-400 mr-3 flex-shrink-0" />
+                    <input
+                      id="desktop-mfa"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      required
+                      value={mfaCode}
+                      onChange={(e) => { setMfaCode(e.target.value.replace(/\D/g, '')); setError(''); }}
+                      placeholder="123456"
+                      className="w-full bg-transparent text-center tracking-widest text-xl font-mono font-bold text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full cursor-pointer font-bold bg-indigo-600 hover:bg-indigo-700" isLoading={loading} disabled={mfaCode.length < 6}>
+                  Verify Code & Continue
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => { setMfaFactorId(null); setMfaCode(''); setError(''); }}
+                  className="w-full text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 py-2 text-center transition-colors cursor-pointer"
+                >
+                  ← Back to Login
+                </button>
+              </form>
+            ) : (
             <form className="space-y-6" onSubmit={handleLogin} autoComplete="off">
               <Input
                 label="Email address"
@@ -362,6 +531,7 @@ export default function LoginPage() {
                 Sign In
               </Button>
             </form>
+            )}
           </div>
         </div>
       </div>

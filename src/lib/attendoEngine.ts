@@ -516,14 +516,93 @@ export async function assignStaffShift(
 /**
  * Get daily attendance records for a restaurant on a specific date (YYYY-MM-DD)
  */
+
+/**
+ * Timezone-safe local date string (YYYY-MM-DD) avoiding UTC midnight shift
+ */
+export function getLocalDateString(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Calculate total hours worked between punch-in and punch-out (or now if on-duty)
+ */
+export function calculateHoursWorked(punchInTime?: string | null, punchOutTime?: string | null): number {
+  if (!punchInTime) return 0;
+  const inMs = new Date(punchInTime).getTime();
+  const endMs = punchOutTime ? new Date(punchOutTime).getTime() : Date.now();
+  const diffMs = Math.max(0, endMs - inMs);
+  const hours = diffMs / (1000 * 60 * 60);
+  return Math.round(hours * 10) / 10;
+}
+
+/**
+ * Format total hours worked into human text (e.g. "1 hr", "1.5 hrs", "2 hrs")
+ */
+export function formatHoursWorkedText(punchInTime?: string | null, punchOutTime?: string | null): string {
+  const hours = calculateHoursWorked(punchInTime, punchOutTime);
+  if (hours <= 0) return '0 hrs';
+  if (hours === 1) return '1 hr';
+  return `${hours} hrs`;
+}
+
+function saveLocalAttendanceRecord(restaurantId: string, record: StaffAttendance) {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = `smartdine_attendo_recent_${restaurantId}`;
+    const raw = localStorage.getItem(key);
+    let list: StaffAttendance[] = raw ? JSON.parse(raw) : [];
+    list = list.filter(a => !(a.staff_id === record.staff_id && a.date === record.date));
+    list.push(record);
+    if (list.length > 60) list = list.slice(-60);
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {}
+}
+
+function getLocalAttendanceRecords(restaurantId: string, date?: string): StaffAttendance[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const key = `smartdine_attendo_recent_${restaurantId}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const list: StaffAttendance[] = JSON.parse(raw);
+    if (date) {
+      return list.filter(a => a.date === date);
+    }
+    return list;
+  } catch {
+    return [];
+  }
+}
+
 export async function getAttendanceForDate(restaurantId: string, date: string): Promise<StaffAttendance[]> {
   try {
     const rest = await db.getRestaurantById(restaurantId);
-    const attendanceList: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
-    return attendanceList.filter(a => a.date === date);
+    let attendanceList: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
+    let matched = attendanceList.filter(a => a.date === date);
+
+    const localRecords = getLocalAttendanceRecords(restaurantId, date);
+    if (localRecords.length > 0) {
+      const mergedMap = new Map<string, StaffAttendance>();
+      matched.forEach(item => mergedMap.set(item.staff_id, item));
+      localRecords.forEach(localItem => {
+        const existing = mergedMap.get(localItem.staff_id);
+        if (!existing) {
+          mergedMap.set(localItem.staff_id, localItem);
+        } else if (localItem.punch_out_time && !existing.punch_out_time) {
+          mergedMap.set(localItem.staff_id, localItem);
+        }
+      });
+      matched = Array.from(mergedMap.values());
+    }
+
+    return matched;
   } catch (err) {
     console.warn('[Attendo] getAttendanceForDate err:', err);
-    return [];
+    return getLocalAttendanceRecords(restaurantId, date);
   }
 }
 
@@ -687,6 +766,7 @@ export async function punchIn(params: {
     if (apiRes.ok) {
       const data = await apiRes.json();
       if (data.success && data.attendance) {
+        saveLocalAttendanceRecord(restaurantId, data.attendance);
         db.clearRestaurantCache(restaurantId);
         return { success: true, attendance: data.attendance };
       }
@@ -719,6 +799,7 @@ export async function punchIn(params: {
     db.clearRestaurantCache(restaurantId);
   }
 
+  saveLocalAttendanceRecord(restaurantId, attendanceRecord);
   return { success: true, attendance: attendanceRecord };
 }
 
@@ -775,6 +856,7 @@ export async function punchOut(params: {
     if (apiRes.ok) {
       const data = await apiRes.json();
       if (data.success && data.attendance) {
+        saveLocalAttendanceRecord(restaurantId, data.attendance);
         db.clearRestaurantCache(restaurantId);
         return { success: true, attendance: data.attendance };
       }
@@ -807,6 +889,7 @@ export async function punchOut(params: {
     db.clearRestaurantCache(restaurantId);
   }
 
+  saveLocalAttendanceRecord(restaurantId, updated);
   return { success: true, attendance: updated };
 }
 
