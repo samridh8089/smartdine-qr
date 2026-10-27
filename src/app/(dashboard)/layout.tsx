@@ -605,6 +605,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('smartdine_impersonated_profile');
     }
+    if (typeof window !== 'undefined' && (window as any).ReactNativeWebView?.postMessage) {
+      try { (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'SIGN_OUT' })); } catch (_) {}
+    }
     clearActiveUserCache();
     await supabase.auth.signOut();
     router.push('/login');
