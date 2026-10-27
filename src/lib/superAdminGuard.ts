@@ -88,6 +88,41 @@ export async function verifySuperAdminRequest(req: Request) {
       };
     }
 
+    // MANDATORY MFA (AAL2) VERIFICATION FOR SUPER ADMIN
+    let jwtAal = 'aal1';
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        jwtAal = payload.aal || 'aal1';
+      }
+    } catch (e) {
+      // In case of parsing error, jwtAal remains 'aal1'
+    }
+
+    // Check if user has enrolled/verified TOTP factors
+    let hasVerifiedTotp = (user as any).factors?.some((f: any) => f.factor_type === 'totp' && f.status === 'verified');
+    if (hasVerifiedTotp === undefined) {
+      try {
+        const { data: mfaData } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: user.id });
+        hasVerifiedTotp = mfaData?.factors?.some((f: any) => f.factor_type === 'totp' && f.status === 'verified');
+      } catch (mfaErr) {
+        console.warn('[superAdminGuard] Failed to fetch MFA factors:', mfaErr);
+      }
+    }
+
+    if (hasVerifiedTotp && jwtAal !== 'aal2') {
+      console.warn(`[MFA REJECTED]: Super Admin ${user.email} attempted admin API call with single-factor token (${jwtAal} instead of aal2)`);
+      return {
+        isSuperAdmin: false,
+        user,
+        response: NextResponse.json({
+          error: 'MFA_CHALLENGE_REQUIRED',
+          message: 'Two-Factor Authentication (AAL2) token required for Super Admin actions. Please verify your 6-digit TOTP code.'
+        }, { status: 403 })
+      };
+    }
+
     return { isSuperAdmin: true, user, response: null };
   } catch (err: any) {
     return {
