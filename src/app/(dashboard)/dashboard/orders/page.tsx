@@ -3305,9 +3305,9 @@ export default function OrdersPage() {
             ) : selectedOrder ? (
               <div className="flex-1 flex flex-col">
                 <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
-                  <div className="space-y-1">
+                  <div className="space-y-2 w-full">
                     {/* Mobile Back Button */}
-                    <div className="md:hidden w-full pb-2">
+                    <div className="md:hidden w-full pb-1">
                       <button
                         type="button"
                         onClick={() => setSelectedOrderId(null)}
@@ -3320,10 +3320,31 @@ export default function OrdersPage() {
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-950 dark:text-white text-lg">
-                        Order {getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}
-                      </h3>
+                    {/* Top Row: Order ID, Table & PROMINENT GRAND TOTAL AT TOP */}
+                    <div className="flex justify-between items-start gap-2 w-full">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-slate-950 dark:text-white text-lg">
+                            Order {getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}
+                          </h3>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                          {selectedOrder.table_name ? (selectedOrder.table_name.startsWith('Table') ? selectedOrder.table_name : `Table ${selectedOrder.table_name}`) : 'Dine-In Table'} &bull; {selectedOrder.created_at ? formatDate(selectedOrder.created_at) : 'Live'}
+                        </p>
+                      </div>
+
+                      {/* ★ GRAND TOTAL AT THE VERY TOP (Option 4 Emerald Badge) ★ */}
+                      <div className="text-right bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500/40 dark:border-emerald-700/60 px-3.5 py-1.5 rounded-xl shrink-0 shadow-2xs">
+                        <span className="block text-[9px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+                          Grand Total
+                        </span>
+                        <span className="text-xl font-black text-emerald-700 dark:text-emerald-200 leading-tight">
+                          {formatPrice(selectedOrder.total, restaurant?.settings?.currency)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap pt-1">
                       <Button
                         size="sm"
                         variant="ghost"

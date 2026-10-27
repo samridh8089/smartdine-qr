@@ -925,7 +925,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-full">
             {/* Dashboard Header */}
-            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 pt-1 sm:pt-0 flex items-center justify-between px-3.5 sm:px-6 shrink-0 sticky top-0 z-30 transition-colors">
+            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 pt-2 pb-2 px-4 sm:px-6 flex items-center justify-between shrink-0 sticky top-0 z-30 transition-colors">
               <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {restaurant?.logo_url && !logoError ? (
@@ -1000,22 +1000,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </main>
 
-            {/* Sticky Frosted Crystal Floating Manage Button (M) for Mobile */}
+            {/* Pure Frosted Crystal Floating Manage Button for Mobile (Only 'Manage' Text) */}
             <div className="fixed bottom-6 right-5 z-40 lg:hidden pointer-events-auto">
               <button
                 type="button"
                 onClick={() => setSidebarOpen(true)}
-                className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl cursor-pointer active:scale-95 transition-all backdrop-blur-md bg-white/75 dark:bg-slate-900/80 border border-white/60 dark:border-slate-700/60 shadow-xl"
+                className="px-5 py-2.5 rounded-full cursor-pointer active:scale-95 transition-all backdrop-blur-md bg-white/80 dark:bg-slate-900/85 border border-white/70 dark:border-slate-700/70 shadow-xl flex items-center justify-center"
                 aria-label="Open navigation menu"
               >
-                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white dark:bg-emerald-600 flex items-center justify-center font-black text-sm shadow-xs shrink-0">
-                  M
-                </div>
-                <div className="text-left pr-0.5">
-                  <div className="text-xs font-black text-slate-900 dark:text-white leading-tight">Manage</div>
-                  <div className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-tight">Menu • Nav</div>
-                </div>
-                <MenuIcon className="w-4 h-4 text-slate-700 dark:text-slate-300 ml-0.5 shrink-0" />
+                <span className="text-sm font-black text-slate-900 dark:text-white tracking-wide">
+                  Manage
+                </span>
               </button>
             </div>
           </div>
