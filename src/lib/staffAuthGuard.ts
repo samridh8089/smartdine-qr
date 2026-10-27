@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { decodeJwtPayloadSafe } from '@/lib/superAdminGuard';
 
 let _supabaseAdminInstance: SupabaseClient | null = null;
 
@@ -251,6 +252,40 @@ export async function verifyStaffRequest(
     // Hardened Super Admin determination: STRICTLY role === 'super_admin' in database (C7, R4)
     const isSuperAdmin = resolvedProfile?.role === 'super_admin';
     const effectiveRole = isSuperAdmin ? 'super_admin' : (resolvedProfile?.role || 'owner');
+
+    // Super Admin staff operations MANDATE AAL2 token (fail-closed)
+    if (isSuperAdmin) {
+      let jwtAal = 'aal1';
+      try {
+        const payload = decodeJwtPayloadSafe(token);
+        jwtAal = payload.aal || 'aal1';
+      } catch (parseErr: any) {
+        return {
+          isAuthorized: false,
+          isSuperAdmin: false,
+          user,
+          profile: resolvedProfile,
+          response: NextResponse.json({
+            error: 'INVALID_TOKEN_PAYLOAD',
+            message: 'Malformed or unparseable authentication token format.'
+          }, { status: 403 })
+        };
+      }
+
+      if (jwtAal !== 'aal2') {
+        console.warn(`[STAFF_GUARD MFA REJECTED]: Super Admin ${user.email} attempted staff route bypass with single-factor (${jwtAal}) token.`);
+        return {
+          isAuthorized: false,
+          isSuperAdmin: false,
+          user,
+          profile: resolvedProfile,
+          response: NextResponse.json({
+            error: 'MFA_CHALLENGE_REQUIRED',
+            message: 'Two-Factor Authentication (AAL2) token required for Super Admin staff operations. Please verify your 6-digit TOTP code.'
+          }, { status: 403 })
+        };
+      }
+    }
 
     // 3. Verify Allowed Roles
     if (allowedRoles && allowedRoles.length > 0 && !isSuperAdmin) {

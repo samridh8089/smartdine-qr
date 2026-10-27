@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { decodeJwtPayloadSafe } from './jwtHelper';
+
+export { decodeJwtPayloadSafe };
 
 let _supabaseAdminInstance: SupabaseClient | null = null;
 
@@ -88,31 +91,49 @@ export async function verifySuperAdminRequest(req: Request) {
       };
     }
 
-    // MANDATORY MFA (AAL2) VERIFICATION FOR SUPER ADMIN
-    let jwtAal = 'aal1';
+    // 1. Decode JWT payload using strict fail-closed base64url decoder
+    let jwtPayload: Record<string, any>;
     try {
-      const parts = token.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
-        jwtAal = payload.aal || 'aal1';
-      }
-    } catch (e) {
-      // In case of parsing error, jwtAal remains 'aal1'
+      jwtPayload = decodeJwtPayloadSafe(token);
+    } catch (parseErr: any) {
+      console.warn(`[FORBIDDEN 403]: Super Admin ${user.email} presented unparseable JWT:`, parseErr?.message);
+      return {
+        isSuperAdmin: false,
+        user,
+        response: NextResponse.json({
+          error: 'INVALID_TOKEN_PAYLOAD',
+          message: 'Malformed or unparseable authentication token format.'
+        }, { status: 403 })
+      };
     }
 
-    // Check if user has enrolled/verified TOTP factors
-    let hasVerifiedTotp = (user as any).factors?.some((f: any) => f.factor_type === 'totp' && f.status === 'verified');
-    if (hasVerifiedTotp === undefined) {
+    const jwtAal = jwtPayload.aal || 'aal1';
+
+    // 2. UNCONDITIONAL FAIL-CLOSED AAL2 CHECK FOR ALL SUPER ADMIN REQUESTS
+    // Super Admin endpoints MANDATE an aal2 token on every single request.
+    if (jwtAal !== 'aal2') {
+      // Check if user has enrolled/verified TOTP factors to return the precise actionable error code
+      let hasVerifiedTotp = false;
       try {
         const { data: mfaData } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: user.id });
-        hasVerifiedTotp = mfaData?.factors?.some((f: any) => f.factor_type === 'totp' && f.status === 'verified');
-      } catch (mfaErr) {
-        console.warn('[superAdminGuard] Failed to fetch MFA factors:', mfaErr);
+        hasVerifiedTotp = Boolean(mfaData?.factors?.some((f: any) => f.factor_type === 'totp' && f.status === 'verified'));
+      } catch (factorErr) {
+        console.warn('[superAdminGuard] Could not query MFA factors list:', factorErr);
       }
-    }
 
-    if (hasVerifiedTotp && jwtAal !== 'aal2') {
-      console.warn(`[MFA REJECTED]: Super Admin ${user.email} attempted admin API call with single-factor token (${jwtAal} instead of aal2)`);
+      if (!hasVerifiedTotp) {
+        console.warn(`[MFA ENROLLMENT REQUIRED]: Super Admin ${user.email} has no verified TOTP factor enrolled.`);
+        return {
+          isSuperAdmin: false,
+          user,
+          response: NextResponse.json({
+            error: 'MFA_ENROLLMENT_REQUIRED',
+            message: 'Two-Factor Authentication (TOTP) enrollment is mandatory for Super Admin accounts before accessing admin endpoints. Please enroll via the Super Admin portal.'
+          }, { status: 403 })
+        };
+      }
+
+      console.warn(`[MFA CHALLENGE REQUIRED]: Super Admin ${user.email} presented single-factor token (${jwtAal}) instead of mandatory aal2.`);
       return {
         isSuperAdmin: false,
         user,
