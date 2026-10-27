@@ -311,27 +311,55 @@ export async function getStaffProfiles(restaurantId: string, forceRefresh: boole
       }
     } catch (_) {}
 
-    // 3. Map ONLY genuine registered staff accounts
-    const verifiedStaff: StaffProfile[] = nonOwnerStaff.map(p => {
-      const saved = salaryMap.get(p.id);
-      const normalizedRole: StaffProfile['role'] = (p.role as Profile['role']) || 'waiter';
+    // 3. Merge configured staff and registered staff so records never show 0
+    const profileMap = new Map<string, StaffProfile>();
 
-      return {
+    // Seed from savedStaff in attendo settings
+    savedStaff.forEach(s => {
+      const id = s.profile_id || s.id;
+      if (id) {
+        profileMap.set(id, {
+          id,
+          restaurant_id: restaurantId,
+          profile_id: id,
+          name: s.name || 'Staff Member',
+          role: s.role || 'waiter',
+          phone: s.phone || '',
+          email: s.email || '',
+          base_salary: Number(s.base_salary) || 15000,
+          salary_type: s.salary_type || 'per_day',
+          weekly_off: s.weekly_off || 'none',
+          is_active: s.is_active !== false,
+          created_at: s.created_at,
+          updated_at: s.updated_at
+        });
+      }
+    });
+
+    // Merge registered staff profiles
+    nonOwnerStaff.forEach(p => {
+      const existing = profileMap.get(p.id);
+      const saved = salaryMap.get(p.id);
+      const normalizedRole: StaffProfile['role'] = (p.role as Profile['role']) || existing?.role || 'waiter';
+
+      profileMap.set(p.id, {
         id: p.id,
         restaurant_id: restaurantId,
         profile_id: p.id,
-        name: p.full_name || p.email.split('@')[0],
+        name: p.full_name || existing?.name || p.email.split('@')[0],
         role: normalizedRole,
-        phone: p.phone || saved?.phone || '',
-        email: p.email || '',
-        base_salary: Number(saved?.base_salary) || 15000,
-        salary_type: saved?.salary_type || 'per_day',
-        weekly_off: saved?.weekly_off || 'none',
+        phone: p.phone || existing?.phone || saved?.phone || '',
+        email: p.email || existing?.email || '',
+        base_salary: Number(saved?.base_salary || existing?.base_salary) || 15000,
+        salary_type: saved?.salary_type || existing?.salary_type || 'per_day',
+        weekly_off: saved?.weekly_off || existing?.weekly_off || 'none',
         is_active: p.is_active !== false,
-        created_at: p.created_at || saved?.created_at,
-        updated_at: saved?.updated_at
-      };
+        created_at: p.created_at || existing?.created_at || saved?.created_at,
+        updated_at: saved?.updated_at || existing?.updated_at
+      });
     });
+
+    const verifiedStaff: StaffProfile[] = Array.from(profileMap.values());
 
     _attendoStaffCache.set(restaurantId, { timestamp: Date.now(), data: verifiedStaff });
     if (typeof window !== 'undefined') {
@@ -674,7 +702,7 @@ function saveLocalAttendanceRecord(restaurantId: string, record: StaffAttendance
   } catch {}
 }
 
-function getLocalAttendanceRecords(restaurantId: string, date?: string): StaffAttendance[] {
+export function getLocalAttendanceRecords(restaurantId: string, date?: string): StaffAttendance[] {
   if (typeof window === 'undefined') return [];
   try {
     const key = `smartdine_attendo_recent_${restaurantId}`;

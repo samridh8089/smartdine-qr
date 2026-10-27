@@ -40,7 +40,8 @@ import {
   cleanupOldAttendanceSelfies,
   calculateHoursWorked,
   formatHoursWorkedText,
-  getLocalDateString
+  getLocalDateString,
+  getLocalAttendanceRecords
 } from '@/lib/attendoEngine';
 import { supabase } from '@/lib/supabase';
 import { db, Restaurant, Profile } from '@/lib/db';
@@ -116,16 +117,48 @@ export default function AttendanceManagerView({
   const canManagePayroll = currentRole === 'owner' || currentRole === 'manager';
   // 1. useState
   const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'logs' | 'payroll' | 'leaves' | 'settings'>('live');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString());
   const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
 
-  // Entity States
-  const [staffList, setStaffList] = useState<StaffProfile[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>([]);
-  const [todayAttendances, setTodayAttendances] = useState<StaffAttendance[]>([]);
-  const [dateRoster, setDateRoster] = useState<StaffShift[]>([]);
+  // Entity States - seeded immediately from restaurant prop for instantaneous 0ms first paint
+  const [staffList, setStaffList] = useState<StaffProfile[]>(() => {
+    const list: StaffProfile[] = (restaurant?.settings as any)?.attendo?.staff_profiles || [];
+    if (typeof window !== 'undefined' && restaurant?.id) {
+      try {
+        const raw = localStorage.getItem(`smartdine_staff_cache_${restaurant.id}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.data) && parsed.data.length > 0) return parsed.data;
+        }
+      } catch (_) {}
+    }
+    return list;
+  });
+  const [shifts, setShifts] = useState<Shift[]>(() => {
+    return (restaurant?.settings as any)?.attendo?.shifts || [];
+  });
+  const [todayAttendances, setTodayAttendances] = useState<StaffAttendance[]>(() => {
+    const today = getLocalDateString();
+    const list: StaffAttendance[] = (restaurant?.settings as any)?.attendo?.attendance || [];
+    let matched = list.filter(a => a.date === today);
+    if (typeof window !== 'undefined' && restaurant?.id) {
+      const local = getLocalAttendanceRecords(restaurant.id, today);
+      if (local.length > 0) {
+        const map = new Map<string, StaffAttendance>();
+        matched.forEach(m => map.set(m.staff_id, m));
+        local.forEach(l => map.set(l.staff_id, l));
+        matched = Array.from(map.values());
+      }
+    }
+    return matched;
+  });
+  const [dateRoster, setDateRoster] = useState<StaffShift[]>(() => {
+    const today = getLocalDateString();
+    const all: StaffShift[] = (restaurant?.settings as any)?.attendo?.staff_shifts || [];
+    return all.filter(a => a.assigned_date === today);
+  });
   const [salaryRecords, setSalaryRecords] = useState<SalaryRecord[]>([]);
 
   // Search & Filters
@@ -384,8 +417,12 @@ export default function AttendanceManagerView({
         getRestaurantLeaveRequests(restaurant.id)
       ]);
 
-      setStaffList(profiles);
-      setShifts(shiftList);
+      if (profiles && profiles.length > 0) {
+        setStaffList(profiles);
+      }
+      if (shiftList && shiftList.length > 0) {
+        setShifts(shiftList);
+      }
       setTodayAttendances(attendances);
       setDateRoster(roster);
       setLeaveRequests(leaves);

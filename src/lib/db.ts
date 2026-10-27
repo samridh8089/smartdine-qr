@@ -4578,10 +4578,19 @@ export const db = {
       let token = sessionData?.session?.access_token;
       if (!token && typeof window !== 'undefined') {
         try {
-          const raw = localStorage.getItem('smartdine_auth_token_v2');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            token = Array.isArray(parsed) ? parsed[0]?.access_token : (parsed?.access_token || parsed);
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.includes('-auth-token') || key.includes('smartdine_auth_token'))) {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                const candidate = Array.isArray(parsed) ? (parsed[0]?.access_token || parsed[0]) : (parsed?.access_token || parsed);
+                if (candidate && typeof candidate === 'string' && candidate.length > 20) {
+                  token = candidate;
+                  break;
+                }
+              }
+            }
           }
         } catch (e) {}
       }

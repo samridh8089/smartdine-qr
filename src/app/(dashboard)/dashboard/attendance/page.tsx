@@ -23,7 +23,12 @@ export default function AttendancePage() {
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [todayAttendances, setTodayAttendances] = useState<StaffAttendance[]>([]);
   const [todayRoster, setTodayRoster] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (activeRole && ['waiter', 'kitchen', 'cashier', 'kitchen_helper', 'cleaner', 'helper'].includes(activeRole)) {
+      return true;
+    }
+    return false;
+  });
   const [viewMode, setViewMode] = useState<'manager' | 'punch'>(() => {
     // If waiter, kitchen, cashier, cleaner, helper -> default to personal punch card
     if (activeRole && ['waiter', 'kitchen', 'cashier', 'kitchen_helper', 'cleaner', 'helper'].includes(activeRole)) {
