@@ -925,15 +925,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-full">
             {/* Dashboard Header */}
-            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 flex items-center justify-between px-3.5 sm:px-6 shrink-0 sticky top-0 z-30 transition-colors">
+            <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 pt-1 sm:pt-0 flex items-center justify-between px-3.5 sm:px-6 shrink-0 sticky top-0 z-30 transition-colors">
               <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="lg:hidden px-3 py-1.5 text-slate-800 dark:text-slate-100 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all font-extrabold text-xs shadow-2xs active:scale-95 shrink-0 cursor-pointer"
-                  aria-label="Manage restaurant"
-                >
-                  Manage
-                </button>
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {restaurant?.logo_url && !logoError ? (
                     <img 
@@ -1006,6 +999,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 children
               )}
             </main>
+
+            {/* Sticky Frosted Crystal Floating Manage Button (M) for Mobile */}
+            <div className="fixed bottom-6 right-5 z-40 lg:hidden pointer-events-auto">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl cursor-pointer active:scale-95 transition-all backdrop-blur-md bg-white/75 dark:bg-slate-900/80 border border-white/60 dark:border-slate-700/60 shadow-xl"
+                aria-label="Open navigation menu"
+              >
+                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white dark:bg-emerald-600 flex items-center justify-center font-black text-sm shadow-xs shrink-0">
+                  M
+                </div>
+                <div className="text-left pr-0.5">
+                  <div className="text-xs font-black text-slate-900 dark:text-white leading-tight">Manage</div>
+                  <div className="text-[9px] font-bold text-slate-500 dark:text-slate-400 leading-tight">Menu • Nav</div>
+                </div>
+                <MenuIcon className="w-4 h-4 text-slate-700 dark:text-slate-300 ml-0.5 shrink-0" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

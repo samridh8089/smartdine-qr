@@ -340,7 +340,12 @@ export default function OrdersPage() {
   const initialCachedOrders = restId ? dashboardStore.getCachedOrders(restId) : null;
   const [orders, setOrders] = useState<Order[]>(() => initialCachedOrders || []);
   const [optimisticStatusMap, setOptimisticStatusMap] = useState<Record<string, Order['status']>>({});
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(orderIdParam || null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return null;
+    }
+    return orderIdParam || null;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -490,7 +495,11 @@ export default function OrdersPage() {
       const foundInAll = effectiveOrders.find(o => o.id === selectedOrderId || getFormattedOrderId(o, restaurant?.name || '', effectiveOrders) === selectedOrderId);
       if (foundInAll) return foundInAll;
     }
-    // 3. Fallback to the first order of the currently visible queue
+    // 3. Fallback to the first order of the currently visible queue ONLY on desktop!
+    // On mobile (< 768px), fallback must remain null so Orders List (SS1) stays open until user taps an order!
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return null;
+    }
     return filteredOrders.length > 0 ? filteredOrders[0] : (effectiveOrders.length > 0 ? effectiveOrders[0] : null);
   }, [selectedOrderId, filteredOrders, effectiveOrders, restaurant?.name]);
 
@@ -688,7 +697,9 @@ export default function OrdersPage() {
   // ─── 4. useEffect Declarations ─────────────────────────────────────────
   useEffect(() => {
     if (rawSelectedOrder && rawSelectedOrder.id !== selectedOrderId) {
-      setSelectedOrderId(rawSelectedOrder.id);
+      if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+        setSelectedOrderId(rawSelectedOrder.id);
+      }
     }
   }, [rawSelectedOrder?.id]);
 
@@ -3403,7 +3414,7 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                <div className="p-4 sm:p-5 space-y-4">
+                <div className="p-4 sm:p-5 flex flex-col space-y-4">
                   {/* Reservation Details Banner */}
                   {isOrderReservation(selectedOrder) && (() => {
                     const parsed = parseReservationDetails(selectedOrder);
@@ -5030,8 +5041,13 @@ export default function OrdersPage() {
                 );
               })()}
 
-                  <div className="space-y-4 order-2 md:order-none">
-                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Ordered Items</h4>
+                  <div className="space-y-4 order-1 md:order-none">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Ordered Items</h4>
+                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        Food Items First
+                      </span>
+                    </div>
                     {(!selectedOrder.items || selectedOrder.items.length === 0) ? (
                       <div className="p-6 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/30">
                         <UtensilsCrossed className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
