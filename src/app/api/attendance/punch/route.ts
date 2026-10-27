@@ -72,17 +72,43 @@ export async function POST(req: Request) {
     if (punchType === 'out') {
       const prev = existingAttendance || {};
       const punchInDate = prev.punch_in_time ? new Date(prev.punch_in_time) : now;
-      const diffHours = (now.getTime() - punchInDate.getTime()) / (1000 * 60 * 60);
+      const totalWorkedHours = Math.max(0, (now.getTime() - punchInDate.getTime()) / (1000 * 60 * 60));
 
       let status = prev.status || 'present';
-      if (diffHours < 4 && status !== 'half_day') {
+      if (totalWorkedHours < 4 && status !== 'half_day') {
         status = 'half_day';
+      }
+
+      // Calculate shift duration
+      const shiftStart = assignedShift?.start_time ? assignedShift.start_time.split(':').map(Number) : [9, 0];
+      const shiftEnd = assignedShift?.end_time ? assignedShift.end_time.split(':').map(Number) : [17, 0];
+      let shiftMinutes = (shiftEnd[0] * 60 + shiftEnd[1]) - (shiftStart[0] * 60 + shiftStart[1]);
+      if (shiftMinutes <= 0) shiftMinutes += 24 * 60;
+      const shiftStandardHours = shiftMinutes / 60;
+
+      // Overtime calculation
+      let standardHours = Math.round(totalWorkedHours * 10) / 10;
+      let overtimeHours = 0;
+      let overtimeAmount = 0;
+
+      if (totalWorkedHours > shiftStandardHours) {
+        const extraHours = totalWorkedHours - shiftStandardHours;
+        if (extraHours * 60 >= 30) { // 30 min minimum buffer
+          overtimeHours = Math.round(extraHours * 10) / 10;
+          standardHours = Math.round(shiftStandardHours * 10) / 10;
+          const hourlyRate = 15000 / (30 * (shiftStandardHours > 0 ? shiftStandardHours : 8));
+          overtimeAmount = Math.round(overtimeHours * hourlyRate);
+        }
       }
 
       record = {
         ...prev,
         punch_out_time: now.toISOString(),
         status,
+        standard_hours: standardHours,
+        overtime_hours: overtimeHours,
+        overtime_amount: overtimeAmount,
+        overtime_status: overtimeHours > 0 ? 'approved' : undefined,
         updated_at: now.toISOString()
       };
     } else {

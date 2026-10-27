@@ -347,7 +347,7 @@ function generateRealisticFallbackRecipe(dishName: string, cuisine?: string) {
     preparationSteps: `1. Prep and wash fresh primary ingredients for ${dishName}.\n2. Heat pure butter or cooking oil in a heavy pan, sauté base aromatics.\n3. Add chef signature seasoning and simmer on medium flame to develop flavors.\n4. Cook main ingredients thoroughly until tender and aromatic.\n5. Finish with fresh herbs and garnishing before plating.`,
     ingredients: [
       { name: `${dishName} Main Cut / Protein`, suggestedQuantity: 180, suggestedUnit: 'gram' },
-      { name: 'Pure Dairy Butter / Cooking Oil', suggestedQuantity: 25, suggestedUnit: 'ml' },
+      { name: 'Pure Dairy Butter', suggestedQuantity: 30, suggestedUnit: 'gram' },
       { name: 'Chef Signature Gravy / Sauce Base', suggestedQuantity: 80, suggestedUnit: 'ml' },
       { name: 'Aromatic Herb & Seasoning Blend', suggestedQuantity: 15, suggestedUnit: 'gram' },
       { name: 'Fresh Herb & Cream Garnish', suggestedQuantity: 10, suggestedUnit: 'gram' }
@@ -456,7 +456,7 @@ STRICT CULINARY CATEGORIES DIRECTIVE:
 Every ingredient MUST have:
 "name": Specific, clean ingredient name (e.g. "Grated Red Carrots", "Pure Desi Ghee", "Full Cream Milk", "Khoya", "Sugar", "Green Cardamom Powder")
 "suggestedQuantity": Realistic commercial numeric quantity (e.g. 150)
-"suggestedUnit": Must be one of "gram", "ml", "piece", "kg", "litre"`;
+"suggestedUnit": Must be one of "gram", "ml", "piece", "kg", "litre". CRITICAL: Use "gram" for solids, meats, vegetables, spices, butter, paneer, and cheese. Use "ml" for liquids (milk, cooking oil, water, syrups, vinegar). Use "piece" for buns, breads, eggs. Never use "ml" for butter.`;
 
       const responseSchema = {
         type: 'OBJECT',

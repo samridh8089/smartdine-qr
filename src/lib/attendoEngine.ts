@@ -69,6 +69,10 @@ export interface StaffAttendance {
   approved_by_id?: string | null;
   approved_by_name?: string | null;
   approved_at?: string | null;
+  standard_hours?: number;
+  overtime_hours?: number;
+  overtime_amount?: number;
+  overtime_status?: 'pending' | 'approved' | 'rejected';
   created_at?: string;
   updated_at?: string;
 }
@@ -95,6 +99,8 @@ export interface SalaryRecord {
   salary_type?: 'fixed' | 'per_day';
   weekly_off?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday' | 'none';
   gross_earned: number;
+  total_overtime_hours?: number;
+  total_overtime_pay?: number;
   allowances: SalaryItem[]; // e.g. Uniform Allowance, Rent Allowance, Bonus
   deductions: SalaryItem[]; // e.g. Uniform Cut, Late Penalty, Damage
   total_advance: number;
@@ -108,6 +114,120 @@ export interface SalaryRecord {
   paid_at?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface OvertimeConfig {
+  enabled: boolean;
+  min_threshold_minutes: number; // minimum extra minutes required before OT triggers (e.g. 30 mins)
+  multiplier: number; // hourly rate multiplier (e.g. 1.0, 1.25, 1.5, 2.0)
+  auto_approve: boolean; // whether OT automatically approves on punch-out
+}
+
+export function getOvertimeConfig(restaurant: any): OvertimeConfig {
+  const ot = restaurant?.settings?.attendo?.overtime;
+  return {
+    enabled: ot?.enabled !== false,
+    min_threshold_minutes: Number(ot?.min_threshold_minutes) || 30,
+    multiplier: Number(ot?.multiplier) || 1.0,
+    auto_approve: ot?.auto_approve !== false
+  };
+}
+
+export async function saveOvertimeConfig(restaurantId: string, config: OvertimeConfig): Promise<void> {
+  const rest = await db.getRestaurantById(restaurantId);
+  if (!rest) return;
+  await db.updateRestaurant(restaurantId, {
+    settings: ({
+      ...rest.settings,
+      attendo: {
+        ...((rest.settings as any)?.attendo || {}),
+        overtime: config
+      }
+    } as any)
+  });
+}
+
+/**
+ * Calculate standard shift duration in hours (e.g. 09:00 to 17:00 = 8.0 hrs)
+ */
+export function calculateShiftDurationHours(shift?: Shift | null): number {
+  if (!shift || !shift.start_time || !shift.end_time) return 8.0;
+  const [startH, startM] = shift.start_time.split(':').map(Number);
+  const [endH, endM] = shift.end_time.split(':').map(Number);
+  let startMinutes = startH * 60 + startM;
+  let endMinutes = endH * 60 + endM;
+  if (endMinutes <= startMinutes) {
+    endMinutes += 24 * 60; // Overnight shift
+  }
+  const diffHours = (endMinutes - startMinutes) / 60;
+  return Math.round(diffHours * 10) / 10;
+}
+
+/**
+ * Robust Overtime Calculator
+ */
+export function calculateOvertime(params: {
+  punchInTime?: string | null;
+  punchOutTime?: string | null;
+  shift?: Shift | null;
+  baseSalary?: number;
+  salaryType?: 'fixed' | 'per_day';
+  otConfig?: OvertimeConfig;
+}): {
+  standardHours: number;
+  overtimeHours: number;
+  overtimeAmount: number;
+  isOvertime: boolean;
+} {
+  const { punchInTime, punchOutTime, shift, baseSalary = 15000, salaryType = 'per_day', otConfig } = params;
+  if (!punchInTime) {
+    return { standardHours: 0, overtimeHours: 0, overtimeAmount: 0, isOvertime: false };
+  }
+
+  const totalWorked = calculateHoursWorked(punchInTime, punchOutTime);
+  const shiftHours = calculateShiftDurationHours(shift);
+
+  const isEnabled = otConfig ? otConfig.enabled : true;
+  const minThresholdMinutes = otConfig ? otConfig.min_threshold_minutes : 30;
+  const multiplier = otConfig ? otConfig.multiplier : 1.0;
+
+  if (!isEnabled || totalWorked <= shiftHours) {
+    return {
+      standardHours: totalWorked,
+      overtimeHours: 0,
+      overtimeAmount: 0,
+      isOvertime: false
+    };
+  }
+
+  const extraHours = totalWorked - shiftHours;
+  const extraMinutes = extraHours * 60;
+
+  if (extraMinutes < minThresholdMinutes) {
+    return {
+      standardHours: totalWorked,
+      overtimeHours: 0,
+      overtimeAmount: 0,
+      isOvertime: false
+    };
+  }
+
+  const overtimeHours = Math.round(extraHours * 10) / 10;
+  const standardHours = shiftHours;
+
+  const effectiveSalary = Number(baseSalary) > 0 ? Number(baseSalary) : (salaryType === 'per_day' ? 500 : 15000);
+  const hourlyRate = salaryType === 'per_day'
+    ? effectiveSalary / (shiftHours > 0 ? shiftHours : 8)
+    : effectiveSalary / (30 * (shiftHours > 0 ? shiftHours : 8));
+
+  const overtimeAmount = Math.round(overtimeHours * hourlyRate * multiplier);
+
+  return {
+    standardHours,
+    overtimeHours,
+    overtimeAmount,
+    isOvertime: true
+  };
 }
 
 export interface StaffLeaveRequest {
@@ -1027,10 +1147,47 @@ export async function punchOut(params: {
     status = 'half_day';
   }
 
+  // Calculate Overtime on punch-out
+  let standardHours = Math.round(diffHours * 10) / 10;
+  let overtimeHours = 0;
+  let overtimeAmount = 0;
+  let overtimeStatus: 'approved' | undefined = undefined;
+
+  try {
+    const restObj = await db.getRestaurantById(restaurantId);
+    const otConfig = getOvertimeConfig(restObj);
+    const staffProfiles: StaffProfile[] = (restObj?.settings as any)?.attendo?.staff_profiles || [];
+    const staffProfile = staffProfiles.find(s => s.id === staffId || s.profile_id === staffId);
+    const allRoster: StaffShift[] = (restObj?.settings as any)?.attendo?.staff_shifts || [];
+    const assignedRoster = allRoster.find(r => r.staff_id === staffId && r.assigned_date === date);
+    const allShifts: Shift[] = (restObj?.settings as any)?.attendo?.shifts || [];
+    const assignedShift = allShifts.find(s => s.id === assignedRoster?.shift_id);
+
+    const otResult = calculateOvertime({
+      punchInTime: existingAttendance.punch_in_time,
+      punchOutTime: now.toISOString(),
+      shift: assignedShift,
+      baseSalary: staffProfile?.base_salary,
+      salaryType: staffProfile?.salary_type,
+      otConfig
+    });
+
+    standardHours = otResult.standardHours;
+    overtimeHours = otResult.overtimeHours;
+    overtimeAmount = otResult.overtimeAmount;
+    if (otResult.isOvertime && otConfig.auto_approve) {
+      overtimeStatus = 'approved';
+    }
+  } catch (_) {}
+
   const updated: StaffAttendance = {
     ...existingAttendance,
     punch_out_time: now.toISOString(),
     status,
+    standard_hours: standardHours,
+    overtime_hours: overtimeHours,
+    overtime_amount: overtimeAmount,
+    overtime_status: overtimeStatus,
     updated_at: now.toISOString()
   };
 
@@ -1106,6 +1263,36 @@ export async function managerOverrideAttendance(params: {
   managerUserId?: string;
 }): Promise<StaffAttendance> {
   const now = new Date().toISOString();
+
+  let standardHours = 0;
+  let overtimeHours = 0;
+  let overtimeAmount = 0;
+
+  if (params.punchInTime && params.punchOutTime) {
+    try {
+      const restObj = await db.getRestaurantById(params.restaurantId);
+      const otConfig = getOvertimeConfig(restObj);
+      const staffProfiles: StaffProfile[] = (restObj?.settings as any)?.attendo?.staff_profiles || [];
+      const staffProfile = staffProfiles.find(s => s.id === params.staffId || s.profile_id === params.staffId);
+      const allRoster: StaffShift[] = (restObj?.settings as any)?.attendo?.staff_shifts || [];
+      const assignedRoster = allRoster.find(r => r.staff_id === params.staffId && r.assigned_date === params.date);
+      const allShifts: Shift[] = (restObj?.settings as any)?.attendo?.shifts || [];
+      const assignedShift = allShifts.find(s => s.id === assignedRoster?.shift_id);
+
+      const otResult = calculateOvertime({
+        punchInTime: params.punchInTime,
+        punchOutTime: params.punchOutTime,
+        shift: assignedShift,
+        baseSalary: staffProfile?.base_salary,
+        salaryType: staffProfile?.salary_type,
+        otConfig
+      });
+      standardHours = otResult.standardHours;
+      overtimeHours = otResult.overtimeHours;
+      overtimeAmount = otResult.overtimeAmount;
+    } catch (_) {}
+  }
+
   const payload: StaffAttendance = {
     id: `att_${params.staffId}_${params.date}`,
     restaurant_id: params.restaurantId,
@@ -1114,6 +1301,10 @@ export async function managerOverrideAttendance(params: {
     punch_in_time: params.punchInTime || null,
     punch_out_time: params.punchOutTime || null,
     status: params.status,
+    standard_hours: standardHours,
+    overtime_hours: overtimeHours,
+    overtime_amount: overtimeAmount,
+    overtime_status: overtimeHours > 0 ? 'approved' : undefined,
     marked_by_type: 'manager_override',
     marked_by_user_id: params.managerUserId || null,
     notes: params.notes || 'Manager Manual Correction',
@@ -1203,6 +1394,8 @@ export async function calculateMonthlyPayroll(
     let presentCount = 0;
     let halfDayCount = 0;
     let lateCount = 0;
+    let totalOtHours = 0;
+    let totalOtPay = 0;
 
     for (const a of staffAtts) {
       if (a.approval_status === 'rejected') continue;
@@ -1212,7 +1405,14 @@ export async function calculateMonthlyPayroll(
         presentCount += 1;
         lateCount += 1;
       }
+      if (a.overtime_hours && a.overtime_status !== 'rejected') {
+        totalOtHours += Number(a.overtime_hours) || 0;
+        totalOtPay += Number(a.overtime_amount) || 0;
+      }
     }
+
+    const totalOtHoursRounded = Math.round(totalOtHours * 10) / 10;
+    const totalOtPayRounded = Math.round(totalOtPay);
 
     const baseSalary = Number(staff.base_salary) || 0;
     const salaryType: 'fixed' | 'per_day' = existing?.salary_type || staff.salary_type || 'per_day';
@@ -1241,7 +1441,7 @@ export async function calculateMonthlyPayroll(
     const totalDeductions = deductions.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
     const totalAdvance = Number(existing?.total_advance) || 0;
 
-    const netSalary = Math.max(0, Math.round(grossEarned + totalAllowances - totalDeductions - totalAdvance));
+    const netSalary = Math.max(0, Math.round(grossEarned + totalOtPayRounded + totalAllowances - totalDeductions - totalAdvance));
 
     const record: SalaryRecord = {
       id: existing?.id || `sal_${staff.id}_${year}_${month}`,
@@ -1258,6 +1458,8 @@ export async function calculateMonthlyPayroll(
       base_salary: baseSalary,
       salary_type: salaryType,
       gross_earned: grossEarned,
+      total_overtime_hours: totalOtHoursRounded,
+      total_overtime_pay: totalOtPayRounded,
       allowances,
       deductions,
       total_advance: totalAdvance,

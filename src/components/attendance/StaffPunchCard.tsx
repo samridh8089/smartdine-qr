@@ -167,15 +167,23 @@ export default function StaffPunchCard({
   const historySummary = useMemo(() => {
     let daysWorked = 0;
     let totalHours = 0;
+    let totalOvertimeHours = 0;
+    let totalOvertimePay = 0;
     for (const att of monthlyHistory) {
       if (att.status === 'present' || att.status === 'late' || att.status === 'half_day' || att.punch_in_time) {
         daysWorked += 1;
       }
       totalHours += calculateHoursWorked(att.punch_in_time, att.punch_out_time);
+      if (att.overtime_hours && att.overtime_hours > 0) {
+        totalOvertimeHours += att.overtime_hours;
+        totalOvertimePay += (att.overtime_amount || 0);
+      }
     }
     return {
       daysWorked,
-      totalHours: Math.round(totalHours * 10) / 10
+      totalHours: Math.round(totalHours * 10) / 10,
+      totalOvertimeHours: Math.round(totalOvertimeHours * 10) / 10,
+      totalOvertimePay
     };
   }, [monthlyHistory]);
   const todayStatus = useMemo(() => {
@@ -521,6 +529,12 @@ export default function StaffPunchCard({
                 <span>Total Hours Worked:</span>
                 <span className="font-bold text-slate-900 dark:text-white">{formatHoursWorkedText(todayAttendance?.punch_in_time, todayAttendance?.punch_out_time)}</span>
               </div>
+              {Boolean(todayAttendance?.overtime_hours && todayAttendance.overtime_hours > 0) && (
+                <div className="flex justify-between items-center text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 rounded-lg border border-amber-200 dark:border-amber-800/60 font-bold">
+                  <span>Overtime (OT):</span>
+                  <span>+{todayAttendance?.overtime_hours} hrs {todayAttendance?.overtime_amount ? `(₹${todayAttendance.overtime_amount})` : ''}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-600 dark:text-slate-300 border-t border-slate-200 dark:border-slate-700 pt-1.5 font-bold">
                 <span>Shift Status:</span>
                 <span className="capitalize text-slate-900 dark:text-white">{todayAttendance?.status}</span>
@@ -630,7 +644,7 @@ export default function StaffPunchCard({
           </div>
 
           {/* Clean Metric Summary Bar for Staff */}
-          <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Days Worked</span>
               <span className="text-base font-black text-slate-900 dark:text-white">{historySummary.daysWorked} Days</span>
@@ -638,6 +652,12 @@ export default function StaffPunchCard({
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Total Hours Worked</span>
               <span className="text-base font-black text-slate-900 dark:text-white">{historySummary.totalHours} hrs</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400 block">Overtime (OT)</span>
+              <span className="text-base font-black text-amber-600 dark:text-amber-400">
+                {historySummary.totalOvertimeHours} hrs {historySummary.totalOvertimePay > 0 ? `(₹${historySummary.totalOvertimePay})` : ''}
+              </span>
             </div>
           </div>
 
@@ -671,6 +691,11 @@ export default function StaffPunchCard({
                       <span className="text-xs font-bold text-slate-900 dark:text-white block">
                         {hoursText}
                       </span>
+                      {Boolean(att.overtime_hours && att.overtime_hours > 0) && (
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 block">
+                          +{att.overtime_hours}h OT
+                        </span>
+                      )}
                       <span
                         className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block mt-0.5 ${
                           att.status === 'present'

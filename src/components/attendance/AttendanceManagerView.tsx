@@ -41,7 +41,10 @@ import {
   calculateHoursWorked,
   formatHoursWorkedText,
   getLocalDateString,
-  getLocalAttendanceRecords
+  getLocalAttendanceRecords,
+  OvertimeConfig,
+  getOvertimeConfig,
+  saveOvertimeConfig
 } from '@/lib/attendoEngine';
 import { supabase } from '@/lib/supabase';
 import { db, Restaurant, Profile } from '@/lib/db';
@@ -256,6 +259,11 @@ export default function AttendanceManagerView({
   // Storage & Selfie Optimizer State
   const [cleaningSelfies, setCleaningSelfies] = useState(false);
   const [cleanupResultNotice, setCleanupResultNotice] = useState<string | null>(null);
+
+  // Overtime Rules Configuration State
+  const [overtimeConfig, setOvertimeConfig] = useState<OvertimeConfig>(() => getOvertimeConfig(restaurant));
+  const [savingOvertime, setSavingOvertime] = useState(false);
+  const [overtimeNotice, setOvertimeNotice] = useState<string | null>(null);
 
   // 2. useMemo: Filtered Staff List
   const filteredStaffList = useMemo(() => {
@@ -1247,6 +1255,21 @@ export default function AttendanceManagerView({
     }
   };
 
+  const handleSaveOvertimeSettings = async () => {
+    if (!restaurant?.id) return;
+    setSavingOvertime(true);
+    setOvertimeNotice(null);
+    try {
+      await saveOvertimeConfig(restaurant.id, overtimeConfig);
+      setOvertimeNotice('Overtime rules and calculation policy saved successfully!');
+      setTimeout(() => setOvertimeNotice(null), 4000);
+    } catch (e: any) {
+      setOvertimeNotice('Error saving overtime settings: ' + (e.message || 'Unknown error'));
+    } finally {
+      setSavingOvertime(false);
+    }
+  };
+
   const handleAcquireCurrentLocationAsRestaurant = () => {
     if (typeof window !== 'undefined' && navigator?.geolocation) {
       setSettingsNotice('Acquiring current GPS location from browser...');
@@ -1526,11 +1549,18 @@ export default function AttendanceManagerView({
                         </div>
                       )}
                       {isPunchedIn && (
-                        <div className="flex justify-between text-slate-600 dark:text-slate-400 border-t border-slate-200/60 dark:border-slate-700/60 pt-1 mt-1">
+                        <div className="flex justify-between items-center text-slate-600 dark:text-slate-400 border-t border-slate-200/60 dark:border-slate-700/60 pt-1 mt-1">
                           <span className="font-medium">Worked Today:</span>
-                          <span className="font-bold text-slate-900 dark:text-white bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 rounded text-[11px]">
-                            {formatHoursWorkedText(att?.punch_in_time, att?.punch_out_time)} {isOnDuty ? '(Active)' : '(Completed)'}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <span className="font-bold text-slate-900 dark:text-white bg-slate-200/80 dark:bg-slate-700 px-2 py-0.5 rounded text-[11px]">
+                              {formatHoursWorkedText(att?.punch_in_time, att?.punch_out_time)} {isOnDuty ? '(Active)' : '(Completed)'}
+                            </span>
+                            {Boolean(att?.overtime_hours && att.overtime_hours > 0) && (
+                              <span className="font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 px-1.5 py-0.5 rounded text-[10px]" title={`Overtime Pay: ₹${att?.overtime_amount || 0}`}>
+                                +{att?.overtime_hours}h OT (₹{att?.overtime_amount || 0})
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                       {att?.status === 'late' && (
@@ -1803,10 +1833,10 @@ export default function AttendanceManagerView({
                     <th className="px-4 py-3">Base Salary</th>
                     <th className="px-4 py-3">Attendance Days</th>
                     <th className="px-4 py-3">Gross Earned</th>
+                    <th className="px-4 py-3">Overtime (OT)</th>
                     <th className="px-4 py-3">Allowances (Uniform/Rent)</th>
                     <th className="px-4 py-3">Deductions & Advance</th>
                     <th className="px-4 py-3 font-bold text-slate-900 dark:text-white">Net Salary</th>
-                    <th className="px-4 py-3">Approval</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -1814,7 +1844,7 @@ export default function AttendanceManagerView({
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {staffList.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-12 text-center">
+                      <td colSpan={10} className="px-4 py-12 text-center">
                         <div className="flex flex-col items-center justify-center space-y-2 max-w-sm mx-auto">
                           <UserCheck className="w-10 h-10 text-slate-300 dark:text-slate-600" />
                           <p className="font-bold text-slate-700 dark:text-slate-200">No registered staff accounts</p>
@@ -1833,7 +1863,7 @@ export default function AttendanceManagerView({
                     </tr>
                   ) : salaryRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                      <td colSpan={10} className="px-4 py-8 text-center text-slate-400">
                         No payroll computed for {MONTH_NAMES[selectedMonth - 1]} {selectedYear}. Click &quot;Calculate Monthly Payroll&quot; to generate records.
                       </td>
                     </tr>
@@ -1890,6 +1920,18 @@ export default function AttendanceManagerView({
                             <span className="text-[10px] text-slate-400 block font-normal">
                               {(record.salary_type || 'fixed') === 'fixed' ? 'Full Base' : 'Days Pro-rated'}
                             </span>
+                          </td>
+                          <td className="px-4 py-3.5 font-semibold text-slate-800 dark:text-slate-200">
+                            {record.total_overtime_hours && record.total_overtime_hours > 0 ? (
+                              <div>
+                                <span className="text-amber-600 dark:text-amber-400 font-bold">+₹{Number(record.total_overtime_pay || 0).toLocaleString('en-IN')}</span>
+                                <span className="text-[10px] text-slate-400 block font-normal">
+                                  {record.total_overtime_hours} hrs OT
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">--</span>
+                            )}
                           </td>
                           <td className="px-4 py-3.5 font-semibold text-slate-800 dark:text-slate-200">
                             +₹{totalAllowances.toLocaleString('en-IN')}
@@ -2106,7 +2148,8 @@ export default function AttendanceManagerView({
       {/* TAB 4: GEOFENCE SETTINGS */}
       {/* ========================================================================= */}
       {activeTab === 'settings' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6 max-w-2xl">
+        <div className="space-y-6 max-w-2xl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-6">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white">
               Restaurant Geofencing & Location Punch Settings
@@ -2248,6 +2291,118 @@ export default function AttendanceManagerView({
                   {cleanupResultNotice}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+          {/* Overtime Rules & Policy Card */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-5">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Overtime (OT) Rules & Compensation Policy
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Configure extra hours calculation, minimum grace buffer, and overtime hourly pay rates for staff.
+              </p>
+            </div>
+
+            {overtimeNotice && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                {overtimeNotice}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Toggle Enable Overtime */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div>
+                  <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                    Calculate Staff Overtime Automatically
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Track extra working hours beyond standard shift duration upon punch-out
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={overtimeConfig.enabled}
+                  onChange={e => setOvertimeConfig(prev => ({ ...prev, enabled: e.target.checked }))}
+                  className="w-5 h-5 accent-slate-900 dark:accent-white rounded cursor-pointer"
+                />
+              </div>
+
+              {/* OT Minimum Buffer Threshold */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Minimum Buffer Threshold Before Overtime Starts
+                </label>
+                <select
+                  value={overtimeConfig.min_threshold_minutes}
+                  onChange={e => setOvertimeConfig(prev => ({ ...prev, min_threshold_minutes: Number(e.target.value) || 30 }))}
+                  disabled={!overtimeConfig.enabled}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-50"
+                >
+                  <option value={15}>15 Minutes Buffer</option>
+                  <option value={30}>30 Minutes Buffer (Recommended)</option>
+                  <option value={45}>45 Minutes Buffer</option>
+                  <option value={60}>60 Minutes (1 Hour Buffer)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Extra duty shorter than this threshold will not be counted as overtime.
+                </p>
+              </div>
+
+              {/* OT Multiplier */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Overtime Pay Multiplier Rate
+                </label>
+                <select
+                  value={overtimeConfig.multiplier}
+                  onChange={e => setOvertimeConfig(prev => ({ ...prev, multiplier: Number(e.target.value) || 1.0 }))}
+                  disabled={!overtimeConfig.enabled}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold disabled:opacity-50"
+                >
+                  <option value={1.0}>1.0x (Regular Hourly Rate)</option>
+                  <option value={1.25}>1.25x (Standard 25% Premium)</option>
+                  <option value={1.5}>1.5x (Time & a Half)</option>
+                  <option value={2.0}>2.0x (Double Pay)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Hourly rate is derived automatically from employee monthly or daily base salary.
+                </p>
+              </div>
+
+              {/* Toggle Auto-Approve */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div>
+                  <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                    Auto-Approve Overtime for Payroll
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Include calculated overtime amounts in monthly payroll without requiring manual manager approval
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={overtimeConfig.auto_approve}
+                  onChange={e => setOvertimeConfig(prev => ({ ...prev, auto_approve: e.target.checked }))}
+                  disabled={!overtimeConfig.enabled}
+                  className="w-5 h-5 accent-slate-900 dark:accent-white rounded cursor-pointer disabled:opacity-50"
+                />
+              </div>
+
+              {/* Save Button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleSaveOvertimeSettings}
+                  disabled={savingOvertime}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 dark:text-slate-900 text-white font-extrabold text-xs rounded-xl shadow-sm cursor-pointer transition disabled:opacity-50"
+                >
+                  {savingOvertime ? 'Saving...' : 'Save Overtime Settings'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2833,7 +2988,7 @@ export default function AttendanceManagerView({
               </div>
 
               {/* Summary Strip */}
-              <div className="p-4 bg-slate-900 text-white dark:bg-slate-950 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-3 gap-3 shrink-0">
+              <div className="p-4 bg-slate-900 text-white dark:bg-slate-950 border-b border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
                 <div>
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Days Logged</span>
                   <span className="text-lg font-black text-white">
@@ -2844,6 +2999,15 @@ export default function AttendanceManagerView({
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Hours Worked</span>
                   <span className="text-lg font-black text-emerald-400">
                     {Math.round(historyAttendances.reduce((acc, a) => acc + calculateHoursWorked(a.punch_in_time, a.punch_out_time), 0) * 10) / 10} hrs
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">Overtime (OT)</span>
+                  <span className="text-lg font-black text-amber-300">
+                    {Math.round(historyAttendances.reduce((acc, a) => acc + (a.overtime_hours || 0), 0) * 10) / 10} hrs
+                  </span>
+                  <span className="text-[11px] text-slate-400 block font-normal">
+                    ₹{historyAttendances.reduce((acc, a) => acc + (a.overtime_amount || 0), 0).toLocaleString('en-IN')}
                   </span>
                 </div>
                 <div>
@@ -2928,6 +3092,11 @@ export default function AttendanceManagerView({
                           <span className="text-xs font-black text-slate-900 dark:text-white block">
                             {hoursWorked}
                           </span>
+                          {Boolean(att.overtime_hours && att.overtime_hours > 0) && (
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 block">
+                              +{att.overtime_hours}h OT (₹{att.overtime_amount || 0})
+                            </span>
+                          )}
                           <span
                             className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full inline-block mt-1 ${
                               att.status === 'present'

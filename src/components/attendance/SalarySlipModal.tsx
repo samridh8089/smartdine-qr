@@ -55,8 +55,9 @@ export default function SalarySlipModal({
   const totals = useMemo(() => {
     if (!record) return { totalEarnings: 0, totalDeductions: 0, netSalary: 0 };
     const allowancesSum = (record.allowances || []).reduce((acc, a) => acc + (Number(a.amount) || 0), 0);
+    const otPay = Number(record.total_overtime_pay) || 0;
     const deductionsSum = (record.deductions || []).reduce((acc, d) => acc + (Number(d.amount) || 0), 0) + (Number(record.total_advance) || 0);
-    const totalEarnings = (Number(record.gross_earned) || 0) + allowancesSum;
+    const totalEarnings = (Number(record.gross_earned) || 0) + otPay + allowancesSum;
     const totalDeductions = deductionsSum;
     const netSalary = Math.max(0, totalEarnings - totalDeductions);
     return { totalEarnings, totalDeductions, netSalary };
@@ -305,6 +306,12 @@ export default function SalarySlipModal({
                       </span>
                       <span className="font-bold text-slate-800">₹{Number(record.gross_earned).toLocaleString('en-IN')}</span>
                     </div>
+                    {Number(record.total_overtime_pay) > 0 && (
+                      <div className="flex justify-between pt-1.5 text-amber-800 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-950/40 px-2 py-1 rounded-lg">
+                        <span>Overtime Pay ({record.total_overtime_hours || 0} hrs)</span>
+                        <span>+₹{Number(record.total_overtime_pay).toLocaleString('en-IN')}</span>
+                      </div>
+                    )}
                     {(record.allowances || []).map((item, idx) => (
                       <div key={item.id || idx} className="flex justify-between pt-1.5 text-slate-700">
                         <span>{item.name}</span>

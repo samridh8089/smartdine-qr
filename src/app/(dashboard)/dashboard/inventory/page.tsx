@@ -449,6 +449,60 @@ export function getRateExplanationText(rate: number, rateUnit: string, itemUnit:
   return `Purchase rate: ₹${rate.toFixed(2)} per ${rateUnit}.`;
 }
 
+/**
+ * Returns only dimensionally compatible recipe portion units for an inventory raw item.
+ * Prevents catastrophic cross-unit bugs (e.g. assigning ml to kg items).
+ */
+export function getCompatibleRecipeUnits(itemUnit: string): { value: string; label: string }[] {
+  const norm = normalizeUnit(itemUnit);
+  const map = UNIT_MAP[norm];
+  const cat = map?.category;
+
+  if (cat === 'mass') {
+    return [
+      { value: 'gram', label: 'gram (g) - Recipe standard' },
+      { value: 'kg', label: 'kg (kilogram) - Bulk portion' },
+      { value: 'mg', label: 'mg (milligram) - Micro seasoning' }
+    ];
+  }
+  if (cat === 'volume') {
+    return [
+      { value: 'ml', label: 'ml (millilitre) - Recipe standard' },
+      { value: 'litre', label: 'litre (l) - Bulk portion' },
+      { value: 'tbsp', label: 'tbsp (~15ml)' },
+      { value: 'tsp', label: 'tsp (~5ml)' }
+    ];
+  }
+  if (cat === 'count') {
+    return [
+      { value: 'piece', label: 'piece (pcs)' },
+      { value: 'dozen', label: 'dozen (12 pcs)' },
+      { value: 'unit', label: 'unit' }
+    ];
+  }
+  return [
+    { value: norm || 'piece', label: norm || 'piece' },
+    { value: 'piece', label: 'piece (pcs)' },
+    { value: 'packet', label: 'packet' },
+    { value: 'box', label: 'box' },
+    { value: 'bottle', label: 'bottle' },
+    { value: 'can', label: 'can' },
+    { value: 'portion', label: 'portion' }
+  ];
+}
+
+/**
+ * Provides the recommended default culinary portion unit when linking a raw item to a recipe.
+ */
+export function getDefaultRecipeUnit(itemUnit: string): string {
+  const norm = normalizeUnit(itemUnit);
+  const cat = UNIT_MAP[norm]?.category;
+  if (cat === 'mass') return 'gram';
+  if (cat === 'volume') return 'ml';
+  if (cat === 'count') return 'piece';
+  return norm || 'piece';
+}
+
 function formatTransactionMeta(tx: any) {
   const type = tx.transaction_type;
   const rawQty = Number(tx.quantity) || 0;
@@ -1055,6 +1109,7 @@ export default function InventoryDashboardPage() {
     if (!recipe || !recipe.inventory_recipe_ingredients || recipe.inventory_recipe_ingredients.length === 0) {
       return {
         isConfigured: false,
+        hasUnitConflict: false,
         recipeCost: 0,
         baselineCost: 0,
         costDiff: 0,
@@ -1076,12 +1131,26 @@ export default function InventoryDashboardPage() {
     }
 
     let totalCost = 0;
+    let hasUnitConflict = false;
     recipe.inventory_recipe_ingredients.forEach((ing: any) => {
       const item = effectiveItems.find(i => i.id === ing.inventory_item_id);
       if (item) {
         let ingQtyInItemUnit = Number(ing.quantity || 0);
-        if (normalizeUnit(ing.unit) !== normalizeUnit(item.unit) && areUnitsCompatible(ing.unit, item.unit)) {
-          ingQtyInItemUnit = convertUnit(ingQtyInItemUnit, ing.unit, item.unit);
+        if (normalizeUnit(ing.unit) !== normalizeUnit(item.unit)) {
+          if (areUnitsCompatible(ing.unit, item.unit)) {
+            ingQtyInItemUnit = convertUnit(ingQtyInItemUnit, ing.unit, item.unit);
+          } else {
+            hasUnitConflict = true;
+            // Cross-dimensional safety proxy for UI cost calculation (prevents 1,000x cost explosion)
+            const catIng = UNIT_MAP[normalizeUnit(ing.unit)]?.category;
+            const catItem = UNIT_MAP[normalizeUnit(item.unit)]?.category;
+            if ((catIng === 'volume' && catItem === 'mass') || (catIng === 'mass' && catItem === 'volume')) {
+              if ((normalizeUnit(ing.unit) === 'ml' && normalizeUnit(item.unit) === 'kg') ||
+                  (normalizeUnit(ing.unit) === 'gram' && normalizeUnit(item.unit) === 'litre')) {
+                ingQtyInItemUnit = ingQtyInItemUnit * 0.001;
+              }
+            }
+          }
         }
         totalCost += ingQtyInItemUnit * Number(item.cost_per_unit || 0);
       }
@@ -1153,6 +1222,7 @@ export default function InventoryDashboardPage() {
 
     return {
       isConfigured: true,
+      hasUnitConflict,
       recipeCost: currentCost,
       baselineCost,
       costDiff,
@@ -1799,6 +1869,20 @@ export default function InventoryDashboardPage() {
       } catch (_) {}
 
       const validIngredients = recipeIngredients.filter(i => i.inventory_item_id && Number(i.quantity) > 0);
+
+      // Unit Mismatch Protection: Stop save if an ingredient has incompatible units (e.g. ml for kg items)
+      const incompatibleIng = validIngredients.find(ing => {
+        const item = effectiveItems.find(i => i.id === ing.inventory_item_id);
+        return item && !areUnitsCompatible(ing.unit, item.unit);
+      });
+
+      if (incompatibleIng) {
+        const item = effectiveItems.find(i => i.id === incompatibleIng.inventory_item_id);
+        const correctUnit = getDefaultRecipeUnit(item?.unit || 'gram');
+        alert(`Cannot save recipe due to Unit Mismatch: "${item?.name}" is tracked in "${item?.unit}" in inventory, but recipe has unit "${incompatibleIng.unit}". Please click the "Fix" button to change it to "${correctUnit}" before saving.`);
+        return;
+      }
+
       const computedTotalCost = validIngredients.reduce((sum, ing) => {
         const item = effectiveItems.find(i => i.id === ing.inventory_item_id);
         if (!item) return sum;
@@ -2101,11 +2185,15 @@ export default function InventoryDashboardPage() {
         }
 
         if (matched) {
+          let finalUnit = ing.suggestedUnit || matched.unit || 'gram';
+          if (!areUnitsCompatible(finalUnit, matched.unit)) {
+            finalUnit = getDefaultRecipeUnit(matched.unit);
+          }
           mappedIngredients.push({
             inventory_item_id: matched.id,
             ingredientName: matched.name,
             quantity: Number(ing.suggestedQuantity || 100),
-            unit: ing.suggestedUnit || matched.unit || 'gram',
+            unit: finalUnit,
             isMatched: true
           });
         }
@@ -2943,9 +3031,16 @@ export default function InventoryDashboardPage() {
                         </td>
                         <td className="py-3.5 px-4">
                           {metrics.isConfigured ? (
-                            <span className="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
-                              Configured ({metrics.ingredientsCount} items)
-                            </span>
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                                Configured ({metrics.ingredientsCount} items)
+                              </span>
+                              {metrics.hasUnitConflict && (
+                                <span className="bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                  Unit Conflict (Click to fix)
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="border border-gray-200 dark:border-gray-700 text-gray-500 px-2.5 py-0.5 rounded-full text-[10px] font-medium">
                               Not Configured
@@ -4201,8 +4296,20 @@ export default function InventoryDashboardPage() {
                     const selItem = effectiveItems.find(i => i.id === ing.inventory_item_id);
                     if (!selItem) return acc;
                     let qtyInItemUnit = Number(ing.quantity || 0);
-                    if (normalizeUnit(ing.unit) !== normalizeUnit(selItem.unit) && areUnitsCompatible(ing.unit, selItem.unit)) {
-                      qtyInItemUnit = convertUnit(qtyInItemUnit, ing.unit, selItem.unit);
+                    if (normalizeUnit(ing.unit) !== normalizeUnit(selItem.unit)) {
+                      if (areUnitsCompatible(ing.unit, selItem.unit)) {
+                        qtyInItemUnit = convertUnit(qtyInItemUnit, ing.unit, selItem.unit);
+                      } else {
+                        // Safe culinary estimation fallback (1 ml ≈ 1 g)
+                        const catIng = UNIT_MAP[normalizeUnit(ing.unit)]?.category;
+                        const catItem = UNIT_MAP[normalizeUnit(selItem.unit)]?.category;
+                        if ((catIng === 'volume' && catItem === 'mass') || (catIng === 'mass' && catItem === 'volume')) {
+                          if ((normalizeUnit(ing.unit) === 'ml' && normalizeUnit(selItem.unit) === 'kg') ||
+                              (normalizeUnit(ing.unit) === 'gram' && normalizeUnit(selItem.unit) === 'litre')) {
+                            qtyInItemUnit = qtyInItemUnit * 0.001;
+                          }
+                        }
+                      }
                     }
                     return acc + (qtyInItemUnit * Number(selItem.cost_per_unit || 0));
                   }, 0);
@@ -4367,90 +4474,142 @@ export default function InventoryDashboardPage() {
                     {recipeIngredients.map((ing, idx) => {
                       const selItem = effectiveItems.find(i => i.id === ing.inventory_item_id);
                       let ingCost = 0;
+                      let isUnitMismatch = false;
+                      let stockDeductionText = '';
+                      const qty = Number(ing.quantity || 0);
+
                       if (selItem) {
-                        let ingQtyInItemUnit = Number(ing.quantity || 0);
-                        if (normalizeUnit(ing.unit) !== normalizeUnit(selItem.unit) && areUnitsCompatible(ing.unit, selItem.unit)) {
-                          ingQtyInItemUnit = convertUnit(ingQtyInItemUnit, ing.unit, selItem.unit);
+                        const normIng = normalizeUnit(ing.unit);
+                        const normItem = normalizeUnit(selItem.unit);
+                        const compatible = areUnitsCompatible(ing.unit, selItem.unit);
+
+                        if (compatible) {
+                          let ingQtyInItemUnit = qty;
+                          if (normIng !== normItem) {
+                            ingQtyInItemUnit = convertUnit(ingQtyInItemUnit, ing.unit, selItem.unit);
+                          }
+                          ingCost = ingQtyInItemUnit * Number(selItem.cost_per_unit || 0);
+                          if (qty > 0) {
+                            stockDeductionText = `${qty} ${ing.unit} = ${parseFloat(ingQtyInItemUnit.toFixed(4))} ${selItem.unit} deducted from stock per dish`;
+                          }
+                        } else {
+                          isUnitMismatch = true;
+                          // Safe culinary fallback proxy for UI preview so cost doesn't show as ₹25,000+
+                          const catIng = UNIT_MAP[normIng]?.category;
+                          const catItem = UNIT_MAP[normItem]?.category;
+                          let fallbackFactor = 1;
+                          if ((catIng === 'volume' && catItem === 'mass') || (catIng === 'mass' && catItem === 'volume')) {
+                            if ((normIng === 'ml' && normItem === 'kg') || (normIng === 'gram' && normItem === 'litre')) {
+                              fallbackFactor = 0.001;
+                            }
+                          }
+                          const safeQty = qty * fallbackFactor;
+                          ingCost = safeQty * Number(selItem.cost_per_unit || 0);
                         }
-                        ingCost = ingQtyInItemUnit * Number(selItem.cost_per_unit || 0);
                       }
 
                       return (
-                        <div key={idx} className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
-                          <select
-                            value={ing.inventory_item_id}
-                            onChange={e => {
-                              const newIngs = [...recipeIngredients];
-                              newIngs[idx].inventory_item_id = e.target.value;
-                              const targetItem = effectiveItems.find(i => i.id === e.target.value);
-                              if (targetItem) {
-                                newIngs[idx].unit = targetItem.unit;
-                              }
-                              setRecipeIngredients(newIngs);
-                            }}
-                            className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
-                          >
-                            <option value="">Select Raw Inventory Item...</option>
-                            {activeItems.map(item => (
-                              <option key={item.id} value={item.id}>
-                                {item.name} ({item.category}) — {formatStockQuantity(item.current_stock, item.unit)} in stock
-                              </option>
-                            ))}
-                          </select>
+                        <div key={idx} className="p-2.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/60 space-y-1.5">
+                          <div className="flex gap-2 items-center flex-wrap sm:flex-nowrap">
+                            <select
+                              value={ing.inventory_item_id}
+                              onChange={e => {
+                                const newIngs = [...recipeIngredients];
+                                newIngs[idx].inventory_item_id = e.target.value;
+                                const targetItem = effectiveItems.find(i => i.id === e.target.value);
+                                if (targetItem) {
+                                  newIngs[idx].unit = getDefaultRecipeUnit(targetItem.unit);
+                                }
+                                setRecipeIngredients(newIngs);
+                              }}
+                              className="flex-1 min-w-[200px] px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
+                            >
+                              <option value="">Select Raw Inventory Item...</option>
+                              {activeItems.map(item => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name} ({item.category}) — {formatStockQuantity(item.current_stock, item.unit)} in stock
+                                </option>
+                              ))}
+                            </select>
 
-                          <input
-                            type="number"
-                            step="any"
-                            placeholder="Qty"
-                            value={ing.quantity}
-                            onChange={e => {
-                              const newIngs = [...recipeIngredients];
-                              newIngs[idx].quantity = e.target.value;
-                              setRecipeIngredients(newIngs);
-                            }}
-                            className="w-20 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
-                          />
+                            <input
+                              type="number"
+                              step="any"
+                              placeholder="Qty"
+                              value={ing.quantity}
+                              onChange={e => {
+                                const newIngs = [...recipeIngredients];
+                                newIngs[idx].quantity = e.target.value;
+                                setRecipeIngredients(newIngs);
+                              }}
+                              className="w-20 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
+                            />
 
-                          <select
-                            value={ing.unit}
-                            onChange={e => {
-                              const newIngs = [...recipeIngredients];
-                              newIngs[idx].unit = e.target.value;
-                              setRecipeIngredients(newIngs);
-                            }}
-                            className="w-24 px-2 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
-                          >
-                            {selItem ? (
-                              STANDARD_UNIT_GROUPS.map((grp, gIdx) => (
-                                <optgroup key={gIdx} label={grp.group}>
-                                  {grp.options.map((opt, oIdx) => (
-                                    <option key={oIdx} value={opt.value}>{opt.label}</option>
-                                  ))}
-                                </optgroup>
-                              ))
-                            ) : (
-                              <>
-                                <option value="gram">gram (g)</option>
-                                <option value="kg">kg</option>
-                                <option value="ml">ml</option>
-                                <option value="litre">litre (l)</option>
-                                <option value="piece">piece (pcs)</option>
-                              </>
-                            )}
-                          </select>
+                            <select
+                              value={ing.unit}
+                              onChange={e => {
+                                const newIngs = [...recipeIngredients];
+                                newIngs[idx].unit = e.target.value;
+                                setRecipeIngredients(newIngs);
+                              }}
+                              className="w-32 px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                            >
+                              {selItem ? (
+                                getCompatibleRecipeUnits(selItem.unit).map((opt, oIdx) => (
+                                  <option key={oIdx} value={opt.value}>{opt.label}</option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="gram">gram (g)</option>
+                                  <option value="kg">kg</option>
+                                  <option value="ml">ml</option>
+                                  <option value="litre">litre (l)</option>
+                                  <option value="piece">piece (pcs)</option>
+                                </>
+                              )}
+                            </select>
 
-                          <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 min-w-[70px] text-right px-1">
-                            ₹{formatCurrency(ingCost)}
-                          </span>
+                            <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 min-w-[70px] text-right px-1">
+                              ₹{formatCurrency(ingCost)}
+                            </span>
 
-                          <button
-                            onClick={() => {
-                              setRecipeIngredients(recipeIngredients.filter((_, iIdx) => iIdx !== idx));
-                            }}
-                            className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                            <button
+                              onClick={() => {
+                                setRecipeIngredients(recipeIngredients.filter((_, iIdx) => iIdx !== idx));
+                              }}
+                              className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+
+                          {/* Unit Incompatibility Alert with 1-Click Auto-Fix */}
+                          {isUnitMismatch && selItem && (
+                            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-[11px] text-amber-950 dark:text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                              <div>
+                                <span className="font-bold">Unit Mismatch Alert:</span> {selItem.name} is tracked in <strong>{selItem.unit}</strong> ({UNIT_MAP[normalizeUnit(selItem.unit)]?.category === 'mass' ? 'Weight' : 'Volume'}), but recipe specifies <strong>{ing.unit}</strong> ({UNIT_MAP[normalizeUnit(ing.unit)]?.category === 'mass' ? 'Weight' : 'Volume'}). In orders, this causes 1,000x stock calculation errors!
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const autoUnit = getDefaultRecipeUnit(selItem.unit);
+                                  const newIngs = [...recipeIngredients];
+                                  newIngs[idx].unit = autoUnit;
+                                  setRecipeIngredients(newIngs);
+                                }}
+                                className="px-2.5 py-1 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded-lg cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                              >
+                                Fix: Switch to {getDefaultRecipeUnit(selItem.unit)}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Live Stock Deduction Helper */}
+                          {!isUnitMismatch && stockDeductionText && (
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium pl-1">
+                              {stockDeductionText}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
