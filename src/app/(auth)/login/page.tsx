@@ -42,6 +42,19 @@ export default function LoginPage() {
   }, []);
 
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session?.user) {
+        const role = data.session.user.user_metadata?.role;
+        if (role === 'super_admin') {
+          router.push('/super-admin');
+        } else {
+          router.push('/dashboard');
+        }
+      }
+    });
+  }, [router]);
+
   const handleVerifyMfa = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mfaFactorId || !mfaCode.trim()) return;
@@ -87,9 +100,16 @@ export default function LoginPage() {
     setError('');
     clearActiveUserCache();
 
+    const form = e.currentTarget as HTMLFormElement;
+    const formData = new FormData(form);
+    const formEmail = (formData.get('email') as string) || email;
+    const formPassword = (formData.get('password') as string) || password;
+    const cleanEmail = (formEmail || '').trim().toLowerCase();
+    const cleanPassword = formPassword || '';
+
     let { data, error: err } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password
+      email: cleanEmail,
+      password: cleanPassword
     });
 
     if (err || !data?.user) {
@@ -279,6 +299,7 @@ export default function LoginPage() {
                 <Mail className="w-5 h-5 text-slate-400 mr-2.5 flex-shrink-0" />
                 <input
                   id="mobile-email"
+                  name="email"
                   type="email"
                   autoComplete="off"
                   required
@@ -307,6 +328,7 @@ export default function LoginPage() {
                 <Lock className="w-5 h-5 text-slate-400 mr-2.5 flex-shrink-0" />
                 <input
                   id="mobile-password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   required

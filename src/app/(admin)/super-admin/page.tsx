@@ -1500,15 +1500,16 @@ export default function SuperAdminPage() {
 
           {/* MFA / 2FA Security Button */}
           <button
+            type="button"
             onClick={() => {
               setMfaModalOpen(true);
               loadMfaStatus();
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer"
             title="Two-Factor Authentication (2FA) Security Settings"
           >
-            <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-            <span className="hidden sm:inline">2FA Security</span>
+            <ShieldCheck className="h-4 w-4 text-white" />
+            <span>2FA Security</span>
           </button>
 
           {/* Founder Profile Pill */}
@@ -1733,6 +1734,17 @@ export default function SuperAdminPage() {
                       className="flex-1 bg-white/10 hover:bg-white/20 border-white/20 text-white text-xs font-bold rounded-xl gap-1.5"
                     >
                       <Lock className="h-3.5 w-3.5 text-emerald-300" /> Audit Logs
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setMfaModalOpen(true);
+                        loadMfaStatus();
+                      }}
+                      className="flex-1 bg-indigo-500/30 hover:bg-indigo-500/50 border-indigo-400/40 text-white text-xs font-bold rounded-xl gap-1.5"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 text-indigo-300" /> 2FA Setup
                     </Button>
                   </div>
                 </div>
@@ -3870,6 +3882,209 @@ export default function SuperAdminPage() {
           <div className="flex justify-end pt-2">
             <Button variant="secondary" size="sm" onClick={() => setShortcutsModalOpen(false)}>Close</Button>
           </div>
+        </div>
+      </Dialog>
+
+      {/* 2FA / MFA SECURITY MODAL */}
+      <Dialog
+        isOpen={mfaModalOpen}
+        onClose={() => {
+          setMfaModalOpen(false);
+          setMfaQrCode(null);
+          setMfaSecret(null);
+          setMfaError(null);
+          setMfaSuccessMsg(null);
+          setMfaVerificationCode('');
+        }}
+        title="Two-Factor Authentication (2FA) Security"
+        size="md"
+      >
+        <div className="space-y-5">
+          {mfaError && (
+            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-xl flex items-center gap-2.5 text-xs text-rose-700 dark:text-rose-400 font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              <span>{mfaError}</span>
+            </div>
+          )}
+
+          {mfaSuccessMsg && (
+            <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2.5 text-xs text-emerald-700 dark:text-emerald-400 font-semibold">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span>{mfaSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* If 2FA is already active */}
+          {mfaEnrolledFactor ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-emerald-900 dark:text-emerald-200">Two-Factor Authentication is ACTIVE</h4>
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    Your account is securely protected with Google Authenticator (TOTP). Every login requires a 6-digit one-time code.
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-mono mt-2">Factor ID: {mfaEnrolledFactor.id}</p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">Auditor Proof Checklist:</div>
+                <ul className="text-xs text-slate-600 dark:text-slate-400 list-disc list-inside space-y-1">
+                  <li>Super Admin account: <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{adminUser?.email || 'admin@cleverops.in'}</span></li>
+                  <li>Protection type: <span className="font-bold">Time-based One-Time Password (TOTP)</span></li>
+                  <li>Status: <span className="text-emerald-600 font-bold">Enrolled & Enforced</span></li>
+                </ul>
+              </div>
+
+              <div className="pt-2 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={disableMfa}
+                  disabled={mfaLoading}
+                  className="px-3.5 py-2 text-rose-600 hover:text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Disable 2FA</span>
+                </button>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setMfaModalOpen(false)}
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+          ) : mfaQrCode ? (
+            /* Enrollment in progress: Show QR code and verification input */
+            <form onSubmit={confirmMfaEnrollment} className="space-y-4">
+              <div className="text-center space-y-1">
+                <h4 className="font-bold text-sm text-slate-900 dark:text-white">Scan this QR Code in Google Authenticator</h4>
+                <p className="text-xs text-slate-500">Open Google Authenticator on your phone, tap &ldquo;+&rdquo;, and scan this QR code.</p>
+              </div>
+
+              {/* QR Code Container */}
+              <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border-2 border-indigo-100 dark:border-slate-700 shadow-sm mx-auto max-w-xs">
+                <img
+                  src={mfaQrCode}
+                  alt="2FA QR Code"
+                  className="w-48 h-48 rounded-lg"
+                />
+              </div>
+
+              {/* Secret key for manual entry */}
+              {mfaSecret && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                  <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center justify-between">
+                    <span>Manual Setup Key</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(mfaSecret);
+                        alert('Secret copied to clipboard!');
+                      }}
+                      className="text-indigo-600 hover:underline flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" /> Copy
+                    </button>
+                  </div>
+                  <div className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200 tracking-wider break-all select-all">
+                    {mfaSecret}
+                  </div>
+                </div>
+              )}
+
+              {/* 6-digit confirmation code */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 text-center">
+                  Enter 6-Digit Code from Authenticator
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={mfaVerificationCode}
+                  onChange={(e) => {
+                    setMfaVerificationCode(e.target.value.replace(/\D/g, ''));
+                    setMfaError(null);
+                  }}
+                  placeholder="000000"
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-indigo-200 dark:border-slate-700 rounded-xl py-3 px-4 text-center font-mono font-bold text-xl tracking-widest text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-600"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-1/3"
+                  onClick={() => {
+                    setMfaQrCode(null);
+                    setMfaSecret(null);
+                    setMfaVerificationCode('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="w-2/3 bg-indigo-600 hover:bg-indigo-700 font-bold"
+                  isLoading={mfaLoading}
+                  disabled={mfaVerificationCode.length < 6}
+                >
+                  Verify & Activate 2FA
+                </Button>
+              </div>
+            </form>
+          ) : (
+            /* Setup Prompt: Not enrolled yet */
+            <div className="space-y-4">
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 rounded-2xl flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-amber-900 dark:text-amber-200">Two-Factor Authentication is NOT Enabled</h4>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                    Super Admin security guidelines require MFA (TOTP) to protect sensitive restaurant configuration, owner databases, and system migrations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-xs text-slate-600 dark:text-slate-400">
+                <p className="font-bold text-slate-800 dark:text-slate-200">How it works:</p>
+                <ol className="list-decimal list-inside space-y-1.5 pl-1">
+                  <li>Click the button below to generate a secure TOTP QR code.</li>
+                  <li>Scan the QR code with <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong> on your phone.</li>
+                  <li>Enter the generated 6-digit code to activate two-factor authentication.</li>
+                </ol>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setMfaModalOpen(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={startMfaEnrollment}
+                  isLoading={mfaLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 font-bold"
+                >
+                  <ShieldCheck className="w-4 h-4 mr-1.5" />
+                  Set Up Google Authenticator
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Dialog>
     </div>
