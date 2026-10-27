@@ -88,8 +88,10 @@ export const STANDARD_INVENTORY_CATEGORIES = [
   'Sauces & Condiments',
   'Bakery & Breads',
   'Beverages & Syrups',
+  'Bar & Alcoholic Beverages',
   'Dry Fruits & Nuts',
   'Packaging & Disposables',
+  'Housekeeping & Cleaning',
   'General'
 ];
 
@@ -105,35 +107,45 @@ export const UI_UNIT_GROUPS = [
   {
     group: 'Volume (Liquids)',
     options: [
-      { value: 'litre', label: 'Litre (l) - Standard for oils, milk & syrups' },
-      { value: 'ml', label: 'Millilitre (ml) - For small extracts & colors' },
+      { value: 'litre', label: 'Litre (l) - Standard for oils, milk, syrups & draught' },
+      { value: 'ml', label: 'Millilitre (ml) - For small extracts, colors & bar measures' },
       { value: 'tbsp', label: 'Tablespoon (tbsp ~15ml)' },
       { value: 'tsp', label: 'Teaspoon (tsp ~5ml)' }
     ]
   },
   {
-    group: 'Count & Units',
+    group: 'Bar & Bottles',
     options: [
+      { value: 'bottle', label: 'Bottle - Standard for beer, wine, spirits & sauces' },
+      { value: 'can', label: 'Can / Tin - For canned beer, energy drinks, soda' },
       { value: 'piece', label: 'Piece (pcs) - For buns, eggs, portions' },
       { value: 'dozen', label: 'Dozen (12 pcs)' },
       { value: 'unit', label: 'Unit' }
     ]
   },
   {
-    group: 'Packaging',
+    group: 'Packaging & Bulk Storage',
     options: [
       { value: 'packet', label: 'Packet' },
       { value: 'box', label: 'Box' },
-      { value: 'bottle', label: 'Bottle' },
-      { value: 'can', label: 'Can' },
+      { value: 'case', label: 'Case / Carton' },
+      { value: 'crate', label: 'Crate' },
+      { value: 'keg', label: 'Keg / Barrel' },
       { value: 'jar', label: 'Jar' },
       { value: 'bag', label: 'Bag' },
       { value: 'pouch', label: 'Pouch' },
       { value: 'tray', label: 'Tray' },
-      { value: 'crate', label: 'Crate' }
+      { value: 'roll', label: 'Roll / Bundle' }
     ]
   }
 ];
+
+function hasKeyword(text: string, keyword: string): boolean {
+  if (!text || !keyword) return false;
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp('(?:^|[^a-zA-Z0-9])' + escaped + '(?:s|es)?(?:[^a-zA-Z0-9]|$)', 'i');
+  return regex.test(text);
+}
 
 export function detectCategoryAndUnit(rawName: string): { category: string; unit: string } {
   const name = (rawName || '').toLowerCase().trim();
@@ -141,134 +153,211 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
     return { category: 'Vegetables & Fruits', unit: 'kg' };
   }
 
-  // 1. Spices & Fine micro ingredients (gram)
-  const gramSpiceKeywords = [
-    'kesar', 'saffron', 'elaichi', 'cardamom', 'baking powder', 'baking soda',
-    'cinnamon', 'dalchini', 'clove', 'laung', 'heeng', 'asafoetida', 'nutmeg', 'jaiphal',
-    'mace', 'javitri', 'vanilla', 'food color', 'yeast', 'mono sodium', 'msg', 'ajinomoto',
-    'star anise', 'chhoti elaichi', 'badi elaichi'
+  // 1. Housekeeping & Cleaning (Prioritized to avoid 'Scotch Brite' / 'Bleach' conflicts)
+  const cleaningKeywords = [
+    'dishwash', 'detergent', 'lizol', 'colin', 'harpic', 'sanitizer',
+    'floor cleaner', 'surface cleaner', 'glass cleaner', 'degreaser', 'bleach', 'handwash',
+    'garbage bag', 'trash bag', 'dustbin bag', 'dustbin', 'scrubber', 'scrub pad',
+    'scotch brite', 'scotch-brite', 'mop', 'wiper', 'duster', 'microfiber', 'cleaning glove',
+    'latex glove', 'nitrile glove', 'glove', 'gloves', 'chef cap', 'hair net', 'apron',
+    'toilet cleaner', 'soap', 'dishwasher tablet', 'drain cleaner', 'oven cleaner', 'sponge'
   ];
-  if (gramSpiceKeywords.some(k => name.includes(k))) {
-    return { category: 'Spices & Seasonings', unit: 'gram' };
+  if (cleaningKeywords.some(k => hasKeyword(name, k))) {
+    const isLiquid = hasKeyword(name, 'liquid') || hasKeyword(name, 'cleaner') || hasKeyword(name, 'sanitizer') || hasKeyword(name, 'wash') || hasKeyword(name, 'bleach') || hasKeyword(name, 'spray');
+    return { category: 'Housekeeping & Cleaning', unit: isLiquid ? 'bottle' : 'packet' };
   }
 
-  // 2. Bulk Spices (Usually purchased in kg)
-  const bulkSpiceKeywords = [
-    'spice', 'masala', 'mirch powder', 'chili powder', 'turmeric', 'haldi',
-    'cumin', 'jeera', 'coriander powder', 'dhania powder', 'garam masala',
-    'chaat masala', 'amchur', 'kasuri methi', 'black pepper', 'kali mirch',
-    'salt', 'namak', 'black salt', 'rock salt', 'sesame', 'til', 'mustard seed', 'sarson seed', 'rai'
+  // 2. Packaging & Disposables
+  const packagingKeywords = [
+    'container', 'pouch', 'cup', 'glass', 'lid', 'straw',
+    'tissue', 'napkin', 'foil', 'silver foil', 'cling film', 'tape', 'packing tape',
+    'spoon', 'fork', 'cutlery', 'plate', 'bowl', 'carry bag', 'meal tray', 'tray',
+    'pizza box', 'burger box', 'bill roll', 'thermal paper', 'paper roll', 'thermal roll',
+    'toothpick', 'wet wipe', 'butter paper', 'parchment paper'
   ];
-  if (bulkSpiceKeywords.some(k => name.includes(k))) {
-    return { category: 'Spices & Seasonings', unit: 'kg' };
+  if (packagingKeywords.some(k => hasKeyword(name, k))) {
+    const isRoll = hasKeyword(name, 'foil') || hasKeyword(name, 'film') || hasKeyword(name, 'roll') || hasKeyword(name, 'tape');
+    return { category: 'Packaging & Disposables', unit: isRoll ? 'roll' : 'packet' };
   }
 
-  // 3. Oils, Ghee & Fats (Liquids in litre)
+  // 3. Bakery & Breads (Before micro spices so 'Vanilla Ice Cream' doesn't match 'Vanilla')
+  const bakeryKeywords = [
+    'bread', 'bun', 'pav', 'pizza base', 'croissant',
+    'tortilla', 'wrap', 'sponge', 'cake', 'muffin', 'loaf', 'pita',
+    'taco', 'waffle', 'brownie', 'ice cream', 'chocolate slab', 'choco chips', 'cocoa powder'
+  ];
+  if (bakeryKeywords.some(k => hasKeyword(name, k))) {
+    const isTub = hasKeyword(name, 'ice cream');
+    return { category: 'Bakery & Breads', unit: isTub ? 'litre' : 'piece' };
+  }
+
+  // 4. Bar & Alcoholic Beverages (Beer, Wine, Spirits, Cocktails)
+  const beerKeywords = [
+    'beer', 'lager', 'ale', 'stout', 'draught', 'draft beer', 'pint',
+    'kingfisher', 'bira', 'corona', 'budweiser', 'heineken', 'carlsberg',
+    'tuborg', 'miller', 'hoegaarden', 'craft beer', 'cider', 'breezer',
+    'strong beer', 'wheat beer', 'ipa'
+  ];
+  if (beerKeywords.some(k => hasKeyword(name, k))) {
+    const isCan = hasKeyword(name, 'can') || hasKeyword(name, 'tin');
+    const isKeg = hasKeyword(name, 'keg') || hasKeyword(name, 'draught') || hasKeyword(name, 'barrel');
+    return { 
+      category: 'Bar & Alcoholic Beverages', 
+      unit: isKeg ? 'keg' : isCan ? 'can' : 'bottle' 
+    };
+  }
+
+  const wineKeywords = [
+    'wine', 'champagne', 'sparkling wine', 'sula', 'jacobs creek',
+    'cabernet', 'shiraz', 'merlot', 'sauvignon', 'chardonnay', 'pinot',
+    'rose wine', 'red wine', 'white wine', 'port wine', 'prosecco', 'sangria'
+  ];
+  if (wineKeywords.some(k => hasKeyword(name, k))) {
+    return { category: 'Bar & Alcoholic Beverages', unit: 'bottle' };
+  }
+
+  const spiritsKeywords = [
+    'whiskey', 'whisky', 'scotch', 'bourbon', 'single malt', 'vodka', 'rum',
+    'gin', 'tequila', 'brandy', 'cognac', 'liqueur', 'liquor', 'alcohol',
+    'smirnoff', 'absolut', 'grey goose', 'bacardi', 'old monk', 'captain morgan',
+    'johnnie walker', 'black label', 'red label', 'chivas', 'glenfiddich', 'jameson',
+    'jack daniel', 'jim beam', 'bombay sapphire', 'tanqueray', 'baileys', 'jagermeister',
+    'kahlua', 'cointreau', 'triple sec', 'cocktail', 'mocktail', 'peg', 'campari', 'aperol'
+  ];
+  if (spiritsKeywords.some(k => hasKeyword(name, k))) {
+    return { category: 'Bar & Alcoholic Beverages', unit: 'bottle' };
+  }
+
+  // 5. Sauces, Pastes & Condiments (Takes precedence over raw vegetables/spices for ketchup, paste, puree)
+  const sauceKeywords = [
+    'sauce', 'ketchup', 'mayonnaise', 'mayo', 'vinegar', 'sirka', 'soya sauce',
+    'soy sauce', 'chilli sauce', 'schezwan', 'mustard sauce', 'dip', 'dressing', 
+    'chutney', 'paste', 'ginger garlic paste', 'puree', 'tomato puree', 'salsa'
+  ];
+  if (sauceKeywords.some(k => hasKeyword(name, k))) {
+    const isLiquid = hasKeyword(name, 'vinegar') || hasKeyword(name, 'soya sauce') || hasKeyword(name, 'soy sauce');
+    return { category: 'Sauces & Condiments', unit: isLiquid ? 'litre' : 'kg' };
+  }
+
+  // 6. Cooking Oils, Ghee & Fats (Takes precedence over raw seeds/olives)
   const oilKeywords = [
     'oil', 'tel', 'ghee', 'butter oil', 'olive oil', 'mustard oil', 'sunflower',
-    'refined oil', 'soyabean oil', 'sesame oil', 'coconut oil', 'shortening', 'vanaspati', 'dalda'
+    'refined oil', 'soyabean oil', 'sesame oil', 'coconut oil', 'shortening', 'vanaspati', 'dalda', 'pomace', 'margarine'
   ];
-  if (oilKeywords.some(k => name.includes(k))) {
+  if (oilKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Oils, Ghee & Fats', unit: 'litre' };
   }
 
-  // 4. Dairy Products
+  // 7. Fine Micro Spices & Baking Essentials (gram)
+  const gramSpiceKeywords = [
+    'kesar', 'saffron', 'elaichi', 'cardamom', 'baking powder', 'baking soda',
+    'cinnamon', 'dalchini', 'clove', 'laung', 'heeng', 'hing', 'asafoetida', 'nutmeg', 'jaiphal',
+    'mace', 'javitri', 'vanilla', 'food color', 'food colour', 'yeast', 'mono sodium', 'msg', 'ajinomoto',
+    'star anise', 'chhoti elaichi', 'badi elaichi', 'oregano', 'chilli flakes', 'chili flakes',
+    'peri peri', 'peri peri seasoning', 'citric acid'
+  ];
+  if (gramSpiceKeywords.some(k => hasKeyword(name, k))) {
+    return { category: 'Spices & Seasonings', unit: 'gram' };
+  }
+
+  // 8. Bulk Spices & Seasonings (kg)
+  const bulkSpiceKeywords = [
+    'spice', 'masala', 'mirch powder', 'chilli powder', 'chili powder', 'lal mirch', 'degi mirch', 'kashmiri mirch',
+    'turmeric', 'haldi', 'cumin', 'jeera', 'coriander powder', 'dhania powder', 'garam masala',
+    'chaat masala', 'amchur', 'kasuri methi', 'black pepper', 'kali mirch', 'white pepper',
+    'salt', 'namak', 'black salt', 'rock salt', 'sendha namak', 'sesame', 'til', 'mustard seed', 
+    'sarson seed', 'rai', 'fennel', 'saunf', 'ajwain', 'kalonji', 'tejpatta', 
+    'bay leaf', 'khus khus', 'poppy seed', 'kitchen king', 'sambar masala', 
+    'pav bhaji masala', 'chana masala', 'biryani masala', 'meat masala'
+  ];
+  if (bulkSpiceKeywords.some(k => hasKeyword(name, k))) {
+    return { category: 'Spices & Seasonings', unit: 'kg' };
+  }
+
+  // 9. Dairy Products
   const dairyLiquidKeywords = ['milk', 'doodh', 'buttermilk', 'chaas', 'lassi'];
-  if (dairyLiquidKeywords.some(k => name.includes(k))) {
+  if (dairyLiquidKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Dairy & Cheese', unit: 'litre' };
   }
   const dairySolidKeywords = [
     'paneer', 'cheese', 'butter', 'dahi', 'curd', 'cream', 'malai',
-    'khoya', 'mawa', 'yogurt', 'condensed milk', 'mozzarella', 'cheddar'
+    'khoya', 'mawa', 'yogurt', 'condensed milk', 'mozzarella', 'cheddar', 'parmesan', 'milkmaid'
   ];
-  if (dairySolidKeywords.some(k => name.includes(k))) {
+  if (dairySolidKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Dairy & Cheese', unit: 'kg' };
   }
 
-  // 5. Meat, Poultry & Seafood
-  if (name.includes('egg') || name.includes('anda')) {
+  // 10. Meat, Poultry & Seafood
+  if (hasKeyword(name, 'egg') || hasKeyword(name, 'anda') || hasKeyword(name, 'ande')) {
     return { category: 'Meat, Poultry & Seafood', unit: 'piece' };
   }
   const meatKeywords = [
     'chicken', 'mutton', 'fish', 'prawn', 'lamb', 'keema', 'pork',
-    'beef', 'bacon', 'sausage', 'salami', 'tikka meat', 'wings', 'boneless'
+    'beef', 'bacon', 'sausage', 'salami', 'tikka meat', 'wings', 'boneless',
+    'surmai', 'pomfret', 'basa', 'salmon', 'shrimp', 'crab', 'lobster', 'drumstick', 'curry cut',
+    'rawas', 'squid', 'calamari', 'ham', 'pepperoni'
   ];
-  if (meatKeywords.some(k => name.includes(k))) {
+  if (meatKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Meat, Poultry & Seafood', unit: 'kg' };
   }
 
-  // 6. Grains, Flour & Pulses
+  // 11. Grains, Flour & Pulses (kg)
   const grainKeywords = [
-    'rice', 'chawal', 'basmati', 'atta', 'flour', 'maida', 'sooji', 'besan',
+    'rice', 'chawal', 'basmati', 'biryani rice', 'atta', 'flour', 'maida', 'sooji', 'suji', 'rava', 'besan',
     'sugar', 'cheeni', 'jaggery', 'gud', 'dal', 'daal', 'rajma', 'chole',
-    'chana', 'poha', 'oats', 'wheat', 'noodle', 'pasta', 'cornflour', 'corn starch'
+    'chana', 'poha', 'oats', 'wheat', 'noodle', 'pasta', 'cornflour', 'corn starch',
+    'macaroni', 'spaghetti', 'penne', 'fusilli', 'breadcrumbs', 'vermicelli', 'seviyan'
   ];
-  if (grainKeywords.some(k => name.includes(k))) {
+  if (grainKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Grains, Flour & Pulses', unit: 'kg' };
   }
 
-  // 7. Bakery & Breads
-  const bakeryKeywords = [
-    'bread', 'bun', 'burger bun', 'pav', 'pizza base', 'croissant',
-    'tortilla', 'wrap', 'sponge', 'cake', 'muffin', 'loaf', 'pita'
-  ];
-  if (bakeryKeywords.some(k => name.includes(k))) {
-    return { category: 'Bakery & Breads', unit: 'piece' };
-  }
-
-  // 8. Packaging & Disposables
-  const packagingKeywords = [
-    'box', 'container', 'bag', 'pouch', 'cup', 'glass', 'lid', 'straw',
-    'tissue', 'napkin', 'foil', 'silver foil', 'cling film', 'tape',
-    'spoon', 'fork', 'cutlery', 'plate', 'bowl', 'carry bag'
-  ];
-  if (packagingKeywords.some(k => name.includes(k))) {
-    return { category: 'Packaging & Disposables', unit: 'piece' };
-  }
-
-  // 9. Sauces & Condiments
-  const sauceKeywords = [
-    'sauce', 'ketchup', 'mayonnaise', 'mayo', 'vinegar', 'sirka', 'soya sauce',
-    'soy sauce', 'chilli sauce', 'schezwan', 'mustard sauce', 'dip', 'dressing', 'chutney'
-  ];
-  if (sauceKeywords.some(k => name.includes(k))) {
-    const isLiquid = name.includes('vinegar') || name.includes('soya') || name.includes('soy');
-    return { category: 'Sauces & Condiments', unit: isLiquid ? 'litre' : 'kg' };
-  }
-
-  // 10. Beverages & Syrups
-  const beverageKeywords = [
-    'syrup', 'crush', 'squash', 'juice', 'soda', 'coke', 'cold drink',
-    'concentrate', 'tea', 'coffee', 'chai patti', 'green tea'
-  ];
-  if (beverageKeywords.some(k => name.includes(k))) {
-    if (name.includes('tea') || name.includes('coffee')) {
-      return { category: 'Beverages & Syrups', unit: 'kg' };
-    }
-    return { category: 'Beverages & Syrups', unit: 'litre' };
-  }
-
-  // 11. Dry Fruits & Nuts
-  const nutKeywords = [
-    'kaju', 'cashew', 'badam', 'almond', 'pista', 'pistachio', 'akhrot',
-    'walnut', 'kismis', 'raisin', 'dates', 'khajoor', 'makhana', 'peanut', 'moongphali'
-  ];
-  if (nutKeywords.some(k => name.includes(k))) {
-    return { category: 'Dry Fruits & Nuts', unit: 'kg' };
-  }
-
   // 12. Fresh Vegetables & Fruits
-  const vegetableKeywords = [
-    'pepper', 'capsicum', 'mirch', 'shimla', 'potato', 'aloo', 'onion', 'pyaz',
-    'tomato', 'tamatar', 'garlic', 'lahsun', 'ginger', 'adrak', 'lemon', 'nimbu',
-    'coriander', 'dhania', 'mint', 'pudina', 'mushroom', 'broccoli', 'spinach',
+  const freshProduceKeywords = [
+    'capsicum', 'shimla', 'shimla mirch', 'bell pepper', 'hari mirch', 'green chilli', 'green chili',
+    'potato', 'aloo', 'onion', 'pyaz', 'tomato', 'tamatar', 'garlic', 'lahsun', 'ginger', 'adrak',
+    'lemon', 'nimbu', 'coriander', 'dhania', 'mint', 'pudina', 'mushroom', 'broccoli', 'spinach',
     'palak', 'peas', 'matar', 'cucumber', 'kheera', 'carrot', 'gajar', 'cabbage',
     'patta gobhi', 'cauliflower', 'phool gobhi', 'beans', 'bhindi', 'okra',
-    'lady finger', 'beetroot', 'chukandar', 'corn', 'apple', 'banana', 'orange',
-    'mango', 'pineapple', 'watermelon'
+    'lady finger', 'beetroot', 'chukandar', 'baby corn', 'sweet corn',
+    'zucchini', 'lettuce', 'jalapeno', 'olive', 'curry leaf', 'kadi patta', 
+    'lauki', 'baingan', 'brinjal', 'spring onion', 'basil', 'parsley', 'celery', 
+    'leek', 'rosemary', 'thyme', 'apple', 'seb', 'banana', 'kela', 'orange', 
+    'santra', 'mosambi', 'pineapple', 'ananas', 'mango', 'aam', 'strawberry', 
+    'watermelon', 'tarbooj', 'muskmelon', 'kharbuja', 'papaya', 'papita', 
+    'kiwi', 'grapes', 'angoor', 'pomegranate', 'anaar', 'lime', 'avocado', 
+    'dragonfruit', 'peach', 'plum'
   ];
-  if (vegetableKeywords.some(k => name.includes(k))) {
+  if (freshProduceKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Vegetables & Fruits', unit: 'kg' };
+  }
+
+  // 13. Non-Alcoholic Beverages, Sodas & Syrups
+  const beverageKeywords = [
+    'coke', 'coca cola', 'pepsi', 'sprite', 'thums up', 'thumps up', 'fanta',
+    'limca', 'mountain dew', '7up', 'mirinda', 'soda', 'tonic water',
+    'ginger ale', 'red bull', 'monster energy', 'sting', 'syrup', 'crush', 
+    'squash', 'concentrate', 'tea', 'coffee', 'chai patti', 'green tea', 
+    'coffee beans', 'water', 'mineral water', 'packaged water', 'kinley', 
+    'aquafina', 'bisleri', 'juice', 'real juice', 'tropicana'
+  ];
+  if (beverageKeywords.some(k => hasKeyword(name, k))) {
+    if (hasKeyword(name, 'tea') || hasKeyword(name, 'coffee') || hasKeyword(name, 'chai patti') || hasKeyword(name, 'coffee beans')) {
+      return { category: 'Beverages & Syrups', unit: 'kg' };
+    }
+    const isCan = hasKeyword(name, 'can') || hasKeyword(name, 'tin') || hasKeyword(name, 'red bull') || hasKeyword(name, 'monster');
+    return { category: 'Beverages & Syrups', unit: isCan ? 'can' : 'bottle' };
+  }
+
+  // 14. Dry Fruits & Nuts
+  const nutKeywords = [
+    'kaju', 'cashew', 'badam', 'almond', 'pista', 'pistachio', 'akhrot',
+    'walnut', 'kismis', 'raisin', 'dates', 'khajoor', 'makhana', 'peanut', 
+    'moongphali', 'anjeer', 'fig', 'chia seed', 'flax seed', 'melon seed', 
+    'magaz', 'char magaz', 'pumpkin seed'
+  ];
+  if (nutKeywords.some(k => hasKeyword(name, k))) {
+    return { category: 'Dry Fruits & Nuts', unit: 'kg' };
   }
 
   return { category: 'General', unit: 'kg' };
@@ -282,17 +371,26 @@ export function computeDbCostPerUnit(rate: number, rateUnit: string, itemUnit: s
   if (normRateUnit === normItemUnit) {
     return rate;
   }
+  // Weight conversions
   if (normRateUnit === 'kg' && normItemUnit === 'gram') {
     return parseFloat((rate / 1000).toFixed(6));
   }
   if (normRateUnit === 'gram' && normItemUnit === 'kg') {
     return parseFloat((rate * 1000).toFixed(6));
   }
+  // Volume conversions
   if (normRateUnit === 'litre' && normItemUnit === 'ml') {
     return parseFloat((rate / 1000).toFixed(6));
   }
   if (normRateUnit === 'ml' && normItemUnit === 'litre') {
     return parseFloat((rate * 1000).toFixed(6));
+  }
+  // Dozen conversions
+  if (normRateUnit === 'dozen' && normItemUnit === 'piece') {
+    return parseFloat((rate / 12).toFixed(6));
+  }
+  if (normRateUnit === 'piece' && normItemUnit === 'dozen') {
+    return parseFloat((rate * 12).toFixed(6));
   }
   return rate;
 }
@@ -319,6 +417,34 @@ export function getRateExplanationText(rate: number, rateUnit: string, itemUnit:
   if (normRateUnit === 'ml') {
     const perLitre = rate * 1000;
     return `Purchase rate: ₹${rate.toFixed(2)} per ml. Bulk equivalent: ₹${perLitre.toFixed(2)} per litre.`;
+  }
+  if (normRateUnit === 'bottle') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per bottle.`;
+  }
+  if (normRateUnit === 'can') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per can.`;
+  }
+  if (normRateUnit === 'dozen' && normItemUnit === 'piece') {
+    const perPiece = rate / 12;
+    return `Purchase rate: ₹${rate.toFixed(2)} per dozen. Cost per piece: ₹${perPiece.toFixed(2)} per piece.`;
+  }
+  if (normRateUnit === 'case') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per case.`;
+  }
+  if (normRateUnit === 'crate') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per crate.`;
+  }
+  if (normRateUnit === 'keg') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per keg.`;
+  }
+  if (normRateUnit === 'packet') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per packet.`;
+  }
+  if (normRateUnit === 'box') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per box.`;
+  }
+  if (normRateUnit === 'piece') {
+    return `Purchase rate: ₹${rate.toFixed(2)} per piece.`;
   }
   return `Purchase rate: ₹${rate.toFixed(2)} per ${rateUnit}.`;
 }
@@ -3536,12 +3662,20 @@ export default function InventoryDashboardPage() {
                         >
                           <option value="kg">per kg</option>
                           <option value="litre">per litre</option>
+                          <option value="bottle">per bottle</option>
+                          <option value="can">per can</option>
                           <option value="piece">per piece</option>
                           <option value="gram">per gram</option>
                           <option value="ml">per ml</option>
                           <option value="packet">per packet</option>
                           <option value="box">per box</option>
+                          <option value="case">per case</option>
+                          <option value="crate">per crate</option>
+                          <option value="keg">per keg</option>
                           <option value="dozen">per dozen</option>
+                          {!['kg', 'litre', 'bottle', 'can', 'piece', 'gram', 'ml', 'packet', 'box', 'case', 'crate', 'keg', 'dozen'].includes(itemUnitType) && itemUnitType && (
+                            <option value={itemUnitType}>per {itemUnitType}</option>
+                          )}
                         </select>
                       </div>
 
