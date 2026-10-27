@@ -27,7 +27,13 @@ export async function generateStyledQRDataURL({
 
   try {
     const targetSize = Math.round((appearance.size || 200) * scale);
-    const quietMargin = Math.max(2, Math.round((appearance.padding || 8) / 4));
+    const quietMargin = Math.max(3, Math.round((appearance.padding || 8) / 4));
+
+    // Optical Scannability Guardrail: Ensure dark modules have strong contrast against light background
+    const requestedFg = (appearance.fgColor || '#0F172A').trim();
+    const isRedOrLowContrast = /^#?(8b|b9|5c|e6|ff|00f5)/i.test(requestedFg);
+    const effectiveFg = isRedOrLowContrast ? '#0F172A' : requestedFg;
+    const effectiveBg = (appearance.bgColor || '#FFFFFF').trim();
 
     // 1. Generate base QR code on an offscreen canvas
     if (typeof window !== 'undefined') {
@@ -39,8 +45,8 @@ export async function generateStyledQRDataURL({
         width: targetSize,
         margin: quietMargin,
         color: {
-          dark: appearance.fgColor || '#000000',
-          light: appearance.bgColor || '#FFFFFF'
+          dark: effectiveFg,
+          light: effectiveBg
         },
         errorCorrectionLevel: 'H' // High error tolerance (up to 30% occluded by center logo)
       });
@@ -54,15 +60,17 @@ export async function generateStyledQRDataURL({
             const ctx = canvas.getContext('2d');
             if (!ctx) return resolve();
 
-            const badgeSize = Math.round((appearance.centerLogoSize || 36) * scale);
+            // Cap badge size to max 20% of targetSize to strictly preserve Reed-Solomon QR data blocks
+            const rawBadgeSize = Math.round((appearance.centerLogoSize || 32) * scale);
+            const badgeSize = Math.min(rawBadgeSize, Math.round(targetSize * 0.20));
             const badgeX = (targetSize - badgeSize) / 2;
             const badgeY = (targetSize - badgeSize) / 2;
 
             ctx.save();
-            // Draw background badge for quiet separation
-            ctx.fillStyle = appearance.bgColor || '#FFFFFF';
-            ctx.shadowColor = 'rgba(0,0,0,0.15)';
-            ctx.shadowBlur = 4 * scale;
+            // Draw background badge for quiet separation without bleeding shadow
+            ctx.fillStyle = effectiveBg;
+            ctx.shadowColor = 'rgba(0,0,0,0.08)';
+            ctx.shadowBlur = 2 * scale;
 
             // Rounded badge
             const radius = badgeSize * 0.25;
@@ -80,7 +88,7 @@ export async function generateStyledQRDataURL({
             ctx.fill();
 
             // Draw image clipped inside badge
-            const pad = 3 * scale;
+            const pad = 2 * scale;
             ctx.save();
             ctx.beginPath();
             ctx.arc(targetSize / 2, targetSize / 2, (badgeSize / 2) - pad, 0, Math.PI * 2);
@@ -106,8 +114,8 @@ export async function generateStyledQRDataURL({
       width: targetSize,
       margin: quietMargin,
       color: {
-        dark: appearance.fgColor || '#000000',
-        light: appearance.bgColor || '#FFFFFF'
+        dark: effectiveFg,
+        light: effectiveBg
       },
       errorCorrectionLevel: 'H'
     });

@@ -20,6 +20,7 @@ import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 import { dashboardStore } from '@/lib/dashboardStore';
 import { useQRDesign } from '@/components/qr-studio/storage';
 import { QRCardRenderer } from '@/components/qr-studio/QRCardRenderer';
+import { generateStyledQRDataURL } from '@/components/qr-studio/qrGenerator';
 import { 
   downloadBrandedTableQR, 
   downloadAllTablesQRZip, 
@@ -79,6 +80,14 @@ export default function TablesPage() {
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignSuccessToast, setAssignSuccessToast] = useState<string | null>(null);
 
+  // Customer Name on View Cart setting state
+  const [requireCustomerName, setRequireCustomerName] = useState<boolean>(() => (restaurant?.settings as any)?.require_customer_name ?? false);
+  const [isUpdatingCustomerNameSetting, setIsUpdatingCustomerNameSetting] = useState(false);
+
+  // Large Scan & Test Modal State
+  const [scanModalTable, setScanModalTable] = useState<Table | null>(null);
+  const [scanModalQRUrl, setScanModalQRUrl] = useState<string>('');
+
   // Global QR Design Studio configuration sync
   const { designConfig: qrDesign } = useQRDesign(restaurant);
 
@@ -136,11 +145,17 @@ export default function TablesPage() {
       if (restaurant) {
         setRestaurantSlug(restaurant.slug);
         setActivePlan(restaurant.subscription_plan);
+        if (restaurant.settings?.require_customer_name !== undefined) {
+          setRequireCustomerName(Boolean(restaurant.settings.require_customer_name));
+        }
       } else {
         const rest = await db.getRestaurantById(targetRestId);
         if (rest) {
           setRestaurantSlug(rest.slug);
           setActivePlan(rest.subscription_plan);
+          if (rest.settings?.require_customer_name !== undefined) {
+            setRequireCustomerName(Boolean(rest.settings.require_customer_name));
+          }
         }
       }
 
@@ -559,6 +574,49 @@ export default function TablesPage() {
       url: getCanonicalTableQRUrl(origin, restaurantSlug, t.id)
     }));
     await printAllTablesA4Sheet(qrDesign, items, restaurant?.name || 'The Foody Hub');
+  };
+
+  const handleToggleRequireCustomerName = async () => {
+    if (!restaurantId || isUpdatingCustomerNameSetting) return;
+    const newValue = !requireCustomerName;
+    setIsUpdatingCustomerNameSetting(true);
+    setRequireCustomerName(newValue);
+    try {
+      const rest = await db.getRestaurantById(restaurantId);
+      if (rest) {
+        await db.updateRestaurant(restaurantId, {
+          settings: {
+            ...rest.settings,
+            require_customer_name: newValue
+          }
+        });
+        db.clearRestaurantCache(restaurantId);
+      }
+    } catch (err) {
+      console.error('Failed to update customer name requirement:', err);
+      setRequireCustomerName(!newValue);
+    } finally {
+      setIsUpdatingCustomerNameSetting(false);
+    }
+  };
+
+  const handleOpenScanModal = async (table: Table) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const customerUrl = getCanonicalTableQRUrl(origin, restaurantSlug, table.id);
+    const highContrastData = await generateStyledQRDataURL({
+      url: customerUrl,
+      appearance: {
+        ...qrDesign.qr,
+        fgColor: '#0F172A',
+        bgColor: '#FFFFFF',
+        size: 360,
+        padding: 12
+      },
+      logoUrl: qrDesign.logo?.enabled ? qrDesign.logo.url : undefined,
+      scale: 2
+    });
+    setScanModalTable(table);
+    setScanModalQRUrl(highContrastData || qrCodes[table.id] || '');
   };
 
   const tableNameToFilename = (name: string) => {
@@ -1139,6 +1197,49 @@ export default function TablesPage() {
           </div>
         </div>
       </div>
+
+      {/* Table Ordering Settings & Customer Name Control Card */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base">
+              Customer Name on Order (View Cart)
+            </h3>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              requireCustomerName 
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' 
+                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+            }`}>
+              {requireCustomerName ? 'Active' : 'Disabled'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {requireCustomerName 
+              ? 'Customers will be prompted to enter their name in the cart before placing dine-in table orders.' 
+              : 'Dine-in customers can place table orders directly without entering their name in the cart.'}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={isUpdatingCustomerNameSetting}
+          onClick={handleToggleRequireCustomerName}
+          className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+            requireCustomerName ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'
+          }`}
+          role="switch"
+          aria-checked={requireCustomerName}
+          title={requireCustomerName ? 'Click to turn off customer name requirement' : 'Click to turn on customer name requirement'}
+        >
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+              requireCustomerName ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
+      </div>
+
       {tables.length === 0 ? (
         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-3">
           <QrCode className="h-10 w-10 text-slate-300" />
@@ -1265,13 +1366,23 @@ export default function TablesPage() {
                         </button>
                       </div>
                     ) : (
-                      <QRCardRenderer
-                        config={qrDesign}
-                        tableName={table.name}
-                        directUrl={customerUrl}
-                        previewScale={0.72}
-                        className="shadow-md rounded-2xl"
-                      />
+                      <div 
+                        onClick={() => handleOpenScanModal(table)}
+                        className="cursor-pointer transition-transform hover:scale-[1.01] flex flex-col items-center"
+                        title="Click to view large scannable QR code"
+                      >
+                        <QRCardRenderer
+                          config={qrDesign}
+                          tableName={table.name}
+                          directUrl={customerUrl}
+                          previewScale={0.72}
+                          className="shadow-md rounded-2xl"
+                        />
+                        <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-slate-400 hover:text-slate-600">
+                          <QrCode className="h-3 w-3" />
+                          <span>Click to enlarge & scan</span>
+                        </span>
+                      </div>
                     )}
                   </div>
 
@@ -1599,6 +1710,64 @@ export default function TablesPage() {
               {isAssigning ? 'Saving Assignment...' : 'Confirm Assignment'}
             </Button>
           </div>
+        </div>
+      </Dialog>
+
+      {/* High-Contrast Fast Scan & Test Modal */}
+      <Dialog
+        isOpen={!!scanModalTable}
+        onClose={() => setScanModalTable(null)}
+        title={scanModalTable ? `${scanModalTable.name} - High-Contrast Ordering QR` : 'Table QR'}
+      >
+        <div className="space-y-5 flex flex-col items-center text-center p-2">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Scan this high-contrast QR code directly with your phone camera or any scanner app.
+          </p>
+
+          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-md flex items-center justify-center">
+            {scanModalQRUrl ? (
+              <img
+                src={scanModalQRUrl}
+                alt={`${scanModalTable?.name || 'Table'} QR Code`}
+                className="w-72 h-72 object-contain"
+                style={{ imageRendering: 'pixelated' }}
+              />
+            ) : (
+              <div className="w-72 h-72 flex items-center justify-center text-xs text-slate-400">
+                <div className="w-8 h-8 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+
+          {scanModalTable && (
+            <div className="w-full space-y-2">
+              <div className="w-full truncate text-[11px] font-mono text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl select-all">
+                {getCanonicalTableQRUrl(typeof window !== 'undefined' ? window.location.origin : '', restaurantSlug, scanModalTable.id)}
+              </div>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const url = getCanonicalTableQRUrl(typeof window !== 'undefined' ? window.location.origin : '', restaurantSlug, scanModalTable.id);
+                    navigator.clipboard.writeText(url);
+                    setCopyFeedback('Table link copied!');
+                    setTimeout(() => setCopyFeedback(null), 2500);
+                  }}
+                >
+                  {copyFeedback === 'Table link copied!' ? 'Copied!' : 'Copy Link'}
+                </Button>
+                <Link
+                  href={getCanonicalTableQRUrl(typeof window !== 'undefined' ? window.location.origin : '', restaurantSlug, scanModalTable.id)}
+                  target="_blank"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>Open in Browser</span>
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </Dialog>
     </div>

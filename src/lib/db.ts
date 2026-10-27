@@ -56,6 +56,7 @@ export interface Restaurant {
     waiter_bell_url?: string;
     owner_bell_enabled?: boolean;
     show_customer_details_on_bill?: boolean;
+    require_customer_name?: boolean;
     offers?: any[];
     table_assignments?: TableAssignment[];
     zones?: RestaurantZone[];

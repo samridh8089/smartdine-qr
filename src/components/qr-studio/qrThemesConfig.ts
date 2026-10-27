@@ -839,7 +839,7 @@ export const QR_THEMES_CONFIG: Record<QRStudioSubCategory, SubCategoryThemeConfi
       text: '#FFF8F0', // Warm Cream
       accent: '#D4AF37', // Metallic Gold
       qrBg: '#FFFFFF',
-      qrFg: '#8B261D',
+      qrFg: '#0F172A',
       qrFrame: '#D4AF37'
     },
     bgStyle: {
@@ -1175,7 +1175,7 @@ export const QR_THEMES_CONFIG: Record<QRStudioSubCategory, SubCategoryThemeConfi
       text: '#FFFFFF',
       accent: '#F97316', // Ember Red-Orange
       qrBg: '#FFFFFF',
-      qrFg: '#B91C1C',
+      qrFg: '#0F172A',
       qrFrame: '#FFB703'
     },
     bgStyle: {
@@ -1804,8 +1804,8 @@ export const QR_THEMES_CONFIG: Record<QRStudioSubCategory, SubCategoryThemeConfi
       secondary: '#FF007F', // Neon Pink
       text: '#FFFFFF',
       accent: '#00F5D4', // Vibrant Cyan
-      qrBg: '#0F172A',
-      qrFg: '#00F5D4',
+      qrBg: '#FFFFFF',
+      qrFg: '#0F172A',
       qrFrame: '#FF007F'
     },
     bgStyle: {
@@ -2014,8 +2014,8 @@ export const QR_THEMES_CONFIG: Record<QRStudioSubCategory, SubCategoryThemeConfi
       secondary: '#9B2226', // Desi Red / Clay
       text: '#FEFAE0', // Butter Cream
       accent: '#DDA15E', // Khichdi Gold
-      qrBg: '#FFFDF0',
-      qrFg: '#5C1D11',
+      qrBg: '#FFFFFF',
+      qrFg: '#0F172A',
       qrFrame: '#9B2226'
     },
     bgStyle: {

@@ -121,6 +121,14 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   // Counter / Bar States
   const [counterCustomerName, setCounterCustomerName] = useState<string>('');
 
+  // Dine-in Customer Name State
+  const [dineInCustomerName, setDineInCustomerName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('smartdine_customer_name') || localStorage.getItem('smartdine_customer_name') || '';
+    }
+    return '';
+  });
+
   // Anti-Prank Geofence States
   const [geofenceModalOpen, setGeofenceModalOpen] = useState<boolean>(false);
   const [geofenceDistance, setGeofenceDistance] = useState<number>(0);
@@ -526,8 +534,10 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           setTable(tbl);
           setIsInvalidTable(false);
         } else if (tableId) {
-          const targetId = tableId.trim();
+          const sanitizedRaw = decodeURIComponent(String(tableId)).trim().replace(/\/+$/, '');
+          const targetId = sanitizedRaw;
           const targetLower = targetId.toLowerCase();
+          const targetDigits = targetLower.replace(/^table\s*[-_]?/i, '').trim();
           const matchedTbl = tbls.find((t: Table) => t.id === targetId) ||
                              tbls.find((t: Table) => (t as any).table_uuid === targetId) ||
                              tbls.find((t: Table) => (t as any).slug === targetId) ||
@@ -536,6 +546,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                              tbls.find((t: Table) => t.name?.toLowerCase().replace(/\s+/g, '-') === targetLower) ||
                              tbls.find((t: Table) => `table ${t.display_number || ''}`.toLowerCase() === targetLower) ||
                              tbls.find((t: Table) => `table-${t.display_number || ''}`.toLowerCase() === targetLower) ||
+                             (targetDigits && tbls.find((t: Table) => (t.display_number || '').trim() === targetDigits || t.name?.replace(/\D/g, '') === targetDigits)) ||
                              tbls.find((t: Table) => t.renumber_history?.some((h: any) => h.old_name?.toLowerCase() === targetLower || h.old_name?.toLowerCase().replace('table ', '') === targetLower));
           if (matchedTbl) {
             setTable(matchedTbl);
@@ -946,6 +957,16 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       }
     }
 
+    // Dine-in Table Customer Name Validation
+    if (!isTakeaway && !isReservation && !isCounter && restaurant?.settings?.require_customer_name) {
+      if (!dineInCustomerName.trim()) {
+        isSubmittingRef.current = false;
+        setOrderPlacing(false);
+        showToast('Please enter your name before placing your order.');
+        return;
+      }
+    }
+
     // Geofencing Premises Check for Dine-in Table Orders
     let detectedCustomerLat: number | null = null;
     let detectedCustomerLng: number | null = null;
@@ -1090,6 +1111,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         finalInstructions = `TAKEAWAY | CUSTOMER: ${takeawayName.trim()} | PHONE: ${takeawayPhone.trim()} | ARRIVAL: ${arrivalMinutes} mins${takeawayNotes ? ` | NOTES: ${takeawayNotes}` : ''}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
       } else if (isCounter) {
         finalInstructions = `EXPRESS COUNTER / BAR | Customer: ${counterCustomerName.trim()}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
+      } else if (dineInCustomerName.trim()) {
+        finalInstructions = `CUSTOMER: ${dineInCustomerName.trim()}${specialInstructions ? ` | Notes: ${specialInstructions}` : ''}`;
       }
 
       let newOrder: any;
@@ -1109,7 +1132,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
             customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
             takeawayNotes: isTakeaway ? takeawayNotes : undefined,
-            customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : isCounter ? counterCustomerName.trim() : undefined,
+            customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : isCounter ? counterCustomerName.trim() : (dineInCustomerName.trim() || undefined),
             customerPhone: isTakeaway ? takeawayPhone.trim() : isReservation ? reservationPhone.trim() : undefined,
             paymentStatus: isTakeaway ? 'customer_marked_paid' : (isReservation && cartTotal > 0 && reservationPaymentCompleted) ? 'customer_marked_paid' : 'pending',
             customerLat: detectedCustomerLat || undefined,
@@ -1154,7 +1177,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
                 customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
                 takeawayNotes: isTakeaway ? takeawayNotes : undefined,
-                customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : undefined,
+                customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : isCounter ? counterCustomerName.trim() : (dineInCustomerName.trim() || undefined),
                 customerPhone: isTakeaway ? takeawayPhone.trim() : isReservation ? reservationPhone.trim() : undefined,
                 paymentStatus: (isTakeaway || isReservation) ? 'customer_marked_paid' : 'pending',
                 idempotencyKey,
@@ -1194,6 +1217,14 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           localStorage.setItem('smartdine_active_token', newOrder.tracking_token);
         }
       } catch (e) {}
+
+      // Save customer name for recurring orders
+      if (dineInCustomerName.trim()) {
+        try {
+          sessionStorage.setItem('smartdine_customer_name', dineInCustomerName.trim());
+          localStorage.setItem('smartdine_customer_name', dineInCustomerName.trim());
+        } catch (_) {}
+      }
 
       // Close cart before navigating away — clean exit
       setCartOpen(false);
@@ -2462,6 +2493,23 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 onChange={(e) => setCounterCustomerName(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 required
+              />
+            </div>
+          )}
+
+          {/* Dine-in Table Customer Details */}
+          {!isTakeaway && !isReservation && !isCounter && (restaurant?.settings?.require_customer_name || dineInCustomerName) && (
+            <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                Your Name {restaurant?.settings?.require_customer_name ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>}
+              </label>
+              <input
+                type="text"
+                placeholder="Enter your name (e.g. Rahul Sharma)"
+                value={dineInCustomerName}
+                onChange={(e) => setDineInCustomerName(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                required={!!restaurant?.settings?.require_customer_name}
               />
             </div>
           )}

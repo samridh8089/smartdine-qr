@@ -45,6 +45,7 @@ function ModalPortal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
+// Compatible Units
 function getCompatibleUnits(unit: string) {
   const norm = normalizeUnit(unit);
   const mapping = UNIT_MAP[norm];
@@ -74,6 +75,252 @@ function getCompatibleUnits(unit: string) {
     ];
   }
   return [{ value: unit, label: unit }];
+}
+
+// Standard categories without emojis
+export const STANDARD_INVENTORY_CATEGORIES = [
+  'Vegetables & Fruits',
+  'Dairy & Cheese',
+  'Meat, Poultry & Seafood',
+  'Oils, Ghee & Fats',
+  'Spices & Seasonings',
+  'Grains, Flour & Pulses',
+  'Sauces & Condiments',
+  'Bakery & Breads',
+  'Beverages & Syrups',
+  'Dry Fruits & Nuts',
+  'Packaging & Disposables',
+  'General'
+];
+
+export const UI_UNIT_GROUPS = [
+  {
+    group: 'Weight (Solids)',
+    options: [
+      { value: 'kg', label: 'Kilogram (kg) - Standard for vegetables & raw materials' },
+      { value: 'gram', label: 'Gram (g) - For spices & fine ingredients' },
+      { value: 'mg', label: 'Milligram (mg)' }
+    ]
+  },
+  {
+    group: 'Volume (Liquids)',
+    options: [
+      { value: 'litre', label: 'Litre (l) - Standard for oils, milk & syrups' },
+      { value: 'ml', label: 'Millilitre (ml) - For small extracts & colors' },
+      { value: 'tbsp', label: 'Tablespoon (tbsp ~15ml)' },
+      { value: 'tsp', label: 'Teaspoon (tsp ~5ml)' }
+    ]
+  },
+  {
+    group: 'Count & Units',
+    options: [
+      { value: 'piece', label: 'Piece (pcs) - For buns, eggs, portions' },
+      { value: 'dozen', label: 'Dozen (12 pcs)' },
+      { value: 'unit', label: 'Unit' }
+    ]
+  },
+  {
+    group: 'Packaging',
+    options: [
+      { value: 'packet', label: 'Packet' },
+      { value: 'box', label: 'Box' },
+      { value: 'bottle', label: 'Bottle' },
+      { value: 'can', label: 'Can' },
+      { value: 'jar', label: 'Jar' },
+      { value: 'bag', label: 'Bag' },
+      { value: 'pouch', label: 'Pouch' },
+      { value: 'tray', label: 'Tray' },
+      { value: 'crate', label: 'Crate' }
+    ]
+  }
+];
+
+export function detectCategoryAndUnit(rawName: string): { category: string; unit: string } {
+  const name = (rawName || '').toLowerCase().trim();
+  if (!name) {
+    return { category: 'Vegetables & Fruits', unit: 'kg' };
+  }
+
+  // 1. Spices & Fine micro ingredients (gram)
+  const gramSpiceKeywords = [
+    'kesar', 'saffron', 'elaichi', 'cardamom', 'baking powder', 'baking soda',
+    'cinnamon', 'dalchini', 'clove', 'laung', 'heeng', 'asafoetida', 'nutmeg', 'jaiphal',
+    'mace', 'javitri', 'vanilla', 'food color', 'yeast', 'mono sodium', 'msg', 'ajinomoto',
+    'star anise', 'chhoti elaichi', 'badi elaichi'
+  ];
+  if (gramSpiceKeywords.some(k => name.includes(k))) {
+    return { category: 'Spices & Seasonings', unit: 'gram' };
+  }
+
+  // 2. Bulk Spices (Usually purchased in kg)
+  const bulkSpiceKeywords = [
+    'spice', 'masala', 'mirch powder', 'chili powder', 'turmeric', 'haldi',
+    'cumin', 'jeera', 'coriander powder', 'dhania powder', 'garam masala',
+    'chaat masala', 'amchur', 'kasuri methi', 'black pepper', 'kali mirch',
+    'salt', 'namak', 'black salt', 'rock salt', 'sesame', 'til', 'mustard seed', 'sarson seed', 'rai'
+  ];
+  if (bulkSpiceKeywords.some(k => name.includes(k))) {
+    return { category: 'Spices & Seasonings', unit: 'kg' };
+  }
+
+  // 3. Oils, Ghee & Fats (Liquids in litre)
+  const oilKeywords = [
+    'oil', 'tel', 'ghee', 'butter oil', 'olive oil', 'mustard oil', 'sunflower',
+    'refined oil', 'soyabean oil', 'sesame oil', 'coconut oil', 'shortening', 'vanaspati', 'dalda'
+  ];
+  if (oilKeywords.some(k => name.includes(k))) {
+    return { category: 'Oils, Ghee & Fats', unit: 'litre' };
+  }
+
+  // 4. Dairy Products
+  const dairyLiquidKeywords = ['milk', 'doodh', 'buttermilk', 'chaas', 'lassi'];
+  if (dairyLiquidKeywords.some(k => name.includes(k))) {
+    return { category: 'Dairy & Cheese', unit: 'litre' };
+  }
+  const dairySolidKeywords = [
+    'paneer', 'cheese', 'butter', 'dahi', 'curd', 'cream', 'malai',
+    'khoya', 'mawa', 'yogurt', 'condensed milk', 'mozzarella', 'cheddar'
+  ];
+  if (dairySolidKeywords.some(k => name.includes(k))) {
+    return { category: 'Dairy & Cheese', unit: 'kg' };
+  }
+
+  // 5. Meat, Poultry & Seafood
+  if (name.includes('egg') || name.includes('anda')) {
+    return { category: 'Meat, Poultry & Seafood', unit: 'piece' };
+  }
+  const meatKeywords = [
+    'chicken', 'mutton', 'fish', 'prawn', 'lamb', 'keema', 'pork',
+    'beef', 'bacon', 'sausage', 'salami', 'tikka meat', 'wings', 'boneless'
+  ];
+  if (meatKeywords.some(k => name.includes(k))) {
+    return { category: 'Meat, Poultry & Seafood', unit: 'kg' };
+  }
+
+  // 6. Grains, Flour & Pulses
+  const grainKeywords = [
+    'rice', 'chawal', 'basmati', 'atta', 'flour', 'maida', 'sooji', 'besan',
+    'sugar', 'cheeni', 'jaggery', 'gud', 'dal', 'daal', 'rajma', 'chole',
+    'chana', 'poha', 'oats', 'wheat', 'noodle', 'pasta', 'cornflour', 'corn starch'
+  ];
+  if (grainKeywords.some(k => name.includes(k))) {
+    return { category: 'Grains, Flour & Pulses', unit: 'kg' };
+  }
+
+  // 7. Bakery & Breads
+  const bakeryKeywords = [
+    'bread', 'bun', 'burger bun', 'pav', 'pizza base', 'croissant',
+    'tortilla', 'wrap', 'sponge', 'cake', 'muffin', 'loaf', 'pita'
+  ];
+  if (bakeryKeywords.some(k => name.includes(k))) {
+    return { category: 'Bakery & Breads', unit: 'piece' };
+  }
+
+  // 8. Packaging & Disposables
+  const packagingKeywords = [
+    'box', 'container', 'bag', 'pouch', 'cup', 'glass', 'lid', 'straw',
+    'tissue', 'napkin', 'foil', 'silver foil', 'cling film', 'tape',
+    'spoon', 'fork', 'cutlery', 'plate', 'bowl', 'carry bag'
+  ];
+  if (packagingKeywords.some(k => name.includes(k))) {
+    return { category: 'Packaging & Disposables', unit: 'piece' };
+  }
+
+  // 9. Sauces & Condiments
+  const sauceKeywords = [
+    'sauce', 'ketchup', 'mayonnaise', 'mayo', 'vinegar', 'sirka', 'soya sauce',
+    'soy sauce', 'chilli sauce', 'schezwan', 'mustard sauce', 'dip', 'dressing', 'chutney'
+  ];
+  if (sauceKeywords.some(k => name.includes(k))) {
+    const isLiquid = name.includes('vinegar') || name.includes('soya') || name.includes('soy');
+    return { category: 'Sauces & Condiments', unit: isLiquid ? 'litre' : 'kg' };
+  }
+
+  // 10. Beverages & Syrups
+  const beverageKeywords = [
+    'syrup', 'crush', 'squash', 'juice', 'soda', 'coke', 'cold drink',
+    'concentrate', 'tea', 'coffee', 'chai patti', 'green tea'
+  ];
+  if (beverageKeywords.some(k => name.includes(k))) {
+    if (name.includes('tea') || name.includes('coffee')) {
+      return { category: 'Beverages & Syrups', unit: 'kg' };
+    }
+    return { category: 'Beverages & Syrups', unit: 'litre' };
+  }
+
+  // 11. Dry Fruits & Nuts
+  const nutKeywords = [
+    'kaju', 'cashew', 'badam', 'almond', 'pista', 'pistachio', 'akhrot',
+    'walnut', 'kismis', 'raisin', 'dates', 'khajoor', 'makhana', 'peanut', 'moongphali'
+  ];
+  if (nutKeywords.some(k => name.includes(k))) {
+    return { category: 'Dry Fruits & Nuts', unit: 'kg' };
+  }
+
+  // 12. Fresh Vegetables & Fruits
+  const vegetableKeywords = [
+    'pepper', 'capsicum', 'mirch', 'shimla', 'potato', 'aloo', 'onion', 'pyaz',
+    'tomato', 'tamatar', 'garlic', 'lahsun', 'ginger', 'adrak', 'lemon', 'nimbu',
+    'coriander', 'dhania', 'mint', 'pudina', 'mushroom', 'broccoli', 'spinach',
+    'palak', 'peas', 'matar', 'cucumber', 'kheera', 'carrot', 'gajar', 'cabbage',
+    'patta gobhi', 'cauliflower', 'phool gobhi', 'beans', 'bhindi', 'okra',
+    'lady finger', 'beetroot', 'chukandar', 'corn', 'apple', 'banana', 'orange',
+    'mango', 'pineapple', 'watermelon'
+  ];
+  if (vegetableKeywords.some(k => name.includes(k))) {
+    return { category: 'Vegetables & Fruits', unit: 'kg' };
+  }
+
+  return { category: 'General', unit: 'kg' };
+}
+
+export function computeDbCostPerUnit(rate: number, rateUnit: string, itemUnit: string): number {
+  if (rate <= 0 || isNaN(rate)) return 0;
+  const normRateUnit = normalizeUnit(rateUnit);
+  const normItemUnit = normalizeUnit(itemUnit);
+
+  if (normRateUnit === normItemUnit) {
+    return rate;
+  }
+  if (normRateUnit === 'kg' && normItemUnit === 'gram') {
+    return parseFloat((rate / 1000).toFixed(6));
+  }
+  if (normRateUnit === 'gram' && normItemUnit === 'kg') {
+    return parseFloat((rate * 1000).toFixed(6));
+  }
+  if (normRateUnit === 'litre' && normItemUnit === 'ml') {
+    return parseFloat((rate / 1000).toFixed(6));
+  }
+  if (normRateUnit === 'ml' && normItemUnit === 'litre') {
+    return parseFloat((rate * 1000).toFixed(6));
+  }
+  return rate;
+}
+
+export function getRateExplanationText(rate: number, rateUnit: string, itemUnit: string): string {
+  if (rate <= 0 || isNaN(rate)) {
+    return 'Enter purchase cost to calculate unit and recipe rates.';
+  }
+  const normRateUnit = normalizeUnit(rateUnit);
+  const normItemUnit = normalizeUnit(itemUnit);
+
+  if (normRateUnit === 'kg') {
+    const perGram = rate / 1000;
+    return `Purchase rate: ₹${rate.toFixed(2)} per kg. Recipe ingredient cost: ₹${perGram.toFixed(4)} per gram.`;
+  }
+  if (normRateUnit === 'gram') {
+    const perKg = rate * 1000;
+    return `Purchase rate: ₹${rate.toFixed(2)} per gram. Bulk equivalent: ₹${perKg.toFixed(2)} per kg.`;
+  }
+  if (normRateUnit === 'litre') {
+    const perMl = rate / 1000;
+    return `Purchase rate: ₹${rate.toFixed(2)} per litre. Recipe ingredient cost: ₹${perMl.toFixed(4)} per ml.`;
+  }
+  if (normRateUnit === 'ml') {
+    const perLitre = rate * 1000;
+    return `Purchase rate: ₹${rate.toFixed(2)} per ml. Bulk equivalent: ₹${perLitre.toFixed(2)} per litre.`;
+  }
+  return `Purchase rate: ₹${rate.toFixed(2)} per ${rateUnit}.`;
 }
 
 function formatTransactionMeta(tx: any) {
@@ -260,10 +507,10 @@ export default function InventoryDashboardPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStockStatus, setSelectedStockStatus] = useState<string>('all');
 
-  // Item Modal
+  // Item Modal & Entry Flow
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [itemUnitType, setItemUnitType] = useState<string>('gram');
+  const [itemUnitType, setItemUnitType] = useState<string>('kg');
   const [customUnitName, setCustomUnitName] = useState<string>('');
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
   const [itemDependencyBlock, setItemDependencyBlock] = useState<{
@@ -273,6 +520,20 @@ export default function InventoryDashboardPage() {
     firstDishId: string | null;
   } | null>(null);
   const [isDeletingItem, setIsDeletingItem] = useState(false);
+
+  // Auto-detection & 2-step verification states
+  const [itemNameInput, setItemNameInput] = useState<string>('');
+  const [itemCategoryInput, setItemCategoryInput] = useState<string>('Vegetables & Fruits');
+  const [customCategoryInput, setCustomCategoryInput] = useState<string>('');
+  const [itemCurrentStockInput, setItemCurrentStockInput] = useState<string>('0');
+  const [itemMinStockInput, setItemMinStockInput] = useState<string>('1');
+  const [itemCostRateInput, setItemCostRateInput] = useState<string>('');
+  const [itemCostRateUnit, setItemCostRateUnit] = useState<string>('kg');
+  const [itemSupplierInput, setItemSupplierInput] = useState<string>('');
+  const [itemSkuInput, setItemSkuInput] = useState<string>('');
+  const [isReviewingItem, setIsReviewingItem] = useState(false);
+  const [manuallyChangedCategory, setManuallyChangedCategory] = useState(false);
+  const [manuallyChangedUnit, setManuallyChangedUnit] = useState(false);
 
   // Recipe Modal
   const [showRecipeModal, setShowRecipeModal] = useState(false);
@@ -370,6 +631,18 @@ export default function InventoryDashboardPage() {
     );
   }, [hubSearchQuery]);
 
+  // Dynamic Category List (Standard Categories + Any Custom Restaurant Categories)
+  const allCategoriesList = useMemo(() => {
+    const set = new Set<string>();
+    STANDARD_INVENTORY_CATEGORIES.forEach(c => set.add(c));
+    items.forEach(i => {
+      if (i.category && typeof i.category === 'string' && i.category.trim()) {
+        set.add(i.category.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [items]);
+
   // Recipe Open Modal Helper (Variant / Portion Aware)
   const openRecipeModalForDish = useCallback((dish: any, variantId: string | null = null) => {
     setSelectedMenuItemForRecipe(dish);
@@ -403,6 +676,47 @@ export default function InventoryDashboardPage() {
     }
     setShowRecipeModal(true);
   }, [recipes]);
+
+  // Open Add Item Modal Helper
+  const openAddItemModal = useCallback(() => {
+    setEditingItem(null);
+    setItemNameInput('');
+    setItemCategoryInput('Vegetables & Fruits');
+    setItemUnitType('kg');
+    setItemCostRateInput('');
+    setItemCostRateUnit('kg');
+    setItemCurrentStockInput('0');
+    setItemMinStockInput('1');
+    setItemSupplierInput('');
+    setItemSkuInput('');
+    setCustomUnitName('');
+    setCustomCategoryInput('');
+    setIsReviewingItem(false);
+    setManuallyChangedCategory(false);
+    setManuallyChangedUnit(false);
+    setShowItemModal(true);
+  }, []);
+
+  // Open Edit Item Modal Helper
+  const openEditItemModal = useCallback((item: any) => {
+    if (!item) return;
+    setEditingItem(item);
+    setItemNameInput(item.name || '');
+    setItemCategoryInput(item.category || 'General');
+    setItemUnitType(item.unit || 'kg');
+    setItemCostRateInput(String(item.cost_per_unit ?? 0));
+    setItemCostRateUnit(item.unit || 'kg');
+    setItemCurrentStockInput(String(item.current_stock ?? 0));
+    setItemMinStockInput(String(item.minimum_stock ?? 0));
+    setItemSupplierInput(item.supplier || '');
+    setItemSkuInput(item.sku || '');
+    setCustomUnitName('');
+    setCustomCategoryInput('');
+    setIsReviewingItem(false);
+    setManuallyChangedCategory(true);
+    setManuallyChangedUnit(true);
+    setShowItemModal(true);
+  }, []);
 
   // Prevent background page shift when Recipe Modal is open
   useEffect(() => {
@@ -908,22 +1222,22 @@ export default function InventoryDashboardPage() {
     }
   };
 
-  // Item Save Handler
-  const handleSaveItem = async (e: React.FormEvent<HTMLFormElement>) => {
+  // Step 1: Validate & Transition to Review Summary
+  const handleProceedToReview = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (savingItemRef.current || isSavingItem) return;
-
-    const formData = new FormData(e.currentTarget);
-    const name = (formData.get('name') as string || '').trim();
-    const category = formData.get('category') as string;
+    const name = itemNameInput.trim();
+    let category = itemCategoryInput === 'custom' ? customCategoryInput.trim() : itemCategoryInput;
     let unit = itemUnitType === 'custom' ? customUnitName.trim() : itemUnitType;
-    const current_stock = Number(formData.get('current_stock') || 0);
-    const minimum_stock = Number(formData.get('minimum_stock') || 0);
-    const cost_per_unit = Number(formData.get('cost_per_unit') || 0);
-    const supplier = formData.get('supplier') as string;
-    const sku = formData.get('sku') as string;
+    const currentStock = Number(itemCurrentStockInput || 0);
+    const minStock = Number(itemMinStockInput || 0);
+    const rate = Number(itemCostRateInput || 0);
 
-    if (!name || !unit) return alert('Please fill in Item Name and Unit');
+    if (!name) return alert('Please enter Item Name');
+    if (!category) return alert('Please choose or enter a Category');
+    if (!unit) return alert('Please choose or enter a Unit');
+    if (isNaN(currentStock) || currentStock < 0) return alert('Please enter a valid Current Stock quantity');
+    if (isNaN(minStock) || minStock < 0) return alert('Please enter a valid Minimum Alert quantity');
+    if (isNaN(rate) || rate < 0) return alert('Please enter a valid Purchase Cost');
 
     // Duplicate check for new items
     if (!editingItem) {
@@ -934,6 +1248,26 @@ export default function InventoryDashboardPage() {
       }
     }
 
+    setIsReviewingItem(true);
+  };
+
+  // Step 2: Final Database Confirmation & Save
+  const handleFinalConfirmSave = async () => {
+    if (savingItemRef.current || isSavingItem) return;
+
+    const name = itemNameInput.trim();
+    let category = itemCategoryInput === 'custom' ? customCategoryInput.trim() : itemCategoryInput;
+    if (!category) category = 'General';
+    let unit = itemUnitType === 'custom' ? customUnitName.trim() : itemUnitType;
+    if (!unit) unit = 'kg';
+
+    const current_stock = Number(itemCurrentStockInput || 0);
+    const minimum_stock = Number(itemMinStockInput || 0);
+    const rawRate = Number(itemCostRateInput || 0);
+    const cost_per_unit = computeDbCostPerUnit(rawRate, itemCostRateUnit || unit, unit);
+    const supplier = itemSupplierInput.trim();
+    const sku = itemSkuInput.trim();
+
     savingItemRef.current = true;
     setIsSavingItem(true);
 
@@ -942,7 +1276,17 @@ export default function InventoryDashboardPage() {
         const beforeStock = Number(editingItem.current_stock || 0);
         await supabase
           .from('inventory_items')
-          .update({ name, category, unit, current_stock, minimum_stock, cost_per_unit, supplier, sku, updated_at: new Date().toISOString() })
+          .update({
+            name,
+            category,
+            unit,
+            current_stock,
+            minimum_stock,
+            cost_per_unit,
+            supplier,
+            sku,
+            updated_at: new Date().toISOString()
+          })
           .eq('id', editingItem.id);
 
         if (beforeStock !== current_stock) {
@@ -965,7 +1309,7 @@ export default function InventoryDashboardPage() {
           return alert(limitCheck.message || 'Inventory items limit reached for your plan.');
         }
 
-        const { data: newIns } = await supabase.from('inventory_items').insert({
+        const { data: newIns, error: insErr } = await supabase.from('inventory_items').insert({
           restaurant_id: restaurantId,
           name,
           category,
@@ -979,6 +1323,8 @@ export default function InventoryDashboardPage() {
           is_active: true
         }).select();
 
+        if (insErr) throw insErr;
+
         if (newIns && newIns.length > 0) {
           await supabase.from('inventory_transactions').insert({
             restaurant_id: restaurantId,
@@ -989,13 +1335,14 @@ export default function InventoryDashboardPage() {
             after_stock: current_stock,
             transaction_type: 'OPENING_STOCK',
             user_name: activeRole === 'owner' ? 'Owner' : 'Manager',
-            notes: `Opening stock recorded`
+            notes: 'Opening stock recorded'
           });
         }
       }
 
       setShowItemModal(false);
       setEditingItem(null);
+      setIsReviewingItem(false);
       await loadData();
     } catch (err: any) {
       alert(err.message || 'Error saving item');
@@ -1842,12 +2189,7 @@ export default function InventoryDashboardPage() {
 
               <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => {
-                    setEditingItem(null);
-                    setItemUnitType('gram');
-                    setCustomUnitName('');
-                    setShowItemModal(true);
-                  }}
+                  onClick={openAddItemModal}
                   className="px-3 py-1.5 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -2116,12 +2458,7 @@ export default function InventoryDashboardPage() {
                     <span>Import CSV</span>
                   </button>
                   <button
-                    onClick={() => {
-                      setEditingItem(null);
-                      setItemUnitType('gram');
-                      setCustomUnitName('');
-                      setShowItemModal(true);
-                    }}
+                    onClick={openAddItemModal}
                     className="flex items-center gap-1.5 bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 px-3 py-1.5 rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -2183,6 +2520,17 @@ export default function InventoryDashboardPage() {
 
             <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
               <select
+                value={selectedCategory}
+                onChange={e => setSelectedCategory(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer"
+              >
+                <option value="all">All Categories</option>
+                {allCategoriesList.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+
+              <select
                 value={selectedStockStatus}
                 onChange={e => setSelectedStockStatus(e.target.value)}
                 className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer"
@@ -2238,12 +2586,7 @@ export default function InventoryDashboardPage() {
                             <p className="text-xs text-gray-500 mt-0.5">Add your raw ingredients or import from a CSV to begin tracking stock.</p>
                           </div>
                           <button
-                            onClick={() => {
-                              setEditingItem(null);
-                              setItemUnitType('gram');
-                              setCustomUnitName('');
-                              setShowItemModal(true);
-                            }}
+                            onClick={openAddItemModal}
                             className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-all cursor-pointer mt-1"
                           >
                             <Plus className="h-4 w-4" />
@@ -2282,7 +2625,29 @@ export default function InventoryDashboardPage() {
                             {formatStockQuantity(item.minimum_stock, item.unit)}
                           </td>
                           <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
-                            ₹{formatCurrency(item.cost_per_unit)} / {item.unit}
+                            <div className="font-bold">
+                              ₹{formatCurrency(item.cost_per_unit)} / {item.unit}
+                            </div>
+                            {item.unit === 'kg' && Number(item.cost_per_unit) > 0 && (
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                ₹{formatCurrency(Number(item.cost_per_unit) / 1000)} / gram (recipe)
+                              </div>
+                            )}
+                            {item.unit === 'gram' && Number(item.cost_per_unit) > 0 && (
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                ₹{formatCurrency(Number(item.cost_per_unit) * 1000)} / kg (bulk)
+                              </div>
+                            )}
+                            {item.unit === 'litre' && Number(item.cost_per_unit) > 0 && (
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                ₹{formatCurrency(Number(item.cost_per_unit) / 1000)} / ml (recipe)
+                              </div>
+                            )}
+                            {item.unit === 'ml' && Number(item.cost_per_unit) > 0 && (
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                ₹{formatCurrency(Number(item.cost_per_unit) * 1000)} / litre (bulk)
+                              </div>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 font-black text-emerald-600 dark:text-emerald-400">
                             ₹{formatCurrency(val)}
@@ -2308,12 +2673,7 @@ export default function InventoryDashboardPage() {
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
-                                onClick={() => {
-                                  setEditingItem(item);
-                                  setItemUnitType(item.unit || 'gram');
-                                  setCustomUnitName('');
-                                  setShowItemModal(true);
-                                }}
+                                onClick={() => openEditItemModal(item)}
                                 className="text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                                 title="Edit Item"
                                 aria-label="Edit Item"
@@ -2982,125 +3342,432 @@ export default function InventoryDashboardPage() {
       )}
 
       {/* MODAL: ADD / EDIT ITEM */}
+      {/* MODAL: ADD / EDIT ITEM (TWO-STEP FOOLPROOF FLOW) */}
       {showItemModal && (
         <ModalPortal>
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overflow-hidden pointer-events-auto">
             <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" onClick={() => setShowItemModal(false)} />
-            <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[88vh] overflow-hidden animate-pop z-10">
+            <div className="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[88vh] overflow-hidden animate-pop z-10">
+              
+              {/* MODAL HEADER */}
               <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center flex-shrink-0">
-                <h3 className="font-black text-base text-slate-900 dark:text-white">
-                  {editingItem ? 'Edit Inventory Item' : 'Add Raw Material Item'}
-                </h3>
-                <button onClick={() => setShowItemModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+                <div>
+                  <h3 className="font-black text-base text-slate-900 dark:text-white">
+                    {isReviewingItem 
+                      ? 'Review Inventory Entry' 
+                      : (editingItem ? 'Edit Inventory Item' : 'Add Raw Material Item')}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    {isReviewingItem 
+                      ? 'Step 2 of 2: Verify details and calculated stock valuation before confirming' 
+                      : 'Step 1 of 2: Enter item specifications, category, unit, and purchase cost'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowItemModal(false)} 
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveItem} className="flex flex-col flex-1 overflow-hidden">
-                <div className="p-4 md:p-6 space-y-4 flex-1 overflow-y-auto">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Item Name *</label>
-                    <input name="name" defaultValue={editingItem?.name || ''} required className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500" />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
+              {/* STEP 1: ITEM SPECIFICATION & RATE INPUT */}
+              {!isReviewingItem ? (
+                <form onSubmit={handleProceedToReview} className="flex flex-col flex-1 overflow-hidden">
+                  <div className="p-4 md:p-6 space-y-4 flex-1 overflow-y-auto">
+                    
+                    {/* Item Name with live auto-detection */}
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Category</label>
-                      <input name="category" defaultValue={editingItem?.category || 'Dairy'} className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold" />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Unit *</label>
-                      <select
-                        value={itemUnitType}
-                        onChange={e => setItemUnitType(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold cursor-pointer"
-                      >
-                        {STANDARD_UNIT_GROUPS.map((grp, gIdx) => (
-                          <optgroup key={gIdx} label={grp.group}>
-                            {grp.options.map((opt, oIdx) => (
-                              <option key={oIdx} value={opt.value}>{opt.label}</option>
-                            ))}
-                          </optgroup>
-                        ))}
-                        <option value="custom">Custom Unit...</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {itemUnitType === 'custom' && (
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Custom Unit Name (e.g. scoop, glass, portion) *</label>
-                      <input
+                      <div className="flex justify-between items-baseline mb-1">
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Item Name *</label>
+                        {!editingItem && (
+                          <span className="text-[10px] text-slate-400 font-medium">Auto-detects category and unit</span>
+                        )}
+                      </div>
+                      <input 
                         type="text"
-                        placeholder="e.g. scoop, bucket, portion"
-                        value={customUnitName}
-                        onChange={e => setCustomUnitName(e.target.value)}
-                        required
-                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs font-bold"
+                        value={itemNameInput}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setItemNameInput(val);
+                          if (!editingItem && !manuallyChangedCategory && !manuallyChangedUnit) {
+                            const detected = detectCategoryAndUnit(val);
+                            setItemCategoryInput(detected.category);
+                            setItemUnitType(detected.unit);
+                            setItemCostRateUnit(detected.unit);
+                          }
+                        }}
+                        placeholder="e.g. Bell Peppers, Refined Oil, Basmati Rice, Chicken Breast..."
+                        required 
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none" 
                       />
                     </div>
-                  )}
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Current Stock</label>
-                      <input type="number" step="any" name="current_stock" defaultValue={editingItem?.current_stock ?? 1000} className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Min Level</label>
-                      <input type="number" step="any" name="minimum_stock" defaultValue={editingItem?.minimum_stock ?? 200} className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Cost / Unit ₹</label>
-                      <input type="number" step="any" name="cost_per_unit" defaultValue={editingItem?.cost_per_unit ?? 0.35} className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
-                    </div>
-                  </div>
+                    {/* Category & Unit Selector */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Category *</label>
+                        <select
+                          value={itemCategoryInput}
+                          onChange={e => {
+                            setItemCategoryInput(e.target.value);
+                            setManuallyChangedCategory(true);
+                          }}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                        >
+                          {allCategoriesList.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                          <option value="custom">Custom Category...</option>
+                        </select>
+                        {itemCategoryInput === 'custom' && (
+                          <input
+                            type="text"
+                            placeholder="Enter custom category name"
+                            value={customCategoryInput}
+                            onChange={e => setCustomCategoryInput(e.target.value)}
+                            required
+                            className="mt-2 w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
+                          />
+                        )}
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">Supplier</label>
-                      <input name="supplier" defaultValue={editingItem?.supplier || ''} placeholder="Vendor name" className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Tracking Unit *</label>
+                        <select
+                          value={itemUnitType}
+                          onChange={e => {
+                            const newUnit = e.target.value;
+                            setItemUnitType(newUnit);
+                            setItemCostRateUnit(newUnit);
+                            setManuallyChangedUnit(true);
+                          }}
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                        >
+                          {UI_UNIT_GROUPS.map((grp, gIdx) => (
+                            <optgroup key={gIdx} label={grp.group}>
+                              {grp.options.map((opt, oIdx) => (
+                                <option key={oIdx} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </optgroup>
+                          ))}
+                          <option value="custom">Custom Unit...</option>
+                        </select>
+                        {itemUnitType === 'custom' && (
+                          <input
+                            type="text"
+                            placeholder="e.g. scoop, bucket, portion"
+                            value={customUnitName}
+                            onChange={e => setCustomUnitName(e.target.value)}
+                            required
+                            className="mt-2 w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
+                          />
+                        )}
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">SKU / Code</label>
-                      <input name="sku" defaultValue={editingItem?.sku || ''} placeholder="SKU code" className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
-                    </div>
-                  </div>
-                </div>
 
-                <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80 flex-shrink-0">
-                  <div>
-                    {editingItem && (
-                      <button
-                        type="button"
-                        onClick={() => promptDeleteItem(editingItem)}
-                        className="px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl cursor-pointer transition-colors flex items-center gap-1.5"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span>Delete Item</span>
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => setShowItemModal(false)} className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer">Cancel</button>
-                    <button 
-                      type="submit" 
-                      disabled={isSavingItem}
-                      className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                    >
-                      {isSavingItem ? (
-                        <>
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                          <span>Saving...</span>
-                        </>
-                      ) : (
-                        <span>Save Item</span>
+                    {/* Current Stock & Min Level */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Current Stock ({itemUnitType === 'custom' ? (customUnitName || 'unit') : itemUnitType})
+                        </label>
+                        <div className="relative">
+                          <input 
+                            type="number" 
+                            step="any" 
+                            value={itemCurrentStockInput}
+                            onChange={e => setItemCurrentStockInput(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold pr-12" 
+                          />
+                          <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400 uppercase">
+                            {itemUnitType === 'custom' ? (customUnitName || 'unit') : itemUnitType}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Min Level Alert ({itemUnitType === 'custom' ? (customUnitName || 'unit') : itemUnitType})
+                        </label>
+                        <div className="relative">
+                          <input 
+                            type="number" 
+                            step="any" 
+                            value={itemMinStockInput}
+                            onChange={e => setItemMinStockInput(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold pr-12" 
+                          />
+                          <span className="absolute right-3 top-2.5 text-[10px] font-bold text-slate-400 uppercase">
+                            {itemUnitType === 'custom' ? (customUnitName || 'unit') : itemUnitType}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Purchase Rate / Cost Input with Dual Selector */}
+                    <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                      <div className="flex justify-between items-baseline">
+                        <label className="block text-[11px] font-bold text-slate-800 dark:text-slate-200">
+                          Purchase Rate / Unit Cost *
+                        </label>
+                        <span className="text-[10px] text-slate-400">Specify cost rate and billing unit</span>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₹</span>
+                          <input 
+                            type="number" 
+                            step="any" 
+                            placeholder="e.g. 300"
+                            value={itemCostRateInput}
+                            onChange={e => setItemCostRateInput(e.target.value)}
+                            required
+                            className="w-full pl-7 pr-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold" 
+                          />
+                        </div>
+                        <select
+                          value={itemCostRateUnit}
+                          onChange={e => setItemCostRateUnit(e.target.value)}
+                          className="w-32 px-2 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          <option value="kg">per kg</option>
+                          <option value="litre">per litre</option>
+                          <option value="piece">per piece</option>
+                          <option value="gram">per gram</option>
+                          <option value="ml">per ml</option>
+                          <option value="packet">per packet</option>
+                          <option value="box">per box</option>
+                          <option value="dozen">per dozen</option>
+                        </select>
+                      </div>
+
+                      {/* Live Explanation Text */}
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
+                        {getRateExplanationText(
+                          Number(itemCostRateInput || 0), 
+                          itemCostRateUnit, 
+                          itemUnitType === 'custom' ? (customUnitName || 'unit') : itemUnitType
+                        )}
+                      </p>
+
+                      {/* Anti-Error Warning for Grams */}
+                      {itemCostRateUnit === 'gram' && Number(itemCostRateInput) > 5 && (
+                        <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-900 dark:text-amber-300 space-y-1.5">
+                          <p className="font-bold">
+                            Notice: A rate of ₹{Number(itemCostRateInput).toFixed(2)} per gram equals ₹{(Number(itemCostRateInput) * 1000).toLocaleString('en-IN')} per kilogram.
+                          </p>
+                          <p className="text-slate-600 dark:text-slate-400">
+                            If this is the rate for 1 kilogram (wholesale rate), switch rate unit to kg to prevent inflated inventory valuation.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItemCostRateUnit('kg');
+                              setItemUnitType('kg');
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold bg-amber-600 hover:bg-amber-500 text-white rounded-lg cursor-pointer"
+                          >
+                            Switch rate to ₹{Number(itemCostRateInput).toFixed(2)} per kg
+                          </button>
+                        </div>
                       )}
+                    </div>
+
+                    {/* Supplier & SKU */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Supplier</label>
+                        <input 
+                          type="text"
+                          value={itemSupplierInput}
+                          onChange={e => setItemSupplierInput(e.target.value)}
+                          placeholder="Vendor name" 
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">SKU / Code</label>
+                        <input 
+                          type="text"
+                          value={itemSkuInput}
+                          onChange={e => setItemSkuInput(e.target.value)}
+                          placeholder="SKU code" 
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 1 Modal Footer */}
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80 flex-shrink-0">
+                    <div>
+                      {editingItem && (
+                        <button
+                          type="button"
+                          onClick={() => promptDeleteItem(editingItem)}
+                          className="px-3 py-2 text-xs font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl cursor-pointer transition-colors flex items-center gap-1.5"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Delete Item</span>
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setShowItemModal(false)} 
+                        className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit" 
+                        className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 text-xs font-bold rounded-xl cursor-pointer shadow-xs"
+                      >
+                        Review Item Details
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                /* STEP 2: SUMMARY CONFIRMATION SCREEN */
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  <div className="p-4 md:p-6 space-y-4 flex-1 overflow-y-auto">
+                    
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-900 dark:text-blue-300">
+                      <p className="font-bold">Summary Review & Verification</p>
+                      <p className="text-[11px] text-blue-700 dark:text-blue-400 mt-0.5">
+                        Please inspect the item specifications, rate conversion, and total initial stock value before confirming.
+                      </p>
+                    </div>
+
+                    {/* Summary Specifications Grid */}
+                    {(() => {
+                      const effectiveUnit = itemUnitType === 'custom' ? (customUnitName.trim() || 'unit') : itemUnitType;
+                      const effectiveCategory = itemCategoryInput === 'custom' ? (customCategoryInput.trim() || 'General') : itemCategoryInput;
+                      const effectiveRate = Number(itemCostRateInput || 0);
+                      const effectiveDbCost = computeDbCostPerUnit(effectiveRate, itemCostRateUnit || effectiveUnit, effectiveUnit);
+                      const effectiveStock = Number(itemCurrentStockInput || 0);
+                      const totalValuation = effectiveStock * effectiveDbCost;
+
+                      return (
+                        <div className="space-y-3">
+                          <div className="bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 p-4 divide-y divide-slate-200 dark:divide-slate-700 text-xs">
+                            <div className="flex justify-between py-1.5">
+                              <span className="text-slate-500 font-medium">Item Name:</span>
+                              <span className="font-extrabold text-slate-900 dark:text-white">{itemNameInput.trim()}</span>
+                            </div>
+                            <div className="flex justify-between py-1.5">
+                              <span className="text-slate-500 font-medium">Category:</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{effectiveCategory}</span>
+                            </div>
+                            <div className="flex justify-between py-1.5">
+                              <span className="text-slate-500 font-medium">Primary Tracking Unit:</span>
+                              <span className="font-bold text-slate-800 dark:text-slate-200">{effectiveUnit}</span>
+                            </div>
+                            <div className="flex justify-between py-1.5">
+                              <span className="text-slate-500 font-medium">Current Stock:</span>
+                              <span className="font-bold text-slate-900 dark:text-white">{effectiveStock} {effectiveUnit}</span>
+                            </div>
+                            <div className="flex justify-between py-1.5">
+                              <span className="text-slate-500 font-medium">Minimum Alert Level:</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-300">{Number(itemMinStockInput || 0)} {effectiveUnit}</span>
+                            </div>
+                            <div className="flex justify-between py-1.5">
+                              <span className="text-slate-500 font-medium">Purchase Rate:</span>
+                              <span className="font-bold text-slate-900 dark:text-white">₹{effectiveRate.toFixed(2)} per {itemCostRateUnit}</span>
+                            </div>
+                            <div className="flex justify-between py-1.5">
+                              <span className="text-slate-500 font-medium">Database Rate ({effectiveUnit}):</span>
+                              <span className="font-mono text-slate-700 dark:text-slate-300">₹{effectiveDbCost.toFixed(4)} / {effectiveUnit}</span>
+                            </div>
+                            {itemSupplierInput && (
+                              <div className="flex justify-between py-1.5">
+                                <span className="text-slate-500 font-medium">Supplier:</span>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">{itemSupplierInput}</span>
+                              </div>
+                            )}
+                            {itemSkuInput && (
+                              <div className="flex justify-between py-1.5">
+                                <span className="text-slate-500 font-medium">SKU / Code:</span>
+                                <span className="font-mono text-slate-700 dark:text-slate-300">{itemSkuInput}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Highlighted Stock Valuation Card */}
+                          <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-between">
+                            <div>
+                              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                                Calculated Total Stock Value
+                              </p>
+                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                ({effectiveStock} {effectiveUnit} × ₹{effectiveDbCost.toFixed(2)} / {effectiveUnit})
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-lg font-black text-emerald-700 dark:text-emerald-300">
+                                ₹{formatCurrency(totalValuation)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* High Valuation Caution Notice */}
+                          {totalValuation > 100000 && (
+                            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl text-[11px] text-rose-900 dark:text-rose-300 space-y-1">
+                              <p className="font-bold">High Valuation Notice</p>
+                              <p>
+                                Total stock valuation is ₹{formatCurrency(totalValuation)}. Please ensure that you did not enter a kilogram price for a gram unit.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                  </div>
+
+                  {/* Step 2 Modal Footer: Edit vs Confirm */}
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80 flex-shrink-0">
+                    <button 
+                      type="button" 
+                      onClick={() => setIsReviewingItem(false)} 
+                      className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors"
+                    >
+                      Edit Details
                     </button>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        type="button" 
+                        onClick={() => setShowItemModal(false)} 
+                        className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={handleFinalConfirmSave}
+                        disabled={isSavingItem}
+                        className="px-5 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
+                      >
+                        {isSavingItem ? (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            <span>Saving...</span>
+                          </>
+                        ) : (
+                          <span>Confirm & Save Item</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </form>
+              )}
+
             </div>
           </div>
         </ModalPortal>
