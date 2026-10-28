@@ -190,84 +190,290 @@ export default function OwnerNetMarginCard({
 
   return (
     <>
-      {/* 1. COMPACT MONOCHROME SUMMARY CARD ON REPORTS PAGE */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 sm:p-3.5 shadow-2xs">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          
-          {/* Net Profit & Margin (Clean Monochrome) */}
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Net Profit (In-Hand Munafa)
-                </span>
-                <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  Owner
-                </span>
-                <span className="text-[10px] text-slate-400 font-semibold hidden sm:inline">
-                  • {pnl.periodLabel}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2.5 mt-0.5">
-                <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-                  {formatPrice(pnl.netProfit, currency, 2)}
-                </span>
-                <span className="px-2 py-0.5 rounded-md text-xs font-bold inline-flex items-center gap-1 bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                  {isProfit ? <TrendingUp className="h-3 w-3 text-slate-700 dark:text-slate-300" /> : <TrendingDown className="h-3 w-3 text-slate-700 dark:text-slate-300" />}
-                  <span>{pnl.netMarginPercentage > 0 ? `+${pnl.netMarginPercentage}%` : `${pnl.netMarginPercentage}%`} Margin</span>
-                </span>
-              </div>
+      {/* EXECUTIVE P&L COMMAND CENTER (DIRECTLY ON REPORTS PAGE) */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-6">
+        
+        {/* Header Row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white leading-tight">
+                Profit &amp; Loss Summary (Munafa &amp; Kharche)
+              </h3>
+              <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Owner
+              </span>
             </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Total sales, food cost aur monthly expenses ka hisab • {pnl.periodLabel}
+            </p>
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 text-xs">
-            <div className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="text-[10px] font-bold text-slate-400 block uppercase">Total Sales</span>
-              <span className="font-extrabold text-slate-900 dark:text-white">
-                {formatPrice(pnl.netRevenue, currency, 0)}
-              </span>
-            </div>
-
-            <div className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="text-[10px] font-bold text-slate-400 block uppercase">Total Expenses</span>
-              <span className="font-extrabold text-slate-900 dark:text-white">
-                {formatPrice(pnl.totalExpenses, currency, 0)}
-              </span>
-            </div>
-
-            <div className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="text-[10px] font-bold text-slate-400 block uppercase">Break-Even Sales</span>
-              <span className="font-extrabold text-slate-900 dark:text-white">
-                {formatPrice(pnl.dailyBreakEvenSales, currency, 0)}/d
-              </span>
-            </div>
-          </div>
-
-          {/* Action Buttons (Strict Monochrome) */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleOpenAddModal}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 font-bold text-xs rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              className="px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 font-bold text-xs rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Add Expense</span>
+              <span>+ Add Expense</span>
             </button>
 
             <button
               type="button"
               onClick={() => {
-                setActiveModalTab('summary');
+                setActiveModalTab('ledger');
                 setStatementModalOpen(true);
               }}
               className="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold text-xs rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
             >
               <Layers className="h-3.5 w-3.5 text-slate-500" />
-              <span>P&L Statement</span>
+              <span>Full Ledger ({expenses.length})</span>
             </button>
           </div>
         </div>
+
+        {/* 1. TOP 4 KEY METRIC CARDS */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          
+          {/* Card 1: Total Sales */}
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              Total Sales
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-1">
+              {formatPrice(pnl.netRevenue, currency, 0)}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {salesSummary.totalOrders || 0} verified orders
+            </div>
+          </div>
+
+          {/* Card 2: Food Cost (Raw Material) */}
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              Food Cost (Raw Material)
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
+              {formatPrice(pnl.foodCost, currency, 0)}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              {pnl.foodCostPercentage}% of total sales
+            </div>
+          </div>
+
+          {/* Card 3: Monthly Expenses */}
+          <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+              Monthly Expenses
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
+              {formatPrice(pnl.operatingExpenses, currency, 0)}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Rent, Salary &amp; Bills ({pnl.operatingExpensesPercentage}%)
+            </div>
+          </div>
+
+          {/* Card 4: Net Profit (In-Hand Munafa) */}
+          <div className="border-2 border-slate-950 dark:border-white rounded-xl p-4 bg-white dark:bg-slate-900 shadow-2xs">
+            <span className="text-[11px] font-extrabold text-slate-950 dark:text-white uppercase tracking-wider block">
+              Net Profit (In-Hand Munafa)
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-1">
+              {formatPrice(pnl.netProfit, currency, 2)}
+            </div>
+            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1 flex items-center gap-1">
+              {isProfit ? <TrendingUp className="h-3.5 w-3.5 text-slate-800 dark:text-slate-200" /> : <TrendingDown className="h-3.5 w-3.5 text-slate-800 dark:text-slate-200" />}
+              <span>{pnl.netMarginPercentage > 0 ? `+${pnl.netMarginPercentage}%` : `${pnl.netMarginPercentage}%`} Net Margin</span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* 2. REVENUE ALLOCATION BREAKDOWN (HAR ₹100 KI SALE KA HISAB) */}
+        <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/40 dark:bg-slate-800/20 space-y-3">
+          <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
+            <span>Har ₹100 Ki Sale Ka Breakdown</span>
+            <span className="text-slate-500 font-normal">Base: ₹100 Sales</span>
+          </div>
+
+          {/* Segmented Monochrome Bar */}
+          <div className="w-full h-3 rounded-full overflow-hidden flex bg-slate-200 dark:bg-slate-700">
+            <div className="h-full bg-slate-400 dark:bg-slate-400 transition-all" style={{ width: `${Math.min(100, Math.max(0, pnl.foodCostPercentage))}%` }} title={`Food Cost: ${pnl.foodCostPercentage}%`}></div>
+            <div className="h-full bg-slate-600 dark:bg-slate-500 transition-all" style={{ width: `${Math.min(100, Math.max(0, pnl.operatingExpensesPercentage + pnl.staffLaborPercentage))}%` }} title={`Expenses: ${pnl.operatingExpensesPercentage}%`}></div>
+            <div className="h-full bg-slate-950 dark:bg-white transition-all" style={{ width: `${Math.min(100, Math.max(0, pnl.netMarginPercentage))}%` }} title={`Net Profit: ${pnl.netMarginPercentage}%`}></div>
+          </div>
+
+          {/* Legend 3 Clean Cards */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-1 text-center">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                <span className="w-2.5 h-2.5 rounded-xs bg-slate-400 inline-block"></span>
+                Food Cost
+              </div>
+              <div className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                ₹{pnl.perHundredBreakdown?.foodCost?.toFixed(1) || '0.0'} <span className="text-xs font-normal text-slate-500">({pnl.foodCostPercentage}%)</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                <span className="w-2.5 h-2.5 rounded-xs bg-slate-600 inline-block"></span>
+                Monthly Expenses
+              </div>
+              <div className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
+                ₹{((pnl.perHundredBreakdown?.operatingExpenses || 0) + (pnl.perHundredBreakdown?.staffLabor || 0)).toFixed(1)} <span className="text-xs font-normal text-slate-500">({pnl.operatingExpensesPercentage}%)</span>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-white rounded-lg p-2.5">
+              <div className="flex items-center justify-center gap-1.5 text-xs text-slate-950 dark:text-white font-bold">
+                <span className="w-2.5 h-2.5 rounded-xs bg-slate-950 dark:bg-white inline-block"></span>
+                Net Profit
+              </div>
+              <div className="text-sm font-extrabold text-slate-950 dark:text-white mt-0.5">
+                ₹{pnl.perHundredBreakdown?.netProfit?.toFixed(1) || '0.0'} <span className="text-xs font-normal text-slate-500">({pnl.netMarginPercentage}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. ITEMIZED OPERATING EXPENSES (EVERY OWNER EXPENSE IN SEPARATE CARD) */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
+                Monthly Expenses (Har Kharcha Alag Card Me)
+              </h4>
+              <p className="text-xs text-slate-500">
+                Total {(pnl.expenseCards || []).length} items recorded for {pnl.periodLabel}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveModalTab('ledger');
+                setStatementModalOpen(true);
+              }}
+              className="text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer underline"
+            >
+              View Full Table &rarr;
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {(pnl.expenseCards || []).map((card) => {
+              const originalExp = expenses.find(e => e.id === card.id);
+              return (
+                <div
+                  key={card.id}
+                  onClick={() => {
+                    if (originalExp) handleOpenEditModal(originalExp);
+                  }}
+                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition group shadow-2xs cursor-pointer"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                        {card.category.replace('_', ' ')}
+                      </span>
+                      {card.isRecurring && (
+                        <span className="text-[8px] font-bold text-slate-400">Monthly</span>
+                      )}
+                    </div>
+                    <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate" title={card.title}>
+                      {card.title}
+                    </h5>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-black text-slate-900 dark:text-white">
+                        {formatPrice(card.amount, currency, 0)}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-500">
+                        {card.percentage}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[9px] text-slate-400 mt-1">
+                      <span>₹{card.perHundred.toFixed(1)} / ₹100</span>
+                      {originalExp && (
+                        <div 
+                          className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(originalExp)}
+                            className="p-1 px-1.5 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer text-[10px] font-bold flex items-center gap-0.5"
+                            title="Edit"
+                          >
+                            <Edit3 className="h-3 w-3" />
+                            <span className="sm:hidden">Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteExpense(originalExp.id)}
+                            className="p-1 px-1.5 rounded bg-slate-100 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-500 hover:text-rose-600 cursor-pointer text-[10px] font-bold flex items-center gap-0.5"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span className="sm:hidden">Del</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* CleverOps SaaS POS Fee Card */}
+            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between shadow-2xs">
+              <div>
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <span className="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                    SaaS POS
+                  </span>
+                  <span className="text-[8px] font-bold text-slate-400">{pnl.cleveropsPlanName}</span>
+                </div>
+                <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                  CleverOps Platform
+                </h5>
+              </div>
+
+              <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-black text-slate-900 dark:text-white">
+                    {formatPrice(pnl.cleveropsCost, currency, 0)}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-500">
+                    {pnl.cleveropsCostPercentage}%
+                  </span>
+                </div>
+                <div className="text-[9px] text-slate-400 mt-1">
+                  <span>₹{pnl.perHundredBreakdown?.cleverops?.toFixed(1) || '0.1'} / ₹100</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Add New Expense Card Button */}
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="p-3 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-slate-500 bg-slate-50/50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/60 flex flex-col items-center justify-center gap-1.5 text-center transition cursor-pointer min-h-[95px]"
+            >
+              <div className="h-6 w-6 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-300">
+                <Plus className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                + Add Expense
+              </span>
+            </button>
+          </div>
+        </div>
+
       </div>
 
       {/* 2. FULL P&L STATEMENT MODAL (PORTAL TO BODY - STRICT NO SCROLL & MONOCHROME) */}
