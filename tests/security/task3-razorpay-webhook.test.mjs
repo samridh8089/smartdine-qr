@@ -31,7 +31,7 @@ describe('Task 3: Razorpay Webhook Security & Idempotency Tests', () => {
     assert.match(code, /processed_webhook_events/, 'Must query processed_webhook_events for duplicates');
 
     // 4. No fixed password
-    assert.doesNotMatch(code, /***REMOVED***/, 'Must not use fixed ***REMOVED*** password');
+    assert.doesNotMatch(code, /TempPass/i, 'Must not use fixed password');
     assert.match(code, /crypto\.randomBytes/, 'Must generate cryptographically random password');
     assert.match(code, /generateLink\(\{\s*type:\s*'recovery'/, 'Must dispatch password recovery/invite link');
   });

@@ -193,15 +193,24 @@ export const getActiveUser = async (forceRefresh = false) => {
         if (foundRest) {
           resolvedRestId = foundRest.id;
           
-          // Auto-upsert profile row to link this restaurant_id permanently
-          await supabase.from('profiles').upsert({
-            id: sessionUser.id,
-            email: sessionUser.email || '',
-            full_name: sessionUser.user_metadata?.fullName || sessionUser.email || 'Owner',
-            role: sessionUser.user_metadata?.role || 'owner',
-            restaurant_id: foundRest.id,
-            is_active: true
-          });
+          // Secure Server-Side Auto-Link: shift from browser-side upsert to authenticated server route
+          try {
+            const clientToken = await getClientAuthToken();
+            if (clientToken && typeof window !== 'undefined') {
+              await fetch('/api/auth/auto-link-profile', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${clientToken}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ restaurantId: foundRest.id })
+              }).catch((linkErr) => {
+                console.warn('[Supabase Auth] Auto-link server route notice:', linkErr);
+              });
+            }
+          } catch (linkEx) {
+            console.warn('[Supabase Auth] Auto-link exception:', linkEx);
+          }
         }
       } catch (matchErr) {
         console.warn('[Supabase Auth] Restaurant auto-matching notice:', matchErr);
