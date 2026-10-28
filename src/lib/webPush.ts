@@ -60,7 +60,10 @@ export async function sendWebPushToRestaurant(
     // Lookup matching staff profiles with Web Push subscriptions stored in push_token or web_push_subscription
     const normRoles = roles.map(r => r.toLowerCase().trim());
     if (normRoles.includes('kitchen')) {
-      normRoles.push('kds', 'kitchen_staff');
+      normRoles.push('kds', 'kitchen_staff', 'head_chef', 'chef', 'kitchen_helper');
+    }
+    if (normRoles.includes('waiter')) {
+      normRoles.push('captain');
     }
 
     const { data: profiles } = await supabase
@@ -84,11 +87,12 @@ export async function sendWebPushToRestaurant(
     for (const p of profiles) {
       if (!p.push_token) continue;
 
-      // Check if push_token is a JSON Web Push Subscription object
+      // Check if push_token is a JSON Web Push Subscription object (direct or nested in { web, mobile })
       try {
         if (p.push_token.startsWith('{') && p.push_token.includes('endpoint')) {
-          const sub = JSON.parse(p.push_token);
-          if (sub.endpoint) {
+          const parsed = JSON.parse(p.push_token);
+          const sub = parsed.web || (parsed.endpoint ? parsed : null);
+          if (sub && sub.endpoint) {
             await webpush.sendNotification(sub, pushPayloadString, {
               TTL: 60,
               urgency: 'high',

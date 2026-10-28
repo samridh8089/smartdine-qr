@@ -878,6 +878,9 @@ export const db = {
       .eq('slug', cleanSlug);
     if (!error && data && data.length > 0) {
       const res = data[0] as Restaurant;
+      if (!res.logo_url) {
+        res.logo_url = (res.settings as any)?.logo_url || (res.settings as any)?.logo || '/logo.png';
+      }
       restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
       restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
       return res;

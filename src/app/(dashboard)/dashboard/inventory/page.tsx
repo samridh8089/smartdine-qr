@@ -159,12 +159,46 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
     'floor cleaner', 'surface cleaner', 'glass cleaner', 'degreaser', 'bleach', 'handwash',
     'garbage bag', 'trash bag', 'dustbin bag', 'dustbin', 'scrubber', 'scrub pad',
     'scotch brite', 'scotch-brite', 'mop', 'wiper', 'duster', 'microfiber', 'cleaning glove',
-    'latex glove', 'nitrile glove', 'glove', 'gloves', 'chef cap', 'hair net', 'apron',
-    'toilet cleaner', 'soap', 'dishwasher tablet', 'drain cleaner', 'oven cleaner', 'sponge'
+    'latex glove', 'nitrile glove', 'glove', 'gloves', 'chef cap', 'hair net', 'hairnet', 'apron',
+    'toilet cleaner', 'soap', 'dishwasher tablet', 'drain cleaner', 'oven cleaner', 'sponge',
+    // Comprehensive Hinglish & Indian kitchen terms
+    'pocha', 'pochha', 'pocha kapda', 'pochha kapda', 'floor mop', 'floor wiper', 'kitchen wiper',
+    'jhadu', 'jhaadu', 'phool jhadu', 'seekh jhadu', 'broom', 'soopa', 'dustpan',
+    'bartan dhone', 'bartan sabun', 'bartan bar', 'bartan bati', 'bartan batti', 'bartan liquid',
+    'vim bar', 'vim liquid', 'vim gel', 'exo bar', 'exo', 'pril', 'bartan safai',
+    'kapda sabun', 'kapde dhone', 'rin', 'wheel', 'ghadi sabun', 'sabun',
+    'washing powder', 'surf', 'surf excel', 'tide', 'ariel', 'ghadi powder', 'nirma',
+    'phenyl', 'fenil', 'white phenyl', 'black phenyl',
+    'lohe ka juna', 'juna', 'steel scrubber', 'green pad', 'bartan juna',
+    'kachra panni', 'kachra bag', 'koodedan', 'caustic soda', 'bleaching powder'
   ];
   if (cleaningKeywords.some(k => hasKeyword(name, k))) {
-    const isLiquid = hasKeyword(name, 'liquid') || hasKeyword(name, 'cleaner') || hasKeyword(name, 'sanitizer') || hasKeyword(name, 'wash') || hasKeyword(name, 'bleach') || hasKeyword(name, 'spray');
-    return { category: 'Housekeeping & Cleaning', unit: isLiquid ? 'bottle' : 'packet' };
+    const isPieceCleaning = 
+      hasKeyword(name, 'pocha') || hasKeyword(name, 'pochha') || hasKeyword(name, 'mop') ||
+      hasKeyword(name, 'jhadu') || hasKeyword(name, 'jhaadu') || hasKeyword(name, 'broom') ||
+      hasKeyword(name, 'wiper') || hasKeyword(name, 'scrubber') || hasKeyword(name, 'scrub pad') ||
+      hasKeyword(name, 'scotch brite') || hasKeyword(name, 'scotch-brite') || hasKeyword(name, 'sponge') ||
+      hasKeyword(name, 'juna') || hasKeyword(name, 'duster') || hasKeyword(name, 'bar') ||
+      hasKeyword(name, 'batti') || hasKeyword(name, 'glove') || hasKeyword(name, 'gloves') ||
+      hasKeyword(name, 'apron') || hasKeyword(name, 'chef cap') || hasKeyword(name, 'hair net') ||
+      hasKeyword(name, 'hairnet') ||
+      (hasKeyword(name, 'sabun') && !hasKeyword(name, 'liquid') && !hasKeyword(name, 'handwash'));
+
+    const isLiquidCleaning = 
+      hasKeyword(name, 'liquid') || hasKeyword(name, 'cleaner') || hasKeyword(name, 'sanitizer') ||
+      hasKeyword(name, 'wash') || hasKeyword(name, 'bleach') || hasKeyword(name, 'spray') ||
+      hasKeyword(name, 'phenyl') || hasKeyword(name, 'fenil') || hasKeyword(name, 'harpic') ||
+      hasKeyword(name, 'lizol') || hasKeyword(name, 'colin') || hasKeyword(name, 'gel') ||
+      hasKeyword(name, 'handwash');
+
+    const isBulkPowder = 
+      hasKeyword(name, 'powder') || hasKeyword(name, 'surf') || hasKeyword(name, 'washing powder') ||
+      hasKeyword(name, 'detergent powder') || hasKeyword(name, 'caustic soda') || hasKeyword(name, 'bleaching powder');
+
+    if (isPieceCleaning) return { category: 'Housekeeping & Cleaning', unit: 'piece' };
+    if (isLiquidCleaning) return { category: 'Housekeeping & Cleaning', unit: 'bottle' };
+    if (isBulkPowder) return { category: 'Housekeeping & Cleaning', unit: 'kg' };
+    return { category: 'Housekeeping & Cleaning', unit: 'packet' };
   }
 
   // 2. Packaging & Disposables
@@ -173,7 +207,12 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
     'tissue', 'napkin', 'foil', 'silver foil', 'cling film', 'tape', 'packing tape',
     'spoon', 'fork', 'cutlery', 'plate', 'bowl', 'carry bag', 'meal tray', 'tray',
     'pizza box', 'burger box', 'bill roll', 'thermal paper', 'paper roll', 'thermal roll',
-    'toothpick', 'wet wipe', 'butter paper', 'parchment paper'
+    'toothpick', 'wet wipe', 'butter paper', 'parchment paper',
+    // Hinglish additions
+    'dabba', 'parcel dabba', 'plastic dabba', 'foil paper', 'aluminium foil',
+    'tissue paper', 'paper napkin', 'chamach', 'plastic chamach', 'kanta chamach',
+    'disposable glass', 'paper glass', 'chai cup', 'paper cup', 'disposable plate',
+    'thali', 'disposable thali', 'panni', 'parcel bag', 'thaili', 'polythene', 'pos roll', 'billing roll'
   ];
   if (packagingKeywords.some(k => hasKeyword(name, k))) {
     const isRoll = hasKeyword(name, 'foil') || hasKeyword(name, 'film') || hasKeyword(name, 'roll') || hasKeyword(name, 'tape');
@@ -182,8 +221,8 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
 
   // 3. Bakery & Breads (Before micro spices so 'Vanilla Ice Cream' doesn't match 'Vanilla')
   const bakeryKeywords = [
-    'bread', 'bun', 'pav', 'pizza base', 'croissant',
-    'tortilla', 'wrap', 'sponge', 'cake', 'muffin', 'loaf', 'pita',
+    'bread', 'bun', 'burger bun', 'pav', 'ladi pav', 'pizza base', 'croissant',
+    'tortilla', 'wrap', 'sponge', 'cake', 'muffin', 'loaf', 'pita', 'toast', 'rusk',
     'taco', 'waffle', 'brownie', 'ice cream', 'chocolate slab', 'choco chips', 'cocoa powder'
   ];
   if (bakeryKeywords.some(k => hasKeyword(name, k))) {
@@ -219,7 +258,7 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
   const spiritsKeywords = [
     'whiskey', 'whisky', 'scotch', 'bourbon', 'single malt', 'vodka', 'rum',
     'gin', 'tequila', 'brandy', 'cognac', 'liqueur', 'liquor', 'alcohol',
-    'smirnoff', 'absolut', 'grey goose', 'bacardi', 'old monk', 'captain morgan',
+    'daru', 'sharab', 'smirnoff', 'absolut', 'grey goose', 'bacardi', 'old monk', 'captain morgan',
     'johnnie walker', 'black label', 'red label', 'chivas', 'glenfiddich', 'jameson',
     'jack daniel', 'jim beam', 'bombay sapphire', 'tanqueray', 'baileys', 'jagermeister',
     'kahlua', 'cointreau', 'triple sec', 'cocktail', 'mocktail', 'peg', 'campari', 'aperol'
@@ -230,19 +269,23 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
 
   // 5. Sauces, Pastes & Condiments (Takes precedence over raw vegetables/spices for ketchup, paste, puree)
   const sauceKeywords = [
-    'sauce', 'ketchup', 'mayonnaise', 'mayo', 'vinegar', 'sirka', 'soya sauce',
+    'sauce', 'ketchup', 'tomato ketchup', 'mayonnaise', 'mayo', 'vinegar', 'sirka', 'soya sauce',
     'soy sauce', 'chilli sauce', 'schezwan', 'mustard sauce', 'dip', 'dressing', 
-    'chutney', 'paste', 'ginger garlic paste', 'puree', 'tomato puree', 'salsa'
+    'chutney', 'paste', 'ginger garlic paste', 'adrak lahsun paste', 'adrak paste', 'lahsun paste',
+    'puree', 'tomato puree', 'salsa'
   ];
   if (sauceKeywords.some(k => hasKeyword(name, k))) {
-    const isLiquid = hasKeyword(name, 'vinegar') || hasKeyword(name, 'soya sauce') || hasKeyword(name, 'soy sauce');
+    const isLiquid = hasKeyword(name, 'vinegar') || hasKeyword(name, 'soya sauce') || hasKeyword(name, 'soy sauce') || hasKeyword(name, 'sirka');
     return { category: 'Sauces & Condiments', unit: isLiquid ? 'litre' : 'kg' };
   }
 
   // 6. Cooking Oils, Ghee & Fats (Takes precedence over raw seeds/olives)
   const oilKeywords = [
-    'oil', 'tel', 'ghee', 'butter oil', 'olive oil', 'mustard oil', 'sunflower',
-    'refined oil', 'soyabean oil', 'sesame oil', 'coconut oil', 'shortening', 'vanaspati', 'dalda', 'pomace', 'margarine'
+    'oil', 'tel', 'tail', 'ghee', 'desi ghee', 'amul ghee', 'butter oil', 'olive oil',
+    'mustard oil', 'sarson tel', 'sarson ka tel', 'sarson oil', 'sunflower', 'sunflower oil',
+    'refined oil', 'refined tel', 'soyabean oil', 'soyabean tel', 'sesame oil', 'til tel', 'til ka tel',
+    'coconut oil', 'nariyal tel', 'groundnut oil', 'moongphali tel', 'palm oil', 'shortening',
+    'vanaspati', 'dalda', 'pomace', 'margarine'
   ];
   if (oilKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Oils, Ghee & Fats', unit: 'litre' };
@@ -250,11 +293,13 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
 
   // 7. Fine Micro Spices & Baking Essentials (gram)
   const gramSpiceKeywords = [
-    'kesar', 'saffron', 'elaichi', 'cardamom', 'baking powder', 'baking soda',
-    'cinnamon', 'dalchini', 'clove', 'laung', 'heeng', 'hing', 'asafoetida', 'nutmeg', 'jaiphal',
-    'mace', 'javitri', 'vanilla', 'food color', 'food colour', 'yeast', 'mono sodium', 'msg', 'ajinomoto',
-    'star anise', 'chhoti elaichi', 'badi elaichi', 'oregano', 'chilli flakes', 'chili flakes',
-    'peri peri', 'peri peri seasoning', 'citric acid'
+    'kesar', 'zafran', 'saffron', 'elaichi', 'cardamom', 'chhoti elaichi', 'choti elaichi',
+    'hari elaichi', 'green cardamom', 'badi elaichi', 'moti elaichi', 'black cardamom',
+    'baking powder', 'baking soda', 'meetha soda', 'cinnamon', 'dalchini', 'clove', 'cloves',
+    'laung', 'lavang', 'heeng', 'hing', 'asafoetida', 'nutmeg', 'jaiphal', 'mace', 'javitri',
+    'vanilla', 'food color', 'food colour', 'yeast', 'mono sodium', 'msg', 'ajinomoto',
+    'star anise', 'chakraphool', 'chakra phool', 'oregano', 'chilli flakes', 'chili flakes',
+    'peri peri', 'peri peri seasoning', 'citric acid', 'nimbu sat', 'nimbu phool', 'tatri'
   ];
   if (gramSpiceKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Spices & Seasonings', unit: 'gram' };
@@ -262,25 +307,34 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
 
   // 8. Bulk Spices & Seasonings (kg)
   const bulkSpiceKeywords = [
-    'spice', 'masala', 'mirch powder', 'chilli powder', 'chili powder', 'lal mirch', 'degi mirch', 'kashmiri mirch',
-    'turmeric', 'haldi', 'cumin', 'jeera', 'coriander powder', 'dhania powder', 'garam masala',
-    'chaat masala', 'amchur', 'kasuri methi', 'black pepper', 'kali mirch', 'white pepper',
-    'salt', 'namak', 'black salt', 'rock salt', 'sendha namak', 'sesame', 'til', 'mustard seed', 
-    'sarson seed', 'rai', 'fennel', 'saunf', 'ajwain', 'kalonji', 'tejpatta', 
-    'bay leaf', 'khus khus', 'poppy seed', 'kitchen king', 'sambar masala', 
-    'pav bhaji masala', 'chana masala', 'biryani masala', 'meat masala'
+    'spice', 'masala', 'mirch powder', 'chilli powder', 'chili powder', 'lal mirch', 'lal mirchi',
+    'degi mirch', 'kashmiri mirch', 'kutti mirch', 'red chilli powder',
+    'turmeric', 'haldi', 'haldi powder', 'sabut haldi',
+    'cumin', 'jeera', 'zeera', 'jeera powder', 'sabut jeera', 'shahi jeera',
+    'coriander powder', 'dhania powder', 'dhaniya powder', 'sabut dhania', 'sabut dhaniya',
+    'garam masala', 'chaat masala', 'chat masala', 'amchur', 'aamchur', 'amchoor', 'dry mango powder',
+    'kasuri methi', 'kasoori methi', 'dry fenugreek',
+    'black pepper', 'kali mirch', 'kali mirchi', 'sabut kali mirch', 'white pepper', 'safed mirch',
+    'salt', 'namak', 'tata namak', 'black salt', 'rock salt', 'sendha namak', 'kala namak',
+    'sesame', 'til', 'safed til', 'kala til', 'mustard seed', 'sarson seed', 'sarson dana',
+    'rai', 'peeli sarson', 'fennel', 'saunf', 'moti saunf', 'barik saunf', 'ajwain', 'kalonji',
+    'mangraila', 'tejpatta', 'tej patta', 'tez patta', 'bay leaf', 'khus khus', 'khas khas', 'poppy seed',
+    'kitchen king', 'sambar masala', 'sambhar masala', 'pav bhaji masala', 'chana masala',
+    'biryani masala', 'meat masala', 'chicken masala', 'sabzi masala', 'methi dana'
   ];
   if (bulkSpiceKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Spices & Seasonings', unit: 'kg' };
   }
 
   // 9. Dairy Products
-  const dairyLiquidKeywords = ['milk', 'doodh', 'buttermilk', 'chaas', 'lassi'];
+  const dairyLiquidKeywords = ['milk', 'doodh', 'dudh', 'amul doodh', 'buttermilk', 'chaas', 'mattha', 'lassi'];
   if (dairyLiquidKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Dairy & Cheese', unit: 'litre' };
   }
   const dairySolidKeywords = [
-    'paneer', 'cheese', 'butter', 'dahi', 'curd', 'cream', 'malai',
+    'paneer', 'chena', 'cottage cheese', 'cheese', 'mozzarella', 'cheddar', 'cheese slice',
+    'butter', 'makhan', 'amul butter', 'safed makhan', 'desi butter',
+    'dahi', 'curd', 'amul dahi', 'cream', 'fresh cream', 'amul cream', 'malai',
     'khoya', 'mawa', 'yogurt', 'condensed milk', 'mozzarella', 'cheddar', 'parmesan', 'milkmaid'
   ];
   if (dairySolidKeywords.some(k => hasKeyword(name, k))) {
@@ -288,14 +342,14 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
   }
 
   // 10. Meat, Poultry & Seafood
-  if (hasKeyword(name, 'egg') || hasKeyword(name, 'anda') || hasKeyword(name, 'ande')) {
+  if (hasKeyword(name, 'egg') || hasKeyword(name, 'eggs') || hasKeyword(name, 'anda') || hasKeyword(name, 'ande')) {
     return { category: 'Meat, Poultry & Seafood', unit: 'piece' };
   }
   const meatKeywords = [
-    'chicken', 'mutton', 'fish', 'prawn', 'lamb', 'keema', 'pork',
-    'beef', 'bacon', 'sausage', 'salami', 'tikka meat', 'wings', 'boneless',
-    'surmai', 'pomfret', 'basa', 'salmon', 'shrimp', 'crab', 'lobster', 'drumstick', 'curry cut',
-    'rawas', 'squid', 'calamari', 'ham', 'pepperoni'
+    'chicken', 'murga', 'mutton', 'gosht', 'fish', 'machli', 'prawn', 'jhinga', 'lamb', 'keema',
+    'pork', 'beef', 'bacon', 'sausage', 'salami', 'tikka meat', 'wings', 'chicken wings',
+    'boneless', 'chicken boneless', 'surmai', 'pomfret', 'basa', 'salmon', 'shrimp', 'crab',
+    'lobster', 'drumstick', 'curry cut', 'rawas', 'squid', 'calamari', 'ham', 'pepperoni'
   ];
   if (meatKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Meat, Poultry & Seafood', unit: 'kg' };
@@ -303,10 +357,19 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
 
   // 11. Grains, Flour & Pulses (kg)
   const grainKeywords = [
-    'rice', 'chawal', 'basmati', 'biryani rice', 'atta', 'flour', 'maida', 'sooji', 'suji', 'rava', 'besan',
-    'sugar', 'cheeni', 'jaggery', 'gud', 'dal', 'daal', 'rajma', 'chole',
-    'chana', 'poha', 'oats', 'wheat', 'noodle', 'pasta', 'cornflour', 'corn starch',
-    'macaroni', 'spaghetti', 'penne', 'fusilli', 'breadcrumbs', 'vermicelli', 'seviyan'
+    'rice', 'chawal', 'chaval', 'chawl', 'basmati', 'biryani rice', 'sela chawal', 'kolam', 'sona masoori',
+    'atta', 'aata', 'gehun', 'gehu', 'gehun ka aata', 'wheat flour', 'chakki aata',
+    'flour', 'maida', 'all purpose flour', 'besan', 'gram flour', 'chana aata',
+    'sooji', 'suji', 'rava', 'rawa', 'semolina',
+    'makki ka aata', 'makka aata', 'jowar aata', 'bajra aata', 'ragi flour',
+    'sugar', 'cheeni', 'chini', 'shakkar', 'bura', 'boora', 'jaggery', 'gud', 'gur',
+    'dal', 'daal', 'arhar dal', 'toor dal', 'tuvar dal', 'tur dal', 'moong dal', 'dhuli moong',
+    'urad dal', 'dhuli urad', 'urad sabut', 'kali dal', 'makhani dal', 'chana dal',
+    'masoor dal', 'lal masoor', 'rajma', 'rajmah', 'chole', 'chana', 'kabuli chana', 'safed chana', 'kala chana',
+    'poha', 'chiwda', 'chivda', 'murmura', 'kurmura', 'lai', 'oats', 'wheat', 'dalia',
+    'noodle', 'noodles', 'chowmein', 'hakka noodles', 'pasta', 'macaroni', 'spaghetti', 'penne', 'fusilli',
+    'cornflour', 'corn starch', 'ararot', 'arrowroot', 'breadcrumbs', 'vermicelli', 'seviyan', 'sewai',
+    'sabudana', 'soya chunks', 'soya badi', 'soyabean'
   ];
   if (grainKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Grains, Flour & Pulses', unit: 'kg' };
@@ -314,19 +377,41 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
 
   // 12. Fresh Vegetables & Fruits
   const freshProduceKeywords = [
-    'capsicum', 'shimla', 'shimla mirch', 'bell pepper', 'hari mirch', 'green chilli', 'green chili',
-    'potato', 'aloo', 'onion', 'pyaz', 'tomato', 'tamatar', 'garlic', 'lahsun', 'ginger', 'adrak',
-    'lemon', 'nimbu', 'coriander', 'dhania', 'mint', 'pudina', 'mushroom', 'broccoli', 'spinach',
-    'palak', 'peas', 'matar', 'cucumber', 'kheera', 'carrot', 'gajar', 'cabbage',
-    'patta gobhi', 'cauliflower', 'phool gobhi', 'beans', 'bhindi', 'okra',
-    'lady finger', 'beetroot', 'chukandar', 'baby corn', 'sweet corn',
-    'zucchini', 'lettuce', 'jalapeno', 'olive', 'curry leaf', 'kadi patta', 
-    'lauki', 'baingan', 'brinjal', 'spring onion', 'basil', 'parsley', 'celery', 
-    'leek', 'rosemary', 'thyme', 'apple', 'seb', 'banana', 'kela', 'orange', 
-    'santra', 'mosambi', 'pineapple', 'ananas', 'mango', 'aam', 'strawberry', 
+    'hara dhaniya', 'dhaniya', 'dhania', 'dhaniya patta', 'dhania patta', 'kothmir', 'kothimbir', 'cilantro', 'coriander',
+    'pudina', 'hara pudina', 'mint',
+    'hari mirch', 'hari mirchi', 'green chilli', 'green chili', 'mirchi', 'mirch',
+    'capsicum', 'shimla', 'shimla mirch', 'bell pepper',
+    'potato', 'aloo', 'alu', 'batata',
+    'onion', 'pyaz', 'pyaaz', 'kanda', 'spring onion', 'hara pyaz',
+    'tomato', 'tamatar', 'tamater',
+    'garlic', 'lahsun', 'lehsun', 'lasun',
+    'ginger', 'adrak', 'adrakh',
+    'baingan', 'bengan', 'baigan', 'bhata', 'brinjal', 'eggplant',
+    'peas', 'matar', 'mutter', 'mattar', 'hari matar', 'frozen matar',
+    'lemon', 'nimbu', 'neebu', 'limbu', 'lime',
+    'kheera', 'kakdi', 'cucumber',
+    'carrot', 'gajar', 'gaajar',
+    'radish', 'mooli', 'muli',
+    'cabbage', 'patta gobhi', 'patta gobi', 'band gobhi', 'bandh gobhi',
+    'cauliflower', 'phool gobhi', 'phul gobhi', 'gobhi', 'gobi',
+    'beans', 'bhindi', 'bhendi', 'okra', 'lady finger', 'ladyfinger',
+    'beetroot', 'chukandar', 'chukander',
+    'lauki', 'dudhi', 'ghiya', 'bottle gourd',
+    'turai', 'tori', 'gilki', 'ridge gourd',
+    'karela', 'bitter gourd',
+    'kaddu', 'sitaphal', 'petha', 'pumpkin',
+    'palak', 'saag', 'spinach',
+    'methi', 'hari methi', 'fenugreek leaves',
+    'arbi', 'arvi', 'ghuiyan', 'taro root',
+    'shalgam', 'turnip',
+    'curry leaf', 'curry leaves', 'kadi patta', 'curry patta', 'meetha neem',
+    'mushroom', 'broccoli', 'zucchini', 'lettuce', 'jalapeno', 'olive',
+    'baby corn', 'sweet corn', 'basil', 'parsley', 'celery', 'leek', 'rosemary', 'thyme',
+    'apple', 'seb', 'banana', 'kela', 'orange', 'santra', 'mosambi', 'sweet lime',
+    'pineapple', 'ananas', 'mango', 'aam', 'kacha aam', 'keri', 'strawberry', 
     'watermelon', 'tarbooj', 'muskmelon', 'kharbuja', 'papaya', 'papita', 
-    'kiwi', 'grapes', 'angoor', 'pomegranate', 'anaar', 'lime', 'avocado', 
-    'dragonfruit', 'peach', 'plum'
+    'kiwi', 'grapes', 'angoor', 'pomegranate', 'anaar', 'amrood', 'peru', 'guava',
+    'chiku', 'chikoo', 'avocado', 'dragonfruit', 'peach', 'plum', 'litchi'
   ];
   if (freshProduceKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Vegetables & Fruits', unit: 'kg' };
@@ -337,12 +422,13 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
     'coke', 'coca cola', 'pepsi', 'sprite', 'thums up', 'thumps up', 'fanta',
     'limca', 'mountain dew', '7up', 'mirinda', 'soda', 'tonic water',
     'ginger ale', 'red bull', 'monster energy', 'sting', 'syrup', 'crush', 
-    'squash', 'concentrate', 'tea', 'coffee', 'chai patti', 'green tea', 
-    'coffee beans', 'water', 'mineral water', 'packaged water', 'kinley', 
-    'aquafina', 'bisleri', 'juice', 'real juice', 'tropicana'
+    'squash', 'concentrate', 'tea', 'chai', 'chai patti', 'tea leaves', 'green tea', 
+    'coffee', 'coffee beans', 'nescafe', 'bru',
+    'water', 'mineral water', 'packaged water', 'pani bottle', 'kinley', 
+    'aquafina', 'bisleri', 'juice', 'real juice', 'tropicana', 'frooti', 'maaza'
   ];
   if (beverageKeywords.some(k => hasKeyword(name, k))) {
-    if (hasKeyword(name, 'tea') || hasKeyword(name, 'coffee') || hasKeyword(name, 'chai patti') || hasKeyword(name, 'coffee beans')) {
+    if (hasKeyword(name, 'tea') || hasKeyword(name, 'chai') || hasKeyword(name, 'coffee')) {
       return { category: 'Beverages & Syrups', unit: 'kg' };
     }
     const isCan = hasKeyword(name, 'can') || hasKeyword(name, 'tin') || hasKeyword(name, 'red bull') || hasKeyword(name, 'monster');
@@ -352,15 +438,92 @@ export function detectCategoryAndUnit(rawName: string): { category: string; unit
   // 14. Dry Fruits & Nuts
   const nutKeywords = [
     'kaju', 'cashew', 'badam', 'almond', 'pista', 'pistachio', 'akhrot',
-    'walnut', 'kismis', 'raisin', 'dates', 'khajoor', 'makhana', 'peanut', 
-    'moongphali', 'anjeer', 'fig', 'chia seed', 'flax seed', 'melon seed', 
-    'magaz', 'char magaz', 'pumpkin seed'
+    'walnut', 'kismis', 'kishmish', 'raisin', 'dates', 'khajoor', 'makhana', 'peanut', 
+    'moongphali', 'mungfali', 'anjeer', 'fig', 'charoli', 'chironji', 'chia seed',
+    'flax seed', 'alshi', 'melon seed', 'magaz', 'char magaz', 'pumpkin seed'
   ];
   if (nutKeywords.some(k => hasKeyword(name, k))) {
     return { category: 'Dry Fruits & Nuts', unit: 'kg' };
   }
 
   return { category: 'General', unit: 'kg' };
+}
+
+// Bilingual search synonyms (English <-> Hinglish <-> Regional aliases)
+export const HINGLISH_SYNONYM_GROUPS: string[][] = [
+  ['coriander', 'dhaniya', 'dhania', 'kothmir', 'kothimbir', 'cilantro', 'hara dhaniya', 'hara dhania'],
+  ['tomato', 'tamatar', 'tamater'],
+  ['potato', 'aloo', 'alu', 'batata'],
+  ['onion', 'pyaz', 'pyaaz', 'kanda'],
+  ['ginger', 'adrak', 'adrakh'],
+  ['garlic', 'lahsun', 'lehsun', 'lasun'],
+  ['lemon', 'lime', 'nimbu', 'neebu', 'limbu'],
+  ['green chilli', 'green chili', 'hari mirch', 'hari mirchi'],
+  ['red chilli', 'red chili', 'lal mirch', 'lal mirchi', 'chilli powder', 'mirch powder'],
+  ['black pepper', 'kali mirch', 'kali mirchi'],
+  ['turmeric', 'haldi', 'haldi powder'],
+  ['cumin', 'jeera', 'zeera'],
+  ['cardamom', 'elaichi', 'chhoti elaichi', 'badi elaichi'],
+  ['clove', 'laung', 'lavang'],
+  ['cinnamon', 'dalchini'],
+  ['asafoetida', 'heeng', 'hing'],
+  ['fenugreek', 'methi', 'kasuri methi', 'kasoori methi', 'methi dana'],
+  ['mustard', 'rai', 'sarson'],
+  ['fennel', 'saunf'],
+  ['flour', 'wheat flour', 'atta', 'aata', 'gehun ka aata'],
+  ['rice', 'chawal', 'chaval', 'chawl', 'basmati'],
+  ['gram flour', 'besan'],
+  ['semolina', 'sooji', 'suji', 'rava', 'rawa'],
+  ['all purpose flour', 'maida'],
+  ['salt', 'namak', 'tata namak', 'sendha namak', 'kala namak'],
+  ['sugar', 'cheeni', 'chini', 'shakkar', 'bura', 'gud', 'jaggery'],
+  ['milk', 'doodh', 'dudh'],
+  ['butter', 'makhan', 'amul butter'],
+  ['clarified butter', 'ghee', 'desi ghee'],
+  ['curd', 'yogurt', 'dahi'],
+  ['cottage cheese', 'paneer'],
+  ['cream', 'malai', 'fresh cream'],
+  ['oil', 'tel', 'refined oil', 'mustard oil', 'sarson ka tel', 'sarson tel'],
+  ['egg', 'eggs', 'anda', 'ande'],
+  ['chicken', 'murga'],
+  ['mutton', 'gosht'],
+  ['fish', 'machli'],
+  ['prawn', 'jhinga'],
+  ['mop', 'pocha', 'pochha', 'floor mop'],
+  ['broom', 'jhadu', 'jhaadu'],
+  ['dishwash', 'bartan sabun', 'bartan dhone', 'vim bar', 'exo bar'],
+  ['soap', 'sabun'],
+  ['scrubber', 'juna', 'lohe ka juna', 'scotch brite'],
+  ['pea', 'peas', 'matar', 'mutter', 'mattar'],
+  ['brinjal', 'eggplant', 'baingan', 'bengan', 'baigan'],
+  ['cauliflower', 'gobhi', 'gobi', 'phool gobhi', 'phul gobhi'],
+  ['cabbage', 'patta gobhi', 'patta gobi', 'band gobhi'],
+  ['bottle gourd', 'lauki', 'dudhi', 'ghiya'],
+  ['okra', 'ladyfinger', 'bhindi', 'bhendi'],
+  ['radish', 'mooli', 'muli'],
+  ['carrot', 'gajar', 'gaajar'],
+  ['cucumber', 'kheera', 'kakdi'],
+  ['spinach', 'palak', 'saag'],
+  ['tea', 'chai', 'chai patti'],
+  ['water', 'pani', 'mineral water']
+];
+
+export function matchesItemSearch(name: string, category: string, query: string): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase().trim();
+  const n = (name || '').toLowerCase();
+  const c = (category || '').toLowerCase();
+  if (n.includes(q) || c.includes(q)) return true;
+
+  // Check synonym group matches
+  for (const group of HINGLISH_SYNONYM_GROUPS) {
+    const qMatchesGroup = group.some(alias => alias.includes(q) || q.includes(alias));
+    if (qMatchesGroup) {
+      const nameMatchesGroup = group.some(alias => n.includes(alias));
+      if (nameMatchesGroup) return true;
+    }
+  }
+  return false;
 }
 
 export function computeDbCostPerUnit(rate: number, rateUnit: string, itemUnit: string): number {
@@ -1638,7 +1801,7 @@ export default function InventoryDashboardPage() {
       const { data: created, error } = await supabase.from('inventory_items').insert({
         restaurant_id: restaurantId,
         name: cleanName,
-        category: 'General',
+        category: detectCategoryAndUnit(cleanName).category,
         unit: quickItemUnit,
         current_stock: 1000,
         minimum_stock: 100,
@@ -2354,8 +2517,7 @@ export default function InventoryDashboardPage() {
 
   // Filtered Inventory Items (Using canonical getItemStockStatus: BUG-INV-009)
   const filteredItems = activeItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = matchesItemSearch(item.name, item.category, searchQuery);
 
     const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
 
@@ -3618,7 +3780,7 @@ export default function InventoryDashboardPage() {
                             setItemCostRateUnit(detected.unit);
                           }
                         }}
-                        placeholder="e.g. Bell Peppers, Refined Oil, Basmati Rice, Chicken Breast..."
+                        placeholder="e.g. Hara Dhaniya, Pocha, Haldi, Bartan Dhone Ka Sabun, Basmati Chawal..."
                         required 
                         className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none" 
                       />
@@ -4763,7 +4925,7 @@ export default function InventoryDashboardPage() {
               <div className="space-y-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-600">Item Name *</label>
-                  <input value={quickItemName} onChange={e => setQuickItemName(e.target.value)} className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
+                  <input value={quickItemName} onChange={e => { const val = e.target.value; setQuickItemName(val); const detected = detectCategoryAndUnit(val); setQuickItemUnit(detected.unit); }} className="w-full px-3 py-2 bg-slate-50 border rounded-xl text-xs font-bold" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">

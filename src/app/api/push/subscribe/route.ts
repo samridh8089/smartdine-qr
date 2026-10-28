@@ -36,13 +36,40 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'FORBIDDEN', message: 'Cannot subscribe push notifications for another user' }, { status: 403 });
     }
 
-    const subString = JSON.stringify(subscription);
     const supabaseAdmin = getSupabaseAdmin();
+
+    // Check existing push_token to preserve any active mobile FCM/Expo tokens
+    const { data: existingProf } = await supabaseAdmin
+      .from('profiles')
+      .select('push_token')
+      .eq('id', userId)
+      .maybeSingle();
+
+    let tokenToPersist = JSON.stringify({ web: subscription });
+    if (existingProf?.push_token) {
+      if (existingProf.push_token.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(existingProf.push_token);
+          tokenToPersist = JSON.stringify({
+            web: subscription,
+            mobile: parsed.mobile || null
+          });
+        } catch (_) {
+          tokenToPersist = JSON.stringify({ web: subscription });
+        }
+      } else {
+        // Existing is a plain mobile FCM/Expo token string
+        tokenToPersist = JSON.stringify({
+          web: subscription,
+          mobile: existingProf.push_token
+        });
+      }
+    }
 
     // Save Web Push subscription string in profiles.push_token
     const { error } = await supabaseAdmin
       .from('profiles')
-      .update({ push_token: subString, updated_at: new Date().toISOString() })
+      .update({ push_token: tokenToPersist, updated_at: new Date().toISOString() })
       .eq('id', userId);
 
     if (error) {

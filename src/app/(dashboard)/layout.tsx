@@ -122,6 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     return false;
   });
+  const [isRinging, setIsRinging] = useState(false);
   // Phase-19: Founder Control Center easter egg (5-tap logo)
   const [logoTapCount, setLogoTapCount] = useState(0);
   const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -454,14 +455,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => clearTimeout(timer);
   }, [restaurant?.id, profile?.restaurant_id]);
 
-  // Global Audio stop listeners triggered by actions
+  // Global Audio stop listeners triggered by actions & bell ringing state
   useEffect(() => {
-    const handleStopSound = () => stopGlobalAlarm();
+    const handleStopSound = () => {
+      stopGlobalAlarm();
+      setIsRinging(false);
+    };
+    const handleBellState = (e: any) => {
+      setIsRinging(Boolean(e?.detail?.isRinging));
+    };
     window.addEventListener('stop-kitchen-sound', handleStopSound);
     window.addEventListener('stop-waiter-sound', handleStopSound);
+    window.addEventListener('cleverops-bell-state-changed', handleBellState);
     return () => {
       window.removeEventListener('stop-kitchen-sound', handleStopSound);
       window.removeEventListener('stop-waiter-sound', handleStopSound);
+      window.removeEventListener('cleverops-bell-state-changed', handleBellState);
     };
   }, []);
 
@@ -655,6 +664,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const handleToggleBellMute = async () => {
+    // If bell is actively ringing, 1-tap immediately silences the active chime
+    if (isRinging) {
+      stopGlobalAlarm();
+      setIsRinging(false);
+      return;
+    }
+
     const nextMuted = !alarmMuted;
     setAlarmMuted(nextMuted);
     setGlobalMute(nextMuted);
@@ -951,18 +967,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <button
                   type="button"
                   onClick={handleToggleBellMute}
-                  className={`p-2 rounded-xl border transition-all cursor-pointer shadow-xs ${
-                    alarmMuted
+                  className={`p-2 rounded-xl border transition-all cursor-pointer shadow-xs flex items-center gap-1.5 ${
+                    isRinging
+                      ? 'bg-rose-600 text-white border-rose-500 animate-bounce shadow-lg shadow-rose-500/20'
+                      : alarmMuted
                       ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700 hover:bg-slate-200'
                       : 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white hover:bg-slate-800'
                   }`}
-                  title={alarmMuted ? 'Sound alerts are MUTED. Click to turn ON.' : 'Sound alerts are ACTIVE. Click to MUTE.'}
+                  title={
+                    isRinging
+                      ? 'ALERT RINGING! Click to silence bell immediately.'
+                      : alarmMuted
+                      ? 'Order sound alerts are MUTED. Click to turn sound ON.'
+                      : 'Order sound alerts are ACTIVE. Click to MUTE.'
+                  }
                   aria-label="Toggle bell sound alerts"
                 >
-                  {alarmMuted ? (
+                  {isRinging ? (
+                    <Bell className="h-4 w-4 shrink-0 fill-current animate-pulse text-white" />
+                  ) : alarmMuted ? (
                     <BellOff className="h-4 w-4 shrink-0" />
                   ) : (
                     <Bell className="h-4 w-4 shrink-0 fill-current" />
+                  )}
+                  {isRinging && (
+                    <span className="text-[10px] font-black uppercase tracking-wider pr-1">Silence</span>
                   )}
                 </button>
               </div>

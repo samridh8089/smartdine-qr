@@ -26,9 +26,15 @@ export async function dispatchFCMNotification(
     // 1. Client-Side Browser Fallback: proxy to Next.js API endpoint to bypass CORS
     if (typeof window !== 'undefined') {
       try {
+        const { supabase } = await import('./supabase');
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
         await fetch('/api/push/send-native', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             restaurantId,
             title,
@@ -86,6 +92,16 @@ export async function dispatchFCMNotification(
         expandedRoles.add('KDS');
         expandedRoles.add('kitchen_staff');
         expandedRoles.add('Kitchen_Staff');
+        expandedRoles.add('head_chef');
+        expandedRoles.add('Head_Chef');
+        expandedRoles.add('chef');
+        expandedRoles.add('Chef');
+        expandedRoles.add('kitchen_helper');
+        expandedRoles.add('Kitchen_Helper');
+      }
+      if (norm === 'waiter') {
+        expandedRoles.add('captain');
+        expandedRoles.add('Captain');
       }
     });
     expandedRoles.add('supervisor');
@@ -144,14 +160,33 @@ export async function dispatchFCMNotification(
     const nativeFcmMessages: any[] = [];
 
     targetProfiles.forEach(p => {
-      if (!p.push_token || p.push_token.startsWith('{')) return;
+      if (!p.push_token) return;
+
+      // Extract mobile push token (supports plain string or JSON with { web, mobile })
+      let mobileToken: string | null = null;
+      if (p.push_token.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(p.push_token);
+          if (parsed.mobile && typeof parsed.mobile === 'string') {
+            mobileToken = parsed.mobile;
+          }
+        } catch (_) {}
+      } else {
+        mobileToken = p.push_token;
+      }
+
+      if (!mobileToken) return;
 
       const normRole = (p.role || '').toLowerCase().trim();
-      const roleChannel = (normRole === 'kitchen' || normRole === 'kds' || normRole === 'kitchen_staff')
+      const isKitchenRole = ['kitchen', 'kds', 'kitchen_staff', 'head_chef', 'chef', 'kitchen_helper'].includes(normRole);
+      const isWaiterRole = ['waiter', 'captain'].includes(normRole);
+      const isOwnerRole = ['owner', 'manager'].includes(normRole);
+
+      const roleChannel = isKitchenRole
         ? 'smartdine_kitchen'
-        : normRole === 'waiter'
+        : isWaiterRole
         ? 'smartdine_waiter'
-        : normRole === 'owner' || normRole === 'manager'
+        : isOwnerRole
         ? 'smartdine_owner'
         : 'smartdine_kitchen';
 
@@ -182,9 +217,9 @@ export async function dispatchFCMNotification(
         ...(extraData || {})
       };
 
-      if (p.push_token.startsWith('ExponentPushToken[')) {
+      if (mobileToken.startsWith('ExponentPushToken[')) {
         expoMessages.push({
-          to: p.push_token,
+          to: mobileToken,
           sound: 'order_tune',
           priority: 'high',
           channelId: roleChannel,
@@ -197,7 +232,7 @@ export async function dispatchFCMNotification(
         });
       } else {
         nativeFcmMessages.push({
-          token: p.push_token,
+          token: mobileToken,
           channelId: roleChannel,
           title,
           body,
