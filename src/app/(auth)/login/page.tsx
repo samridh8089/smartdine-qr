@@ -69,7 +69,7 @@ export default function LoginPage() {
         throw new Error(challengeErr?.message || 'Failed to create MFA challenge');
       }
 
-      const { error: verifyErr } = await supabase.auth.mfa.verify({
+      const { data: verifyData, error: verifyErr } = await supabase.auth.mfa.verify({
         factorId: mfaFactorId,
         challengeId: challengeData.id,
         code: mfaCode.trim()
@@ -78,6 +78,16 @@ export default function LoginPage() {
       if (verifyErr) {
         throw new Error(verifyErr.message || 'Invalid 6-digit authenticator code. Please check your authenticator app.');
       }
+
+      // Explicitly refresh session to guarantee aal2 token is updated in smartdine_auth_token_v2 & cookies
+      const { data: refreshedSession } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
+      if (!refreshedSession?.session && (verifyData as any)?.access_token) {
+        await supabase.auth.setSession({
+          access_token: (verifyData as any).access_token,
+          refresh_token: (verifyData as any).refresh_token
+        }).catch(() => {});
+      }
+      clearActiveUserCache();
 
       if (typeof window !== 'undefined') {
         localStorage.setItem('cleverops_auth_timestamp', String(Date.now()));

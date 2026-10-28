@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { db, Restaurant, PricingPlan, getEffectiveSubscriptionStatus } from '@/lib/db';
 import { parsePlanSpec } from '@/lib/entitlements';
-import { getActiveUser, supabase } from '@/lib/supabase';
+import { getActiveUser, supabase, clearActiveUserCache, getClientAuthToken } from '@/lib/supabase';
 import { formatPrice } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -419,8 +419,11 @@ export default function SuperAdminPage() {
   }, []);
 
   const getAdminAuthHeaders = useCallback(async (): Promise<Record<string, string>> => {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token || '';
+    let token = await getClientAuthToken().catch(() => '');
+    if (!token) {
+      const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+      token = sessionData?.session?.access_token || '';
+    }
     const headers: Record<string, string> = {
       'Content-Type': 'application/json'
     };
@@ -722,7 +725,7 @@ export default function SuperAdminPage() {
         throw new Error(challengeErr?.message || 'Failed to create challenge');
       }
 
-      const { error: verifyErr } = await supabase.auth.mfa.verify({
+      const { data: verifyData, error: verifyErr } = await supabase.auth.mfa.verify({
         factorId: mfaEnrollId,
         challengeId: challengeData.id,
         code: mfaVerificationCode.trim()
@@ -731,6 +734,16 @@ export default function SuperAdminPage() {
       if (verifyErr) {
         throw new Error(verifyErr.message || 'Invalid verification code. Check your Authenticator app.');
       }
+
+      // Elevate active session immediately so all admin API calls carry AAL2 token
+      const { data: refreshedSession } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
+      if (!refreshedSession?.session && (verifyData as any)?.access_token) {
+        await supabase.auth.setSession({
+          access_token: (verifyData as any).access_token,
+          refresh_token: (verifyData as any).refresh_token
+        }).catch(() => {});
+      }
+      clearActiveUserCache();
 
       setMfaSuccessMsg('Two-Factor Authentication is now ACTIVE on this account!');
       setMfaQrCode(null);

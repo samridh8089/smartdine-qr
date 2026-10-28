@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { decodeJwtPayloadSafe } from '@/lib/superAdminGuard';
+import { decodeJwtPayloadSafe } from './jwtHelper';
 
 let _supabaseAdminInstance: SupabaseClient | null = null;
 
@@ -22,6 +22,11 @@ function getSupabaseAdmin(): SupabaseClient {
 }
 
 const STAFF_AUTH_CACHE = new Map<string, { result: StaffAuthResult; expiresAt: number }>();
+
+export function _resetStaffAuthCache(): void {
+  STAFF_AUTH_CACHE.clear();
+  _supabaseAdminInstance = null;
+}
 
 export interface StaffAuthResult {
   isAuthorized: boolean;
