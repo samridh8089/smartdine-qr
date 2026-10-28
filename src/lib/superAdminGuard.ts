@@ -23,6 +23,10 @@ function getSupabaseAdmin(): SupabaseClient {
   return _supabaseAdminInstance;
 }
 
+export function _resetSupabaseAdminInstance(): void {
+  _supabaseAdminInstance = null;
+}
+
 export async function verifySuperAdminRequest(req: Request) {
   try {
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
@@ -113,12 +117,16 @@ export async function verifySuperAdminRequest(req: Request) {
     // Super Admin endpoints MANDATE an aal2 token on every single request.
     if (jwtAal !== 'aal2') {
       // Check if user has enrolled/verified TOTP factors to return the precise actionable error code
-      let hasVerifiedTotp = false;
-      try {
-        const { data: mfaData } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: user.id });
-        hasVerifiedTotp = Boolean(mfaData?.factors?.some((f: any) => f.factor_type === 'totp' && f.status === 'verified'));
-      } catch (factorErr) {
-        console.warn('[superAdminGuard] Could not query MFA factors list:', factorErr);
+      let hasVerifiedTotp = Boolean(
+        (user as any)?.factors?.some((f: any) => (f.factor_type === 'totp' || f.friendly_name) && f.status === 'verified')
+      );
+      if (!hasVerifiedTotp) {
+        try {
+          const { data: mfaData } = await supabaseAdmin.auth.admin.mfa.listFactors({ userId: user.id });
+          hasVerifiedTotp = Boolean(mfaData?.factors?.some((f: any) => f.factor_type === 'totp' && f.status === 'verified'));
+        } catch (factorErr) {
+          console.warn('[superAdminGuard] Could not query MFA factors list:', factorErr);
+        }
       }
 
       if (!hasVerifiedTotp) {
