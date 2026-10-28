@@ -17,19 +17,24 @@ function getSupabaseClient(): SupabaseClient {
   return _supabaseClient;
 }
 
-// In-memory server cache (10s TTL) for lightning-fast sub-10ms customer menu loads
+// In-memory server cache (15s TTL) for lightning-fast sub-10ms customer menu loads
 interface CacheEntry {
   timestamp: number;
   restaurant: any;
+  categories?: any[];
+  menu_items?: any[];
+  tables?: any[];
+  plan?: any;
 }
 const serverRestaurantCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 10000;
+const CACHE_TTL_MS = 15000;
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const slug = searchParams.get('slug')?.toLowerCase().trim();
     const id = searchParams.get('id')?.trim();
+    const includeMenu = searchParams.get('includeMenu') === 'true';
 
     if (!slug && !id) {
       return NextResponse.json({ error: 'slug or id parameter is required' }, { status: 400 });
@@ -38,14 +43,24 @@ export async function GET(req: Request) {
     const cacheKey = slug || id || '';
     const cached = serverRestaurantCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
-      return NextResponse.json(
-        { success: true, restaurant: cached.restaurant, fromCache: true },
-        {
-          headers: {
-            'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=15',
+      if (!includeMenu || (cached.categories && cached.menu_items)) {
+        return NextResponse.json(
+          {
+            success: true,
+            restaurant: cached.restaurant,
+            categories: cached.categories,
+            menu_items: cached.menu_items,
+            tables: cached.tables,
+            plan: cached.plan,
+            fromCache: true,
           },
-        }
-      );
+          {
+            headers: {
+              'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=15',
+            },
+          }
+        );
+      }
     }
 
     const supabase = getSupabaseClient();
@@ -111,23 +126,122 @@ export async function GET(req: Request) {
       created_at: rest.created_at,
     };
 
-    // Populate server memory cache
-    serverRestaurantCache.set(cacheKey, { timestamp: Date.now(), restaurant: safeRestaurant });
-    if (rest.slug && rest.slug !== cacheKey) {
-      serverRestaurantCache.set(rest.slug, { timestamp: Date.now(), restaurant: safeRestaurant });
-    }
-    if (rest.id && rest.id !== cacheKey) {
-      serverRestaurantCache.set(rest.id, { timestamp: Date.now(), restaurant: safeRestaurant });
+    let categories: any[] = [];
+    let menuItems: any[] = [];
+    let tables: any[] = [];
+    let planData: any = null;
+
+    if (includeMenu) {
+      const planId = (rest.subscription_plan || 'starter').toLowerCase();
+      const [catsRes, itemsRes, tablesRes, planRes] = await Promise.all([
+        supabase
+          .from('categories')
+          .select('*')
+          .eq('restaurant_id', rest.id)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true }),
+        supabase
+          .from('menu_items')
+          .select('*')
+          .eq('restaurant_id', rest.id)
+          .eq('is_available', true)
+          .order('display_order', { ascending: true }),
+        supabase
+          .from('tables')
+          .select('id, name, restaurant_id')
+          .eq('restaurant_id', rest.id),
+        supabase
+          .from('pricing_plans')
+          .select('*')
+          .eq('id', planId)
+          .maybeSingle(),
+      ]);
+
+      categories = catsRes.data || [];
+      const rawItems = itemsRes.data || [];
+      tables = (tablesRes.data || []).map((t: any) => ({
+        ...t,
+        qr_enabled: true,
+      }));
+      planData = planRes.data || null;
+
+      // Fetch variants for menu items
+      const itemIds = rawItems.map((i: any) => i.id);
+      if (itemIds.length > 0) {
+        try {
+          const { data: varData } = await supabase
+            .from('menu_item_variants')
+            .select('*')
+            .in('menu_item_id', itemIds)
+            .order('display_order', { ascending: true });
+
+          if (varData && varData.length > 0) {
+            const varMap: Record<string, any[]> = {};
+            varData.forEach((v: any) => {
+              if (!varMap[v.menu_item_id]) varMap[v.menu_item_id] = [];
+              varMap[v.menu_item_id].push({
+                id: v.id,
+                menu_item_id: v.menu_item_id,
+                name: v.name,
+                price: Number(v.price),
+                display_order: v.display_order || 0,
+                is_available: v.is_available !== false,
+              });
+            });
+
+            menuItems = rawItems.map((item: any) => {
+              const itemVars = varMap[item.id] || item.variants || [];
+              return {
+                ...item,
+                has_variants: Boolean(item.has_variants || itemVars.length > 0),
+                variants: itemVars,
+              };
+            });
+          } else {
+            menuItems = rawItems;
+          }
+        } catch (_) {
+          menuItems = rawItems;
+        }
+      } else {
+        menuItems = rawItems;
+      }
     }
 
-    return NextResponse.json(
-      { success: true, restaurant: safeRestaurant },
-      {
-        headers: {
-          'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=15',
-        },
-      }
-    );
+    // Populate server memory cache
+    const cacheEntry: CacheEntry = {
+      timestamp: Date.now(),
+      restaurant: safeRestaurant,
+      categories: includeMenu ? categories : cached?.categories,
+      menu_items: includeMenu ? menuItems : cached?.menu_items,
+      tables: includeMenu ? tables : cached?.tables,
+      plan: includeMenu ? planData : cached?.plan,
+    };
+
+    serverRestaurantCache.set(cacheKey, cacheEntry);
+    if (rest.slug && rest.slug !== cacheKey) {
+      serverRestaurantCache.set(rest.slug, cacheEntry);
+    }
+    if (rest.id && rest.id !== cacheKey) {
+      serverRestaurantCache.set(rest.id, cacheEntry);
+    }
+
+    const responsePayload: any = {
+      success: true,
+      restaurant: safeRestaurant,
+    };
+    if (includeMenu) {
+      responsePayload.categories = categories;
+      responsePayload.menu_items = menuItems;
+      responsePayload.tables = tables;
+      responsePayload.plan = planData;
+    }
+
+    return NextResponse.json(responsePayload, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=15',
+      },
+    });
   } catch (err: any) {
     console.error('[api/customer/restaurant] unexpected error:', err);
     return NextResponse.json({ error: err.message || 'Internal error' }, { status: 500 });

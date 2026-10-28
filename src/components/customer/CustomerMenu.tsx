@@ -433,12 +433,42 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
   useEffect(() => {
     async function loadData() {
       try {
-        const rest = await db.getRestaurantBySlug(restaurantSlug);
+        // Fast Bootstrap Cache: Instant sub-5ms paint on re-visits or warm sessions
+        const bootstrapKey = `smartdine_bootstrap_${restaurantSlug}`;
+        let cachedBundle: any = null;
+        if (typeof window !== 'undefined') {
+          try {
+            const raw = sessionStorage.getItem(bootstrapKey);
+            if (raw) cachedBundle = JSON.parse(raw);
+          } catch (_) {}
+        }
+
+        // Single roundtrip to unified bootstrap endpoint with 15s in-memory server cache
+        let bootstrapData: any = null;
+        try {
+          const bRes = await fetch(`/api/customer/restaurant?slug=${encodeURIComponent(restaurantSlug)}&includeMenu=true`);
+          if (bRes.ok) {
+            bootstrapData = await bRes.json();
+          }
+        } catch (_) {}
+
+        const activeBundle = (bootstrapData?.menu_items && bootstrapData?.restaurant) ? bootstrapData : cachedBundle;
+
+        const rest = activeBundle?.restaurant || (await db.getRestaurantBySlug(restaurantSlug));
         if (!rest) {
           setLoading(false);
           return;
         }
         setRestaurant(rest);
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem('smartdine_active_restaurant', JSON.stringify(rest));
+            localStorage.setItem('smartdine_active_restaurant', JSON.stringify(rest));
+            if (bootstrapData?.menu_items) {
+              sessionStorage.setItem(bootstrapKey, JSON.stringify(bootstrapData));
+            }
+          } catch (_) {}
+        }
 
         // Phase-21: Establish active correlation ID and emit qr_scanned & menu_opened events exactly ONCE per session
         let corrId: string | null = null;
@@ -469,28 +499,38 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
 
         const planId = (rest.subscription_plan || 'starter').toLowerCase();
 
-
-        // Plan cache (0ms network cost)
-        const planCache = (globalThis as any).__cleverops_plan_cache || new Map();
-        (globalThis as any).__cleverops_plan_cache = planCache;
-        const cachedPlan = planCache.get(planId);
-        const planPromise = cachedPlan
-          ? Promise.resolve({ data: cachedPlan })
-          : supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle().then(res => {
-              if (res.data) planCache.set(planId, res.data);
-              return res;
-            });
-
         // Direct offers from restaurant settings (0ms network cost)
         const directOffers = Array.isArray(rest.settings?.offers) ? rest.settings.offers : [];
 
-        // PHASE 1: Fast Parallel Fetch of Core Menu Data (using getBasicTables & in-memory caches)
-        const [cats, rawItems, tbls, planRes] = await Promise.all([
-          db.getCategories(rest.id).catch(() => [] as Category[]),
-          db.getMenuItems(rest.id).catch(() => [] as MenuItem[]),
-          (typeof (db as any).getBasicTables === 'function' ? (db as any).getBasicTables(rest.id) : db.getTables(rest.id)).catch(() => [] as Table[]),
-          planPromise
-        ]);
+        let cats: Category[] = activeBundle?.categories || [];
+        let rawItems: MenuItem[] = activeBundle?.menu_items || [];
+        let tbls: Table[] = activeBundle?.tables || [];
+        let planRow: any = activeBundle?.plan || null;
+
+        // Fallback: If menu_items was missing from unified endpoint, fetch via parallel fallback
+        if (!rawItems || rawItems.length === 0) {
+          const planCache = (globalThis as any).__cleverops_plan_cache || new Map();
+          (globalThis as any).__cleverops_plan_cache = planCache;
+          const cachedPlan = planCache.get(planId);
+          const planPromise = cachedPlan
+            ? Promise.resolve({ data: cachedPlan })
+            : supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle().then(res => {
+                if (res.data) planCache.set(planId, res.data);
+                return res;
+              });
+
+          const [fCats, fItems, fTbls, fPlan] = await Promise.all([
+            db.getCategories(rest.id).catch(() => [] as Category[]),
+            db.getMenuItems(rest.id).catch(() => [] as MenuItem[]),
+            (typeof (db as any).getBasicTables === 'function' ? (db as any).getBasicTables(rest.id) : db.getTables(rest.id)).catch(() => [] as Table[]),
+            planPromise
+          ]);
+          cats = fCats;
+          rawItems = fItems;
+          tbls = fTbls;
+          planRow = fPlan?.data || null;
+        }
+
         const fetchedOffers = directOffers.length > 0 ? directOffers : await db.getOffers(rest.id).catch(() => [] as Offer[]);
 
         if (rest?.id && !alreadyOpened && corrId) {
@@ -507,7 +547,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           }).catch(() => {});
         }
 
-        const spec = parsePlanSpec(planRes.data || { id: planId });
+        const spec = parsePlanSpec(planRow || { id: planId });
         setPlanSpec(spec);
 
         // Table Resolution
@@ -1220,6 +1260,8 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
       try {
         sessionStorage.setItem(`smartdine_order_cache_${newOrder.id}`, JSON.stringify(newOrder));
         localStorage.setItem(`smartdine_order_cache_${newOrder.id}`, JSON.stringify(newOrder));
+        sessionStorage.setItem('smartdine_active_restaurant', JSON.stringify(restaurant));
+        localStorage.setItem('smartdine_active_restaurant', JSON.stringify(restaurant));
         sessionStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
         localStorage.setItem(`smartdine_latest_order_${restaurant.id}`, newOrder.id);
         sessionStorage.removeItem('smartdine_latest_order_id');

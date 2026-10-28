@@ -52,7 +52,16 @@ export default function OrderTrackingPage({ params }: PageProps) {
     return null;
   });
   const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem(`smartdine_order_cache_${orderId}`) || localStorage.getItem(`smartdine_order_cache_${orderId}`);
+        const cachedRest = sessionStorage.getItem('smartdine_active_restaurant') || localStorage.getItem('smartdine_active_restaurant');
+        if (cached && cachedRest) return false;
+      } catch (e) {}
+    }
+    return true;
+  });
   const [callLoading, setCallLoading] = useState(false);
   const [callSent, setCallSent] = useState(false);
   const [submittingPayment, setSubmittingPayment] = useState(false);
