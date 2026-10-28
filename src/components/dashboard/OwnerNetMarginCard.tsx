@@ -20,7 +20,7 @@ import ExpenseModal from './ExpenseModal';
 
 interface OwnerNetMarginCardProps {
   restaurant: Restaurant | null;
-  timeRange: 'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom';
+  timeRange: 'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom' | 'single_day';
   salesSummary: {
     grossSales: number;
     totalDiscount: number;
@@ -199,7 +199,7 @@ export default function OwnerNetMarginCard({
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                  Net Profit & Margin
+                  Net Profit (In-Hand Munafa)
                 </span>
                 <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase rounded bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                   Owner
@@ -223,21 +223,21 @@ export default function OwnerNetMarginCard({
           {/* Quick Metrics */}
           <div className="grid grid-cols-3 gap-2 sm:gap-3 text-xs">
             <div className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="text-[10px] font-bold text-slate-400 block uppercase">Net Sales</span>
+              <span className="text-[10px] font-bold text-slate-400 block uppercase">Total Sales</span>
               <span className="font-extrabold text-slate-900 dark:text-white">
                 {formatPrice(pnl.netRevenue, currency, 0)}
               </span>
             </div>
 
             <div className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="text-[10px] font-bold text-slate-400 block uppercase">Total Costs</span>
+              <span className="text-[10px] font-bold text-slate-400 block uppercase">Total Expenses</span>
               <span className="font-extrabold text-slate-900 dark:text-white">
                 {formatPrice(pnl.totalExpenses, currency, 0)}
               </span>
             </div>
 
             <div className="px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60">
-              <span className="text-[10px] font-bold text-slate-400 block uppercase">Break-Even</span>
+              <span className="text-[10px] font-bold text-slate-400 block uppercase">Break-Even Sales</span>
               <span className="font-extrabold text-slate-900 dark:text-white">
                 {formatPrice(pnl.dailyBreakEvenSales, currency, 0)}/d
               </span>
@@ -281,8 +281,11 @@ export default function OwnerNetMarginCard({
             <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap justify-between items-center bg-slate-50/80 dark:bg-slate-800/40 shrink-0 gap-2">
               <div>
                 <h3 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white leading-tight">
-                  Owner Profit & Loss Statement
+                  Profit &amp; Loss Summary (Munafa &amp; Kharche)
                 </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Total sales, food cost aur monthly expenses ka hisab
+                </p>
               </div>
 
               {/* View Switcher: Executive Overview vs Expense Ledger */}
@@ -334,40 +337,40 @@ export default function OwnerNetMarginCard({
             {activeModalTab === 'summary' && (
               <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 max-h-[calc(88vh-80px)] pb-6">
                 
-                {/* SECTION 1: UNIT ECONOMICS BRIEF ("100 me se kitne paise kahan gaye") */}
+                {/* SECTION 1: BREAKDOWN PER ₹100 */}
                 <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 dark:border-slate-700/60 pb-2">
                     <div>
                       <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                        Where does every ₹100 earned go?
+                        Har ₹100 Ki Sale Ka Breakdown
                       </h4>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300">
-                        Total Overheads: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.totalExpenses?.toFixed(1) || '65.5'}</strong> / ₹100
+                        Total Expenses: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.totalExpenses?.toFixed(1) || '0.0'}</strong> / ₹100
                       </div>
-                      <div className="px-2.5 py-1 bg-slate-900 text-white dark:bg-white dark:text-slate-900 rounded-lg text-xs font-bold shadow-2xs">
-                        Pocket Take-Home Profit: <strong className="text-white dark:text-slate-900">₹{pnl.perHundredBreakdown?.netProfit?.toFixed(1) || '34.5'}</strong> / ₹100
+                      <div className="px-2.5 py-1 bg-white dark:bg-slate-900 border-2 border-slate-900 dark:border-white text-slate-900 dark:text-white rounded-lg text-xs font-bold shadow-2xs">
+                        Net Profit: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.netProfit?.toFixed(1) || '0.0'}</strong> / ₹100
                       </div>
                     </div>
                   </div>
 
-                  {/* Per ₹100 High-Level Brief Pills (Clean 1-line summary) */}
+                  {/* Per ₹100 High-Level Brief Pills (Clean Light Styling - No Emojis, No solid pitch black) */}
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
                     <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
-                      Food Raw Material: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.foodCost?.toFixed(1) || '31.0'}</strong>
+                      Food Cost (Raw Material): <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.foodCost?.toFixed(1) || '0.0'}</strong>
                     </div>
                     <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
-                      Staff Payroll: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.staffLabor?.toFixed(1) || '14.8'}</strong>
+                      Staff Salaries: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.staffLabor?.toFixed(1) || '0.0'}</strong>
                     </div>
                     <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
-                      Operating Overheads: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.operatingExpenses?.toFixed(1) || '19.5'}</strong>
+                      Monthly Expenses: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.operatingExpenses?.toFixed(1) || '0.0'}</strong>
                     </div>
                     <div className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-slate-800 dark:text-slate-200">
                       CleverOps POS: <strong className="text-slate-900 dark:text-white">₹{pnl.perHundredBreakdown?.cleverops?.toFixed(1) || '0.1'}</strong>
                     </div>
-                    <div className="px-2.5 py-1 rounded-lg bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-bold shadow-2xs">
-                      Pocket Profit: <strong>₹{pnl.perHundredBreakdown?.netProfit?.toFixed(1) || '34.5'} / ₹100</strong>
+                    <div className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-bold border border-slate-300 dark:border-slate-700">
+                      Net Profit: <strong>₹{pnl.perHundredBreakdown?.netProfit?.toFixed(1) || '0.0'} / ₹100</strong>
                     </div>
                   </div>
                 </div>
@@ -376,19 +379,19 @@ export default function OwnerNetMarginCard({
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                   <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-                      Period Net Sales
+                      Total Sales
                     </span>
                     <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
                       {formatPrice(pnl.netRevenue, currency, 0)}
                     </p>
                     <span className="text-[11px] font-medium text-slate-400 mt-0.5 block">
-                      {salesSummary.totalOrders || 174} orders completed
+                      {salesSummary.totalOrders || 0} orders completed
                     </span>
                   </div>
 
                   <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-                      Food Cost (COGS)
+                      Food Cost (Raw Material)
                     </span>
                     <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
                       {formatPrice(pnl.foodCost, currency, 0)}
@@ -400,7 +403,7 @@ export default function OwnerNetMarginCard({
 
                   <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-                      Staff Payroll
+                      Staff Salaries
                     </span>
                     <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
                       {formatPrice(pnl.staffLaborCost, currency, 0)}
@@ -412,21 +415,21 @@ export default function OwnerNetMarginCard({
 
                   <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-                      Operating Overheads
+                      Monthly Expenses
                     </span>
                     <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
                       {formatPrice(pnl.operatingExpenses, currency, 0)}
                     </p>
                     <span className="text-[11px] font-medium text-slate-400 mt-0.5 block">
-                      {(pnl.expenseCards || []).length} items logged
+                      {(pnl.expenseCards || []).length} items recorded
                     </span>
                   </div>
 
-                  <div className="p-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/60 shadow-2xs">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block">
-                      Net Take-Home Profit
+                  <div className="p-3 rounded-xl border-2 border-slate-900 dark:border-white bg-slate-50/80 dark:bg-slate-800/60 shadow-2xs">
+                    <span className="text-[10px] font-bold text-slate-950 dark:text-white uppercase tracking-wide block">
+                      Net Profit (In-Hand Munafa)
                     </span>
-                    <p className="text-lg sm:text-xl font-black text-slate-900 dark:text-white mt-0.5">
+                    <p className="text-lg sm:text-xl font-black text-slate-950 dark:text-white mt-0.5">
                       {formatPrice(pnl.netProfit, currency, 0)}
                     </p>
                     <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">
@@ -435,13 +438,16 @@ export default function OwnerNetMarginCard({
                   </div>
                 </div>
 
-                {/* SECTION 3: HAR KHARCHA KA ALAG CARD (Itemized Operating Overheads) */}
+                {/* SECTION 3: HAR KHARCHA KA ALAG CARD (Monthly Expenses) */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white">
-                        Itemized Operating Expenses (Every Owner Expense in Separate Card)
+                        Monthly Expenses (Har Kharcha Alag Card Me)
                       </h4>
+                      <p className="text-[10px] text-slate-500">
+                        Total {(pnl.expenseCards || []).length} items recorded
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -459,7 +465,10 @@ export default function OwnerNetMarginCard({
                       return (
                         <div
                           key={card.id}
-                          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition group shadow-2xs"
+                          onClick={() => {
+                            if (originalExp) handleOpenEditModal(originalExp);
+                          }}
+                          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition group shadow-2xs cursor-pointer"
                         >
                           <div>
                             <div className="flex items-center justify-between gap-1 mb-1">
@@ -484,25 +493,30 @@ export default function OwnerNetMarginCard({
                                 {card.percentage}%
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-[9px] text-slate-400 mt-0.5">
+                            <div className="flex items-center justify-between text-[9px] text-slate-400 mt-1">
                               <span>₹{card.perHundred.toFixed(1)} / ₹100</span>
                               {originalExp && (
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                                <div 
+                                  className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEditModal(originalExp)}
-                                    className="p-0.5 text-slate-400 hover:text-slate-700 cursor-pointer"
+                                    className="p-1 px-1.5 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer text-[10px] font-bold flex items-center gap-0.5"
                                     title="Edit"
                                   >
-                                    <Edit3 className="h-2.5 w-2.5" />
+                                    <Edit3 className="h-3 w-3" />
+                                    <span className="sm:hidden">Edit</span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleDeleteExpense(originalExp.id)}
-                                    className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                                    className="p-1 px-1.5 rounded bg-slate-100 hover:bg-rose-100 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-500 hover:text-rose-600 cursor-pointer text-[10px] font-bold flex items-center gap-0.5"
                                     title="Delete"
                                   >
-                                    <Trash2 className="h-2.5 w-2.5" />
+                                    <Trash2 className="h-3 w-3" />
+                                    <span className="sm:hidden">Del</span>
                                   </button>
                                 </div>
                               )}

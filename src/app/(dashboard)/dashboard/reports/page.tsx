@@ -91,10 +91,10 @@ export default function ReportsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom'>(() => {
+  const [timeRange, setTimeRange] = useState<'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom' | 'single_day'>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('reports_time_range');
-      if (saved && ['today', 'yesterday', 'weekly', 'monthly', 'custom'].includes(saved)) {
+      if (saved && ['today', 'yesterday', 'weekly', 'monthly', 'custom', 'single_day'].includes(saved)) {
         return saved as any;
       }
     }
@@ -102,6 +102,14 @@ export default function ReportsPage() {
   });
   
   // Date Range Controls (Standardized to IST & Persisted across refresh for UX-003)
+  const [singleDate, setSingleDate] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('reports_single_date');
+      if (saved) return saved;
+    }
+    return getISTDateString();
+  });
+
   const [selectedMonth, setSelectedMonth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('reports_selected_month');
@@ -179,32 +187,32 @@ export default function ReportsPage() {
 
   const planConfig = getPlanFeatures(restaurant?.subscription_plan || 'starter');
 
-  // Stats State (Instant cache/fallback initialization so 0s never flash on initial load)
+  // Stats State (Instant cache initialization so real numbers persist without hardcoded mock flicker)
   const [salesSummary, setSalesSummary] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
         const cached = sessionStorage.getItem('reports_cached_sales_summary');
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed && typeof parsed.totalOrders === 'number' && parsed.grossSales > 0) {
+          if (parsed && typeof parsed.totalOrders === 'number' && typeof parsed.grossSales === 'number') {
             return parsed;
           }
         }
       } catch (_) {}
     }
     return {
-      totalOrders: 174,
-      grossSales: 580242,
-      totalDiscount: 41,
+      totalOrders: 0,
+      grossSales: 0,
+      totalDiscount: 0,
       totalRefunds: 0,
-      taxableSales: 580201,
+      taxableSales: 0,
       cgstCollected: 0,
       sgstCollected: 0,
       igstCollected: 0,
       totalGstCollected: 0,
       totalServiceCharge: 0,
-      netRevenue: 580201,
-      periodLabel: 'October 2026'
+      netRevenue: 0,
+      periodLabel: ''
     };
   });
 
@@ -214,18 +222,18 @@ export default function ReportsPage() {
         const cached = sessionStorage.getItem('reports_cached_customer_summary');
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed && typeof parsed.totalCustomers === 'number' && parsed.totalCustomers > 0) {
+          if (parsed && typeof parsed.totalCustomers === 'number') {
             return parsed;
           }
         }
       } catch (_) {}
     }
     return {
-      totalCustomers: 128,
-      newCustomers: 94,
-      returningCustomers: 34,
-      avgAOV: 3334,
-      avgFrequency: '1.4'
+      totalCustomers: 0,
+      newCustomers: 0,
+      returningCustomers: 0,
+      avgAOV: 0,
+      avgFrequency: '0.0'
     };
   });
 
@@ -351,6 +359,11 @@ export default function ReportsPage() {
       const startParts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' }).format(weekStartDate);
       const endParts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }).format(now);
       periodLabel = `Last 7 Days (${startParts} – ${endParts})`;
+    } else if (timeRange === 'single_day') {
+      rangeOrders = allOrders.filter(o => getISTDateString(o.created_at) === singleDate);
+      const sDateObj = new Date(`${singleDate}T00:00:00+05:30`);
+      const sParts = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' }).format(isNaN(sDateObj.getTime()) ? now : sDateObj);
+      periodLabel = `Date: ${sParts}`;
     } else if (timeRange === 'monthly') {
       rangeOrders = allOrders.filter(o => {
         const { month: oMonth, year: oYear } = getISTMonthYear(o.created_at);
@@ -870,6 +883,8 @@ export default function ReportsPage() {
     let totalOperatingWindowMin = 480; // 8h default for 1 day
     if (timeRange === 'weekly') {
       totalOperatingWindowMin = 7 * 480; // 3,360 min
+    } else if (timeRange === 'single_day') {
+      totalOperatingWindowMin = 480;
     } else if (timeRange === 'monthly') {
       totalOperatingWindowMin = 30 * 480; // 14,400 min
     } else if (timeRange === 'custom') {
@@ -1192,6 +1207,9 @@ export default function ReportsPage() {
       const weekStartDate = new Date(now.getTime() - 6 * 24 * 3600 * 1000);
       return { daysCount: 7, startDateStr: getISTDateString(weekStartDate), endDateStr: getISTDateString(now) };
     }
+    if (timeRange === 'single_day') {
+      return { daysCount: 1, startDateStr: singleDate, endDateStr: singleDate };
+    }
     if (timeRange === 'monthly') {
       const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
       const mm = String(selectedMonth + 1).padStart(2, '0');
@@ -1208,7 +1226,7 @@ export default function ReportsPage() {
       return { daysCount: diffDays, startDateStr: appliedStartDate, endDateStr: appliedEndDate };
     }
     return { daysCount: 1, startDateStr: getISTDateString(now), endDateStr: getISTDateString(now) };
-  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate]);
+  }, [timeRange, singleDate, selectedMonth, selectedYear, appliedStartDate, appliedEndDate]);
 
   useEffect(() => {
     loadReportsRef.current = loadReports;
@@ -1216,7 +1234,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadReports();
-  }, [timeRange, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, selectedWaiter, selectedStatus, restaurant?.id]);
+  }, [timeRange, singleDate, selectedMonth, selectedYear, appliedStartDate, appliedEndDate, selectedWaiter, selectedStatus, restaurant?.id]);
 
   // Realtime Subscriptions for Reports Dashboard (Phase-18.8 Production Gate)
   useEffect(() => {
@@ -1344,6 +1362,8 @@ export default function ReportsPage() {
       const weekStartIST = getISTDateString(weekStartDate);
       const startMs = new Date(`${weekStartIST}T00:00:00+05:30`).getTime();
       filtered = orders.filter(o => new Date(o.created_at).getTime() >= startMs);
+    } else if (timeRange === 'single_day') {
+      filtered = orders.filter(o => getISTDateString(o.created_at) === singleDate);
     } else if (timeRange === 'monthly') {
       filtered = orders.filter(o => {
         const { month: oMonth, year: oYear } = getISTMonthYear(o.created_at);
@@ -1949,7 +1969,10 @@ export default function ReportsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setTimeRange('monthly')}
+              onClick={() => {
+                setTimeRange('monthly');
+                sessionStorage.setItem('reports_time_range', 'monthly');
+              }}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 timeRange === 'monthly'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
@@ -1960,7 +1983,24 @@ export default function ReportsPage() {
             </button>
             <button
               type="button"
-              onClick={() => setTimeRange('custom')}
+              onClick={() => {
+                setTimeRange('single_day');
+                sessionStorage.setItem('reports_time_range', 'single_day');
+              }}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'single_day'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Single Day
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTimeRange('custom');
+                sessionStorage.setItem('reports_time_range', 'custom');
+              }}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 timeRange === 'custom'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-2xs'
@@ -1970,6 +2010,59 @@ export default function ReportsPage() {
               Custom Range
             </button>
           </div>
+
+          {/* Month & Year Quick Selector */}
+          {timeRange === 'monthly' && (
+            <div className="bg-slate-100 dark:bg-slate-800/80 p-1 px-2.5 rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700/60 shadow-2xs">
+              <Calendar className="h-3 w-3 text-slate-500" />
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  const m = Number(e.target.value);
+                  setSelectedMonth(m);
+                  sessionStorage.setItem('reports_selected_month', String(m));
+                }}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer py-0.5"
+              >
+                {[
+                  'January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December'
+                ].map((name, idx) => (
+                  <option key={idx} value={idx}>{name}</option>
+                ))}
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => {
+                  const y = Number(e.target.value);
+                  setSelectedYear(y);
+                  sessionStorage.setItem('reports_selected_year', String(y));
+                }}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer py-0.5"
+              >
+                {[2024, 2025, 2026, 2027].map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Single Day Direct Date Picker */}
+          {timeRange === 'single_day' && (
+            <div className="bg-slate-100 dark:bg-slate-800/80 p-1 px-2.5 rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700/60 shadow-2xs">
+              <Calendar className="h-3 w-3 text-slate-500" />
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Date:</span>
+              <input
+                type="date"
+                value={singleDate}
+                onChange={(e) => {
+                  setSingleDate(e.target.value);
+                  sessionStorage.setItem('reports_single_date', e.target.value);
+                }}
+                className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer py-0.5"
+              />
+            </div>
+          )}
 
           {/* Status Filter Selector (R7) */}
           <div className="bg-slate-100 dark:bg-slate-800/80 p-1 px-2.5 rounded-xl flex items-center gap-1.5 border border-slate-200 dark:border-slate-700/60 shadow-2xs">

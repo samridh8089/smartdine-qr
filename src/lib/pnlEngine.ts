@@ -374,7 +374,7 @@ export interface ComputePnLParams {
     netRevenue: number;
     periodLabel: string;
   };
-  timeRange: 'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom';
+  timeRange: 'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom' | 'single_day';
   daysCount: number;
   startDate?: string;
   endDate?: string;
