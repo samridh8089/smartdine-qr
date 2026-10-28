@@ -868,14 +868,14 @@ export const db = {
     const cleanSlug = (slug || '').toLowerCase().trim();
     if (!cleanSlug) return null;
     const cached = restaurantSlugMemoryCache.get(cleanSlug);
-    if (cached && Date.now() - cached.timestamp < 30000) {
+    if (cached && Date.now() - cached.timestamp < 5000) {
       return cached.data;
     }
 
     // 1. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
     if (typeof window !== 'undefined') {
       try {
-        const res = await fetch(`/api/customer/restaurant?slug=${encodeURIComponent(cleanSlug)}`);
+        const res = await fetch(`/api/customer/restaurant?slug=${encodeURIComponent(cleanSlug)}`, { cache: 'no-store' });
         if (res.ok) {
           const payload = await res.json();
           if (payload?.restaurant) {
@@ -926,7 +926,7 @@ export const db = {
     // 1. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
     if (typeof window !== 'undefined') {
       try {
-        const res = await fetch(`/api/customer/restaurant?id=${encodeURIComponent(id)}`);
+        const res = await fetch(`/api/customer/restaurant?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
         if (res.ok) {
           const payload = await res.json();
           if (payload?.restaurant) {

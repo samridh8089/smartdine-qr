@@ -714,6 +714,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${r.id}` }, async () => {
           try {
+            db.clearRestaurantCache(r.id);
             const freshRest = await db.getRestaurantById(r.id);
             if (freshRest) {
               setRestaurant(freshRest);
@@ -1132,7 +1133,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             orderType: isReservation ? 'reservation' : isTakeaway ? 'takeaway' : isCounter ? 'counter' : 'dine_in',
             customerArrivalMinutes: isTakeaway ? arrivalMinutes : undefined,
             takeawayNotes: isTakeaway ? takeawayNotes : undefined,
-            customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : isCounter ? counterCustomerName.trim() : (dineInCustomerName.trim() || undefined),
+            customerName: isTakeaway ? takeawayName.trim() : isReservation ? reservationName.trim() : isCounter ? counterCustomerName.trim() : (restaurant?.settings?.require_customer_name ? (dineInCustomerName.trim() || undefined) : undefined),
             customerPhone: isTakeaway ? takeawayPhone.trim() : isReservation ? reservationPhone.trim() : undefined,
             paymentStatus: isTakeaway ? 'customer_marked_paid' : (isReservation && cartTotal > 0 && reservationPaymentCompleted) ? 'customer_marked_paid' : 'pending',
             customerLat: detectedCustomerLat || undefined,
@@ -2504,11 +2505,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
             </div>
           )}
 
-          {/* Dine-in Table Customer Details */}
-          {!isTakeaway && !isReservation && !isCounter && (
+          {/* Dine-in Table Customer Details - ONLY shown when restaurant owner enables require_customer_name */}
+          {!isTakeaway && !isReservation && !isCounter && Boolean(restaurant?.settings?.require_customer_name) && (
             <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-800">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                Your Name {restaurant?.settings?.require_customer_name ? <span className="text-red-500">*</span> : <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>}
+                Your Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -2516,7 +2517,7 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
                 value={dineInCustomerName}
                 onChange={(e) => setDineInCustomerName(e.target.value)}
                 className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-800 rounded-xl text-xs md:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                required={!!restaurant?.settings?.require_customer_name}
+                required
               />
             </div>
           )}

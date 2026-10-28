@@ -88,7 +88,9 @@ export async function GET(req: Request) {
       { success: true, restaurant: safeRestaurant },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=30',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
         },
       }
     );

@@ -29,7 +29,7 @@ import {
 } from '@/components/qr-studio/cardCanvasExport';
 
 export default function TablesPage() {
-  const { restaurant, profile, planSpec } = useRestaurant();
+  const { restaurant, profile, planSpec, refresh } = useRestaurant();
   const restId = restaurant?.id || profile?.restaurant_id;
   const initialCachedTables = restId ? dashboardStore.getCachedTables(restId) : null;
   const [restaurantId, setRestaurantId] = useState(restId || '');
@@ -591,6 +591,9 @@ export default function TablesPage() {
           }
         });
         db.clearRestaurantCache(restaurantId);
+        if (typeof refresh === 'function') {
+          await refresh();
+        }
       }
     } catch (err) {
       console.error('Failed to update customer name requirement:', err);
