@@ -1552,19 +1552,24 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
           {/* Row 1 on mobile / Left on desktop: Logo + Restaurant Name + Table */}
           <div className="flex items-center justify-between sm:justify-start gap-3 min-w-0">
             <div className="flex items-center gap-3 min-w-0">
-              {(() => {
-                const displayLogo = restaurant.logo_url || (restaurant.settings as any)?.logo_url || (restaurant.settings as any)?.logo || '/logo.png';
-                return (
-                  <img 
-                    src={displayLogo} 
-                    alt={restaurant.name} 
-                    onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
-                    }}
-                    className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 shadow-xs shrink-0" 
-                  />
-                );
-              })()}
+              {restaurant.logo_url ? (
+                <img 
+                  src={restaurant.logo_url} 
+                  alt={restaurant.name} 
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                    const fallback = (e.target as HTMLElement).nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                  className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl object-cover border border-slate-100 dark:border-slate-800 shadow-xs shrink-0" 
+                />
+              ) : null}
+              <div 
+                style={{ display: restaurant.logo_url ? 'none' : 'flex' }}
+                className={`h-11 w-11 sm:h-12 sm:w-12 rounded-xl ${theme.lightBg} ${theme.text} font-black text-base sm:text-lg items-center justify-center shadow-inner shrink-0`}
+              >
+                {restaurant.name?.charAt(0) || 'R'}
+              </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="font-black text-slate-900 dark:text-white text-base sm:text-lg leading-tight">

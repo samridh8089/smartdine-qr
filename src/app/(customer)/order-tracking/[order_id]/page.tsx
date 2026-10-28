@@ -689,21 +689,18 @@ export default function OrderTrackingPage({ params }: PageProps) {
         
         {/* Restaurant Header Info */}
         <div className="text-center space-y-2">
-          {(() => {
-            const displayLogo = restaurant.logo_url || (restaurant.settings as any)?.logo_url || (restaurant.settings as any)?.logo || '/logo.png';
-            return (
-              <div className="flex justify-center mb-1">
-                <img
-                  src={displayLogo}
-                  alt={restaurant.name}
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                  className="h-14 w-14 rounded-2xl object-cover border border-slate-200 dark:border-slate-800 shadow-sm mx-auto"
-                />
-              </div>
-            );
-          })()}
+          {restaurant.logo_url ? (
+            <div className="flex justify-center mb-1">
+              <img
+                src={restaurant.logo_url}
+                alt={restaurant.name}
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+                className="h-14 w-14 rounded-2xl object-cover border border-slate-200 dark:border-slate-800 shadow-sm mx-auto"
+              />
+            </div>
+          ) : null}
           <span className="inline-block px-3 py-1 bg-stone-100 dark:bg-stone-900 text-stone-900 dark:text-stone-100 border border-stone-200 dark:border-stone-800 rounded-full text-xs font-black tracking-wide">
             {getCustomerFacingOrderId(order, restaurant.name)}
           </span>
