@@ -3304,138 +3304,131 @@ export default function OrdersPage() {
               </div>
             ) : selectedOrder ? (
               <div className="flex-1 flex flex-col">
-                <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/30">
-                  <div className="space-y-2 w-full">
-                    {/* Mobile Back Button */}
-                    <div className="md:hidden w-full pb-1">
+                <div className="p-3.5 sm:p-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 space-y-3">
+                  {/* Row 1: Back Navigation (Mobile) + Actions */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setSelectedOrderId(null)}
-                        className="flex items-center gap-2.5 w-full bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-700 rounded-xl py-2.5 px-3.5 text-sm font-bold text-slate-900 dark:text-white shadow-xs hover:bg-slate-50 dark:hover:bg-slate-750 active:scale-[0.99] transition-all cursor-pointer"
+                        className="md:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs hover:bg-slate-50 transition cursor-pointer active:scale-95"
                       >
-                        <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-800 dark:text-slate-100 shrink-0">
-                          <ArrowLeft className="h-4 w-4" />
-                        </div>
-                        <span>Back to Orders List</span>
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        <span>Back</span>
                       </button>
-                    </div>
-
-                    {/* Top Row: Order ID, Table & PROMINENT GRAND TOTAL AT TOP */}
-                    <div className="flex justify-between items-start gap-2 w-full">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-bold text-slate-950 dark:text-white text-lg">
-                            Order {getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}
-                          </h3>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
-                          {selectedOrder.table_name ? (selectedOrder.table_name.startsWith('Table') ? selectedOrder.table_name : `Table ${selectedOrder.table_name}`) : 'Dine-In Table'} &bull; {selectedOrder.created_at ? formatDate(selectedOrder.created_at) : 'Live'}
-                        </p>
-                      </div>
-
-                      {/* ★ GRAND TOTAL AT THE VERY TOP (Option 4 Emerald Badge) ★ */}
-                      <div className="text-right bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-500/40 dark:border-emerald-700/60 px-3.5 py-1.5 rounded-xl shrink-0 shadow-2xs">
-                        <span className="block text-[9px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
-                          Grand Total
-                        </span>
-                        <span className="text-xl font-black text-emerald-700 dark:text-emerald-200 leading-tight">
-                          {formatPrice(selectedOrder.total, restaurant?.settings?.currency)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap pt-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 text-xs text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                      <button
+                        type="button"
                         onClick={() => {
                           const fullId = getFormattedOrderId(selectedOrder, restaurant?.name || '', orders);
                           navigator.clipboard.writeText(fullId);
                           showToast(`Copied Order ID: ${fullId}`, "Copied", "success");
                         }}
-                        title="Copy Full Order ID"
+                        className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white px-2 py-1 rounded bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer font-mono font-bold"
+                        title="Copy Order ID"
                       >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
+                        <Copy className="h-3 w-3" />
+                        <span>Order #{getFormattedOrderId(selectedOrder, restaurant?.name || '', orders)}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
                       {selectedOrder.merge_group_id && (
-                        <Button size="sm" variant="outline" className="text-xs font-bold text-indigo-600 border-indigo-200" onClick={() => setViewMode('merged')}>
-                          View Merged Session ({mergedGroupDetails?.group?.name || 'Group'})
+                        <Button size="sm" variant="outline" className="text-xs font-bold text-indigo-600 border-indigo-200 h-8 px-2.5" onClick={() => setViewMode('merged')}>
+                          Merged View
                         </Button>
                       )}
-                      {selectedOrder.order_type === 'takeaway' && (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 uppercase tracking-wide">
-                          <ShoppingBag className="h-3 w-3" /> Takeaway
-                        </span>
-                      )}
-                      {isOrderReservation(selectedOrder) && (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 uppercase tracking-wide">
-                          <Calendar className="h-3 w-3" /> Reservation
-                        </span>
-                      )}
-                      {Boolean(selectedOrder.order_type === 'counter' || selectedOrder.table_name?.toLowerCase().includes('counter') || selectedOrder.table_name?.toLowerCase().includes('bar')) && (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 uppercase tracking-wide">
-                          <Zap className="h-3 w-3 fill-amber-500 text-amber-600" /> Express Counter / Bar
-                        </span>
-                      )}
-                      {getStatusBadge(effectiveStatus || selectedOrder.status, selectedOrder.order_type)}
-                      {selectedOrderRefundInfo.isRefunded ? (
-                        selectedOrderRefundInfo.isPartial ? (
-                          <Badge variant="success">Paid Verified ({formatPrice(selectedOrderRefundInfo.refundAmount, restaurant?.settings?.currency)} Refunded)</Badge>
-                        ) : (
-                          <Badge variant="error">Refunded ({formatPrice(selectedOrderRefundInfo.refundAmount, restaurant?.settings?.currency)})</Badge>
-                        )
-                      ) : selectedOrder.payment_status === 'paid' && Number(selectedOrder.total || 0) > 0 ? (
-                        <Badge variant="success">Paid Verified</Badge>
-                      ) : selectedOrder.payment_status === 'customer_marked_paid' ? (
-                        <Badge variant="warning">Customer Marked Paid</Badge>
-                      ) : (effectiveStatus === 'cancelled' || selectedOrder.status === 'cancelled') ? null : Number(selectedOrder.total || 0) <= 0 ? (
-                        <Badge variant="neutral">No Bill Required</Badge>
-                      ) : (
-                        <Badge variant="error">Payment Pending</Badge>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs font-bold gap-1.5 rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 cursor-pointer shadow-2xs text-slate-800 dark:text-slate-100"
+                        onClick={handlePrintInvoice}
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        <span>Print Bill</span>
+                      </Button>
                     </div>
-                    <p className="text-xs text-slate-400 font-semibold uppercase flex items-center gap-1.5 flex-wrap">
-                      {selectedOrder.order_type === 'takeaway' ? (
-                        <span className="text-gray-900 dark:text-gray-100 font-bold">Pickup Counter (ETA: {selectedOrder.customer_arrival_minutes || 20} mins)</span>
-                      ) : isOrderReservation(selectedOrder) ? (
-                        <span className="text-gray-900 dark:text-gray-100 font-bold">Table Booking ({selectedOrder.table_name || 'Unassigned'})</span>
-                      ) : Boolean(selectedOrder.order_type === 'counter' || selectedOrder.table_name?.toLowerCase().includes('counter') || selectedOrder.table_name?.toLowerCase().includes('bar')) ? (
-                        <span className="text-amber-800 dark:text-amber-300 font-bold">⚡ Express Counter / Bar Order</span>
-                      ) : (
-                        <span>{selectedOrder.table_name || 'N/A'}</span>
-                      )}
-                      <span>• {formatDate(selectedOrder.created_at)}</span>
-                    </p>
-                    {(() => {
-                      const cust = parseCustomerDetailsFromOrder(selectedOrder);
-                      const cName = selectedOrder.customer_name || cust.name;
-                      const cPhone = selectedOrder.customer_phone || cust.phone;
-                      if (!cName && !cPhone) return null;
-                      return (
-                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 mt-1">
-                          <User className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                          <span className="font-bold text-slate-900 dark:text-white">{cName || 'Valued Guest'}</span>
-                          {cPhone && (
-                            <>
-                              <span className="text-slate-300 dark:text-slate-600">•</span>
-                              <Phone className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 ml-0.5" />
-                              <span className="font-mono text-slate-600 dark:text-slate-400">{cPhone}</span>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })()}
                   </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="gap-1 cursor-pointer" onClick={handlePrintInvoice}>
-                      <Printer className="h-4 w-4" /> Print Bill
-                    </Button>
+
+                  {/* Row 2: Table & Prominent Grand Total Card */}
+                  <div className="flex justify-between items-center gap-3 bg-white dark:bg-slate-850 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-750 shadow-2xs">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                          {selectedOrder.table_name ? (selectedOrder.table_name.startsWith('Table') ? selectedOrder.table_name : `Table ${selectedOrder.table_name}`) : (selectedOrder.order_type === 'takeaway' ? 'Pickup Counter' : 'Dine-In Table')}
+                        </span>
+                        {selectedOrder.order_type === 'takeaway' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 uppercase">
+                            <ShoppingBag className="h-2.5 w-2.5" /> Takeaway
+                          </span>
+                        )}
+                        {isOrderReservation(selectedOrder) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 uppercase">
+                            <Calendar className="h-2.5 w-2.5" /> Reservation
+                          </span>
+                        )}
+                        {Boolean(selectedOrder.order_type === 'counter' || selectedOrder.table_name?.toLowerCase().includes('counter') || selectedOrder.table_name?.toLowerCase().includes('bar')) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800 uppercase">
+                            <Zap className="h-2.5 w-2.5 fill-amber-500 text-amber-600" /> Express Bar
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        {selectedOrder.created_at ? formatDate(selectedOrder.created_at) : 'Live'}
+                      </p>
+                      {(() => {
+                        const cust = parseCustomerDetailsFromOrder(selectedOrder);
+                        const cName = selectedOrder.customer_name || cust.name;
+                        const cPhone = selectedOrder.customer_phone || cust.phone;
+                        if (!cName && !cPhone) return null;
+                        return (
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 pt-0.5">
+                            <User className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                            <span className="font-bold text-slate-900 dark:text-white">{cName || 'Valued Guest'}</span>
+                            {cPhone && (
+                              <>
+                                <span className="text-slate-300 dark:text-slate-600">•</span>
+                                <Phone className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span className="font-mono text-slate-600 dark:text-slate-400">{cPhone}</span>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Grand Total Hero Badge */}
+                    <div className="text-right bg-emerald-50 dark:bg-emerald-950/50 border-2 border-emerald-500/50 dark:border-emerald-600/60 px-3.5 py-2 rounded-xl shrink-0 shadow-2xs">
+                      <span className="block text-[9px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+                        Grand Total
+                      </span>
+                      <span className="text-xl sm:text-2xl font-black text-emerald-800 dark:text-emerald-200 leading-none font-mono">
+                        {formatPrice(selectedOrder.total, restaurant?.settings?.currency)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Status & Payment Badges */}
+                  <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                    {getStatusBadge(effectiveStatus || selectedOrder.status, selectedOrder.order_type)}
+                    {selectedOrderRefundInfo.isRefunded ? (
+                      selectedOrderRefundInfo.isPartial ? (
+                        <Badge variant="success">Paid Verified ({formatPrice(selectedOrderRefundInfo.refundAmount, restaurant?.settings?.currency)} Refunded)</Badge>
+                      ) : (
+                        <Badge variant="error">Refunded ({formatPrice(selectedOrderRefundInfo.refundAmount, restaurant?.settings?.currency)})</Badge>
+                      )
+                    ) : selectedOrder.payment_status === 'paid' && Number(selectedOrder.total || 0) > 0 ? (
+                      <Badge variant="success">Paid Verified</Badge>
+                    ) : selectedOrder.payment_status === 'customer_marked_paid' ? (
+                      <Badge variant="warning">Customer Marked Paid</Badge>
+                    ) : (effectiveStatus === 'cancelled' || selectedOrder.status === 'cancelled') ? null : Number(selectedOrder.total || 0) <= 0 ? (
+                      <Badge variant="neutral">No Bill Required</Badge>
+                    ) : (
+                      <Badge variant="error">Payment Pending</Badge>
+                    )}
                   </div>
                 </div>
 
-                <div className="p-4 sm:p-5 flex flex-col space-y-4">
+                <div className="p-4 sm:p-5 flex flex-col space-y-4 pb-28 md:pb-6">
                   {/* Reservation Details Banner */}
                   {isOrderReservation(selectedOrder) && (() => {
                     const parsed = parseReservationDetails(selectedOrder);
@@ -5065,8 +5058,8 @@ export default function OrdersPage() {
                   <div className="space-y-4 order-1 md:order-none">
                     <div className="flex items-center justify-between">
                       <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Ordered Items</h4>
-                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                        Food Items First
+                      <span className="text-xs font-bold text-slate-400">
+                        ({selectedOrder.items?.length || 0} {selectedOrder.items?.length === 1 ? 'item' : 'items'})
                       </span>
                     </div>
                     {(!selectedOrder.items || selectedOrder.items.length === 0) ? (
@@ -5170,17 +5163,37 @@ export default function OrdersPage() {
                     </div>
                   )}
 
-                  {selectedOrder.special_instructions && (
-                    <div className="space-y-1.5 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-l-4 border-l-stone-400 rounded-xl shadow-2xs">
-                      <h4 className="text-xs font-bold text-slate-950 dark:text-white uppercase tracking-wider">Customer Note</h4>
-                      <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
-                        {selectedOrder.special_instructions}
-                      </p>
-                    </div>
-                  )}
+                  {(() => {
+                    const rawNote = selectedOrder.special_instructions || '';
+                    const cleanedNote = rawNote
+                      .replace(/^TAKEAWAY\s*\|?/i, '')
+                      .replace(/(?:CUSTOMER|Name|Guest):\s*[^|•\n]+/gi, '')
+                      .replace(/(?:PHONE|Contact|Mobile):\s*[^|•\n\)]+/gi, '')
+                      .replace(/(?:ARRIVAL):\s*[^|•\n]+/gi, '')
+                      .replace(/(?:NOTES?):\s*/gi, '')
+                      .replace(/^\[Batch #\d+\]:\s*/gi, '')
+                      .replace(/\[CANCELLED\].*/gi, '')
+                      .replace(/PROMO OFFER:.*/gi, '')
+                      .replace(/[|•\s]+/g, ' ')
+                      .trim();
+
+                    if (!cleanedNote) return null;
+
+                    return (
+                      <div className="order-2 md:order-none p-3.5 bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-xl space-y-1">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider">
+                          <ChefHat className="h-3.5 w-3.5 text-amber-600" />
+                          <span>Special Kitchen Note</span>
+                        </div>
+                        <p className="text-sm text-slate-800 dark:text-slate-200 font-medium">
+                          &ldquo;{cleanedNote}&rdquo;
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
 
-                <div className="px-6 py-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl">
+                <div className="px-6 py-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl pb-28 md:pb-5">
                   {(() => {
                     const calcResult = calculateBillingTotals({
                       items: selectedOrder.items || [],
