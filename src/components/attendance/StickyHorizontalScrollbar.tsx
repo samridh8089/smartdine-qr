@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, User, DollarSign, Clock, ArrowRight, MoveHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, DollarSign, ArrowRight, MoveHorizontal } from 'lucide-react';
 
 interface StickyHorizontalScrollbarProps {
   targetRef: React.RefObject<HTMLDivElement | null>;
@@ -21,7 +21,6 @@ export default function StickyHorizontalScrollbar({
   const [targetRect, setTargetRect] = useState<{ left: number; width: number } | null>(null);
 
   // 2. useRef
-  const trackRef = useRef<HTMLDivElement>(null);
   const isSyncingRef = useRef(false);
 
   // 3. useMemo
@@ -38,14 +37,14 @@ export default function StickyHorizontalScrollbar({
     return Math.min(100, Math.max(0, Math.round((scrollLeft / maxScroll) * 100)));
   }, [scrollLeft, maxScroll]);
 
-  // 4. useEffect: Monitor metrics, table position, and visibility
+  // 4. useEffect: Monitor metrics, table position, DOM changes & visibility
   useEffect(() => {
     const tableEl = targetRef.current;
     if (!tableEl) return;
 
     const updateMetrics = () => {
-      if (!targetRef.current) return;
       const el = targetRef.current;
+      if (!el) return;
       const rect = el.getBoundingClientRect();
       const sWidth = el.scrollWidth;
       const cWidth = el.clientWidth;
@@ -57,7 +56,7 @@ export default function StickyHorizontalScrollbar({
       setTargetRect({ left: Math.max(0, rect.left), width: rect.width });
 
       const windowH = window.innerHeight;
-      const tableInView = rect.top < windowH - 50 && rect.bottom > 120;
+      const tableInView = rect.top < windowH - 60 && rect.bottom > 140;
       const bottomOffscreen = rect.bottom > windowH - 10;
       const overflows = sWidth > cWidth + 5;
 
@@ -67,26 +66,43 @@ export default function StickyHorizontalScrollbar({
 
     updateMetrics();
 
-    // Listen to resize and scroll on all possible scroll containers
+    // Immediate microtask & timeout updates to catch asynchronous data rendering
+    const timer1 = setTimeout(updateMetrics, 100);
+    const timer2 = setTimeout(updateMetrics, 500);
+
+    // Listen to resize and scroll
     window.addEventListener('resize', updateMetrics);
     window.addEventListener('scroll', updateMetrics, { passive: true });
+    document.addEventListener('scroll', updateMetrics, { passive: true });
 
     const scrollParent = tableEl.closest('.overflow-y-auto') || window;
     scrollParent.addEventListener('scroll', updateMetrics, { passive: true });
 
-    // Use ResizeObserver to detect layout / dynamic content changes
+    // ResizeObserver on both container and inner table
     const resizeObserver = new ResizeObserver(updateMetrics);
     resizeObserver.observe(tableEl);
+    const innerTable = tableEl.querySelector('table');
+    if (innerTable) {
+      resizeObserver.observe(innerTable);
+    }
+
+    // MutationObserver to capture any table row changes, filtering, or month switches
+    const mutationObserver = new MutationObserver(updateMetrics);
+    mutationObserver.observe(tableEl, { childList: true, subtree: true, attributes: true });
 
     return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       window.removeEventListener('resize', updateMetrics);
       window.removeEventListener('scroll', updateMetrics);
+      document.removeEventListener('scroll', updateMetrics);
       scrollParent.removeEventListener('scroll', updateMetrics);
       resizeObserver.disconnect();
+      mutationObserver.disconnect();
     };
   }, [targetRef]);
 
-  // 5. useEffect: Sync from table scroll to our track
+  // 5. useEffect: Sync from table scroll to slider state
   useEffect(() => {
     const tableEl = targetRef.current;
     if (!tableEl) return;
@@ -96,9 +112,6 @@ export default function StickyHorizontalScrollbar({
       isSyncingRef.current = true;
       const curLeft = tableEl.scrollLeft;
       setScrollLeft(curLeft);
-      if (trackRef.current) {
-        trackRef.current.scrollLeft = curLeft;
-      }
       requestAnimationFrame(() => {
         isSyncingRef.current = false;
       });
@@ -108,32 +121,75 @@ export default function StickyHorizontalScrollbar({
     return () => tableEl.removeEventListener('scroll', handleTableScroll);
   }, [targetRef]);
 
-  // Early return AFTER ALL HOOKS
+  // Early return AFTER ALL HOOKS (Mandatory React Hook Safety standard)
   if (!hasOverflow || !isTableVisible) {
     return null;
   }
 
-  // Handle user dragging / scrolling our track
-  const handleTrackScroll = () => {
-    if (isSyncingRef.current || !targetRef.current || !trackRef.current) return;
-    isSyncingRef.current = true;
-    const newLeft = trackRef.current.scrollLeft;
-    targetRef.current.scrollLeft = newLeft;
-    setScrollLeft(newLeft);
-    requestAnimationFrame(() => {
-      isSyncingRef.current = false;
-    });
+  // Column Jump Handler reading live DOM metrics with direct scrollLeft fallback
+  const handleScrollToTarget = (type: 'staff' | 'earnings' | 'netpay' | 'actions') => {
+    const el = targetRef.current;
+    if (!el) return;
+    const liveMax = Math.max(0, el.scrollWidth - el.clientWidth);
+    if (liveMax <= 0) return;
+
+    let targetLeft = 0;
+    if (type === 'staff') {
+      targetLeft = 0;
+    } else if (type === 'actions') {
+      targetLeft = liveMax;
+    } else {
+      const col = el.querySelector(`[data-col="${type}"]`) as HTMLElement;
+      if (col) {
+        targetLeft = Math.min(liveMax, Math.max(0, col.offsetLeft - 170));
+      } else {
+        targetLeft = type === 'earnings' ? Math.round(liveMax * 0.35) : Math.round(liveMax * 0.7);
+      }
+    }
+
+    setScrollLeft(targetLeft);
+    try {
+      el.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } catch (_) {
+      el.scrollLeft = targetLeft;
+    }
+
+    setTimeout(() => {
+      if (el && Math.abs(el.scrollLeft - targetLeft) > 5) {
+        el.scrollLeft = targetLeft;
+      }
+    }, 100);
   };
 
   const handleScrollBy = (amount: number) => {
-    if (!targetRef.current) return;
-    targetRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+    const el = targetRef.current;
+    if (!el) return;
+    const liveMax = Math.max(0, el.scrollWidth - el.clientWidth);
+    if (liveMax <= 0) return;
+
+    const targetLeft = Math.max(0, Math.min(liveMax, el.scrollLeft + amount));
+    setScrollLeft(targetLeft);
+
+    try {
+      el.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } catch (_) {
+      el.scrollLeft = targetLeft;
+    }
+
+    setTimeout(() => {
+      if (el && Math.abs(el.scrollLeft - targetLeft) > 5) {
+        el.scrollLeft = targetLeft;
+      }
+    }, 100);
   };
 
-  const handleScrollToFraction = (fraction: number) => {
-    if (!targetRef.current) return;
-    const targetLeft = Math.round(maxScroll * fraction);
-    targetRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' });
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const el = targetRef.current;
+    const val = Number(e.target.value);
+    setScrollLeft(val);
+    if (el) {
+      el.scrollLeft = val;
+    }
   };
 
   return (
@@ -158,13 +214,13 @@ export default function StickyHorizontalScrollbar({
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1 shrink-0">
               <MoveHorizontal className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="hidden sm:inline">Table Slider:</span>
+              <span className="hidden sm:inline">{label}:</span>
             </span>
 
             {/* Quick jump pills */}
             <button
               type="button"
-              onClick={() => handleScrollToFraction(0)}
+              onClick={() => handleScrollToTarget('staff')}
               className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition flex items-center gap-1 ${
                 scrollPercentage < 15
                   ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
@@ -178,7 +234,7 @@ export default function StickyHorizontalScrollbar({
 
             <button
               type="button"
-              onClick={() => handleScrollToFraction(0.35)}
+              onClick={() => handleScrollToTarget('earnings')}
               className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition flex items-center gap-1 ${
                 scrollPercentage >= 15 && scrollPercentage < 55
                   ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
@@ -192,7 +248,7 @@ export default function StickyHorizontalScrollbar({
 
             <button
               type="button"
-              onClick={() => handleScrollToFraction(0.7)}
+              onClick={() => handleScrollToTarget('netpay')}
               className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition flex items-center gap-1 ${
                 scrollPercentage >= 55 && scrollPercentage < 85
                   ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs'
@@ -205,7 +261,7 @@ export default function StickyHorizontalScrollbar({
 
             <button
               type="button"
-              onClick={() => handleScrollToFraction(1)}
+              onClick={() => handleScrollToTarget('actions')}
               className={`px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer transition flex items-center gap-1 ${
                 scrollPercentage >= 85
                   ? 'bg-emerald-600 text-white shadow-xs'
@@ -225,7 +281,7 @@ export default function StickyHorizontalScrollbar({
             </span>
             <button
               type="button"
-              onClick={() => handleScrollBy(-220)}
+              onClick={() => handleScrollBy(-260)}
               disabled={scrollLeft <= 5}
               className="p-1 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition"
               title="Slide Left"
@@ -234,7 +290,7 @@ export default function StickyHorizontalScrollbar({
             </button>
             <button
               type="button"
-              onClick={() => handleScrollBy(220)}
+              onClick={() => handleScrollBy(260)}
               disabled={scrollLeft >= maxScroll - 5}
               className="p-1 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition"
               title="Slide Right"
@@ -244,16 +300,17 @@ export default function StickyHorizontalScrollbar({
           </div>
         </div>
 
-        {/* Bottom Horizontal Slider Track */}
-        <div
-          ref={trackRef}
-          onScroll={handleTrackScroll}
-          className="w-full overflow-x-auto overflow-y-hidden cursor-ew-resize bg-slate-200/60 dark:bg-slate-700/60 rounded-full h-3.5 border border-slate-300/80 dark:border-slate-600/80 shadow-inner flex items-center custom-table-slider"
-          title="Drag slider or scroll horizontally to pan table"
-        >
-          <div
-            style={{ width: `${scrollWidth}px`, height: '8px' }}
-            className="shrink-0 pointer-events-none"
+        {/* Real-time Interactive Range Slider */}
+        <div className="w-full flex items-center py-1">
+          <input
+            type="range"
+            min={0}
+            max={maxScroll > 0 ? maxScroll : 1}
+            value={Math.min(scrollLeft, maxScroll)}
+            onChange={handleSliderChange}
+            aria-label="Table horizontal scroll slider"
+            className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-hidden"
+            title="Drag slider or click anywhere to scroll table"
           />
         </div>
       </div>

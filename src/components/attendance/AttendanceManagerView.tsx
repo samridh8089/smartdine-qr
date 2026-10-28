@@ -420,6 +420,41 @@ export default function AttendanceManagerView({
   // Conditional early return AFTER all hooks
   if (!restaurant || !profile) return null;
 
+  // Table navigation scroll handler with live DOM calculation & smooth scroll + instant fallback
+  const handleScrollPayrollTable = (direction: 'left' | 'right' | 'staff' | 'earnings' | 'netpay' | 'actions') => {
+    const el = payrollTableRef.current;
+    if (!el) return;
+    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+    let targetLeft = 0;
+
+    if (direction === 'left') {
+      targetLeft = Math.max(0, el.scrollLeft - 280);
+    } else if (direction === 'right') {
+      targetLeft = Math.min(max, el.scrollLeft + 280);
+    } else if (direction === 'staff') {
+      targetLeft = 0;
+    } else if (direction === 'actions') {
+      targetLeft = max;
+    } else if (direction === 'earnings') {
+      const targetCol = el.querySelector('[data-col="earnings"]') as HTMLElement;
+      targetLeft = targetCol ? Math.min(max, Math.max(0, targetCol.offsetLeft - 170)) : Math.round(max * 0.35);
+    } else if (direction === 'netpay') {
+      const targetCol = el.querySelector('[data-col="netpay"]') as HTMLElement;
+      targetLeft = targetCol ? Math.min(max, Math.max(0, targetCol.offsetLeft - 170)) : Math.round(max * 0.70);
+    }
+
+    try {
+      el.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    } catch (_) {
+      el.scrollLeft = targetLeft;
+    }
+    setTimeout(() => {
+      if (el && Math.abs(el.scrollLeft - targetLeft) > 5) {
+        el.scrollLeft = targetLeft;
+      }
+    }, 100);
+  };
+
   async function loadAllData(isSilent: boolean = false) {
     if (!isSilent && staffList.length === 0) {
       setLoading(true);
@@ -1841,28 +1876,28 @@ export default function AttendanceManagerView({
                 </span>
                 <button
                   type="button"
-                  onClick={() => payrollTableRef.current?.scrollTo({ left: 0, behavior: 'smooth' })}
+                  onClick={() => handleScrollPayrollTable('staff')}
                   className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
                 >
                   Staff Name
                 </button>
                 <button
                   type="button"
-                  onClick={() => payrollTableRef.current?.scrollTo({ left: 320, behavior: 'smooth' })}
+                  onClick={() => handleScrollPayrollTable('earnings')}
                   className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
                 >
                   Salary &amp; Overtime
                 </button>
                 <button
                   type="button"
-                  onClick={() => payrollTableRef.current?.scrollTo({ left: 650, behavior: 'smooth' })}
+                  onClick={() => handleScrollPayrollTable('netpay')}
                   className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
                 >
                   Net Salary
                 </button>
                 <button
                   type="button"
-                  onClick={() => payrollTableRef.current?.scrollTo({ left: payrollTableRef.current?.scrollWidth || 2000, behavior: 'smooth' })}
+                  onClick={() => handleScrollPayrollTable('actions')}
                   className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition cursor-pointer flex items-center gap-1"
                 >
                   <span>Actions &amp; Payslips</span>
@@ -1873,7 +1908,7 @@ export default function AttendanceManagerView({
               <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
-                  onClick={() => payrollTableRef.current?.scrollBy({ left: -220, behavior: 'smooth' })}
+                  onClick={() => handleScrollPayrollTable('left')}
                   className="p-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
                   title="Scroll Left"
                 >
@@ -1881,7 +1916,7 @@ export default function AttendanceManagerView({
                 </button>
                 <button
                   type="button"
-                  onClick={() => payrollTableRef.current?.scrollBy({ left: 220, behavior: 'smooth' })}
+                  onClick={() => handleScrollPayrollTable('right')}
                   className="p-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
                   title="Scroll Right"
                 >
@@ -1891,19 +1926,19 @@ export default function AttendanceManagerView({
             </div>
 
             <div ref={payrollTableRef} className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="w-full text-left text-xs min-w-[1250px]">
                 <thead className="bg-slate-50 dark:bg-slate-800/90 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20">
                   <tr>
-                    <th className="px-4 py-3 sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Staff Member</th>
-                    <th className="px-4 py-3">Base Salary</th>
-                    <th className="px-4 py-3">Attendance Days</th>
-                    <th className="px-4 py-3">Gross Earned</th>
-                    <th className="px-4 py-3">Overtime (OT)</th>
-                    <th className="px-4 py-3">Allowances (Uniform/Rent)</th>
-                    <th className="px-4 py-3">Deductions & Advance</th>
-                    <th className="px-4 py-3 font-bold text-slate-900 dark:text-white">Net Salary</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
+                    <th className="px-4 py-3 sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] min-w-[160px]">Staff Member</th>
+                    <th className="px-4 py-3 min-w-[105px]">Base Salary</th>
+                    <th className="px-4 py-3 min-w-[110px]">Attendance Days</th>
+                    <th data-col="earnings" className="px-4 py-3 min-w-[110px]">Gross Earned</th>
+                    <th className="px-4 py-3 min-w-[110px]">Overtime (OT)</th>
+                    <th className="px-4 py-3 min-w-[130px]">Allowances (Uniform/Rent)</th>
+                    <th className="px-4 py-3 min-w-[130px]">Deductions & Advance</th>
+                    <th data-col="netpay" className="px-4 py-3 font-bold text-slate-900 dark:text-white min-w-[110px]">Net Salary</th>
+                    <th className="px-4 py-3 min-w-[80px]">Status</th>
+                    <th data-col="actions" className="px-4 py-3 text-right min-w-[280px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1939,7 +1974,7 @@ export default function AttendanceManagerView({
 
                       return (
                         <tr key={record.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 group">
-                          <td className="px-4 py-3.5 sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                          <td className="px-4 py-3.5 sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] min-w-[160px]">
                             <button
                               type="button"
                               onClick={() => {
@@ -2134,7 +2169,7 @@ export default function AttendanceManagerView({
             ) : (
               <div>
                 <div ref={leavesTableRef} className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-xs min-w-[950px]">
                   <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 dark:border-slate-800">
                     <tr>
                       <th className="px-4 py-3">Employee</th>
