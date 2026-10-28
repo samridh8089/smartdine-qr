@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -7,9 +7,23 @@ const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
   ? serviceKey
   : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
-function getSupabaseClient() {
-  return createClient(supabaseUrl, supabaseKey);
+let _supabaseClient: SupabaseClient | null = null;
+function getSupabaseClient(): SupabaseClient {
+  if (!_supabaseClient) {
+    _supabaseClient = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+  }
+  return _supabaseClient;
 }
+
+// In-memory server cache (10s TTL) for lightning-fast sub-10ms customer menu loads
+interface CacheEntry {
+  timestamp: number;
+  restaurant: any;
+}
+const serverRestaurantCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 10000;
 
 export async function GET(req: Request) {
   try {
@@ -19,6 +33,19 @@ export async function GET(req: Request) {
 
     if (!slug && !id) {
       return NextResponse.json({ error: 'slug or id parameter is required' }, { status: 400 });
+    }
+
+    const cacheKey = slug || id || '';
+    const cached = serverRestaurantCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) {
+      return NextResponse.json(
+        { success: true, restaurant: cached.restaurant, fromCache: true },
+        {
+          headers: {
+            'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=15',
+          },
+        }
+      );
     }
 
     const supabase = getSupabaseClient();
@@ -84,13 +111,20 @@ export async function GET(req: Request) {
       created_at: rest.created_at,
     };
 
+    // Populate server memory cache
+    serverRestaurantCache.set(cacheKey, { timestamp: Date.now(), restaurant: safeRestaurant });
+    if (rest.slug && rest.slug !== cacheKey) {
+      serverRestaurantCache.set(rest.slug, { timestamp: Date.now(), restaurant: safeRestaurant });
+    }
+    if (rest.id && rest.id !== cacheKey) {
+      serverRestaurantCache.set(rest.id, { timestamp: Date.now(), restaurant: safeRestaurant });
+    }
+
     return NextResponse.json(
       { success: true, restaurant: safeRestaurant },
       {
         headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0',
+          'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=15',
         },
       }
     );
