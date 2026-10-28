@@ -13,8 +13,7 @@ import {
   EXPENSE_CATEGORIES, 
   computeOwnerPnL, 
   fetchRestaurantExpenses, 
-  deleteRestaurantExpense,
-  DEFAULT_STANDARD_BISTRO_EXPENSES 
+  deleteRestaurantExpense 
 } from '@/lib/pnlEngine';
 import ExpenseModal from './ExpenseModal';
 
@@ -63,18 +62,21 @@ export default function OwnerNetMarginCard({
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<RestaurantExpense | null>(null);
 
-  // Initialize expenses from cache/defaults so numbers never jump or reset on page open
+  // Initialize expenses from cache so real numbers persist without mock flicker
   const [expenses, setExpenses] = useState<RestaurantExpense[]>(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = sessionStorage.getItem('cached_owner_expenses');
+        const rId = restaurant?.id;
+        const cached = (rId ? localStorage.getItem(`cached_owner_expenses_${rId}`) : null) ||
+          localStorage.getItem('cached_owner_expenses') ||
+          sessionStorage.getItem('cached_owner_expenses');
         if (cached) {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         }
       } catch (_) {}
     }
-    return DEFAULT_STANDARD_BISTRO_EXPENSES;
+    return [];
   });
 
   const [loadingExpenses, setLoadingExpenses] = useState(false);
@@ -135,10 +137,12 @@ export default function OwnerNetMarginCard({
     setLoadingExpenses(true);
     try {
       const data = await fetchRestaurantExpenses(restaurantId, startDate, endDate);
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setExpenses(data);
         if (typeof window !== 'undefined') {
           try {
+            localStorage.setItem('cached_owner_expenses', JSON.stringify(data));
+            localStorage.setItem(`cached_owner_expenses_${restaurantId}`, JSON.stringify(data));
             sessionStorage.setItem('cached_owner_expenses', JSON.stringify(data));
           } catch (_) {}
         }
@@ -268,7 +272,11 @@ export default function OwnerNetMarginCard({
               Monthly Expenses
             </span>
             <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1">
-              {formatPrice(pnl.operatingExpenses, currency, 0)}
+              {loadingExpenses && expenses.length === 0 ? (
+                <div className="h-7 w-28 bg-slate-200 dark:bg-slate-700 animate-pulse rounded my-0.5" />
+              ) : (
+                formatPrice(pnl.operatingExpenses, currency, 0)
+              )}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               Rent, Salary &amp; Bills ({pnl.operatingExpensesPercentage}%)
@@ -281,7 +289,11 @@ export default function OwnerNetMarginCard({
               Net Profit (In-Hand Munafa)
             </span>
             <div className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-1">
-              {formatPrice(pnl.netProfit, currency, 2)}
+              {loadingExpenses && expenses.length === 0 ? (
+                <div className="h-7 w-28 bg-slate-200 dark:bg-slate-700 animate-pulse rounded my-0.5" />
+              ) : (
+                formatPrice(pnl.netProfit, currency, 2)
+              )}
             </div>
             <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1 flex items-center gap-1">
               {isProfit ? <TrendingUp className="h-3.5 w-3.5 text-slate-800 dark:text-slate-200" /> : <TrendingDown className="h-3.5 w-3.5 text-slate-800 dark:text-slate-200" />}

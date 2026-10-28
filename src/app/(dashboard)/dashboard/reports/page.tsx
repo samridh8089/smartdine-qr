@@ -191,7 +191,7 @@ export default function ReportsPage() {
   const [salesSummary, setSalesSummary] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = sessionStorage.getItem('reports_cached_sales_summary');
+        const cached = localStorage.getItem('reports_cached_sales_summary') || sessionStorage.getItem('reports_cached_sales_summary');
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && typeof parsed.totalOrders === 'number' && typeof parsed.grossSales === 'number') {
@@ -219,7 +219,7 @@ export default function ReportsPage() {
   const [customerSummary, setCustomerSummary] = useState(() => {
     if (typeof window !== 'undefined') {
       try {
-        const cached = sessionStorage.getItem('reports_cached_customer_summary');
+        const cached = localStorage.getItem('reports_cached_customer_summary') || sessionStorage.getItem('reports_cached_customer_summary');
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed && typeof parsed.totalCustomers === 'number') {
@@ -518,6 +518,7 @@ export default function ReportsPage() {
     setSalesSummary(newSalesSummary);
     if (typeof window !== 'undefined') {
       try {
+        localStorage.setItem('reports_cached_sales_summary', JSON.stringify(newSalesSummary));
         sessionStorage.setItem('reports_cached_sales_summary', JSON.stringify(newSalesSummary));
       } catch (_) {}
     }
@@ -689,6 +690,7 @@ export default function ReportsPage() {
     setCustomerSummary(newCustSummary);
     if (typeof window !== 'undefined') {
       try {
+        localStorage.setItem('reports_cached_customer_summary', JSON.stringify(newCustSummary));
         sessionStorage.setItem('reports_cached_customer_summary', JSON.stringify(newCustSummary));
       } catch (_) {}
     }
