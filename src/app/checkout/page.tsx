@@ -80,11 +80,21 @@ function CheckoutContent() {
         throw new Error('Razorpay Checkout SDK failed to load. Please check internet connection.');
       }
 
-      // If no orderId provided, create one dynamically
+      // If no orderId provided or invalid orderId, create one dynamically
       let activeOrderId = orderId;
       let activeRestId = targetRestaurantId || restaurantId;
+      let activeKeyId = (keyId && keyId !== 'rzp_live_TK1Nbl3mJiENjR') ? keyId : (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_live_TsAPJepoDRq53D');
 
-      if (!activeOrderId) {
+      // Check if orderId is missing OR clearly invalid (e.g. fake fallback order from old app)
+      const isOrderIdValid = Boolean(
+        activeOrderId && 
+        activeOrderId.startsWith('order_') && 
+        activeOrderId.length >= 18 && 
+        !activeOrderId.includes('_fallback') &&
+        !activeOrderId.includes('_test_')
+      );
+
+      if (!isOrderIdValid) {
         const orderRes = await fetch('/api/payments/create-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -115,6 +125,9 @@ function CheckoutContent() {
           throw new Error(orderData.error || 'Failed to generate Razorpay order ID.');
         } else {
           activeOrderId = orderData.order_id;
+          if (orderData.keyId || orderData.key) {
+            activeKeyId = orderData.keyId || orderData.key;
+          }
           if (orderData.restaurantId) {
             activeRestId = orderData.restaurantId;
             setTargetRestaurantId(activeRestId);
@@ -125,7 +138,7 @@ function CheckoutContent() {
       const amountInPaise = Math.round(amount * 100);
 
       const options = {
-        key: keyId,
+        key: activeKeyId,
         amount: amountInPaise,
         currency: 'INR',
         name: 'CleverOps',
