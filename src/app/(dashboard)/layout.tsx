@@ -923,7 +923,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </aside>
 
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto h-full">
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden h-full max-w-full">
             {/* Dashboard Header */}
             <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 pt-2 pb-2 px-4 sm:px-6 flex items-center justify-between shrink-0 sticky top-0 z-30 transition-colors">
               <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
@@ -969,7 +969,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </header>
 
             {/* Dashboard Content Container */}
-            <main className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto animate-fade-in">
+            <main className="flex-1 p-3.5 sm:p-6 md:p-8 max-w-7xl w-full mx-auto animate-fade-in overflow-x-hidden">
               {!allowed ? (
                 <div className="min-h-[50vh] flex items-center justify-center p-6">
                   <div className="max-w-md text-center space-y-4">

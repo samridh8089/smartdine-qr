@@ -1302,10 +1302,10 @@ export default function AttendanceManagerView({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full max-w-full overflow-x-hidden pb-24 md:pb-6">
       {/* Top Navigation Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl text-xs font-bold text-slate-600 dark:text-slate-300 overflow-x-auto max-w-full shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('live')}
@@ -1384,7 +1384,7 @@ export default function AttendanceManagerView({
       {activeTab === 'live' && (
         <div className="space-y-6">
           {/* KPI Dashboard Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3.5">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-sm">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Staff</span>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{kpis.totalStaff}</p>
@@ -1408,9 +1408,9 @@ export default function AttendanceManagerView({
           </div>
 
           {/* Search & Department Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2 flex-1 max-w-sm">
-              <Search className="w-4 h-4 text-slate-400" />
+          <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 flex-1 min-w-[180px] max-w-sm">
+              <Search className="w-4 h-4 text-slate-400 shrink-0" />
               <input
                 type="text"
                 placeholder="Search staff by name or phone..."
@@ -1419,13 +1419,13 @@ export default function AttendanceManagerView({
                 className="w-full text-xs bg-transparent border-none outline-none text-slate-900 dark:text-slate-100"
               />
             </div>
-            <div className="flex items-center gap-3 text-xs">
-              <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between sm:justify-end gap-2 text-xs w-full sm:w-auto">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span className="text-slate-400 font-medium">Role:</span>
                 <select
                   value={roleFilter}
                   onChange={e => setRoleFilter(e.target.value)}
-                  className="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold"
+                  className="px-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none"
                 >
                   <option value="all">All Roles</option>
                   <option value="manager">Manager</option>
@@ -1444,9 +1444,9 @@ export default function AttendanceManagerView({
               <button
                 type="button"
                 onClick={() => handleOpenStaffEdit(null)}
-                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs rounded-xl shadow-sm cursor-pointer transition"
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs rounded-xl shadow-sm cursor-pointer transition shrink-0"
               >
-                + Add Staff & Set Salary
+                + Add Staff
               </button>
             </div>
           </div>
@@ -1479,7 +1479,7 @@ export default function AttendanceManagerView({
                 return (
                   <div
                     key={staff.id}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3"
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3 min-w-0 max-w-full overflow-hidden"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
@@ -1518,12 +1518,12 @@ export default function AttendanceManagerView({
 
                     {/* Shift & Time Details */}
                     <div className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-2.5 text-xs space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-600 dark:text-slate-400 font-medium">Shift:</span>
+                      <div className="flex items-center justify-between text-xs gap-2 min-w-0">
+                        <span className="text-slate-600 dark:text-slate-400 font-medium shrink-0">Shift:</span>
                         <select
                           value={assignedShiftRef?.shift_id || ''}
                           onChange={e => handleAssignRoster(staff.id, e.target.value)}
-                          className="px-2 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none cursor-pointer"
+                          className="px-2 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-800 dark:text-slate-200 outline-none cursor-pointer flex-1 min-w-0 max-w-[200px] sm:max-w-none truncate"
                           title="Assign shift for this date in 1-click"
                         >
                           <option value="">Not Scheduled</option>
@@ -1599,7 +1599,7 @@ export default function AttendanceManagerView({
                     </div>
 
                     {/* Actions Bar */}
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                       <button
                         type="button"
                         onClick={() => handleOpenStaffEdit(staff)}
@@ -1611,7 +1611,7 @@ export default function AttendanceManagerView({
                           {(staff.salary_type || 'fixed') === 'fixed' ? 'Fixed' : 'Per-Day'}
                         </span>
                       </button>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => handleOpenStaffHistory(staff)}
@@ -1624,7 +1624,7 @@ export default function AttendanceManagerView({
                         <button
                           type="button"
                           onClick={() => handleOpenOverride(staff)}
-                          className="px-2.5 py-1 text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold text-xs cursor-pointer transition"
+                          className="px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-semibold text-xs cursor-pointer transition hover:bg-slate-100 dark:hover:bg-slate-800"
                         >
                           Override
                         </button>

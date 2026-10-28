@@ -133,7 +133,7 @@ export default function AttendancePage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
+    <div className="max-w-7xl mx-auto space-y-6 pb-28 md:pb-12 w-full overflow-x-hidden">
       {/* Header Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -144,7 +144,7 @@ export default function AttendancePage() {
 
         {/* View Switcher for Owners/Managers/Supervisors */}
         {isManagementRole && (
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl text-xs font-bold overflow-x-auto max-w-full shrink-0">
             <button
               type="button"
               onClick={() => setViewMode('manager')}
