@@ -2163,6 +2163,26 @@ export default function ReportsPage() {
             staffProfiles={staffProfilesList}
             currency={restaurant?.settings?.currency || 'INR'}
             userId={profile?.id}
+            onTimeRangeChange={(newRange) => {
+              setTimeRange(newRange);
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('reports_time_range', newRange);
+              }
+            }}
+            customStartDate={customStartDate}
+            customEndDate={customEndDate}
+            onCustomDateChange={(start, end) => {
+              setCustomStartDate(start);
+              setCustomEndDate(end);
+              setAppliedStartDate(start);
+              setAppliedEndDate(end);
+              setTimeRange('custom');
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('reports_custom_start_date', start);
+                sessionStorage.setItem('reports_custom_end_date', end);
+                sessionStorage.setItem('reports_time_range', 'custom');
+              }
+            }}
           />
         </div>
       )}

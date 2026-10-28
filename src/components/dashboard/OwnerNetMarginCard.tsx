@@ -4,7 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Plus, Edit3, Trash2, Search, X, 
-  TrendingUp, TrendingDown, Layers
+  TrendingUp, TrendingDown, Layers,
+  ChevronDown, ChevronUp, Calendar
 } from 'lucide-react';
 import { Restaurant } from '@/lib/db';
 import { formatPrice } from '@/lib/utils';
@@ -41,6 +42,10 @@ interface OwnerNetMarginCardProps {
   staffProfiles?: any[];
   currency?: string;
   userId?: string;
+  onTimeRangeChange?: (range: 'today' | 'yesterday' | 'weekly' | 'monthly' | 'custom' | 'single_day') => void;
+  onCustomDateChange?: (start: string, end: string) => void;
+  customStartDate?: string;
+  customEndDate?: string;
 }
 
 export default function OwnerNetMarginCard({
@@ -56,6 +61,10 @@ export default function OwnerNetMarginCard({
   staffProfiles = [],
   currency = 'INR',
   userId,
+  onTimeRangeChange,
+  onCustomDateChange,
+  customStartDate,
+  customEndDate,
 }: OwnerNetMarginCardProps) {
   // 1. All React hooks at the top (Strict CleverOps React Hook Safety Rule)
   const [statementModalOpen, setStatementModalOpen] = useState(false);
@@ -84,6 +93,9 @@ export default function OwnerNetMarginCard({
   const [expenseSearchQuery, setExpenseSearchQuery] = useState('');
   const [activeModalTab, setActiveModalTab] = useState<'summary' | 'ledger'>('summary');
   const [mounted, setMounted] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [localCustomStart, setLocalCustomStart] = useState(customStartDate || startDate || '');
+  const [localCustomEnd, setLocalCustomEnd] = useState(customEndDate || endDate || '');
 
   const restaurantId = restaurant?.id;
 
@@ -162,6 +174,14 @@ export default function OwnerNetMarginCard({
     loadExpenses();
   }, [loadExpenses]);
 
+  useEffect(() => {
+    if (customStartDate) setLocalCustomStart(customStartDate);
+  }, [customStartDate]);
+
+  useEffect(() => {
+    if (customEndDate) setLocalCustomEnd(customEndDate);
+  }, [customEndDate]);
+
   // Handler functions
   const handleOpenAddModal = (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -195,10 +215,10 @@ export default function OwnerNetMarginCard({
   return (
     <>
       {/* EXECUTIVE P&L COMMAND CENTER (DIRECTLY ON REPORTS PAGE) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-6">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
         
         {/* Header Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white leading-tight">
@@ -209,7 +229,7 @@ export default function OwnerNetMarginCard({
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Total sales, food cost aur monthly expenses ka hisab • {pnl.periodLabel}
+              Sales, food cost aur operating expenses ka hisab • {pnl.periodLabel}
             </p>
           </div>
 
@@ -237,8 +257,169 @@ export default function OwnerNetMarginCard({
           </div>
         </div>
 
-        {/* 1. TOP 4 KEY METRIC CARDS */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* DATE FILTER BUTTONS (INSIDE THIS CARD: Today, This Week, This Month, Custom) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-1">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl w-fit">
+            <button
+              type="button"
+              onClick={() => onTimeRangeChange?.('today')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                timeRange === 'today'
+                  ? 'bg-white dark:bg-slate-900 text-slate-950 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => onTimeRangeChange?.('weekly')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                timeRange === 'weekly'
+                  ? 'bg-white dark:bg-slate-900 text-slate-950 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              This Week
+            </button>
+            <button
+              type="button"
+              onClick={() => onTimeRangeChange?.('monthly')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                timeRange === 'monthly'
+                  ? 'bg-white dark:bg-slate-900 text-slate-950 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              This Month
+            </button>
+            <button
+              type="button"
+              onClick={() => onTimeRangeChange?.('custom')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                timeRange === 'custom'
+                  ? 'bg-white dark:bg-slate-900 text-slate-950 dark:text-white shadow-xs border border-slate-200 dark:border-slate-700'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5 text-slate-400" />
+            <span>{pnl.periodLabel}</span>
+          </div>
+        </div>
+
+        {/* CUSTOM DATE RANGE PICKER (ONLY WHEN CUSTOM IS ACTIVE) */}
+        {timeRange === 'custom' && (
+          <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40">
+            <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">From:</span>
+            <input
+              type="date"
+              value={localCustomStart}
+              onChange={(e) => setLocalCustomStart(e.target.value)}
+              className="px-2.5 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
+            />
+            <span className="text-xs text-slate-600 dark:text-slate-400 font-semibold">To:</span>
+            <input
+              type="date"
+              value={localCustomEnd}
+              onChange={(e) => setLocalCustomEnd(e.target.value)}
+              className="px-2.5 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white font-medium"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (localCustomStart > localCustomEnd) {
+                  alert('Start date cannot be after end date');
+                  return;
+                }
+                onCustomDateChange?.(localCustomStart, localCustomEnd);
+              }}
+              className="px-3 py-1 bg-slate-950 hover:bg-slate-800 text-white dark:bg-white dark:text-slate-900 font-bold text-xs rounded transition cursor-pointer"
+            >
+              Apply Filter
+            </button>
+          </div>
+        )}
+
+        {/* COMPACT HEADLINE SUMMARY TILES (ALWAYS VISIBLE - 1 SINGLE CLEAN ROW) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Tile 1: Total Sales */}
+          <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+              Total Sales
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-0.5">
+              {formatPrice(pnl.netRevenue, currency, 0)}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {salesSummary.totalOrders || 0} orders
+            </div>
+          </div>
+
+          {/* Tile 2: Total Expenses */}
+          <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+              Total Expenses
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+              {loadingExpenses && expenses.length === 0 ? (
+                <div className="h-7 w-28 bg-slate-200 dark:bg-slate-700 animate-pulse rounded my-0.5" />
+              ) : (
+                formatPrice(pnl.totalExpenses, currency, 0)
+              )}
+            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Food + Salaries + Overheads
+            </div>
+          </div>
+
+          {/* Tile 3: Net Profit */}
+          <div className="p-3.5 rounded-xl border-2 border-slate-950 dark:border-white bg-white dark:bg-slate-900 shadow-2xs">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-950 dark:text-white block">
+              Net Profit (In-Hand Munafa)
+            </span>
+            <div className="text-xl sm:text-2xl font-black text-slate-950 dark:text-white mt-0.5">
+              {loadingExpenses && expenses.length === 0 ? (
+                <div className="h-7 w-28 bg-slate-200 dark:bg-slate-700 animate-pulse rounded my-0.5" />
+              ) : (
+                formatPrice(pnl.netProfit, currency, 2)
+              )}
+            </div>
+            <div className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1 mt-0.5">
+              {isProfit ? <TrendingUp className="h-3.5 w-3.5 text-slate-800 dark:text-slate-200" /> : <TrendingDown className="h-3.5 w-3.5 text-slate-800 dark:text-slate-200" />}
+              <span>{pnl.netMarginPercentage > 0 ? `+${pnl.netMarginPercentage}%` : `${pnl.netMarginPercentage}%`} Margin</span>
+            </div>
+          </div>
+        </div>
+
+        {/* EXPAND / COLLAPSE CTA BUTTON */}
+        <button
+          type="button"
+          onClick={() => setIsDetailsOpen(!isDetailsOpen)}
+          className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 hover:bg-slate-100 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-900 dark:text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-2xs"
+        >
+          {isDetailsOpen ? (
+            <>
+              <ChevronUp className="h-4 w-4" />
+              <span>Close Details (Vivaran Band Karein)</span>
+            </>
+          ) : (
+            <>
+              <ChevronDown className="h-4 w-4" />
+              <span>Open Details (Har ₹100 Ka Breakdown &amp; Kharche Dekhein)</span>
+            </>
+          )}
+        </button>
+
+        {/* DETAILS SECTION (ONLY RENDERED AFTER USER CLICKS OPEN) */}
+        {isDetailsOpen && (
+          <div className="space-y-6 pt-3 border-t border-slate-100 dark:border-slate-800">
+            {/* 1. TOP 4 KEY METRIC CARDS */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           
           {/* Card 1: Total Sales */}
           <div className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40">
@@ -486,7 +667,21 @@ export default function OwnerNetMarginCard({
           </div>
         </div>
 
+        {/* Bottom Close Details Button */}
+        <div className="pt-2 flex justify-center border-t border-slate-100 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setIsDetailsOpen(false)}
+            className="py-2 px-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <ChevronUp className="h-4 w-4" />
+            <span>Close Details (Vivaran Band Karein)</span>
+          </button>
+        </div>
       </div>
+    )}
+
+  </div>
 
       {/* 2. FULL P&L STATEMENT MODAL (PORTAL TO BODY - STRICT NO SCROLL & MONOCHROME) */}
       {statementModalOpen ? createPortal(
