@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   StaffProfile,
@@ -51,6 +51,7 @@ import { db, Restaurant, Profile } from '@/lib/db';
 import SalarySlipModal from './SalarySlipModal';
 import SalaryEditorModal from './SalaryEditorModal';
 import StaffAttendanceCalendarModal from './StaffAttendanceCalendarModal';
+import StickyHorizontalScrollbar from './StickyHorizontalScrollbar';
 import {
   Users,
   CheckCircle,
@@ -78,7 +79,10 @@ import {
   Eye,
   Info,
   XCircle,
-  Coffee
+  Coffee,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight
 } from 'lucide-react';
 
 // Safe portal wrapper ensuring modals render at document body level above headers and sidebars
@@ -265,7 +269,11 @@ export default function AttendanceManagerView({
   const [savingOvertime, setSavingOvertime] = useState(false);
   const [overtimeNotice, setOvertimeNotice] = useState<string | null>(null);
 
-  // 2. useMemo: Filtered Staff List
+  // 2. useRef - Table scroll container refs for sticky horizontal slider
+  const payrollTableRef = useRef<HTMLDivElement>(null);
+  const leavesTableRef = useRef<HTMLDivElement>(null);
+
+  // 3. useMemo: Filtered Staff List
   const filteredStaffList = useMemo(() => {
     return staffList.filter(s => {
       const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1825,11 +1833,68 @@ export default function AttendanceManagerView({
 
           {/* Payroll Table */}
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            {/* Top Quick-Navigation Slider Bar for 1-Click Horizontal Scrolling */}
+            <div className="flex items-center justify-between gap-2 px-4 py-2 bg-slate-50/90 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 shrink-0">
+                  Quick View:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => payrollTableRef.current?.scrollTo({ left: 0, behavior: 'smooth' })}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
+                >
+                  Staff Name
+                </button>
+                <button
+                  type="button"
+                  onClick={() => payrollTableRef.current?.scrollTo({ left: 320, behavior: 'smooth' })}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
+                >
+                  Salary &amp; Overtime
+                </button>
+                <button
+                  type="button"
+                  onClick={() => payrollTableRef.current?.scrollTo({ left: 650, behavior: 'smooth' })}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
+                >
+                  Net Salary
+                </button>
+                <button
+                  type="button"
+                  onClick={() => payrollTableRef.current?.scrollTo({ left: payrollTableRef.current?.scrollWidth || 2000, behavior: 'smooth' })}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition cursor-pointer flex items-center gap-1"
+                >
+                  <span>Actions &amp; Payslips</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => payrollTableRef.current?.scrollBy({ left: -220, behavior: 'smooth' })}
+                  className="p-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
+                  title="Scroll Left"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => payrollTableRef.current?.scrollBy({ left: 220, behavior: 'smooth' })}
+                  className="p-1.5 rounded-lg bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 shadow-2xs transition cursor-pointer"
+                  title="Scroll Right"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div ref={payrollTableRef} className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 dark:border-slate-800">
+                <thead className="bg-slate-50 dark:bg-slate-800/90 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20">
                   <tr>
-                    <th className="px-4 py-3">Staff Member</th>
+                    <th className="px-4 py-3 sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Staff Member</th>
                     <th className="px-4 py-3">Base Salary</th>
                     <th className="px-4 py-3">Attendance Days</th>
                     <th className="px-4 py-3">Gross Earned</th>
@@ -1873,8 +1938,8 @@ export default function AttendanceManagerView({
                       const totalDeductions = (record.deductions || []).reduce((acc, d) => acc + (Number(d.amount) || 0), 0) + (Number(record.total_advance) || 0);
 
                       return (
-                        <tr key={record.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
-                          <td className="px-4 py-3.5">
+                        <tr key={record.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 group">
+                          <td className="px-4 py-3.5 sticky left-0 z-10 bg-white dark:bg-slate-900 group-hover:bg-slate-50 dark:group-hover:bg-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
                             <button
                               type="button"
                               onClick={() => {
@@ -2011,6 +2076,9 @@ export default function AttendanceManagerView({
                 </tbody>
               </table>
             </div>
+
+            {/* STICKY HORIZONTAL SCROLLBAR SLIDER */}
+            <StickyHorizontalScrollbar targetRef={payrollTableRef} label="Payroll Table" />
           </div>
         </div>
       )}
@@ -2064,8 +2132,9 @@ export default function AttendanceManagerView({
                 <p className="text-xs text-slate-500">Employees can submit leave requests from their punch card interface.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              <div>
+                <div ref={leavesTableRef} className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 uppercase tracking-wider font-extrabold border-b border-slate-200 dark:border-slate-800">
                     <tr>
                       <th className="px-4 py-3">Employee</th>
@@ -2140,7 +2209,11 @@ export default function AttendanceManagerView({
                   </tbody>
                 </table>
               </div>
-            )}
+
+              {/* STICKY HORIZONTAL SCROLLBAR SLIDER FOR LEAVES */}
+              <StickyHorizontalScrollbar targetRef={leavesTableRef} label="Leaves Table" />
+            </div>
+          )}
           </div>
         </div>
       )}

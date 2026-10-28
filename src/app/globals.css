@@ -176,6 +176,33 @@ body {
 }
 
 
+/* Custom Table Slider Scrollbar */
+.custom-table-slider::-webkit-scrollbar {
+  height: 8px;
+}
+.custom-table-slider::-webkit-scrollbar-track {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+.custom-table-slider::-webkit-scrollbar-thumb {
+  background: #0f172a;
+  border-radius: 9999px;
+  cursor: grab;
+}
+.dark .custom-table-slider::-webkit-scrollbar-thumb {
+  background: #f8fafc;
+}
+.custom-table-slider::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}
+.custom-table-slider {
+  scrollbar-width: thin;
+  scrollbar-color: #0f172a rgba(148, 163, 184, 0.2);
+}
+.dark .custom-table-slider {
+  scrollbar-color: #f8fafc rgba(148, 163, 184, 0.2);
+}
+
 /* ─── CleverOps Strict Mobile Zoom Prevention ─── */
 html, body {
   touch-action: manipulation;
