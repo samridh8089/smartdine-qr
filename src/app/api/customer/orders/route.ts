@@ -17,7 +17,16 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
   ? serviceKey
   : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
+
+// High-speed server-side memory caches for hot path ordering (15s TTL)
+interface ServerCacheEntry<T> { data: T; timestamp: number; }
+const serverRestCache = new Map<string, ServerCacheEntry<any>>();
+const serverTableCache = new Map<string, ServerCacheEntry<any>>();
+const serverMenuCache = new Map<string, ServerCacheEntry<any>>();
+const CACHE_TTL_MS = 15000;
 
 export async function POST(req: Request) {
   const totalStart = performance.now();
@@ -105,8 +114,16 @@ export async function POST(req: Request) {
     // Cart item IDs for scoped, high-speed indexed lookups (avoids full catalog scans)
     const cartItemIds = Array.from(new Set(items.map((i: any) => i.menuItemId || i.id || i.menu_item_id).filter(Boolean)));
 
-    // 2. UNIFIED HIGH-SPEED PARALLEL PRE-FETCH (Idempotency + Restaurant + Table + Scoped Menu/Variants + Active Orders)
+    // 2. UNIFIED HIGH-SPEED PARALLEL PRE-FETCH (with server-side in-memory caching)
     timer.start('inventory');
+
+    const cachedRest = serverRestCache.get(restaurantId);
+    const useCachedRest = cachedRest && (Date.now() - cachedRest.timestamp < CACHE_TTL_MS);
+
+    const tableKey = `${restaurantId}_${tableId}`;
+    const cachedTable = serverTableCache.get(tableKey);
+    const useCachedTable = cachedTable && (Date.now() - cachedTable.timestamp < CACHE_TTL_MS);
+
     const [existingOrderRes, existingBatchRes, rRes, tRes, mRes, vRes, activeOrdersRes] = await Promise.all([
       cleanKey
         ? supabase.from('orders').select('*').eq('restaurant_id', restaurantId).eq('idempotency_key', cleanKey).maybeSingle()
@@ -114,10 +131,14 @@ export async function POST(req: Request) {
       cleanKey
         ? supabase.from('order_batches').select('*, order:orders(*)').eq('idempotency_key', cleanKey).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
-      supabase.from('restaurants').select('*').eq('id', restaurantId).maybeSingle(),
-      (tableId && tableId !== 'takeaway' && tableId !== 'reservation' && tableId !== 'counter') 
-        ? supabase.from('tables').select('*').eq('id', tableId).eq('restaurant_id', restaurantId).maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
+      useCachedRest
+        ? Promise.resolve({ data: cachedRest.data, error: null })
+        : supabase.from('restaurants').select('*').eq('id', restaurantId).maybeSingle(),
+      useCachedTable
+        ? Promise.resolve({ data: cachedTable.data, error: null })
+        : (tableId && tableId !== 'takeaway' && tableId !== 'reservation' && tableId !== 'counter') 
+          ? supabase.from('tables').select('*').eq('id', tableId).eq('restaurant_id', restaurantId).maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
       cartItemIds.length > 0
         ? supabase.from('menu_items').select('id, name, price, is_available').in('id', cartItemIds).eq('restaurant_id', restaurantId)
         : Promise.resolve({ data: [], error: null }),
@@ -128,6 +149,13 @@ export async function POST(req: Request) {
         ? supabase.from('orders').select('*').eq('table_id', tableId).eq('restaurant_id', restaurantId).in('status', ['new', 'accepted', 'preparing', 'ready', 'served']).neq('payment_status', 'paid').order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [], error: null })
     ]);
+
+    if (rRes.data && !useCachedRest) {
+      serverRestCache.set(restaurantId, { data: rRes.data, timestamp: Date.now() });
+    }
+    if (tRes.data && !useCachedTable) {
+      serverTableCache.set(tableKey, { data: tRes.data, timestamp: Date.now() });
+    }
 
     // Fast return if idempotency key was already processed
     if (existingOrderRes.data) {

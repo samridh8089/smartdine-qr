@@ -577,6 +577,9 @@ function saveStoredOffers(restaurantId: string, offers: Offer[]) {
 
 const restaurantMemoryCache = new Map<string, { data: Restaurant; timestamp: number }>();
 const restaurantSlugMemoryCache = new Map<string, { data: Restaurant; timestamp: number }>();
+const categoriesMemoryCache = new Map<string, { data: Category[]; timestamp: number }>();
+const menuItemsMemoryCache = new Map<string, { data: MenuItem[]; timestamp: number }>();
+const basicTablesMemoryCache = new Map<string, { data: Table[]; timestamp: number }>();
 
 export const DEFAULT_PRICING_PLANS: PricingPlan[] = [
   { id: 'starter', name: 'Starter', price_monthly: 299, price_yearly: 2500, features: ['Standard KDS', 'Basic Sales Overview', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 15, max_items: 50 },
@@ -990,13 +993,19 @@ export const db = {
 
   // --- Category CRUD ---
   async getCategories(restaurantId: string): Promise<Category[]> {
+    const cached = categoriesMemoryCache.get(restaurantId);
+    if (cached && Date.now() - cached.timestamp < 15000) {
+      return cached.data;
+    }
     const { data, error } = await supabase
       .from('categories')
       .select('*')
       .eq('restaurant_id', restaurantId)
       .order('sort_order', { ascending: true });
-    if (error || !data) return [];
-    return data as Category[];
+    if (error || !data) return cached?.data || [];
+    const result = data as Category[];
+    categoriesMemoryCache.set(restaurantId, { data: result, timestamp: Date.now() });
+    return result;
   },
 
   async createCategory(restaurantId: string, name: string): Promise<Category> {
@@ -1062,11 +1071,15 @@ export const db = {
 
   // --- Menu Items CRUD ---
   async getMenuItems(restaurantId: string): Promise<MenuItem[]> {
+    const cached = menuItemsMemoryCache.get(restaurantId);
+    if (cached && Date.now() - cached.timestamp < 15000) {
+      return cached.data;
+    }
     const { data, error } = await supabase
       .from('menu_items')
       .select('*')
       .eq('restaurant_id', restaurantId);
-    if (error || !data) return [];
+    if (error || !data) return cached?.data || [];
     
     let items = data as MenuItem[];
 
@@ -1105,7 +1118,23 @@ export const db = {
       }
     } catch (e) {}
 
+    menuItemsMemoryCache.set(restaurantId, { data: items, timestamp: Date.now() });
     return items;
+  },
+
+  // Lightweight tables lookup for Customer Menu (skips heavy live SLA/active order joins)
+  async getBasicTables(restaurantId: string): Promise<Table[]> {
+    const cached = basicTablesMemoryCache.get(restaurantId);
+    if (cached && Date.now() - cached.timestamp < 15000) {
+      return cached.data;
+    }
+    const { data, error } = await supabase
+      .from('tables')
+      .select('id, name, restaurant_id, qr_enabled, status')
+      .eq('restaurant_id', restaurantId);
+    const result = (data || []) as Table[];
+    basicTablesMemoryCache.set(restaurantId, { data: result, timestamp: Date.now() });
+    return result;
   },
 
   async getMenuItemVariants(menuItemId: string): Promise<MenuItemVariant[]> {
@@ -3964,8 +3993,14 @@ export const db = {
     restaurantSlugMemoryCache.clear();
     if (id) {
       restaurantMemoryCache.delete(id);
+      categoriesMemoryCache.delete(id);
+      menuItemsMemoryCache.delete(id);
+      basicTablesMemoryCache.delete(id);
     } else {
       restaurantMemoryCache.clear();
+      categoriesMemoryCache.clear();
+      menuItemsMemoryCache.clear();
+      basicTablesMemoryCache.clear();
     }
   },
 

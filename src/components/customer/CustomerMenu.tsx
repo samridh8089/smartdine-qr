@@ -470,14 +470,28 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         const planId = (rest.subscription_plan || 'starter').toLowerCase();
 
 
-        // PHASE 1: Fast Parallel Fetch of Core Menu Data
-        const [cats, rawItems, tbls, fetchedOffers, planRes] = await Promise.all([
+        // Plan cache (0ms network cost)
+        const planCache = (globalThis as any).__cleverops_plan_cache || new Map();
+        (globalThis as any).__cleverops_plan_cache = planCache;
+        const cachedPlan = planCache.get(planId);
+        const planPromise = cachedPlan
+          ? Promise.resolve({ data: cachedPlan })
+          : supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle().then(res => {
+              if (res.data) planCache.set(planId, res.data);
+              return res;
+            });
+
+        // Direct offers from restaurant settings (0ms network cost)
+        const directOffers = Array.isArray(rest.settings?.offers) ? rest.settings.offers : [];
+
+        // PHASE 1: Fast Parallel Fetch of Core Menu Data (using getBasicTables & in-memory caches)
+        const [cats, rawItems, tbls, planRes] = await Promise.all([
           db.getCategories(rest.id).catch(() => [] as Category[]),
           db.getMenuItems(rest.id).catch(() => [] as MenuItem[]),
-          db.getTables(rest.id).catch(() => [] as Table[]),
-          db.getOffers(rest.id).catch(() => [] as Offer[]),
-          Promise.resolve(supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle())
+          (typeof (db as any).getBasicTables === 'function' ? (db as any).getBasicTables(rest.id) : db.getTables(rest.id)).catch(() => [] as Table[]),
+          planPromise
         ]);
+        const fetchedOffers = directOffers.length > 0 ? directOffers : await db.getOffers(rest.id).catch(() => [] as Offer[]);
 
         if (rest?.id && !alreadyOpened && corrId) {
           sessionStorage.setItem(`smartdine_menu_opened_${corrId}`, 'true');
