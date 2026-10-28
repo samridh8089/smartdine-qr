@@ -138,14 +138,11 @@ export async function GET(req: Request) {
           .from('categories')
           .select('*')
           .eq('restaurant_id', rest.id)
-          .eq('is_active', true)
-          .order('display_order', { ascending: true }),
+          .order('sort_order', { ascending: true }),
         supabase
           .from('menu_items')
           .select('*')
-          .eq('restaurant_id', rest.id)
-          .eq('is_available', true)
-          .order('display_order', { ascending: true }),
+          .eq('restaurant_id', rest.id),
         supabase
           .from('tables')
           .select('id, name, restaurant_id')
