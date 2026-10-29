@@ -11,7 +11,7 @@ const rootDir = path.resolve(__dirname, '../..');
 test('PHASE 9 - Task 1: auto-link-profile enforces strict ownership and email verification', () => {
   const routePath = path.join(rootDir, 'src/app/api/auth/auto-link-profile/route.ts');
   assert.ok(fs.existsSync(routePath), 'Auto-link API route must exist');
-  const code = fs.readFileSync(routePath, 'utf8');
+  const code = fs.readFileSync(routePath, 'utf8').replace(/\r\n/g, '\n');
 
   // 1. Email confirmation requirement
   assert.ok(
