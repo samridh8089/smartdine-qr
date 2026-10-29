@@ -93,35 +93,61 @@ export async function POST(req: Request) {
 
       // If account already owns a restaurant:
       if (existingRestaurantMatched) {
-        if (isUpgrade || (restaurantId && restaurantId === existingRestaurantMatched.id)) {
-          // UPGRADE FLOW: Reuse existing restaurant! Never create duplicate record
-          targetRestaurantId = existingRestaurantMatched.id;
-          console.log(`[Payment Upgrade Permitted]: Reusing existing restaurant "${existingRestaurantMatched.name}" (${targetRestaurantId}) for ${userId || cleanEmail}`);
-        } else if (!restaurantId && !isUpgrade) {
-          // New signup attempt with an existing owner account
-          console.warn(`[Payment Blocked 409]: Account ${userId || cleanEmail} already owns restaurant "${existingRestaurantMatched.name}" (${existingRestaurantMatched.id})`);
-          return NextResponse.json({
-            success: false,
-            code: 'RESTAURANT_ALREADY_EXISTS',
-            error: 'This account already owns a restaurant.',
-            message: `This account already owns a restaurant (${existingRestaurantMatched.name}).`,
-            existingRestaurant: {
-              id: existingRestaurantMatched.id,
-              name: existingRestaurantMatched.name
+        // Verify if an active auth user actually exists for this account in auth.users
+        let hasActiveAuthUser = false;
+        if (existingRestaurantMatched.owner_id) {
+          try {
+            const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(existingRestaurantMatched.owner_id);
+            if (authUser?.user?.id) {
+              hasActiveAuthUser = true;
             }
-          }, { status: 409 });
-        } else if (restaurantId && restaurantId !== existingRestaurantMatched.id && !isUpgrade) {
-          console.warn(`[Payment Blocked 409]: Account ${userId || cleanEmail} owns "${existingRestaurantMatched.name}", cannot create new restaurant.`);
-          return NextResponse.json({
-            success: false,
-            code: 'RESTAURANT_ALREADY_EXISTS',
-            error: 'This account already owns a restaurant.',
-            message: `This account already owns a restaurant (${existingRestaurantMatched.name}).`,
-            existingRestaurant: {
-              id: existingRestaurantMatched.id,
-              name: existingRestaurantMatched.name
+          } catch (_) {}
+        }
+        if (!hasActiveAuthUser && cleanEmail) {
+          try {
+            const listRes = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+            const foundUser = (listRes?.data?.users || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+            if (foundUser?.id) {
+              hasActiveAuthUser = true;
             }
-          }, { status: 409 });
+          } catch (_) {}
+        }
+
+        // Only block if a real, live user actually exists in Supabase Auth!
+        if (hasActiveAuthUser) {
+          if (isUpgrade || (restaurantId && restaurantId === existingRestaurantMatched.id)) {
+            // UPGRADE FLOW: Reuse existing restaurant! Never create duplicate record
+            targetRestaurantId = existingRestaurantMatched.id;
+            console.log(`[Payment Upgrade Permitted]: Reusing existing restaurant "${existingRestaurantMatched.name}" (${targetRestaurantId}) for ${userId || cleanEmail}`);
+          } else if (!restaurantId && !isUpgrade) {
+            // New signup attempt with an existing owner account
+            console.warn(`[Payment Blocked 409]: Account ${userId || cleanEmail} already owns restaurant "${existingRestaurantMatched.name}" (${existingRestaurantMatched.id})`);
+            return NextResponse.json({
+              success: false,
+              code: 'RESTAURANT_ALREADY_EXISTS',
+              error: 'This account already owns a restaurant.',
+              message: `This account already owns a restaurant (${existingRestaurantMatched.name}).`,
+              existingRestaurant: {
+                id: existingRestaurantMatched.id,
+                name: existingRestaurantMatched.name
+              }
+            }, { status: 409 });
+          } else if (restaurantId && restaurantId !== existingRestaurantMatched.id && !isUpgrade) {
+            console.warn(`[Payment Blocked 409]: Account ${userId || cleanEmail} owns "${existingRestaurantMatched.name}", cannot create new restaurant.`);
+            return NextResponse.json({
+              success: false,
+              code: 'RESTAURANT_ALREADY_EXISTS',
+              error: 'This account already owns a restaurant.',
+              message: `This account already owns a restaurant (${existingRestaurantMatched.name}).`,
+              existingRestaurant: {
+                id: existingRestaurantMatched.id,
+                name: existingRestaurantMatched.name
+              }
+            }, { status: 409 });
+          }
+        } else {
+          console.log(`[Payment Notice]: Orphaned restaurant record "${existingRestaurantMatched.name}" detected for ${cleanEmail} with no active Supabase auth user. Bypassing 409 block to allow fresh signup.`);
+          existingRestaurantMatched = null;
         }
       }
     }
