@@ -18,6 +18,15 @@ export async function POST(req: NextRequest) {
     }
 
     const user = userData.user;
+
+    // Requirement: user.email_confirmed_at null ho toh 403
+    if (!user.email_confirmed_at) {
+      return NextResponse.json(
+        { error: 'FORBIDDEN', message: 'Email must be confirmed before linking profile' },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { restaurantId } = body;
 
@@ -26,9 +35,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Security check: verify that this user is legitimately the owner of this restaurant
+    // Requirement: ownership sirf restaurant.owner_id === user.id se maano. settings.owner_email aur settings.owner_phone wale match hata do.
     const { data: restaurant, error: restErr } = await supabaseAdmin
       .from('restaurants')
-      .select('id, owner_id, settings')
+      .select('id, owner_id')
       .eq('id', restaurantId)
       .maybeSingle();
 
@@ -36,10 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'NOT_FOUND', message: 'Restaurant not found' }, { status: 404 });
     }
 
-    const isLegitimateOwner =
-      restaurant.owner_id === user.id ||
-      (user.email && restaurant.settings?.owner_email?.toLowerCase() === user.email.toLowerCase()) ||
-      (user.phone && restaurant.settings?.owner_phone === user.phone);
+    const isLegitimateOwner = restaurant.owner_id === user.id;
 
     if (!isLegitimateOwner) {
       return NextResponse.json(
@@ -48,19 +55,56 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Execute privileged profile link using service_role instance
-    const { error: upsertErr } = await supabaseAdmin.from('profiles').upsert({
-      id: user.id,
-      email: user.email || '',
-      full_name: user.user_metadata?.fullName || user.email || 'Owner',
-      role: 'owner',
-      restaurant_id: restaurant.id,
-      is_active: true
-    });
+    // Requirement: Agar profile pehle se maujood hai aur uska restaurant_id null nahi hai, toh kuch mat badlo (409 do).
+    // Requirement: Existing profile ka role is route se kabhi overwrite mat karo.
+    const { data: existingProfile, error: profileErr } = await supabaseAdmin.from('profiles')
+      .select('id, role, restaurant_id')
+      .eq('id', user.id)
+      .maybeSingle();
 
-    if (upsertErr) {
-      console.error('[auto-link-profile] Upsert error:', upsertErr);
-      return NextResponse.json({ error: 'INTERNAL_ERROR', message: upsertErr.message }, { status: 500 });
+    if (profileErr) {
+      console.error('[auto-link-profile] Profile fetch error:', profileErr);
+      return NextResponse.json({ error: 'INTERNAL_ERROR', message: profileErr.message }, { status: 500 });
+    }
+
+    if (existingProfile) {
+      if (existingProfile.restaurant_id) {
+        return NextResponse.json(
+          { error: 'CONFLICT', message: 'Profile is already linked to a restaurant' },
+          { status: 409 }
+        );
+      }
+
+      // Profile exists with null restaurant_id: link restaurant_id, but NEVER overwrite role!
+      const { error: updateErr } = await supabaseAdmin.from('profiles')
+        .update({
+          restaurant_id: restaurant.id,
+          is_active: true
+        })
+        .eq('id', user.id);
+
+      if (updateErr) {
+        console.error('[auto-link-profile] Profile update error:', updateErr);
+        return NextResponse.json({ error: 'INTERNAL_ERROR', message: updateErr.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, restaurantId: restaurant.id });
+    }
+
+    // Profile does not exist yet: insert brand new owner profile
+    const { error: insertErr } = await supabaseAdmin.from('profiles')
+      .insert({
+        id: user.id,
+        email: user.email || '',
+        full_name: user.user_metadata?.fullName || user.email || 'Owner',
+        role: 'owner',
+        restaurant_id: restaurant.id,
+        is_active: true
+      });
+
+    if (insertErr) {
+      console.error('[auto-link-profile] Profile insert error:', insertErr);
+      return NextResponse.json({ error: 'INTERNAL_ERROR', message: insertErr.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, restaurantId: restaurant.id });

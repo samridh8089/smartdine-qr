@@ -2,18 +2,14 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
-function getSupabaseAdmin(req?: Request) {
+function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (serviceKey && serviceKey.length > 20) {
-    return createClient(url!, serviceKey);
+  if (!url || !serviceKey || serviceKey === '[SENSITIVE]') {
+    throw new Error('Supabase admin service role key is required and missing');
   }
-  const authHeader = req?.headers.get('Authorization') || req?.headers.get('authorization');
-  const token = authHeader ? authHeader.replace('Bearer ', '').trim() : '';
-  return createClient(url!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    global: {
-      headers: token ? { Authorization: `Bearer ${token}` } : {}
-    }
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
   });
 }
 
@@ -49,10 +45,10 @@ export async function POST(req: Request) {
       restaurantId
     );
 
+    const supabaseAdmin = getSupabaseAdmin();
+
     // If auth fails, allow if token matches user or proceed safely with restaurant membership
     if (!authCheck.isAuthorized && authCheck.response) {
-      // In local/testing mode or valid bearer header, verify profile directly
-      const supabaseAdmin = getSupabaseAdmin(req);
       const { data: profileCheck } = await supabaseAdmin
         .from('profiles')
         .select('id, restaurant_id, role')
@@ -64,13 +60,69 @@ export async function POST(req: Request) {
       }
     }
 
-    const supabaseAdmin = getSupabaseAdmin(req);
     const now = new Date();
+
+    // 1. Process Selfie: store in private Supabase Storage bucket 'attendance-selfies', never base64 in DB
+    let storagePath: string | null = null;
+    if (selfieUrl && typeof selfieUrl === 'string') {
+      if (selfieUrl.startsWith('data:image/') || selfieUrl.length > 500) {
+        try {
+          const base64Data = selfieUrl.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const filename = `${date}_${punchType}_${Date.now()}.jpg`;
+          storagePath = `${restaurantId}/${staffId}/${filename}`;
+
+          const { error: uploadErr } = await supabaseAdmin.storage
+            .from('attendance-selfies')
+            .upload(storagePath, buffer, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
+
+          if (uploadErr) {
+            console.warn('[attendance/punch] Selfie storage upload warning:', uploadErr.message);
+          }
+        } catch (upErr) {
+          console.warn('[attendance/punch] Selfie buffer conversion warning:', upErr);
+        }
+      } else {
+        storagePath = selfieUrl;
+      }
+    }
+
+    // Ensure staff_profile row exists so foreign key constraint passes
+    const { data: staffExists } = await supabaseAdmin
+      .from('staff_profiles')
+      .select('id')
+      .eq('id', staffId)
+      .maybeSingle();
+
+    if (!staffExists) {
+      try {
+        await supabaseAdmin.from('staff_profiles').insert({
+          id: staffId,
+          restaurant_id: restaurantId,
+          name: body.staffName || 'Staff Member',
+          role: body.staffRole || 'waiter'
+        });
+      } catch (_) {}
+    }
 
     let record: any;
 
     if (punchType === 'out') {
-      const prev = existingAttendance || {};
+      let prev = existingAttendance;
+      if (!prev) {
+        const { data: dbPrev } = await supabaseAdmin
+          .from('staff_attendance')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .eq('staff_id', staffId)
+          .eq('date', date)
+          .maybeSingle();
+        prev = dbPrev || {};
+      }
+
       const punchInDate = prev.punch_in_time ? new Date(prev.punch_in_time) : now;
       const totalWorkedHours = Math.max(0, (now.getTime() - punchInDate.getTime()) / (1000 * 60 * 60));
 
@@ -93,7 +145,7 @@ export async function POST(req: Request) {
 
       if (totalWorkedHours > shiftStandardHours) {
         const extraHours = totalWorkedHours - shiftStandardHours;
-        if (extraHours * 60 >= 30) { // 30 min minimum buffer
+        if (extraHours * 60 >= 30) {
           overtimeHours = Math.round(extraHours * 10) / 10;
           standardHours = Math.round(shiftStandardHours * 10) / 10;
           const hourlyRate = 15000 / (30 * (shiftStandardHours > 0 ? shiftStandardHours : 8));
@@ -102,13 +154,12 @@ export async function POST(req: Request) {
       }
 
       record = {
-        ...prev,
+        restaurant_id: restaurantId,
+        staff_id: staffId,
+        date,
         punch_out_time: now.toISOString(),
         status,
-        standard_hours: standardHours,
-        overtime_hours: overtimeHours,
-        overtime_amount: overtimeAmount,
-        overtime_status: overtimeHours > 0 ? 'approved' : undefined,
+        selfie_url: storagePath || prev.selfie_url || null,
         updated_at: now.toISOString()
       };
     } else {
@@ -128,7 +179,6 @@ export async function POST(req: Request) {
       }
 
       record = {
-        id: `att_${staffId}_${date}`,
         restaurant_id: restaurantId,
         staff_id: staffId,
         date,
@@ -140,54 +190,28 @@ export async function POST(req: Request) {
         longitude: longitude ?? null,
         accuracy_meters: accuracy ?? null,
         is_within_geofence: true,
-        selfie_url: selfieUrl || null,
+        selfie_url: storagePath,
         notes: notes || null,
         created_at: now.toISOString(),
         updated_at: now.toISOString()
       };
     }
 
-    // 1. Try upserting to staff_attendance table if it exists
-    try {
-      await supabaseAdmin.from('staff_attendance').upsert(record, { onConflict: 'staff_id,date' });
-    } catch (_) {}
-
-    // 2. Guaranteed persistence in restaurant settings attendo attendance
-    const { data: rest, error: restErr } = await supabaseAdmin
-      .from('restaurants')
-      .select('id, settings')
-      .eq('id', restaurantId)
+    // 2. Authoritative persistence solely in staff_attendance table
+    const { data: savedRecord, error: dbErr } = await supabaseAdmin
+      .from('staff_attendance')
+      .upsert(record, { onConflict: 'staff_id,date' })
+      .select()
       .single();
 
-    if (restErr || !rest) {
-      return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
-    }
-
-    const currentList = (rest.settings as any)?.attendo?.attendance || [];
-    const filtered = currentList.filter((a: any) => !(a.staff_id === staffId && a.date === date));
-    filtered.push(record);
-
-    const updatedSettings = {
-      ...rest.settings,
-      attendo: {
-        ...((rest.settings as any)?.attendo || {}),
-        attendance: filtered
-      }
-    };
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('restaurants')
-      .update({ settings: updatedSettings })
-      .eq('id', restaurantId);
-
-    if (updateErr) {
-      console.error('[API /attendance/punch] Update error:', updateErr.message);
-      return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    if (dbErr) {
+      console.error('[API /attendance/punch] staff_attendance upsert error:', dbErr.message);
+      return NextResponse.json({ error: dbErr.message }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      attendance: record
+      attendance: savedRecord || record
     });
   } catch (err: any) {
     console.error('[API /attendance/punch] Unexpected error:', err);

@@ -840,9 +840,23 @@ export function getLocalAttendanceRecords(restaurantId: string, date?: string): 
 
 export async function getAttendanceForDate(restaurantId: string, date: string): Promise<StaffAttendance[]> {
   try {
-    const rest = await db.getRestaurantById(restaurantId);
-    let attendanceList: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
-    let matched = attendanceList.filter(a => a.date === date);
+    let matched: StaffAttendance[] = [];
+    try {
+      const { data: dbAtts } = await supabase
+        .from('staff_attendance')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .eq('date', date);
+      if (dbAtts && dbAtts.length > 0) {
+        matched = dbAtts as StaffAttendance[];
+      }
+    } catch (_) {}
+
+    if (matched.length === 0) {
+      const rest = await db.getRestaurantById(restaurantId);
+      const attendanceList: StaffAttendance[] = (rest?.settings as any)?.attendo?.attendance || [];
+      matched = attendanceList.filter(a => a.date === date);
+    }
 
     const localRecords = getLocalAttendanceRecords(restaurantId, date);
     if (localRecords.length > 0) {
@@ -1099,24 +1113,7 @@ export async function punchIn(params: {
     await supabase.from('staff_attendance').upsert(attendanceRecord, { onConflict: 'staff_id,date' });
   } catch (_) {}
 
-  // Sync to settings fallback
-  const rest = await db.getRestaurantById(restaurantId);
-  if (rest) {
-    const list: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
-    const filtered = list.filter(a => !(a.staff_id === staffId && a.date === date));
-    filtered.push(attendanceRecord);
 
-    await supabase.from('restaurants').update({
-      settings: {
-        ...rest.settings,
-        attendo: {
-          ...((rest.settings as any)?.attendo || {}),
-          attendance: filtered
-        }
-      }
-    }).eq('id', restaurantId);
-    db.clearRestaurantCache(restaurantId);
-  }
 
   saveLocalAttendanceRecord(restaurantId, attendanceRecord);
   return { success: true, attendance: attendanceRecord };
@@ -1226,24 +1223,7 @@ export async function punchOut(params: {
     await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
   } catch (_) {}
 
-  // Sync to settings fallback
-  const rest = await db.getRestaurantById(restaurantId);
-  if (rest) {
-    const list: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
-    const filtered = list.filter(a => !(a.staff_id === staffId && a.date === date));
-    filtered.push(updated);
 
-    await supabase.from('restaurants').update({
-      settings: {
-        ...rest.settings,
-        attendo: {
-          ...((rest.settings as any)?.attendo || {}),
-          attendance: filtered
-        }
-      }
-    }).eq('id', restaurantId);
-    db.clearRestaurantCache(restaurantId);
-  }
 
   saveLocalAttendanceRecord(restaurantId, updated);
   return { success: true, attendance: updated };
@@ -1316,23 +1296,7 @@ export async function managerOverrideAttendance(params: {
     await supabase.from('staff_attendance').upsert(payload, { onConflict: 'staff_id,date' });
   } catch (_) {}
 
-  const rest = await db.getRestaurantById(params.restaurantId);
-  if (rest) {
-    const list: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
-    const filtered = list.filter(a => !(a.staff_id === params.staffId && a.date === params.date));
-    filtered.push(payload);
 
-    await supabase.from('restaurants').update({
-      settings: {
-        ...rest.settings,
-        attendo: {
-          ...((rest.settings as any)?.attendo || {}),
-          attendance: filtered
-        }
-      }
-    }).eq('id', params.restaurantId);
-    db.clearRestaurantCache(params.restaurantId);
-  }
 
   return payload;
 }
@@ -1651,21 +1615,7 @@ export async function managerApprovePunchOut(params: {
     await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
   } catch (_) {}
 
-  if (rest) {
-    const filtered = list.filter(a => !(a.staff_id === staffId && a.date === date));
-    filtered.push(updated);
 
-    await supabase.from('restaurants').update({
-      settings: {
-        ...rest.settings,
-        attendo: {
-          ...((rest.settings as any)?.attendo || {}),
-          attendance: filtered
-        }
-      }
-    }).eq('id', restaurantId);
-    db.clearRestaurantCache(restaurantId);
-  }
 
   return { success: true, attendance: updated };
 }
@@ -1749,23 +1699,7 @@ export async function requestPastAttendance(params: {
     await supabase.from('staff_attendance').upsert(record, { onConflict: 'staff_id,date' });
   } catch (_) {}
 
-  const rest = await db.getRestaurantById(restaurantId);
-  if (rest) {
-    const list: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
-    const filtered = list.filter(a => !(a.staff_id === staffId && a.date === date));
-    filtered.push(record);
 
-    await supabase.from('restaurants').update({
-      settings: {
-        ...rest.settings,
-        attendo: {
-          ...((rest.settings as any)?.attendo || {}),
-          attendance: filtered
-        }
-      }
-    }).eq('id', restaurantId);
-    db.clearRestaurantCache(restaurantId);
-  }
 
   return record;
 }
@@ -1837,16 +1771,7 @@ export async function reviewAttendanceDays(params: {
     }
   }
 
-  await supabase.from('restaurants').update({
-    settings: {
-      ...rest.settings,
-      attendo: {
-        ...((rest.settings as any)?.attendo || {}),
-        attendance: list
-      }
-    }
-  }).eq('id', restaurantId);
-  db.clearRestaurantCache(restaurantId);
+
 }
 
 /**
@@ -2023,31 +1948,15 @@ export async function cleanupOldAttendanceSelfies(
 
     // 2. Clean fallback settings JSON in restaurant row
     const rest = await db.getRestaurantById(restaurantId);
-    if (rest) {
-      const attendanceList: StaffAttendance[] = (rest.settings as any)?.attendo?.attendance || [];
-      let settingsCleaned = 0;
-
-      const updatedList = attendanceList.map(item => {
-        if (item.date && item.date < cutoffDateStr && item.selfie_url) {
-          settingsCleaned++;
-          return { ...item, selfie_url: null };
+    if (rest && (rest.settings as any)?.attendo?.attendance) {
+      const { attendance: _legacy, ...restAttendo } = (rest.settings as any).attendo;
+      await supabase.from('restaurants').update({
+        settings: {
+          ...rest.settings,
+          attendo: restAttendo
         }
-        return item;
-      });
-
-      if (settingsCleaned > 0) {
-        cleanedCount = Math.max(cleanedCount, settingsCleaned);
-        await supabase.from('restaurants').update({
-          settings: {
-            ...rest.settings,
-            attendo: {
-              ...((rest.settings as any)?.attendo || {}),
-              attendance: updatedList
-            }
-          }
-        }).eq('id', restaurantId);
-        db.clearRestaurantCache(restaurantId);
-      }
+      }).eq('id', restaurantId);
+      db.clearRestaurantCache(restaurantId);
     }
 
     return {
@@ -2062,5 +1971,32 @@ export async function cleanupOldAttendanceSelfies(
       cleanedCount: 0,
       cutoffDate: ''
     };
+  }
+}
+
+
+/**
+ * Get short-lived signed URL for an attendance selfie (accessible only by owner/manager)
+ */
+export async function getAttendanceSelfieSignedUrl(restaurantId: string, pathOrUrl: string): Promise<string | null> {
+  if (!pathOrUrl) return null;
+  if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://') || pathOrUrl.startsWith('data:')) {
+    return pathOrUrl;
+  }
+  try {
+    const token = await getClientAuthToken().catch(() => '');
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    const res = await fetch(`/api/attendance/selfie-url?restaurantId=${encodeURIComponent(restaurantId)}&path=${encodeURIComponent(pathOrUrl)}`, {
+      headers
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.signedUrl || null;
+  } catch (err) {
+    console.warn('[Attendo] Failed to fetch signed URL for selfie:', err);
+    return null;
   }
 }
