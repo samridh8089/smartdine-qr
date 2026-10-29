@@ -7,8 +7,8 @@ import { DEFAULT_PRICING_PLANS } from '@/lib/db';
  * Throws an explicit error if credentials are missing instead of falling back to insecure hardcoded secrets.
  */
 export function getRazorpayCredentials(): { keyId: string; keySecret: string } {
-  const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+  const keyId = (process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '').trim();
+  const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').trim();
 
   if (!keyId || !keySecret) {
     throw new Error('Razorpay credentials are not properly configured on server environment.');
@@ -92,14 +92,14 @@ export function verifyRazorpaySignature(
 ): boolean {
   if (!orderId || !paymentId || !signature || !keySecret) return false;
   try {
-    const payload = `${orderId}|${paymentId}`;
+    const payload = `${(orderId || '').trim()}|${(paymentId || '').trim()}`;
     const expectedSig = crypto
-      .createHmac('sha256', keySecret)
+      .createHmac('sha256', (keySecret || '').trim())
       .update(payload)
       .digest('hex');
 
     const expectedBuf = Buffer.from(expectedSig);
-    const sigBuf = Buffer.from(signature);
+    const sigBuf = Buffer.from((signature || '').trim());
 
     if (expectedBuf.length !== sigBuf.length) return false;
     return crypto.timingSafeEqual(expectedBuf, sigBuf);
