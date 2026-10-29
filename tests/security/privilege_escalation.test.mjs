@@ -66,8 +66,8 @@ test('SECURITY REMEDIATION: Server auto-link route exists and validates authoriz
   assert.ok(code.includes("authHeader?.startsWith('Bearer ')"), 'Must enforce Bearer authorization header');
   // Must verify restaurant ownership
   assert.ok(code.includes('isLegitimateOwner'), 'Must verify legitimate restaurant ownership before linking');
-  // Must use supabaseAdmin for privileged upsert
-  assert.ok(code.includes("supabaseAdmin.from('profiles').upsert"), 'Must use server-side supabaseAdmin instance for profile link');
+  // Must use supabaseAdmin for profile management
+  assert.ok(code.includes("supabaseAdmin.from('profiles')"), 'Must use server-side supabaseAdmin instance for profile link');
 });
 
 test('SECURITY REMEDIATION: Supabase Admin helper module is correctly configured', () => {

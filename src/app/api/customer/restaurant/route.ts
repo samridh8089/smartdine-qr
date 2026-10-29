@@ -2,15 +2,18 @@ import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseKey = (serviceKey && serviceKey !== '[SENSITIVE]')
-  ? serviceKey
-  : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
 
 let _supabaseClient: SupabaseClient | null = null;
 function getSupabaseClient(): SupabaseClient {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey || serviceKey === '[SENSITIVE]') {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required and missing');
+  }
+  if (!supabaseUrl) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is required and missing');
+  }
   if (!_supabaseClient) {
-    _supabaseClient = createClient(supabaseUrl, supabaseKey, {
+    _supabaseClient = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
   }
@@ -28,6 +31,50 @@ interface CacheEntry {
 }
 const serverRestaurantCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 15000;
+
+// Strict Allow-list of settings keys visible to public customer UI
+const ALLOWED_CUSTOMER_SETTINGS_KEYS = [
+  'require_customer_name',
+  'logo_url',
+  'logo',
+  'theme_color',
+  'currency',
+  'offers',
+  'table_states',
+  'geofence',
+  'takeaway_enabled',
+  'delivery_enabled',
+  'dinein_enabled',
+  'reservation_enabled',
+  'payment_enabled',
+  'payment_qr',
+  'upi_id',
+  'upi_name',
+  'gst_enabled',
+  'gst_percentage',
+  'service_charge_enabled',
+  'service_charge_percentage',
+  'custom_charges',
+  'opening_hours',
+  'description',
+  'banner_url',
+  'cover_image'
+] as const;
+
+// Disallowed keys that must never be exposed
+const DISALLOWED_SETTINGS_KEYS = new Set([
+  'owner_email',
+  'owner_phone',
+  'staff_metadata',
+  'activeDevices',
+  'billing',
+  'razorpay_key_secret',
+  'stripe_secret_key',
+  'fcm_server_key',
+  'vapid_private_key',
+  'push_tokens',
+  'webpush_subscribers'
+]);
 
 export async function GET(req: Request) {
   try {
@@ -103,16 +150,25 @@ export async function GET(req: Request) {
     // 3. Resolve true logo (restaurant-level logo_url or settings logo) - NEVER fall back to cleverops /logo.png
     const resolvedLogo = rest.logo_url || (rest.settings as any)?.logo_url || (rest.settings as any)?.logo || null;
 
-    const rawSettings = (rest.settings as any) || {};
-    const sanitizedSettings = {
-      ...rawSettings,
-      require_customer_name: Boolean(rawSettings.require_customer_name),
-      logo_url: resolvedLogo,
-    };
+    const rawSettings = (rest.settings as Record<string, any>) || {};
+    const sanitizedSettings: Record<string, any> = {};
 
-    // Remove any sensitive gateway secrets if present
-    delete (sanitizedSettings as any).razorpay_key_secret;
-    delete (sanitizedSettings as any).stripe_secret_key;
+    // Allow-list filtering: Only allow specifically approved public keys
+    for (const key of ALLOWED_CUSTOMER_SETTINGS_KEYS) {
+      if (
+        key in rawSettings &&
+        rawSettings[key] !== undefined &&
+        !DISALLOWED_SETTINGS_KEYS.has(key) &&
+        !key.toLowerCase().includes('secret') &&
+        !key.toLowerCase().includes('push')
+      ) {
+        sanitizedSettings[key] = rawSettings[key];
+      }
+    }
+
+    // Normalizations for customer menu UI
+    sanitizedSettings.require_customer_name = Boolean(rawSettings.require_customer_name);
+    sanitizedSettings.logo_url = resolvedLogo;
 
     const safeRestaurant = {
       id: rest.id,

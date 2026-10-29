@@ -1,24 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 import { dispatchFCMNotification } from '@/lib/pushDispatcher';
 
-// Sliding-window in-memory rate limiter: max 10 requests per 60 seconds per IP/table
-const customerRequestRateLimits = new Map<string, { count: number; resetAt: number }>();
+const redis = (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    })
+  : (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
+  ? new Redis({
+      url: process.env.KV_REST_API_URL,
+      token: process.env.KV_REST_API_TOKEN,
+    })
+  : null;
 
-function checkRateLimit(key: string, maxLimit: number = 10, windowMs: number = 60000): boolean {
-  const now = Date.now();
-  const entry = customerRequestRateLimits.get(key);
-  if (!entry || now > entry.resetAt) {
-    customerRequestRateLimits.set(key, { count: 1, resetAt: now + windowMs });
-    return true; // allowed
+// Distributed Rate Limiter: max 10 requests per 60 seconds per IP
+const ipRatelimit = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, '60 s'),
+      prefix: 'rl:cust_req:ip',
+    })
+  : null;
+
+// Distributed Rate Limiter: max 10 requests per 60 seconds per table
+const tableRatelimit = redis
+  ? new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, '60 s'),
+      prefix: 'rl:cust_req:table',
+    })
+  : null;
+
+async function checkRateLimit(ip: string, tableId: string, restaurantId: string): Promise<boolean> {
+  // Upstash Rate limit: IP check
+  if (ipRatelimit) {
+    const ipRes = await ipRatelimit.limit(ip);
+    if (!ipRes.success) {
+      return false;
+    }
   }
-  entry.count += 1;
-  return entry.count <= maxLimit;
+
+  // Upstash Rate limit: Table check
+  if (tableRatelimit) {
+    const tableRes = await tableRatelimit.limit(`table:${restaurantId}:${tableId}`);
+    if (!tableRes.success) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function getAdminClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey || serviceKey === '[SENSITIVE]') {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is required and missing');
+  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!supabaseUrl) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is required and missing');
+  }
   return createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false }
   });
@@ -38,9 +82,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request type' }, { status: 400 });
     }
 
-    // Rate limit: max 10 waiter requests per minute per IP
-    const rateLimitKey = `${ip}:${tableId}`;
-    const allowed = checkRateLimit(rateLimitKey, 10, 60000);
+    // Rate limit via Upstash (@upstash/ratelimit) on IP and table
+    const allowed = await checkRateLimit(ip, tableId, restaurantId);
     if (!allowed) {
       return NextResponse.json(
         { error: 'Too many requests. Please wait before calling waiter again.' },
