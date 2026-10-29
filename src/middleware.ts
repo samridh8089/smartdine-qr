@@ -305,13 +305,13 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/api/auth/verify-otp') ||
       pathname.startsWith('/api/auth/check-email-availability') ||
       pathname.startsWith('/api/auth/change-owner-password') ||
-      pathname.startsWith('/api/auth/onboarding-provision') ||
       pathname.startsWith('/api/staff/verify-otp') ||
       pathname.startsWith('/api/staff/reset-password') ||
       pathname.startsWith('/api/staff/create-invite') ||
       pathname.startsWith('/api/staff/resend-verification');
 
-    const isPaymentApi = 
+    const isPaymentApi =
+      pathname.startsWith('/api/auth/onboarding-provision') ||
       pathname.startsWith('/api/payments/') ||
       pathname.startsWith('/api/razorpay/') ||
       pathname.startsWith('/api/webhooks/');
