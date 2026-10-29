@@ -8,11 +8,18 @@
 -- 1. BACKUP TABLE: CREATE _backup_settings_attendance (RLS ON, REVOKE ACCESS)
 -- ============================================================================
 
+DROP TABLE IF EXISTS public._backup_settings_attendance CASCADE;
+
 CREATE TABLE IF NOT EXISTS public._backup_settings_attendance (
   restaurant_id UUID PRIMARY KEY REFERENCES public.restaurants(id) ON DELETE CASCADE,
   settings_attendance JSONB NOT NULL,
   backed_up_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Ensure columns exist in case table was pre-existing
+ALTER TABLE public._backup_settings_attendance 
+  ADD COLUMN IF NOT EXISTS settings_attendance JSONB,
+  ADD COLUMN IF NOT EXISTS backed_up_at TIMESTAMPTZ DEFAULT now();
 
 ALTER TABLE public._backup_settings_attendance ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public._backup_settings_attendance FROM anon, authenticated;
