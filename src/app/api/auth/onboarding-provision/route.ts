@@ -421,20 +421,36 @@ export async function POST(req: Request) {
       validUntil: subscriptionEndsAt
     });
 
-    // ─── 8. UPSERT OWNER PROFILE ──────────────────────────────────────────────
+    // ─── 8. UPSERT OWNER PROFILE & SYNC AUTH METADATA ────────────────────────
     try {
-      await supabaseAdmin.from('profiles').upsert({
+      const { error: profErr } = await supabaseAdmin.from('profiles').upsert({
         id: userId,
-        user_id: userId,
         restaurant_id: restaurantId,
-        restaurant_name: cleanRestName,
         email: cleanEmail,
         full_name: cleanName,
         role: 'owner',
         updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+      if (profErr) {
+        console.warn('[Onboarding Profile Upsert Warning]:', profErr.message);
+      } else {
+        console.log('[Onboarding Profile Upserted Successfully]:', userId);
+      }
+
+      // Sync auth user_metadata with restaurant reference
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          fullName: cleanName,
+          phone: cleanPhone,
+          role: 'owner',
+          restaurant_id: restaurantId,
+          restaurantId: restaurantId,
+          restaurantName: cleanRestName
+        }
       });
     } catch (profErr) {
-      console.warn('[Onboarding Profile Upsert Warning]:', profErr);
+      console.warn('[Onboarding Profile Upsert Notice]:', profErr);
     }
 
 
