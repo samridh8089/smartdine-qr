@@ -16,8 +16,8 @@ VALUES (
 )
 ON CONFLICT (id) DO UPDATE SET public = false;
 
--- Enable RLS on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Note: RLS on storage.objects is already enabled by default by Supabase.
+-- (Running ALTER TABLE storage.objects requires supabase_storage_admin table ownership).
 
 -- 1.1 SELECT: Only Owner and Manager can select/read private attendance selfies (or AAL2 super admin)
 DROP POLICY IF EXISTS "owner_manager_read_attendance_selfies" ON storage.objects;
