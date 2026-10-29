@@ -8,35 +8,75 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '../..');
 
-test('ATTENDANCE SELFIES: Migration 20261029000001 creates private bucket, cleans settings, and secures RLS', () => {
+test('ATTENDANCE SELFIES: Migration creates _backup_settings_attendance, private bucket without storage policies, and cleans settings', () => {
   const migPath = path.join(rootDir, 'supabase/migrations/20261029000001_attendance_selfies_storage_and_cleanup.sql');
   assert.ok(fs.existsSync(migPath), 'Migration 20261029000001 must exist');
   const sql = fs.readFileSync(migPath, 'utf8');
 
-  // 1. Private bucket creation
+  // 1. Backup table creation with RLS and revoked permissions
+  assert.ok(
+    sql.includes('CREATE TABLE IF NOT EXISTS public._backup_settings_attendance'),
+    'Must create _backup_settings_attendance table'
+  );
+  assert.ok(
+    sql.includes('ALTER TABLE public._backup_settings_attendance ENABLE ROW LEVEL SECURITY'),
+    'Must enable RLS on _backup_settings_attendance'
+  );
+  assert.ok(
+    sql.includes('REVOKE ALL ON TABLE public._backup_settings_attendance FROM anon, authenticated'),
+    'Must revoke permissions on _backup_settings_attendance from anon and authenticated'
+  );
+
+  // 2. Private bucket creation
   assert.ok(sql.includes("'attendance-selfies'"), 'Must define attendance-selfies bucket');
   assert.ok(sql.includes('public = false') || sql.includes(', false,'), 'Bucket must be private (public = false)');
 
-  // 2. Storage RLS: Owner/Manager only for reading selfies
-  assert.ok(sql.includes('owner_manager_read_attendance_selfies'), 'Must define owner_manager_read_attendance_selfies policy');
-  assert.ok(sql.includes("role IN ('owner', 'manager')"), 'Selfie read policy must require owner or manager role');
+  // 3. Must NOT contain CREATE POLICY or DROP POLICY on storage.objects
+  assert.ok(
+    !sql.includes('CREATE POLICY') || !sql.includes('ON storage.objects'),
+    'Must not have CREATE POLICY statements on storage.objects'
+  );
+  assert.ok(
+    !sql.includes('DROP POLICY') || !sql.includes('ON storage.objects'),
+    'Must not have DROP POLICY statements on storage.objects'
+  );
 
-  // 3. staff_attendance table RLS: Waiter can only read their own records
+  // 4. staff_attendance table RLS: Waiter can only read their own records
   assert.ok(sql.includes('staff_select_own_attendance'), 'Must define staff_select_own_attendance policy');
   assert.ok(sql.includes('sp.profile_id = auth.uid()'), 'Staff select policy must scope to own profile');
   assert.ok(sql.includes('marked_by_user_id = auth.uid()'), 'Staff select policy allows own marked punches');
 
-  // 4. Data migration & cleanup of settings.attendo.attendance
+  // 5. Data migration & cleanup of settings.attendo.attendance
   assert.ok(sql.includes("settings #- '{attendo,attendance}'"), 'Must strip attendance array from settings.attendo');
   assert.ok(sql.includes("selfie_url LIKE 'data:image%'"), 'Must purge base64 selfies from database');
 });
 
-test('ATTENDANCE SELFIES: /api/attendance/selfie-url restricts signed URLs strictly to Owner/Manager', () => {
+test('ATTENDANCE SELFIES: /api/attendance/selfie-url validates traversal, verifies record in DB, and restricts to Owner/Manager', () => {
   const routePath = path.join(rootDir, 'src/app/api/attendance/selfie-url/route.ts');
   assert.ok(fs.existsSync(routePath), 'Selfie URL API route must exist');
-  const code = fs.readFileSync(routePath, 'utf8');
+  const code = fs.readFileSync(routePath, 'utf8').replace(/\r\n/g, '\n');
 
-  // Must enforce owner/manager authorization
+  // 1. Directory traversal & double slash protection
+  assert.ok(
+    code.includes("path.includes('..')") && code.includes("path.includes('//')"),
+    'Must block .. directory traversal and // double slashes in path parameter'
+  );
+  assert.ok(
+    code.includes('400'),
+    'Must return 400 Bad Request on invalid traversal path'
+  );
+
+  // 2. Must verify path against staff_attendance table for this restaurant
+  assert.ok(
+    code.includes(".from('staff_attendance')"),
+    'Must verify selfie path exists in staff_attendance table'
+  );
+  assert.ok(
+    code.includes(".eq('restaurant_id', restaurantId)"),
+    'Must verify selfie record belongs to the caller restaurant'
+  );
+
+  // 3. Must enforce owner/manager authorization
   assert.ok(
     code.includes("['owner', 'manager', 'super_admin']"),
     'Must restrict signed URL creation strictly to owner, manager, or super_admin'
@@ -46,13 +86,13 @@ test('ATTENDANCE SELFIES: /api/attendance/selfie-url restricts signed URLs stric
     'Must return 403 Forbidden for unauthorized roles like waiter'
   );
 
-  // Must enforce short expiry (300 seconds / 5 minutes)
+  // 4. Must enforce short expiry (300 seconds / 5 minutes)
   assert.ok(
     code.includes('createSignedUrl(cleanPath, 300)'),
     'Must create signed URL with 300s short expiry'
   );
 
-  // Must prevent IDOR across restaurants
+  // 5. Must prevent IDOR across restaurants
   assert.ok(
     code.includes('cleanPath.startsWith(restaurantId'),
     'Must verify requested path belongs to the caller restaurant'
@@ -62,7 +102,7 @@ test('ATTENDANCE SELFIES: /api/attendance/selfie-url restricts signed URLs stric
 test('ATTENDANCE SELFIES: /api/attendance/punch uploads base64 selfies to private storage and stops settings sync', () => {
   const routePath = path.join(rootDir, 'src/app/api/attendance/punch/route.ts');
   assert.ok(fs.existsSync(routePath), 'Attendance punch route must exist');
-  const code = fs.readFileSync(routePath, 'utf8');
+  const code = fs.readFileSync(routePath, 'utf8').replace(/\r\n/g, '\n');
 
   // 1. Uploads to private bucket
   assert.ok(
@@ -89,7 +129,7 @@ test('ATTENDANCE SELFIES: /api/attendance/punch uploads base64 selfies to privat
 
 test('ATTENDANCE SELFIES: attendoEngine does not persist attendance array in settings JSON', () => {
   const enginePath = path.join(rootDir, 'src/lib/attendoEngine.ts');
-  const code = fs.readFileSync(enginePath, 'utf8');
+  const code = fs.readFileSync(enginePath, 'utf8').replace(/\r\n/g, '\n');
 
   // Must export getAttendanceSelfieSignedUrl
   assert.ok(
@@ -110,7 +150,7 @@ test('ATTENDANCE SELFIES: attendoEngine does not persist attendance array in set
 
 test('ATTENDANCE SELFIES: Waiter role cannot access signed URLs or view other staff selfies', async (t) => {
   const routePath = path.join(rootDir, 'src/app/api/attendance/selfie-url/route.ts');
-  const code = fs.readFileSync(routePath, 'utf8');
+  const code = fs.readFileSync(routePath, 'utf8').replace(/\r\n/g, '\n');
 
   // Role check: waiter role is strictly not in allowed list
   assert.ok(!code.includes("'waiter'"), 'Waiter role must NEVER be permitted to access selfie URLs');
@@ -129,4 +169,15 @@ test('ATTENDANCE SELFIES: Waiter role cannot access signed URLs or view other st
   } catch (_) {
     // Dev server not active on port 3000 during test execution
   }
+});
+
+test('AUTO-LINK-PROFILE: Does NOT leak DB error messages in responses', () => {
+  const routePath = path.join(rootDir, 'src/app/api/auth/auto-link-profile/route.ts');
+  assert.ok(fs.existsSync(routePath), 'Auto-link API route must exist');
+  const code = fs.readFileSync(routePath, 'utf8').replace(/\r\n/g, '\n');
+
+  assert.ok(!code.includes('profileErr.message'), 'Must NOT return profileErr.message');
+  assert.ok(!code.includes('updateErr.message'), 'Must NOT return updateErr.message');
+  assert.ok(!code.includes('insertErr.message'), 'Must NOT return insertErr.message');
+  assert.ok(!code.includes('restErr.message'), 'Must NOT return restErr.message');
 });

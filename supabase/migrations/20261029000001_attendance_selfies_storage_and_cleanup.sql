@@ -1,10 +1,44 @@
 -- Migration: 20261029000001_attendance_selfies_storage_and_cleanup.sql
--- Description: Migrate settings.attendo.attendance to staff_attendance, purge base64 selfies from DB,
--- create private storage bucket attendance-selfies, and enforce owner/manager-only access for selfies.
+-- Description: Create _backup_settings_attendance table with RLS and access revokes,
+-- create private storage bucket attendance-selfies (accessed strictly via service-role backend routes),
+-- migrate historical attendance records into staff_attendance, purge base64 strings,
+-- and clean the attendance array from restaurants.settings.attendo.
 
 -- ============================================================================
--- 1. STORAGE: CREATE PRIVATE BUCKET FOR ATTENDANCE SELFIES
+-- 1. BACKUP TABLE: CREATE _backup_settings_attendance (RLS ON, REVOKE ACCESS)
 -- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public._backup_settings_attendance (
+  restaurant_id UUID PRIMARY KEY REFERENCES public.restaurants(id) ON DELETE CASCADE,
+  settings_attendance JSONB NOT NULL,
+  backed_up_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public._backup_settings_attendance ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public._backup_settings_attendance FROM anon, authenticated;
+
+-- Populate backup table before modifying settings
+DO $$
+BEGIN
+  IF to_regclass('public.restaurants') IS NOT NULL AND to_regclass('public._backup_settings_attendance') IS NOT NULL THEN
+    INSERT INTO public._backup_settings_attendance (restaurant_id, settings_attendance, backed_up_at)
+    SELECT id, settings->'attendo'->'attendance', now()
+    FROM public.restaurants
+    WHERE settings ? 'attendo'
+      AND settings->'attendo' ? 'attendance'
+      AND jsonb_typeof(settings->'attendo'->'attendance') = 'array'
+    ON CONFLICT (restaurant_id) DO UPDATE SET
+      settings_attendance = EXCLUDED.settings_attendance,
+      backed_up_at = now();
+  END IF;
+END $$;
+
+-- ============================================================================
+-- 2. STORAGE: CREATE PRIVATE BUCKET FOR ATTENDANCE SELFIES (SERVICE-ROLE ONLY)
+-- ============================================================================
+-- Upload and signed URL generation are executed strictly via service-role API routes
+-- (/api/attendance/punch and /api/attendance/selfie-url).
+-- No public, authenticated, or anon policies exist on storage.objects.
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
@@ -16,62 +50,8 @@ VALUES (
 )
 ON CONFLICT (id) DO UPDATE SET public = false;
 
--- Note: RLS on storage.objects is already enabled by default by Supabase.
--- (Running ALTER TABLE storage.objects requires supabase_storage_admin table ownership).
-
--- 1.1 SELECT: Only Owner and Manager can select/read private attendance selfies (or AAL2 super admin)
-DROP POLICY IF EXISTS "owner_manager_read_attendance_selfies" ON storage.objects;
-CREATE POLICY "owner_manager_read_attendance_selfies"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'attendance-selfies'
-    AND (
-      (
-        (storage.foldername(name))[1] = (public.get_user_restaurant_id(auth.uid()))::text
-        AND EXISTS (
-          SELECT 1 FROM public.profiles
-          WHERE id = auth.uid() AND role IN ('owner', 'manager')
-        )
-      )
-      OR (public.is_super_admin_user() AND (auth.jwt() ->> 'aal') = 'aal2')
-    )
-  );
-
--- 1.2 INSERT: Active staff of the restaurant can upload their punch selfie to their restaurant folder
-DROP POLICY IF EXISTS "staff_upload_attendance_selfies" ON storage.objects;
-CREATE POLICY "staff_upload_attendance_selfies"
-  ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    bucket_id = 'attendance-selfies'
-    AND (
-      (storage.foldername(name))[1] = (public.get_user_restaurant_id(auth.uid()))::text
-      OR (public.is_super_admin_user() AND (auth.jwt() ->> 'aal') = 'aal2')
-    )
-  );
-
--- 1.3 DELETE / UPDATE: Only Owner and Manager can manage selfie objects
-DROP POLICY IF EXISTS "owner_manager_manage_attendance_selfies" ON storage.objects;
-CREATE POLICY "owner_manager_manage_attendance_selfies"
-  ON storage.objects FOR ALL
-  TO authenticated
-  USING (
-    bucket_id = 'attendance-selfies'
-    AND (
-      (
-        (storage.foldername(name))[1] = (public.get_user_restaurant_id(auth.uid()))::text
-        AND EXISTS (
-          SELECT 1 FROM public.profiles
-          WHERE id = auth.uid() AND role IN ('owner', 'manager')
-        )
-      )
-      OR (public.is_super_admin_user() AND (auth.jwt() ->> 'aal') = 'aal2')
-    )
-  );
-
 -- ============================================================================
--- 2. STAFF ATTENDANCE TABLE: SCOPED RLS POLICIES (WAITER CANNOT VIEW OTHERS)
+-- 3. STAFF ATTENDANCE TABLE: SCOPED RLS POLICIES (WAITER CANNOT VIEW OTHERS)
 -- ============================================================================
 
 DO $$
@@ -84,7 +64,7 @@ BEGIN
     DROP POLICY IF EXISTS "staff_select_own_attendance" ON public.staff_attendance;
     DROP POLICY IF EXISTS "staff_insert_own_attendance" ON public.staff_attendance;
 
-    -- 2.1 Owner, Manager, Supervisor have full attendance management for their restaurant
+    -- 3.1 Owner, Manager, Supervisor have full attendance management for their restaurant
     CREATE POLICY "owner_manager_manage_attendance"
       ON public.staff_attendance FOR ALL
       TO authenticated
@@ -109,7 +89,7 @@ BEGIN
         OR (public.is_super_admin_user() AND (auth.jwt() ->> 'aal') = 'aal2')
       );
 
-    -- 2.2 Individual staff (e.g. waiter, chef) can ONLY view their OWN attendance record
+    -- 3.2 Individual staff (e.g. waiter, chef) can ONLY view their OWN attendance record
     CREATE POLICY "staff_select_own_attendance"
       ON public.staff_attendance FOR SELECT
       TO authenticated
@@ -123,7 +103,7 @@ BEGIN
         )
       );
 
-    -- 2.3 Individual staff can insert their own punch
+    -- 3.3 Individual staff can insert their own punch
     CREATE POLICY "staff_insert_own_attendance"
       ON public.staff_attendance FOR INSERT
       TO authenticated
@@ -140,7 +120,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- 3. DATA MIGRATION: COPY SETTINGS.ATTENDO.ATTENDANCE TO STAFF_ATTENDANCE
+-- 4. DATA MIGRATION: COPY SETTINGS.ATTENDO.ATTENDANCE TO STAFF_ATTENDANCE
 -- ============================================================================
 
 DO $$
@@ -256,7 +236,7 @@ BEGIN
       END LOOP;
 
       -- ============================================================================
-      -- 4. CLEANUP: REMOVE ATTENDANCE ARRAY FROM RESTAURANTS.SETTINGS.ATTENDO
+      -- 5. CLEANUP: REMOVE ATTENDANCE ARRAY FROM RESTAURANTS.SETTINGS.ATTENDO
       -- ============================================================================
       UPDATE public.restaurants
       SET settings = settings #- '{attendo,attendance}'

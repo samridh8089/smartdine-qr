@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     if (profileErr) {
       console.error('[auto-link-profile] Profile fetch error:', profileErr);
-      return NextResponse.json({ error: 'INTERNAL_ERROR', message: profileErr.message }, { status: 500 });
+      return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Failed to retrieve profile' }, { status: 500 });
     }
 
     if (existingProfile) {
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
 
       if (updateErr) {
         console.error('[auto-link-profile] Profile update error:', updateErr);
-        return NextResponse.json({ error: 'INTERNAL_ERROR', message: updateErr.message }, { status: 500 });
+        return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Failed to update profile' }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, restaurantId: restaurant.id });
@@ -104,12 +104,12 @@ export async function POST(req: NextRequest) {
 
     if (insertErr) {
       console.error('[auto-link-profile] Profile insert error:', insertErr);
-      return NextResponse.json({ error: 'INTERNAL_ERROR', message: insertErr.message }, { status: 500 });
+      return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Failed to create profile' }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, restaurantId: restaurant.id });
   } catch (err: any) {
     console.error('[auto-link-profile] Unexpected error:', err);
-    return NextResponse.json({ error: 'INTERNAL_ERROR', message: err?.message || 'Server error' }, { status: 500 });
+    return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Internal server error' }, { status: 500 });
   }
 }
