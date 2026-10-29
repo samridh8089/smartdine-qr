@@ -38,6 +38,7 @@ import {
   reviewLeaveRequest,
   submitLeaveRequest,
   cleanupOldAttendanceSelfies,
+  getAttendanceSelfieSignedUrl,
   calculateHoursWorked,
   formatHoursWorkedText,
   getLocalDateString,
@@ -77,6 +78,7 @@ import {
   Ban,
   Send,
   Eye,
+  Camera,
   Info,
   XCircle,
   Coffee,
@@ -3153,15 +3155,29 @@ export default function AttendanceManagerView({
                           {att.selfie_url ? (
                             <button
                               type="button"
-                              onClick={() => setPreviewSelfieUrl(att.selfie_url || null)}
+                              onClick={async () => {
+                                if (att.selfie_url?.startsWith('http') || att.selfie_url?.startsWith('data:')) {
+                                  setPreviewSelfieUrl(att.selfie_url);
+                                } else if (att.selfie_url) {
+                                  const signed = await getAttendanceSelfieSignedUrl(restaurant.id, att.selfie_url);
+                                  setPreviewSelfieUrl(signed || att.selfie_url);
+                                }
+                              }}
                               className="relative group shrink-0 cursor-pointer"
                               title="Click to view full selfie photo"
                             >
-                              <img
-                                src={att.selfie_url}
-                                alt="Selfie"
-                                className="w-12 h-12 rounded-xl object-cover border-2 border-slate-300 dark:border-slate-700 group-hover:scale-105 transition shadow-sm"
-                              />
+                              {att.selfie_url.startsWith('http') || att.selfie_url.startsWith('data:') ? (
+                                <img
+                                  src={att.selfie_url}
+                                  alt="Selfie"
+                                  className="w-12 h-12 rounded-xl object-cover border-2 border-slate-300 dark:border-slate-700 group-hover:scale-105 transition shadow-sm"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-700 flex flex-col items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition shadow-sm">
+                                  <Camera className="w-5 h-5" />
+                                  <span className="text-[9px] font-bold">View</span>
+                                </div>
+                              )}
                               <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                                 <Eye className="w-4 h-4 text-white" />
                               </div>
