@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ShieldCheck, CheckCircle2, AlertCircle, ArrowLeft, RefreshCw, Store } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -19,6 +20,12 @@ function CheckoutContent() {
   const keyId = searchParams.get('keyId') || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
   const plan = searchParams.get('plan') || 'pro';
   const restaurantName = searchParams.get('restaurantName') || 'Restaurant';
+  const restaurantType = searchParams.get('restaurantType') || 'Restaurant';
+  const city = searchParams.get('city') || '';
+  const address = searchParams.get('address') || '';
+  const slug = searchParams.get('slug') || '';
+  const gstNumber = searchParams.get('gstNumber') || '';
+  const fssaiNumber = searchParams.get('fssaiNumber') || '';
   const fullName = searchParams.get('fullName') || '';
   const email = searchParams.get('email') || '';
   const phone = searchParams.get('phone') || '';
@@ -149,7 +156,7 @@ function CheckoutContent() {
           setLoading(true);
           try {
             if (isSignup && !isUpgrade) {
-              // Call Onboarding Provision API
+              // Call Onboarding Provision API with full restaurant details
               const provRes = await fetch('/api/auth/onboarding-provision', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -159,6 +166,12 @@ function CheckoutContent() {
                   phone,
                   password,
                   restaurantName,
+                  restaurantType,
+                  city,
+                  address,
+                  slug,
+                  gstNumber,
+                  fssaiNumber,
                   plan,
                   billingInterval,
                   paymentDetails: {
@@ -169,6 +182,18 @@ function CheckoutContent() {
                   }
                 })
               });
+
+              // Attempt client-side session sign-in so user is automatically authenticated upon entering dashboard
+              if (email && password) {
+                try {
+                  await supabase.auth.signInWithPassword({
+                    email: email.trim().toLowerCase(),
+                    password: password.trim()
+                  });
+                } catch (signErr) {
+                  console.warn('[Checkout Auto-Signin Notice]:', signErr);
+                }
+              }
 
               const provData = await provRes.json();
 
@@ -349,6 +374,14 @@ function CheckoutContent() {
             >
               Enter Dashboard
             </button>
+            <div className="mt-3 text-center">
+              <a
+                href="smartdine://login"
+                className="text-xs text-slate-400 hover:text-emerald-400 transition-colors underline"
+              >
+                Returning to SmartDine Mobile App? Tap to open app
+              </a>
+            </div>
           </div>
         )}
 

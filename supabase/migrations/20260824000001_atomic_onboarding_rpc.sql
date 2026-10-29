@@ -138,6 +138,10 @@ BEGIN
         -- Update existing restaurant owner_id (referencing auth.users.id) & settings if missing
         UPDATE public.restaurants
         SET owner_id = p_owner_id,
+            name = CASE WHEN p_restaurant_name IS NOT NULL AND trim(p_restaurant_name) != '' THEN trim(p_restaurant_name) ELSE name END,
+            slug = CASE WHEN v_clean_slug IS NOT NULL AND v_clean_slug != '' THEN v_clean_slug ELSE slug END,
+            address = CASE WHEN p_address IS NOT NULL AND trim(p_address) != '' THEN trim(p_address) ELSE address END,
+            settings = COALESCE(p_settings, settings),
             subscription_plan = COALESCE(p_subscription_plan, subscription_plan),
             subscription_status = 'active',
             updated_at = now()

@@ -136,35 +136,69 @@ export async function POST(req: Request) {
       }
     }
 
-    // ─── 3. RESOLVE AUTH USER ID (ZERO EXCEPTION GUARANTEE) ────────────────────
+    // ─── 3. RESOLVE AUTH USER ID & SECURE CREDENTIALS (ZERO EXCEPTION GUARANTEE) ──
     let userId = '';
 
-    // Search existing auth users via Admin API
-    const { data: { users: allUsers } } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const existingUser = (allUsers || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+    // Step 3a: Check existing profile
+    const { data: prof } = await supabaseAdmin
+      .from('profiles')
+      .select('id, user_id')
+      .ilike('email', cleanEmail)
+      .maybeSingle();
 
-    if (existingUser?.id) {
-      userId = existingUser.id;
-      console.log('[DUPLICATE ACCOUNT DETECTED LOG]', {
+    if (prof?.user_id || prof?.id) {
+      userId = prof.user_id || prof.id;
+    }
+
+    // Step 3b: Search existing auth users via Admin API safely (no unhandled null destructure)
+    if (!userId) {
+      try {
+        const listRes = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const existingAuth = (listRes?.data?.users || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+        if (existingAuth?.id) {
+          userId = existingAuth.id;
+        }
+      } catch (listErr) {
+        console.warn('[Onboarding ListUsers Warning]:', listErr);
+      }
+    }
+
+    const cleanPassword = (password || '').trim();
+
+    if (userId) {
+      console.log('[EXISTING ACCOUNT RESOLVED]', {
         email: cleanEmail,
         existingUserId: userId,
-        action: 'Reusing existing auth account safely post-payment'
+        action: 'Reusing existing auth account & setting password/metadata'
       });
 
-      // Update password & metadata if password provided
-      if (password) {
+      // Always update password and guarantee email is confirmed
+      if (cleanPassword) {
         try {
-          await supabaseAdmin.auth.admin.updateUserById(userId, {
-            password,
-            user_metadata: { fullName: cleanName, phone: cleanPhone }
+          const updateRes = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            password: cleanPassword,
+            email_confirm: true,
+            user_metadata: {
+              fullName: cleanName,
+              phone: cleanPhone,
+              role: 'owner',
+              restaurantName: cleanRestName
+            }
           });
-        } catch (e) {}
+          if (updateRes.error) {
+            console.error('[Onboarding Password Update Error]:', updateRes.error);
+          } else {
+            console.log('[Onboarding Password Successfully Updated for User]:', userId);
+          }
+        } catch (pwErr) {
+          console.error('[Onboarding Password Update Exception]:', pwErr);
+        }
       }
     } else {
-      // Create new user using Admin API (no email rate limits or duplicate traps)
+      // Create new user using Admin API (confirmed email & typed password)
       const { data: newAuth, error: createErr } = await supabaseAdmin.auth.admin.createUser({
         email: cleanEmail,
-        password: password || 'SecurePass#2026!',
+        password: cleanPassword || 'SecurePass#2026!',
         email_confirm: true,
         user_metadata: {
           fullName: cleanName,
@@ -178,11 +212,24 @@ export async function POST(req: Request) {
         userId = newAuth.user.id;
         console.log('[AUTH USER CREATED LOG]', { userId, email: cleanEmail });
       } else {
-        // Fallback profile check
-        const { data: prof } = await supabaseAdmin.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
-        if (prof?.id) {
-          userId = prof.id;
-        } else {
+        console.warn('[Onboarding CreateUser Warning]:', createErr?.message);
+        // Fallback: Check if user exists in auth.users despite listUsers omission
+        try {
+          const listRes = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+          const retryAuth = (listRes?.data?.users || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+          if (retryAuth?.id) {
+            userId = retryAuth.id;
+            if (cleanPassword) {
+              await supabaseAdmin.auth.admin.updateUserById(userId, {
+                password: cleanPassword,
+                email_confirm: true,
+                user_metadata: { fullName: cleanName, phone: cleanPhone, role: 'owner', restaurantName: cleanRestName }
+              });
+            }
+          }
+        } catch (_) {}
+
+        if (!userId) {
           return NextResponse.json({ error: createErr?.message || 'Failed to resolve user account' }, { status: 400 });
         }
       }
@@ -286,10 +333,14 @@ export async function POST(req: Request) {
       validUntil: subscriptionEndsAt
     });
 
-    // ─── 7. UPDATE RESTAURANT SUBSCRIPTION & SETTINGS IF EXISTING ─────────────
+    // ─── 7. UPDATE RESTAURANT DETAILS & SUBSCRIPTION ──────────────────────────
     await supabaseAdmin
       .from('restaurants')
       .update({
+        name: cleanRestName,
+        slug: cleanSlug,
+        address: address || (city ? `${city}, India` : 'India'),
+        settings: initialSettings,
         subscription_plan: normalizedPlan,
         subscription_status: initialStatus,
         billing_interval: billingInterval,
