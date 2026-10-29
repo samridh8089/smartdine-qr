@@ -174,6 +174,17 @@ export async function POST(req: Request) {
     }
 
     const cleanPassword = (password || '').trim();
+    const displayName = cleanName || cleanRestName || 'Owner';
+    const initialUserMetadata = {
+      name: displayName,
+      full_name: displayName,
+      display_name: displayName,
+      fullName: displayName,
+      phone: cleanPhone,
+      role: 'owner',
+      restaurant_name: cleanRestName,
+      restaurantName: cleanRestName
+    };
 
     if (userId) {
       console.log('[EXISTING ACCOUNT RESOLVED]', {
@@ -188,12 +199,8 @@ export async function POST(req: Request) {
           const updateRes = await supabaseAdmin.auth.admin.updateUserById(userId, {
             password: cleanPassword,
             email_confirm: true,
-            user_metadata: {
-              fullName: cleanName,
-              phone: cleanPhone,
-              role: 'owner',
-              restaurantName: cleanRestName
-            }
+            user_metadata: initialUserMetadata,
+            app_metadata: { role: 'owner' }
           });
           if (updateRes.error) {
             console.error('[Onboarding Password Update Error]:', updateRes.error);
@@ -210,12 +217,8 @@ export async function POST(req: Request) {
         email: cleanEmail,
         password: cleanPassword || 'SecurePass#2026!',
         email_confirm: true,
-        user_metadata: {
-          fullName: cleanName,
-          phone: cleanPhone,
-          role: 'owner',
-          restaurantName: cleanRestName
-        }
+        user_metadata: initialUserMetadata,
+        app_metadata: { role: 'owner' }
       });
 
       if (newAuth?.user?.id) {
@@ -233,7 +236,8 @@ export async function POST(req: Request) {
               await supabaseAdmin.auth.admin.updateUserById(userId, {
                 password: cleanPassword,
                 email_confirm: true,
-                user_metadata: { fullName: cleanName, phone: cleanPhone, role: 'owner', restaurantName: cleanRestName }
+                user_metadata: initialUserMetadata,
+                app_metadata: { role: 'owner' }
               });
             }
           }
@@ -252,7 +256,8 @@ export async function POST(req: Request) {
                 await supabaseAdmin.auth.admin.updateUserById(userId, {
                   password: cleanPassword,
                   email_confirm: true,
-                  user_metadata: { fullName: cleanName, phone: cleanPhone, role: 'owner', restaurantName: cleanRestName }
+                  user_metadata: initialUserMetadata,
+                  app_metadata: { role: 'owner' }
                 });
               }
             }
@@ -456,8 +461,11 @@ export async function POST(req: Request) {
         id: userId,
         restaurant_id: restaurantId,
         email: cleanEmail,
-        full_name: cleanName,
+        full_name: displayName,
         role: 'owner',
+        phone: cleanPhone,
+        is_active: true,
+        is_verified: true,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
 
@@ -467,17 +475,43 @@ export async function POST(req: Request) {
         console.log('[Onboarding Profile Upserted Successfully]:', userId);
       }
 
-      // Sync auth user_metadata with restaurant reference
+      // Sync auth user_metadata & app_metadata with complete restaurant reference
+      const completeUserMetadata = {
+        name: displayName,
+        full_name: displayName,
+        display_name: displayName,
+        fullName: displayName,
+        phone: cleanPhone,
+        role: 'owner',
+        restaurant_id: restaurantId,
+        restaurantId: restaurantId,
+        restaurant_name: cleanRestName,
+        restaurantName: cleanRestName
+      };
+
       await supabaseAdmin.auth.admin.updateUserById(userId, {
-        user_metadata: {
-          fullName: cleanName,
-          phone: cleanPhone,
+        user_metadata: completeUserMetadata,
+        app_metadata: {
           role: 'owner',
-          restaurant_id: restaurantId,
-          restaurantId: restaurantId,
-          restaurantName: cleanRestName
+          restaurant_id: restaurantId
         }
       });
+
+      // Safely set phone in auth.users if available
+      if (cleanPhone) {
+        try {
+          const rawDigits = cleanPhone.replace(/\D/g, '');
+          const formattedPhone = rawDigits.length === 10 ? `+91${rawDigits}` : (cleanPhone.startsWith('+') ? cleanPhone : `+${rawDigits}`);
+          if (/^\+\d{10,15}$/.test(formattedPhone)) {
+            await supabaseAdmin.auth.admin.updateUserById(userId, {
+              phone: formattedPhone,
+              phone_confirm: true
+            });
+          }
+        } catch (phoneErr: any) {
+          console.warn('[Onboarding Sync Phone in auth.users Notice]:', phoneErr?.message);
+        }
+      }
     } catch (profErr) {
       console.warn('[Onboarding Profile Upsert Notice]:', profErr);
     }

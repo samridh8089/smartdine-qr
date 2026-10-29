@@ -127,7 +127,8 @@ export async function POST(req: Request) {
                 email: cleanEmail,
                 password: crypto.randomBytes(32).toString('hex') + '!Aa1',
                 email_confirm: true,
-                user_metadata: { role: 'owner', restaurantName: cleanRestName }
+                user_metadata: { role: 'owner', name: cleanRestName, full_name: cleanRestName, display_name: cleanRestName, restaurantName: cleanRestName },
+                app_metadata: { role: 'owner' }
               });
               userId = authUser?.user?.id;
                           if (userId) {
