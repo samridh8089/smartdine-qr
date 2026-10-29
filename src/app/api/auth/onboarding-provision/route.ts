@@ -42,7 +42,9 @@ export async function POST(req: Request) {
     const cleanPhone = (phone || '').trim();
     const cleanName = (fullName || '').trim();
     const cleanRestName = (restaurantName || '').trim();
+    const validPlans = ['starter', 'pro', 'premium'];
     const normalizedPlan = (plan || 'pro').toLowerCase().trim();
+    const validPlan = validPlans.includes(normalizedPlan) ? normalizedPlan : (normalizedPlan.includes('prem') ? 'premium' : normalizedPlan.includes('start') ? 'starter' : 'pro');
 
     if (!cleanEmail || !cleanRestName) {
       return NextResponse.json({ error: 'Missing mandatory fields (email, restaurant name)' }, { status: 400 });
@@ -302,53 +304,122 @@ export async function POST(req: Request) {
       cleanSlug = `rest${Date.now().toString().slice(-6)}`;
     }
 
-    // ─── 6. EXECUTE ATOMIC RPC: CREATE OR LINK RESTAURANT ─────────────────────
-    const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc('create_restaurant_and_link', {
-      p_owner_id: userId,
-      p_owner_email: cleanEmail,
-      p_owner_name: cleanName,
-      p_owner_phone: cleanPhone,
-      p_restaurant_name: cleanRestName,
-      p_slug: cleanSlug,
-      p_address: address || `${city || 'India'}`,
-      p_subscription_plan: normalizedPlan,
-      p_billing_interval: billingInterval,
-      p_settings: initialSettings,
-      p_trial_ends_at: subscriptionEndsAt
-    });
+    // ─── 6. EXECUTE ATOMIC RPC / DIRECT PROVISION: CREATE OR LINK RESTAURANT ───
+    let restaurantId = '';
+    let alreadyExisted = false;
 
-    if (rpcErr || !rpcRes?.restaurant_id) {
-      console.error('[Onboarding RPC Error]:', rpcErr);
-      return NextResponse.json({ error: rpcErr?.message || 'Failed to provision restaurant workspace' }, { status: 500 });
+    // First: Check if an existing restaurant exists for this owner
+    const { data: existingRest } = await supabaseAdmin
+      .from('restaurants')
+      .select('id, name')
+      .or(`owner_id.eq.${userId},settings->>owner_email.eq.${cleanEmail}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRest?.id) {
+      restaurantId = existingRest.id;
+      alreadyExisted = true;
+      console.log('[Onboarding Linking Existing Restaurant]:', restaurantId);
+
+      // Force update with user's new custom restaurant name, settings, and address
+      await supabaseAdmin
+        .from('restaurants')
+        .update({
+          name: cleanRestName,
+          slug: cleanSlug,
+          address: address || (city ? `${city}, India` : 'India'),
+          settings: initialSettings,
+          subscription_plan: validPlan,
+          subscription_status: initialStatus,
+          billing_interval: billingInterval,
+          trial_ends_at: subscriptionEndsAt,
+          owner_id: userId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', restaurantId);
+    } else {
+      // Execute RPC
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabaseAdmin.rpc('create_restaurant_and_link', {
+          p_owner_id: userId,
+          p_owner_email: cleanEmail,
+          p_owner_name: cleanName,
+          p_owner_phone: cleanPhone,
+          p_restaurant_name: cleanRestName,
+          p_slug: cleanSlug,
+          p_address: address || `${city || 'India'}`,
+          p_subscription_plan: validPlan,
+          p_billing_interval: billingInterval,
+          p_settings: initialSettings,
+          p_trial_ends_at: subscriptionEndsAt
+        });
+
+        if (rpcRes?.restaurant_id) {
+          restaurantId = rpcRes.restaurant_id;
+          alreadyExisted = Boolean(rpcRes.already_existed);
+        } else if (rpcErr) {
+          console.warn('[Onboarding RPC Warning, falling back to direct insert]:', rpcErr.message);
+        }
+      } catch (rpcEx: any) {
+        console.warn('[Onboarding RPC Exception, falling back to direct insert]:', rpcEx?.message);
+      }
+
+      // If RPC did not return restaurant_id, directly insert using admin service role
+      if (!restaurantId) {
+        console.log('[Onboarding Direct Insert Restaurant for User]:', userId);
+        const { data: directRest, error: dirErr } = await supabaseAdmin
+          .from('restaurants')
+          .insert({
+            owner_id: userId,
+            name: cleanRestName,
+            slug: cleanSlug,
+            phone: cleanPhone,
+            address: address || (city ? `${city}, India` : 'India'),
+            subscription_plan: validPlan,
+            subscription_status: initialStatus,
+            billing_interval: billingInterval,
+            trial_ends_at: subscriptionEndsAt,
+            settings: initialSettings,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select('id')
+          .single();
+
+        if (directRest?.id) {
+          restaurantId = directRest.id;
+        } else {
+          console.error('[Onboarding Direct Insert Error]:', dirErr);
+          return NextResponse.json({ error: dirErr?.message || 'Failed to provision restaurant workspace' }, { status: 500 });
+        }
+      } else {
+        // Guarantee cleanRestName is persisted on existing or linked restaurant
+        await supabaseAdmin
+          .from('restaurants')
+          .update({
+            name: cleanRestName,
+            slug: cleanSlug,
+            address: address || (city ? `${city}, India` : 'India'),
+            settings: initialSettings,
+            subscription_plan: validPlan,
+            subscription_status: initialStatus,
+            billing_interval: billingInterval,
+            trial_ends_at: subscriptionEndsAt,
+            owner_id: userId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', restaurantId);
+      }
     }
-
-    const restaurantId = rpcRes.restaurant_id;
 
     // ─── LOG 2: PLAN ACTIVATED ────────────────────────────────────────────────
     console.log('[PLAN ACTIVATED LOG]', {
       restaurantId,
       ownerId: userId,
-      plan: normalizedPlan,
-      alreadyExisted: rpcRes.already_existed,
+      plan: validPlan,
+      alreadyExisted,
       validUntil: subscriptionEndsAt
     });
-
-    // ─── 7. UPDATE RESTAURANT DETAILS & SUBSCRIPTION ──────────────────────────
-    await supabaseAdmin
-      .from('restaurants')
-      .update({
-        name: cleanRestName,
-        slug: cleanSlug,
-        address: address || (city ? `${city}, India` : 'India'),
-        settings: initialSettings,
-        subscription_plan: normalizedPlan,
-        subscription_status: initialStatus,
-        billing_interval: billingInterval,
-        trial_ends_at: subscriptionEndsAt,
-        owner_id: userId,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', restaurantId);
 
     // ─── 8. UPSERT OWNER PROFILE ──────────────────────────────────────────────
     try {
@@ -356,6 +427,7 @@ export async function POST(req: Request) {
         id: userId,
         user_id: userId,
         restaurant_id: restaurantId,
+        restaurant_name: cleanRestName,
         email: cleanEmail,
         full_name: cleanName,
         role: 'owner',
@@ -412,8 +484,8 @@ export async function POST(req: Request) {
         restaurant_id: restaurantId
       },
       invoiceNumber: invoiceNum,
-      alreadyExisted: rpcRes.already_existed,
-      message: rpcRes.already_existed ? 'Payment captured and plan activated on your restaurant.' : 'Restaurant created and plan activated.'
+      alreadyExisted,
+      message: alreadyExisted ? 'Payment captured and plan activated on your restaurant.' : 'Restaurant created and plan activated.'
     });
 
   } catch (err: any) {

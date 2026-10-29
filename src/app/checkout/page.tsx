@@ -183,18 +183,6 @@ function CheckoutContent() {
                 })
               });
 
-              // Attempt client-side session sign-in so user is automatically authenticated upon entering dashboard
-              if (email && password) {
-                try {
-                  await supabase.auth.signInWithPassword({
-                    email: email.trim().toLowerCase(),
-                    password: password.trim()
-                  });
-                } catch (signErr) {
-                  console.warn('[Checkout Auto-Signin Notice]:', signErr);
-                }
-              }
-
               const provData = await provRes.json();
 
               // CRITICAL ZERO POST-PAYMENT FAILURE GUARANTEE:
@@ -225,12 +213,25 @@ function CheckoutContent() {
                 throw new Error(provData.error || 'Backend signature verification failed.');
               }
 
+              const finalRestaurant = provData.restaurant || { name: restaurantName };
               setSuccessDetails({
                 paymentId: response.razorpay_payment_id,
                 orderId: response.razorpay_order_id,
-                restaurant: provData.restaurant
+                restaurant: finalRestaurant
               });
               setStatus('success');
+
+              // Attempt client-side session sign-in so user is automatically authenticated upon entering dashboard
+              if (email && password) {
+                try {
+                  await supabase.auth.signInWithPassword({
+                    email: email.trim().toLowerCase(),
+                    password: password.trim()
+                  });
+                } catch (signErr) {
+                  console.warn('[Checkout Auto-Signin Notice]:', signErr);
+                }
+              }
             } else {
               // Existing Restaurant Upgrade Verification
               const verifyRes = await fetch('/api/payments/verify', {
@@ -354,6 +355,10 @@ function CheckoutContent() {
             </p>
 
             <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-700 text-left text-xs my-4 space-y-1.5 font-mono">
+              <div className="flex justify-between text-slate-400">
+                <span>Restaurant:</span>
+                <span className="text-white font-bold">{successDetails?.restaurant?.name || restaurantName}</span>
+              </div>
               <div className="flex justify-between text-slate-400">
                 <span>Amount Paid:</span>
                 <span className="text-white font-bold">₹{amount}</span>
