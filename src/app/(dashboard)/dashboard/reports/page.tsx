@@ -324,10 +324,22 @@ export default function ReportsPage() {
   const [auditActionFilter, setAuditActionFilter] = useState('all');
   const [auditPage, setAuditPage] = useState(1);
 
+  // Reports Toast Notification State (Non-blocking replacement for browser alert modals)
+  const [reportsToast, setReportsToast] = useState<{ message: string; visible: boolean; type?: 'success' | 'error' | 'info' } | null>(null);
+  const reportsToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showReportsToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    if (reportsToastTimerRef.current) clearTimeout(reportsToastTimerRef.current);
+    setReportsToast({ message, visible: true, type });
+    reportsToastTimerRef.current = setTimeout(() => {
+      setReportsToast(prev => prev && prev.message === message ? { ...prev, visible: false } : prev);
+    }, 4000);
+  };
+
 
   const handleApplyCustomDates = () => {
     if (customStartDate > customEndDate) {
-      alert('Start date cannot be after end date');
+      showReportsToast('Start date cannot be after end date', 'error');
       return;
     }
     setAppliedStartDate(customStartDate);
@@ -1403,13 +1415,8 @@ export default function ReportsPage() {
 
   // CSV EXPORT 1: ORDERS SUMMARY (One row per order, perfectly accounting-friendly!)
   const handleExportOrdersSummaryCSV = () => {
-    const validOrders = getFilteredValidOrders();
-    if (!validOrders || validOrders.length === 0) {
-      alert(`No valid completed/paid orders found to export for ${salesSummary.periodLabel || timeRange}.`);
-      return;
-    }
-
-    const headers = [
+    const validOrders = getFilteredValidOrders() || [];
+    const summaryHeaders = [
       'Order ID',
       'Order Date & Time',
       'Table / Type',
@@ -1498,19 +1505,22 @@ export default function ReportsPage() {
       ];
     });
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    if (validOrders.length === 0) {
+      const csvContent = summaryHeaders.join(',') + '\n';
+      triggerDownload(`CleverOps_Orders_${timeRange}_${getISTDateString()}.csv`, csvContent);
+      showReportsToast(`Exported CSV template with headers (0 orders found for ${salesSummary.periodLabel || timeRange}).`);
+      return;
+    }
+
+    const csvContent = [summaryHeaders.join(','), ...rows.map(r => r.join(','))].join('\n');
     triggerDownload(`CleverOps_Orders_${timeRange}_${getISTDateString()}.csv`, csvContent);
+    showReportsToast(`Exported Orders Summary CSV (${validOrders.length} orders).`);
   };
 
   // CSV EXPORT 2: ORDER ITEMS (One row per item with exact Item Subtotal = Qty * Unit Price)
   const handleExportOrderItemsCSV = () => {
-    const validOrders = getFilteredValidOrders();
-    if (!validOrders || validOrders.length === 0) {
-      alert(`No valid completed/paid orders found to export for ${salesSummary.periodLabel || timeRange}.`);
-      return;
-    }
-
-    const headers = [
+    const validOrders = getFilteredValidOrders() || [];
+    const itemHeaders = [
       'Order ID',
       'Order Date & Time',
       'Table / Type',
@@ -1552,19 +1562,22 @@ export default function ReportsPage() {
       });
     });
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    if (validOrders.length === 0) {
+      const csvContent = itemHeaders.join(',') + '\n';
+      triggerDownload(`CleverOps_Order_Items_${timeRange}_${getISTDateString()}.csv`, csvContent);
+      showReportsToast(`Exported Order Items CSV template (0 items found for ${salesSummary.periodLabel || timeRange}).`);
+      return;
+    }
+
+    const csvContent = [itemHeaders.join(','), ...rows.map(r => r.join(','))].join('\n');
     triggerDownload(`CleverOps_Order_Items_${timeRange}_${getISTDateString()}.csv`, csvContent);
+    showReportsToast(`Exported Order Items CSV (${rows.length} items).`);
   };
 
   // CSV EXPORT 3: COMBINED ACCOUNTING CSV (Order financial totals ONCE on row 1, subsequent item rows BLANK for order columns)
   const handleExportCombinedCSV = () => {
-    const validOrders = getFilteredValidOrders();
-    if (!validOrders || validOrders.length === 0) {
-      alert(`No valid completed/paid orders found to export for ${salesSummary.periodLabel || timeRange}.`);
-      return;
-    }
-
-    const headers = [
+    const validOrders = getFilteredValidOrders() || [];
+    const combinedHeaders = [
       'Order ID',
       'Order Date',
       'Table / Type',
@@ -1679,24 +1692,22 @@ export default function ReportsPage() {
       });
     });
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    if (validOrders.length === 0) {
+      const csvContent = combinedHeaders.join(',') + '\n';
+      triggerDownload(`CleverOps_Accounting_${timeRange}_${getISTDateString()}.csv`, csvContent);
+      showReportsToast(`Exported Accounting CSV template (0 orders found for ${salesSummary.periodLabel || timeRange}).`);
+      return;
+    }
+
+    const csvContent = [combinedHeaders.join(','), ...rows.map(r => r.join(','))].join('\n');
     triggerDownload(`CleverOps_Accounting_${timeRange}_${getISTDateString()}.csv`, csvContent);
+    showReportsToast('Exported Accounting CSV successfully.');
   };
 
   // CSV EXPORT 4: CUSTOMER MARKETING DIRECTORY CSV (WhatsApp & SMS CRM Campaign Ready!)
   const handleExportCustomerMarketingCSV = () => {
-    if (!marketingContacts || marketingContacts.length === 0) {
-      alert(`No customer marketing contacts recorded for ${salesSummary.periodLabel || timeRange}.`);
-      return;
-    }
-
-    const contactsToExport = filteredMarketingContacts;
-    if (contactsToExport.length === 0) {
-      alert('No contacts match the current search or channel filter.');
-      return;
-    }
-
-    const headers = [
+    const contactsToExport = filteredMarketingContacts || [];
+    const crmHeaders = [
       'Customer Name',
       'Mobile Number (10 Digits)',
       'WhatsApp Number',
@@ -1707,6 +1718,13 @@ export default function ReportsPage() {
       'Last Visit Date (IST)',
       'First Visit Date (IST)'
     ];
+
+    if (!marketingContacts || marketingContacts.length === 0 || contactsToExport.length === 0) {
+      const csvContent = crmHeaders.join(',') + '\n';
+      triggerDownload(`CleverOps_Customer_Contacts_${getISTDateString()}.csv`, csvContent);
+      showReportsToast(`Exported CRM Contacts template with headers (0 contacts found for ${salesSummary.periodLabel || timeRange}).`);
+      return;
+    }
 
     const formatOrderTypes = (types: string[]) => {
       return types.map(t => t === 'dine_in' ? 'Dine-In' : t === 'takeaway' ? 'Takeaway' : 'Reservation').join('; ');
@@ -1740,8 +1758,9 @@ export default function ReportsPage() {
       `"${formatISTDateTime(c.firstVisit)}"`
     ]);
 
-    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csvContent = [crmHeaders.join(','), ...rows.map(r => r.join(','))].join('\n');
     triggerDownload(`CleverOps_Customer_Marketing_${timeRange}_${getISTDateString()}.csv`, csvContent);
+    showReportsToast(`Exported Customer Contacts CSV (${contactsToExport.length} contacts).`);
   };
 
   // PDF Export Handler (Triggers Printable Report View)
@@ -3318,6 +3337,30 @@ export default function ReportsPage() {
                 <span>Manager Signoff: ________________</span>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Non-blocking Reports Notification Toast */}
+      {reportsToast && reportsToast.visible && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <div className={`flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl text-xs font-bold border ${
+            reportsToast.type === 'error'
+              ? 'bg-rose-950 text-rose-200 border-rose-800'
+              : 'bg-slate-900 text-white border-slate-700'
+          }`}>
+            {reportsToast.type === 'error' ? (
+              <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+            )}
+            <span>{reportsToast.message}</span>
+            <button
+              onClick={() => setReportsToast(null)}
+              className="ml-2 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       )}
