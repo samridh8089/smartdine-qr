@@ -106,6 +106,7 @@ export async function POST(req: Request) {
       const amount = (payment?.amount || order?.amount || 0) / 100;
 
       let targetRestId = restaurantId;
+      let webhookOwnerId = '';
       const cleanEmail = (notes.owner_email || payment?.email || notes.email || '').trim().toLowerCase();
       const cleanPhone = (notes.owner_phone || payment?.contact || notes.phone || '').trim();
       const cleanRestName = (notes.restaurant_name || notes.restaurantName || 'Restaurant').trim();
@@ -267,19 +268,84 @@ export async function POST(req: Request) {
         currentSettings.last_order_id = orderId;
         currentSettings.payment_history = paymentHistory;
 
+        const restUpdate: any = {
+          subscription_plan: planName,
+          subscription_status: 'active',
+          trial_ends_at: nextBillingDate,
+          billing_interval: billingInterval,
+          settings: currentSettings,
+          updated_at: nowIso
+        };
+        if (cleanRestName && cleanRestName.toLowerCase() !== 'restaurant') {
+          restUpdate.name = cleanRestName;
+        }
+        if (webhookOwnerId) {
+          restUpdate.owner_id = webhookOwnerId;
+        }
+
         await getAdmin()
           .from('restaurants')
-          .update({
-            subscription_plan: planName,
-            subscription_status: 'active',
-            trial_ends_at: nextBillingDate,
-            billing_interval: billingInterval,
-            settings: currentSettings,
-            updated_at: nowIso
-          })
+          .update(restUpdate)
           .eq('id', targetRestId);
 
         console.log(`[Razorpay Webhook] Successfully activated restaurant ${targetRestId} with ${planName} plan (Paid ₹${amount})`);
+
+        // ALWAYS GUARANTEE PROFILE & USER METADATA LINKAGE:
+        let resolvedUserId = webhookOwnerId;
+        if (!resolvedUserId && cleanEmail) {
+          try {
+            const listRes = await getAdmin().auth.admin.listUsers({ page: 1, perPage: 1000 });
+            const found = (listRes?.data?.users || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+            if (found?.id) resolvedUserId = found.id;
+          } catch (_) {}
+        }
+
+        if (resolvedUserId) {
+          await getAdmin().from('restaurants').update({ owner_id: resolvedUserId }).eq('id', targetRestId).catch(() => {});
+
+          await getAdmin().from('profiles').upsert({
+            id: resolvedUserId,
+            restaurant_id: targetRestId,
+            email: cleanEmail,
+            full_name: cleanOwnerName,
+            role: 'owner',
+            phone: cleanPhone,
+            is_active: true,
+            is_verified: true,
+            updated_at: nowIso
+          }, { onConflict: 'id' }).catch((e: any) => console.warn('[Razorpay Webhook] Profile link error:', e?.message));
+
+          await getAdmin().auth.admin.updateUserById(resolvedUserId, {
+            user_metadata: {
+              role: 'owner',
+              restaurant_id: targetRestId,
+              restaurantId: targetRestId,
+              restaurant_name: cleanRestName,
+              restaurantName: cleanRestName,
+              name: cleanOwnerName,
+              display_name: cleanOwnerName
+            },
+            app_metadata: {
+              role: 'owner',
+              restaurant_id: targetRestId
+            }
+          }).catch((e: any) => console.warn('[Razorpay Webhook] User metadata link error:', e?.message));
+        }
+
+        // Guarantee default tables exist so Tables & QR page is immediately functional
+        try {
+          const { data: existingTables } = await getAdmin().from('tables').select('id').eq('restaurant_id', targetRestId);
+          if (!existingTables || existingTables.length === 0) {
+            const defaultTables = [
+              { restaurant_id: targetRestId, name: 'T1', capacity: 2, status: 'available' },
+              { restaurant_id: targetRestId, name: 'T2', capacity: 4, status: 'available' },
+              { restaurant_id: targetRestId, name: 'T3', capacity: 4, status: 'available' },
+              { restaurant_id: targetRestId, name: 'T4', capacity: 6, status: 'available' },
+              { restaurant_id: targetRestId, name: 'T5', capacity: 8, status: 'available' }
+            ];
+            await getAdmin().from('tables').insert(defaultTables).catch(() => {});
+          }
+        } catch (_) {}
       }
     }
 
