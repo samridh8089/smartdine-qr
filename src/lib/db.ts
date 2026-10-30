@@ -875,7 +875,22 @@ export const db = {
       return cached.data;
     }
 
-    // 1. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
+    // 1. Try full restaurants table first (authenticated users have full settings access)
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select('*')
+      .eq('slug', cleanSlug);
+    if (!error && data && data.length > 0) {
+      const res = data[0] as Restaurant;
+      if (!res.logo_url) {
+        res.logo_url = (res.settings as any)?.logo_url || (res.settings as any)?.logo || undefined;
+      }
+      restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
+      restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
+      return res;
+    }
+
+    // 2. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
     if (typeof window !== 'undefined') {
       try {
         const res = await fetch(`/api/customer/restaurant?slug=${encodeURIComponent(cleanSlug)}`, { cache: 'no-store' });
@@ -889,21 +904,6 @@ export const db = {
           }
         }
       } catch (_) {}
-    }
-
-    // 2. Try full restaurants table first (authenticated users have full settings access)
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('slug', cleanSlug);
-    if (!error && data && data.length > 0) {
-      const res = data[0] as Restaurant;
-      if (!res.logo_url) {
-        res.logo_url = (res.settings as any)?.logo_url || (res.settings as any)?.logo || undefined;
-      }
-      restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
-      restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
-      return res;
     }
     // Fallback to safe public_restaurants view for customer menu views
     const { data: pubData, error: pubErr } = await supabase
@@ -926,7 +926,19 @@ export const db = {
       return cached.data;
     }
 
-    // 1. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
+    // 1. Try full restaurants table first (authenticated users have access to complete settings)
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select('*')
+      .eq('id', id);
+    if (!error && data && data.length > 0) {
+      const res = data[0] as Restaurant;
+      restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
+      if (res.slug) restaurantSlugMemoryCache.set(res.slug, { data: res, timestamp: Date.now() });
+      return res;
+    }
+
+    // 2. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
     if (typeof window !== 'undefined') {
       try {
         const res = await fetch(`/api/customer/restaurant?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
@@ -941,12 +953,6 @@ export const db = {
         }
       } catch (_) {}
     }
-
-    // 2. Try full restaurants table first (authenticated users have access to complete settings)
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('id', id);
     if (!error && data && data.length > 0) {
       const res = data[0] as Restaurant;
       restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });

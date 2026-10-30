@@ -125,7 +125,16 @@ export default function AttendanceManagerView({
   const isSupervisor = currentRole === 'supervisor';
   const canManagePayroll = currentRole === 'owner' || currentRole === 'manager';
   // 1. useState
-  const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'logs' | 'payroll' | 'leaves' | 'settings'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'roster' | 'logs' | 'payroll' | 'leaves' | 'settings'>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam && ['live', 'roster', 'logs', 'payroll', 'leaves', 'settings'].includes(tabParam)) {
+        return tabParam as any;
+      }
+    }
+    return 'live';
+  });
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(() => getLocalDateString());
   const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
@@ -366,6 +375,16 @@ export default function AttendanceManagerView({
       setManagerLiveTicker(prev => prev + 1);
     }, 60000);
     return () => clearInterval(t);
+  }, []);
+
+  // Deep-linking tab synchronization (e.g. /dashboard/attendance?tab=payroll)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && ['live', 'roster', 'logs', 'payroll', 'leaves', 'settings'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
   }, []);
   // 9. useEffect: Initial Data Loading
   useEffect(() => {

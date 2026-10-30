@@ -34,7 +34,7 @@ export default function ExpenseModal({
   const [category, setCategory] = useState<string>('electricity');
   const [amount, setAmount] = useState('');
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'bank_transfer' | 'card' | 'cheque'>('cash');
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'bank_transfer' | 'card' | 'cheque' | 'store_inventory'>('cash');
   const [vendorName, setVendorName] = useState('');
   const [isRecurring, setIsRecurring] = useState(false);
   const [notes, setNotes] = useState('');

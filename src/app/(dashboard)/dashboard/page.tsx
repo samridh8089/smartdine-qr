@@ -616,6 +616,7 @@ export default function DashboardPage() {
   useEffect(() => {
     let activeRestId = '';
     let channel: any = null;
+    let isMounted = true;
 
     async function initDashboard() {
       try {
@@ -625,21 +626,30 @@ export default function DashboardPage() {
           restId = user?.restaurant_id;
         }
 
-        if (!restId) {
-          setLoading(false);
+        if (!restId || !isMounted) {
+          if (isMounted) setLoading(false);
           return;
         }
         
         activeRestId = restId;
         await loadDataForRest(restId);
+        if (!isMounted) return;
 
         // Request browser push notification permission
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
           Notification.requestPermission();
         }
 
+        // Clean up any stale channel before subscribing to prevent duplicate/already-subscribed errors
+        const chName = `overview_dashboard_${restId}`;
+        const existing = supabase.getChannels().find((c: any) => c.topic === `realtime:${chName}`);
+        if (existing) {
+          await supabase.removeChannel(existing);
+        }
+        if (!isMounted) return;
+
         channel = supabase
-          .channel(`overview_dashboard_${restId}`, {
+          .channel(chName, {
             config: {
               broadcast: { self: true }
             }
@@ -722,7 +732,9 @@ export default function DashboardPage() {
       } catch (err) {
         console.error('[Dashboard] initDashboard error:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
 
@@ -741,11 +753,18 @@ export default function DashboardPage() {
     window.addEventListener('force-resync', handleForceResync);
 
     return () => {
+      isMounted = false;
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener('force-resync', handleForceResync);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (backgroundTimerRef.current) clearTimeout(backgroundTimerRef.current);
-      if (channel) supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      } else if (activeRestId) {
+        const chName = `overview_dashboard_${activeRestId}`;
+        const existing = supabase.getChannels().find((c: any) => c.topic === `realtime:${chName}`);
+        if (existing) supabase.removeChannel(existing);
+      }
     };
   }, []);
 

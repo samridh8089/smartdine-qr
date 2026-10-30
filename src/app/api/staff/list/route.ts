@@ -6,8 +6,10 @@ let _supabaseAdmin: any = null;
 function getSupabaseAdmin() {
   if (_supabaseAdmin) return _supabaseAdmin;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Missing Supabase service role environment variables');
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== '[SENSITIVE]')
+    ? process.env.SUPABASE_SERVICE_ROLE_KEY
+    : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+  if (!url || !key) throw new Error('Missing Supabase configuration environment variables');
   _supabaseAdmin = createClient(url, key);
   return _supabaseAdmin;
 }
@@ -67,17 +69,37 @@ export async function GET(req: Request) {
       return authCheck.response;
     }
 
-    // 1. Fetch restaurant settings for staff_metadata fallback
-    const { data: rest } = await supabaseAdmin
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization') || '';
+    const token = authHeader.replace('Bearer ', '').trim();
+    const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    const dbClient = token && rawUrl && anonKey
+      ? createClient(rawUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: `Bearer ${token}` } } })
+      : supabaseAdmin;
+
+    // 1. Fetch restaurant settings for staff_metadata and attendo fallback
+    let { data: rest } = await dbClient
       .from('restaurants')
       .select('owner_id, settings')
       .eq('id', restaurantId)
       .maybeSingle();
 
-    const staffMeta = rest?.settings?.staff_metadata || {};
+    if (!rest || !rest.settings) {
+      const { data: pubRest } = await dbClient
+        .from('public_restaurants')
+        .select('settings')
+        .eq('id', restaurantId)
+        .maybeSingle();
+      if (pubRest) {
+        rest = { owner_id: rest?.owner_id, settings: pubRest.settings };
+      }
+    }
 
-    // 2. Fetch profiles using admin service role key (bypasses RLS filtering)
-    const { data: profiles, error } = await supabaseAdmin
+    const staffMeta = rest?.settings?.staff_metadata || {};
+    const attendoStaff = rest?.settings?.attendo?.staff_profiles || [];
+
+    // 2. Fetch profiles using authenticated client or admin
+    const { data: profiles, error } = await dbClient
       .from('profiles')
       .select('id, email, full_name, role, restaurant_id, created_at, updated_at, push_token, user_id')
       .eq('restaurant_id', restaurantId)
@@ -124,9 +146,35 @@ export async function GET(req: Request) {
 
     const seenEmails = new Set(mergedProfiles.map((p: any) => p.email.trim().toLowerCase()));
 
-    // 4. Also include any virtual staff members stored in staff_metadata if not in profiles yet
+    // 4. Also include staff members stored in attendo.staff_profiles or staff_metadata if not in profiles yet
+    if (Array.isArray(attendoStaff)) {
+      attendoStaff.forEach((item: any) => {
+        const staffId = item.profile_id || item.id;
+        if (staffId && !foundIds.has(staffId)) {
+          foundIds.add(staffId);
+          const normEmail = (item.email || '').trim().toLowerCase();
+          if (!seenEmails.has(normEmail)) {
+            seenEmails.add(normEmail);
+            mergedProfiles.push({
+              id: staffId,
+              email: item.email || '',
+              full_name: item.name || item.full_name || 'Staff Member',
+              role: item.role || 'waiter',
+              department: item.department || (item.role === 'waiter' ? 'waiter' : item.role === 'head_chef' ? 'kitchen' : item.role === 'cashier' ? 'cashier' : 'general'),
+              phone: item.phone || '',
+              restaurant_id: restaurantId,
+              is_active: item.is_active !== false,
+              is_verified: true,
+              verification_status: 'active'
+            } as any);
+          }
+        }
+      });
+    }
+
     Object.keys(staffMeta).forEach(id => {
       if (!foundIds.has(id)) {
+        foundIds.add(id);
         const item = staffMeta[id];
         if (item && item.email) {
           const normEmail = item.email.trim().toLowerCase();

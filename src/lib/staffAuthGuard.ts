@@ -245,11 +245,12 @@ export async function verifyStaffRequest(
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+      const userMetaRole = user.user_metadata?.role;
       resolvedProfile = {
         id: user.id,
         email: user.email,
         full_name: user.user_metadata?.full_name || 'Staff',
-        role: ownedRest ? 'owner' : 'staff',
+        role: (userMetaRole === 'owner' || ownedRest) ? 'owner' : (userMetaRole || 'staff'),
         restaurant_id: ownedRest?.id || targetRestaurantId || null
       };
     }

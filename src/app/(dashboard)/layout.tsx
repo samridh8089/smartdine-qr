@@ -16,8 +16,9 @@ import {
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
   LogOut, MenuSquare, X, ChevronRight, User, Settings,
   ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users,
-  Bell, BellOff, UserCheck, Banknote
+  Bell, BellOff, UserCheck, Banknote, Search
 } from 'lucide-react';
+import GlobalCommandPalette from '@/components/dashboard/GlobalCommandPalette';
 import { setGlobalMute, stopLoudBell, isGloballyMuted, playLoudBell } from '@/lib/soundAlert';
 import { registerDeviceActivity, getOrCreateDeviceId } from '@/lib/sessionManager';
 
@@ -125,6 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return false;
   });
   const [isRinging, setIsRinging] = useState(false);
+  const [searchPaletteOpen, setSearchPaletteOpen] = useState(false);
   // Phase-19: Founder Control Center easter egg (5-tap logo)
   const [logoTapCount, setLogoTapCount] = useState(0);
   const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -476,9 +478,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
   }, []);
 
-  // Phase-19 & Phase-31: Keyboard shortcuts (Ctrl+Shift+M for Founder Control Center, Esc for Exit Impersonation)
+  // Phase-19 & Phase-31: Keyboard shortcuts (Ctrl+K for Smart Search, Ctrl+Shift+M for Founder Control Center, Esc for Exit Impersonation)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Global search shortcut (Ctrl+K or Cmd+K)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setSearchPaletteOpen(prev => !prev);
+        return;
+      }
+
+      // Quick slash '/' shortcut to search when not typing in form inputs
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName) && !(e.target as HTMLElement)?.isContentEditable) {
+        e.preventDefault();
+        setSearchPaletteOpen(true);
+        return;
+      }
+
       if (e.key === 'Escape' && isImpersonating) {
         handleExitImpersonation();
         return;
@@ -964,7 +980,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
 
+              {/* 🔍 Global Search Bar for Desktop / Laptop / Tablet (Web View) */}
+              <div className="hidden md:flex items-center flex-1 max-w-sm lg:max-w-md mx-3 lg:mx-6">
+                <button
+                  type="button"
+                  onClick={() => setSearchPaletteOpen(true)}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/90 hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-400 text-xs font-semibold flex items-center transition shadow-2xs group cursor-pointer"
+                  title="Search features, processes, or ask how to..."
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <Search className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition" />
+                    <span className="truncate">Search features or ask how to...</span>
+                  </span>
+                </button>
+              </div>
+
               <div className="flex items-center gap-2 sm:gap-3">
+                {/* 🔍 Mobile Search Icon Button (Mobile App View) */}
+                <button
+                  type="button"
+                  onClick={() => setSearchPaletteOpen(true)}
+                  className="md:hidden p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer shadow-xs"
+                  title="Search features or ask how to"
+                  aria-label="Open search and how-to assistant"
+                >
+                  <Search className="h-4 w-4 shrink-0" />
+                </button>
+
                 {/* 🔔 Minimalist Bell Alert Toggle Button */}
                 <button
                   type="button"
@@ -1047,6 +1089,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </div>
+
+      {/* Global Command Palette & Smart How-To Assistant */}
+      <GlobalCommandPalette
+        isOpen={searchPaletteOpen}
+        onClose={() => setSearchPaletteOpen(false)}
+        userRole={activeRole || profile?.role || 'owner'}
+      />
       </PreviewModeProvider>
     </RestaurantContext.Provider>
   );

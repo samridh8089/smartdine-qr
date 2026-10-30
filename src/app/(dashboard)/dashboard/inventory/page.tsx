@@ -1083,6 +1083,17 @@ export default function InventoryDashboardPage() {
   useEffect(() => {
     if (menuItems.length === 0 || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
+    const actionParam = params.get('action');
+    if (actionParam === 'add_item') {
+      setActiveTab('items');
+      openAddItemModal();
+      if (typeof window !== 'undefined' && window.history?.replaceState) {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('action');
+        window.history.replaceState({}, '', cleanUrl.toString());
+      }
+    }
+
     const targetDishId = params.get('dishId');
     const targetVariantId = params.get('variantId');
     if (targetDishId && handledUrlDishIdRef.current !== targetDishId) {

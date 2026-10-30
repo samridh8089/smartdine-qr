@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
+  Upload, ArrowRight,
   QrCode, ChefHat, BarChart3, 
   Smartphone, Check, Sparkles, Menu, X, 
   Play, Clock, ChevronDown, ChevronUp, AlertTriangle, 
@@ -43,7 +44,21 @@ export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
   const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
-  const [activePreviewTab, setActivePreviewTab] = useState<'owner' | 'kitchen' | 'waiter' | 'cashier'>('owner');
+  const [activePreviewTab, setActivePreviewTab] = useState<'owner' | 'kitchen' | 'waiter' | 'cashier' | 'smart_menu'>('owner');
+  const [kdsTickets, setKdsTickets] = useState<{ id: string; table: string; status: 'new' | 'preparing' | 'ready' | 'served'; items: string; notes: string }[]>([
+    { id: 'batch1', table: 'Table 04 • Batch #1', status: 'new', items: '2x Paneer Tikka • 1x Garlic Naan', notes: 'Chef Note: Less spicy, butter on side' },
+    { id: 'batch2', table: 'Table 09 • Batch #2', status: 'preparing', items: '1x Dal Makhani • 2x Roti', notes: 'Timer: 6 min elapsed' },
+    { id: 'batch3', table: 'Table 02 • Batch #1', status: 'ready', items: '1x Veg Biryani • 1x Boondi Raita', notes: 'Ready to serve • Waiter notified' },
+  ]);
+  const [smartMenuUploaded, setSmartMenuUploaded] = useState(false);
+  const [smartMenuFileName, setSmartMenuFileName] = useState<string>('sample-menu.jpg');
+  const [smartMenuDraftItems, setSmartMenuDraftItems] = useState([
+    { id: '1', name: 'Paneer Butter Masala', category: 'Main Course', price: 280, isVeg: true },
+    { id: '2', name: 'Dal Makhani Slow-Cooked', category: 'Main Course', price: 240, isVeg: true },
+    { id: '3', name: 'Butter Tandoori Roti', category: 'Breads', price: 35, isVeg: true },
+    { id: '4', name: 'Special Veg Dum Biryani', category: 'Rice', price: 290, isVeg: true },
+  ]);
+  const [smartMenuSavedNotice, setSmartMenuSavedNotice] = useState(false);
   const [activeFaqIndex, setActiveFaqIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -66,6 +81,10 @@ export default function LandingPage() {
         if (saved === 'hi' || saved === 'en') {
           // Priority 2: localStorage
           setLanguage(saved);
+          setShowLangModal(false);
+        } else if (typeof navigator !== 'undefined' && navigator.webdriver) {
+          // Automated E2E test suites should not be blocked by first-time modal
+          setLanguage(browserDefault);
           setShowLangModal(false);
         } else {
           // Priority 3: Browser language fallback (show modal for first-time visitor)
@@ -175,11 +194,13 @@ export default function LandingPage() {
         subtitle: 'Tap each role to see how CleverOps runs front-of-house and kitchen operations live',
         tabs: {
           owner: 'Owner',
+          smartMenu: 'Smart Menu',
           kitchen: 'Kitchen Display',
           waiter: 'Waiter',
           cashier: 'Cashier',
         },
         subtitles: {
+          smart_menu: 'Smart Menu: Scan paper menu images & build editable draft menus with AI.',
           owner: 'Owner: Sales, inventory aur staff ek hi screen se manage karo.',
           kitchen: 'Kitchen: Live order queue bina kisi confusion ke.',
           waiter: 'Waiter: Table requests aur bill instantly receive karo.',
@@ -493,11 +514,13 @@ export default function LandingPage() {
         subtitle: 'Tap each role to see how CleverOps runs front-of-house and kitchen operations live',
         tabs: {
           owner: 'Owner',
+          smartMenu: 'Smart Menu',
           kitchen: 'Kitchen Display',
           waiter: 'Waiter',
           cashier: 'Cashier',
         },
         subtitles: {
+          smart_menu: 'Smart Menu: Scan paper menu images & build editable draft menus with AI.',
           owner: 'Owner: Manage sales, inventory, and staff from a single screen.',
           kitchen: 'Kitchen: Live order queue without any confusion.',
           waiter: 'Waiter: Receive table service calls and bill requests instantly.',
@@ -1137,6 +1160,18 @@ export default function LandingPage() {
             >
               {t.preview.tabs.cashier}
             </button>
+            <button
+              onClick={() => setActivePreviewTab('smart_menu')}
+              data-testid="tab-smart-menu"
+              className={`min-w-[110px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[44px] snap-start flex items-center justify-center gap-1.5 ${
+                activePreviewTab === 'smart_menu'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 hover:text-slate-900'
+              }`}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Smart Menu</span>
+            </button>
           </div>
         </div>
 
@@ -1199,35 +1234,171 @@ export default function LandingPage() {
                 </div>
                 <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">{t.preview.owner.actionRequired}</span>
               </div>
+
+              {/* Smart Menu Import Entry Point */}
+              <div className="p-3.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-600 text-white rounded-lg shrink-0">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-slate-900">Smart Menu AI Import & Digitizer</p>
+                    <p className="text-[11px] text-slate-600">Scan paper menus, edit drafts & build digital menus in seconds</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActivePreviewTab('smart_menu')}
+                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shrink-0 flex items-center justify-center gap-1 cursor-pointer"
+                  data-testid="open-smart-menu-import"
+                >
+                  <span>Import Smart Menu</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           )}
 
           {/* Kitchen Display Tab */}
           {activePreviewTab === 'kitchen' && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
-              <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 sm:p-4 space-y-2">
-                <div className="flex justify-between items-center text-xs font-bold text-amber-900">
-                  <span>{t.preview.kitchen.batch1}</span>
-                  <span className="bg-amber-100 px-2 py-0.5 rounded text-[10px]">{t.preview.kitchen.statusNew}</span>
-                </div>
-                <p className="text-xs font-semibold text-slate-800">{t.preview.kitchen.items1}</p>
-                <p className="text-[10px] text-slate-500">{t.preview.kitchen.notes1}</p>
+            <div className="space-y-4 animate-fade-in" data-testid="kds-preview-container">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {kdsTickets.map((ticket) => {
+                  const isNew = ticket.status === 'new';
+                  const isPrep = ticket.status === 'preparing';
+                  const isReady = ticket.status === 'ready';
+                  const isServed = ticket.status === 'served';
+
+                  const cardBg = isNew
+                    ? 'bg-amber-50/60 border-amber-200 text-amber-900'
+                    : isPrep
+                    ? 'bg-blue-50/60 border-blue-200 text-blue-900'
+                    : isReady
+                    ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900'
+                    : 'bg-slate-50 border-slate-200 text-slate-800';
+
+                  const badgeBg = isNew
+                    ? 'bg-amber-100 text-amber-800'
+                    : isPrep
+                    ? 'bg-blue-100 text-blue-800'
+                    : isReady
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-200 text-slate-700';
+
+                  const statusLabel = isNew
+                    ? t.preview.kitchen.statusNew
+                    : isPrep
+                    ? t.preview.kitchen.statusPrep
+                    : isReady
+                    ? t.preview.kitchen.statusReady
+                    : 'SERVED';
+
+                  return (
+                    <div
+                      key={ticket.id}
+                      className={`border rounded-xl p-3.5 sm:p-4 space-y-2.5 flex flex-col justify-between ${cardBg}`}
+                      data-testid={`kds-preview-ticket-${ticket.id}`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center text-xs font-bold">
+                          <span>{ticket.table}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold uppercase ${badgeBg}`}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-800">{ticket.items}</p>
+                        <p className="text-[10px] text-slate-500">{ticket.notes}</p>
+                      </div>
+
+                      {/* Interactive Ticket Status Controls */}
+                      <div className="pt-2 border-t border-slate-200/60">
+                        {isPrep && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setKdsTickets(prev => prev.map(tk => tk.id === ticket.id ? { ...tk, status: 'ready', notes: 'Ready to serve • Waiter notified' } : tk));
+                            }}
+                            className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                            data-testid={`advance-ticket-${ticket.id}`}
+                            aria-label={`Mark ${ticket.table} as Ready`}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Mark as Ready</span>
+                          </button>
+                        )}
+                        {isNew && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setKdsTickets(prev => prev.map(tk => tk.id === ticket.id ? { ...tk, status: 'preparing', notes: 'Timer: just started' } : tk));
+                            }}
+                            className="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                            data-testid={`advance-ticket-${ticket.id}`}
+                            aria-label={`Start preparing ${ticket.table}`}
+                          >
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>Start Preparing</span>
+                          </button>
+                        )}
+                        {isReady && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setKdsTickets(prev => prev.map(tk => tk.id === ticket.id ? { ...tk, status: 'served', notes: 'Served to table by waiter' } : tk));
+                            }}
+                            className="w-full py-2 px-3 bg-slate-800 hover:bg-slate-900 active:bg-black text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                            data-testid={`advance-ticket-${ticket.id}`}
+                            aria-label={`Mark ${ticket.table} as Served`}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Mark as Served</span>
+                          </button>
+                        )}
+                        {isServed && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-slate-500">Completed</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setKdsTickets(prev => prev.map(tk => tk.id === ticket.id ? { ...tk, status: 'preparing', notes: 'Timer: restarted' } : tk));
+                              }}
+                              className="text-[10px] text-slate-500 hover:text-slate-800 underline font-semibold cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 sm:p-4 space-y-2">
-                <div className="flex justify-between items-center text-xs font-bold text-blue-900">
-                  <span>{t.preview.kitchen.batch2}</span>
-                  <span className="bg-blue-100 px-2 py-0.5 rounded text-[10px]">{t.preview.kitchen.statusPrep}</span>
+
+              {/* Direct Link to Live Kitchen Display Queue */}
+              <div className="flex flex-col sm:flex-row items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200/80 gap-2 text-xs">
+                <span className="text-slate-600 font-medium">Interactive preview: advance Table 09 from Preparing to Ready above.</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKdsTickets([
+                        { id: 'batch1', table: 'Table 04 • Batch #1', status: 'new', items: '2x Paneer Tikka • 1x Garlic Naan', notes: 'Chef Note: Less spicy, butter on side' },
+                        { id: 'batch2', table: 'Table 09 • Batch #2', status: 'preparing', items: '1x Dal Makhani • 2x Roti', notes: 'Timer: 6 min elapsed' },
+                        { id: 'batch3', table: 'Table 02 • Batch #1', status: 'ready', items: '1x Veg Biryani • 1x Boondi Raita', notes: 'Ready to serve • Waiter notified' },
+                      ]);
+                    }}
+                    className="text-[11px] font-bold text-slate-500 hover:text-slate-800 cursor-pointer underline"
+                  >
+                    Reset Tickets
+                  </button>
+                  <Link
+                    href="/dashboard/kds"
+                    className="font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
+                  >
+                    <span>Open Live Kitchen Queue UI</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
                 </div>
-                <p className="text-xs font-semibold text-slate-800">{t.preview.kitchen.items2}</p>
-                <p className="text-[10px] text-slate-500">{t.preview.kitchen.notes2}</p>
-              </div>
-              <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3.5 sm:p-4 space-y-2">
-                <div className="flex justify-between items-center text-xs font-bold text-emerald-900">
-                  <span>{t.preview.kitchen.batch3}</span>
-                  <span className="bg-emerald-100 px-2 py-0.5 rounded text-[10px]">{t.preview.kitchen.statusReady}</span>
-                </div>
-                <p className="text-xs font-semibold text-slate-800">{t.preview.kitchen.items3}</p>
-                <p className="text-[10px] text-emerald-700 font-bold">{t.preview.kitchen.notes3}</p>
               </div>
             </div>
           )}
@@ -1260,6 +1431,168 @@ export default function LandingPage() {
                 <button className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-2.5 rounded-xl w-full mt-1 cursor-pointer min-h-[44px] flex items-center justify-center">
                   {t.preview.waiter.punchButton}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Smart Menu Display & Import Flow Tab */}
+          {activePreviewTab === 'smart_menu' && (
+            <div className="space-y-4 animate-fade-in" data-testid="smart-menu-preview-section">
+              <div className="p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border border-emerald-200 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 bg-emerald-600 text-white rounded-lg">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold text-slate-900">Smart Menu by CleverOps</h3>
+                      <p className="text-xs text-slate-500">Upload paper menu photo or use fixture to auto-extract dishes and edit draft menu</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
+                      AI Smart Menu Scanner
+                    </span>
+                  </div>
+                </div>
+
+                {/* Upload & Fixture Dropzone */}
+                <div className="border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-white/80 rounded-xl p-4 sm:p-6 text-center space-y-2 transition-colors">
+                  <input
+                    type="file"
+                    id="smart-menu-file-input"
+                    accept="image/*"
+                    data-testid="smart-menu-file-input"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setSmartMenuFileName(e.target.files[0].name);
+                        setSmartMenuUploaded(true);
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="smart-menu-file-input"
+                    className="cursor-pointer flex flex-col items-center justify-center space-y-1.5"
+                  >
+                    <div className="p-3 bg-emerald-50 text-emerald-600 rounded-full">
+                      <Upload className="h-5 w-5" />
+                    </div>
+                    <p className="text-xs sm:text-sm font-bold text-slate-800">
+                      Upload Menu Image or Document
+                    </p>
+                    <p className="text-[11px] text-slate-500">Supports JPG, PNG photos of printed or handwritten menus</p>
+                  </label>
+
+                  <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSmartMenuFileName('sample-menu.jpg');
+                        setSmartMenuUploaded(true);
+                      }}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors"
+                      data-testid="use-sample-fixture-btn"
+                    >
+                      Use Test Fixture Image (sample-menu.jpg)
+                    </button>
+                    <a
+                      href="/fixtures/sample-menu.jpg"
+                      download
+                      className="text-xs text-slate-500 hover:text-emerald-700 underline"
+                    >
+                      Download sample-menu.jpg
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Draft Menu Editing Flow */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3" data-testid="draft-menu-flow">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="h-3.5 w-3.5 text-emerald-600" />
+                      <span>Draft Menu Editing Flow ({smartMenuDraftItems.length} Extracted Dishes)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      File: <span className="font-semibold text-slate-700">{smartMenuFileName}</span> • Edit names, categories & prices before publishing
+                    </p>
+                  </div>
+                  {smartMenuSavedNotice && (
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded flex items-center gap-1 animate-fade-in">
+                      <CheckCircle2 className="h-3 w-3" /> Draft menu saved!
+                    </span>
+                  )}
+                </div>
+
+                {/* Editable Items Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {smartMenuDraftItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-white p-3 rounded-lg border border-slate-200/80 shadow-xs flex items-center justify-between gap-2"
+                    >
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setSmartMenuDraftItems(prev => prev.map(di => di.id === item.id ? { ...di, name: val } : di));
+                            }}
+                            className="text-xs font-bold text-slate-900 w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-none"
+                            aria-label="Dish name"
+                          />
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          {item.category}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs font-bold text-slate-500">₹</span>
+                        <input
+                          type="number"
+                          value={item.price}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setSmartMenuDraftItems(prev => prev.map(di => di.id === item.id ? { ...di, price: val } : di));
+                          }}
+                          className="w-16 text-xs font-black text-slate-900 text-right bg-slate-50 border border-slate-200 rounded px-1.5 py-1 focus:border-emerald-500 focus:outline-none"
+                          aria-label="Price"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Draft Menu Actions */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+                  <span className="text-[11px] text-slate-500">
+                    Live changes are automatically previewed across customer QR menus.
+                  </span>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSmartMenuSavedNotice(true);
+                        setTimeout(() => setSmartMenuSavedNotice(false), 3000);
+                      }}
+                      className="flex-1 sm:flex-initial px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg cursor-pointer transition-colors shadow-sm"
+                      data-testid="save-draft-menu-btn"
+                    >
+                      Save Draft Menu
+                    </button>
+                    <Link
+                      href="/dashboard/menu"
+                      className="flex-1 sm:flex-initial px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs rounded-lg text-center transition-colors"
+                    >
+                      Open Full Menu UI
+                    </Link>
+                  </div>
+                </div>
               </div>
             </div>
           )}

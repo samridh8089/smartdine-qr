@@ -5,8 +5,8 @@ let _adminClient: any = null;
 function getSupabaseAdmin() {
   if (_adminClient) return _adminClient;
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Missing Supabase service role configuration');
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== '[SENSITIVE]') ? process.env.SUPABASE_SERVICE_ROLE_KEY : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+  if (!url || !key) throw new Error('Missing Supabase configuration variables');
   _adminClient = createClient(url, key);
   return _adminClient;
 }

@@ -43,13 +43,19 @@ export interface RestaurantExpense {
   category: ExpenseCategory;
   amount: number;
   expense_date: string; // YYYY-MM-DD
-  payment_mode: 'cash' | 'upi' | 'bank_transfer' | 'card' | 'cheque';
+  payment_mode: 'cash' | 'upi' | 'bank_transfer' | 'card' | 'cheque' | 'store_inventory';
   vendor_name?: string | null;
   is_recurring?: boolean;
   recurring_frequency?: 'monthly' | 'quarterly' | 'yearly' | null;
   receipt_url?: string | null;
   notes?: string | null;
   created_by?: string | null;
+  staff_name?: string | null;
+  approval_status?: 'approved' | 'pending_approval' | 'rejected';
+  approved_by?: string | null;
+  approved_at?: string | null;
+  expense_source?: 'cash_counter' | 'store_inventory' | 'vendor_invoice' | 'direct';
+  inventory_item_id?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -498,6 +504,7 @@ export function computeOwnerPnL(params: ComputePnLParams): PnLSummary {
   let totalDirectExpenses = 0;
 
   expensesList.forEach(exp => {
+    if (exp.approval_status === 'rejected') return;
     const amt = Number(exp.amount || 0);
     if (amt <= 0) return;
 

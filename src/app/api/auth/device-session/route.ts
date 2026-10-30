@@ -3,11 +3,14 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { verifyStaffRequest } from '@/lib/staffAuthGuard';
 
 let _supabaseAdmin: SupabaseClient | null = null;
-function getSupabaseClient() {
+function getSupabaseClient(token?: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.SUPABASE_SERVICE_ROLE_KEY !== '[SENSITIVE]') ? process.env.SUPABASE_SERVICE_ROLE_KEY : (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '');
+  if (!url || !key) throw new Error('Missing Supabase configuration variables');
+  if (token) {
+    return createClient(url, key, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
+  }
   if (_supabaseAdmin) return _supabaseAdmin;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Missing Supabase service role configuration');
   _supabaseAdmin = createClient(url, key, { auth: { persistSession: false } });
   return _supabaseAdmin;
 }
@@ -30,7 +33,8 @@ export async function GET(req: Request) {
       return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
     }
 
-    const client = getSupabaseClient();
+    const token = (req.headers.get('Authorization') || req.headers.get('authorization') || '').replace('Bearer ', '').trim();
+    const client = getSupabaseClient(token);
 
     const { data: rest, error } = await client
       .from('restaurants')
@@ -100,7 +104,8 @@ export async function POST(req: Request) {
       return authCheck.response || NextResponse.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, { status: 401 });
     }
 
-    const client = getSupabaseClient();
+    const token = (req.headers.get('Authorization') || req.headers.get('authorization') || '').replace('Bearer ', '').trim();
+    const client = getSupabaseClient(token);
 
     const { data: rest, error: fetchErr } = await client
       .from('restaurants')

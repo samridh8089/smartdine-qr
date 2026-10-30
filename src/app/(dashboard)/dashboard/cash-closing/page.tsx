@@ -6,7 +6,10 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import { getDayRangeInTimezone } from '@/lib/timestamp';
-import { Calendar, CheckCircle, AlertTriangle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Calendar, CheckCircle, AlertTriangle, RefreshCw, ShieldCheck, Plus, Check, X, Clock, ShoppingBag } from 'lucide-react';
+import PettyCashRequisitionModal from '@/components/dashboard/PettyCashRequisitionModal';
+import { approveOrRejectExpense } from '@/lib/pettyCashRequisitionService';
+import { RestaurantExpense } from '@/lib/pnlEngine';
 
 interface CashClosingRecord {
   id: string;
@@ -28,12 +31,16 @@ export default function CashClosingPage() {
   const restaurantContext = useContext(RestaurantContext);
   const restaurant = restaurantContext?.restaurant || null;
   const profile = restaurantContext?.profile || null;
+  const activeRole = (restaurantContext?.activeRole || profile?.role || 'cashier').toLowerCase();
 
   // 1. useState hooks (Structured strictly per CleverOps React Hooks Safety Guardrail)
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [openingFloat, setOpeningFloat] = useState('2000');
   const [cashSales, setCashSales] = useState('0');
   const [cashExpenses, setCashExpenses] = useState('0');
+  const [isPettyCashModalOpen, setIsPettyCashModalOpen] = useState(false);
+  const [dayExpenses, setDayExpenses] = useState<RestaurantExpense[]>([]);
+  const [isApprovingId, setIsApprovingId] = useState<string | null>(null);
   const [countedCash, setCountedCash] = useState('');
   const [note, setNote] = useState('');
   const [isLoadingRealData, setIsLoadingRealData] = useState(false);
@@ -175,17 +182,22 @@ export default function CashClosingPage() {
         });
       }
 
-      // Fetch cash expenses for this date (where payment_mode is 'cash')
+      // Fetch expenses for this date
       const { data: expData, error: expErr } = await supabase
         .from('restaurant_expenses')
-        .select('amount, payment_mode')
+        .select('*')
         .eq('restaurant_id', restaurant.id)
-        .eq('payment_mode', 'cash')
-        .eq('expense_date', date);
+        .eq('expense_date', date)
+        .order('created_at', { ascending: false });
 
       if (!expErr && expData) {
-        const sumExp = expData.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+        setDayExpenses(expData as any);
+        // Only cash payments affect physical cash drawer; exclude rejected
+        const cashList = expData.filter((e: any) => e.payment_mode === 'cash' && e.approval_status !== 'rejected');
+        const sumExp = cashList.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
         setCashExpenses(String(Math.round(sumExp)));
+      } else {
+        setDayExpenses([]);
       }
     } catch (_) {
       // Best-effort fetch; user can still manually adjust if needed
@@ -193,6 +205,27 @@ export default function CashClosingPage() {
       setIsLoadingRealData(false);
     }
   }, [restaurant?.id, restaurant?.settings?.timezone, date]);
+
+  const handleApproveReject = useCallback(async (expenseId: string, action: 'approved' | 'rejected') => {
+    setIsApprovingId(expenseId);
+    try {
+      const res = await approveOrRejectExpense({
+        expenseId,
+        action,
+        approverProfile: {
+          id: profile?.id || '',
+          name: profile?.full_name || profile?.role || 'Staff',
+          role: activeRole,
+        },
+      });
+      if (res.success) {
+        await fetchTodayFigures();
+      }
+    } catch (_) {
+    } finally {
+      setIsApprovingId(null);
+    }
+  }, [profile, activeRole, fetchTodayFigures]);
 
   const handleCloseRegister = useCallback(() => {
     if (countedCash === '') return;
@@ -356,10 +389,21 @@ export default function CashClosingPage() {
               </div>
 
               {/* Cash Expenses Paid from Drawer */}
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-600">
-                  Cash Expenses Paid from Drawer
-                </label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-600">
+                    Cash Expenses Paid from Drawer
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsPettyCashModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>+ Add Drawer Expense</span>
+                  </button>
+                </div>
+
                 <div className="flex rounded-xl border border-slate-200 bg-white shadow-2xs focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500 overflow-hidden">
                   <span className="bg-slate-100 text-slate-600 px-3.5 py-2.5 text-xs font-bold border-r border-slate-200 flex items-center select-none shrink-0">
                     {currencySymbol}
@@ -373,7 +417,97 @@ export default function CashClosingPage() {
                     className="w-full px-3.5 py-2.5 text-sm font-bold text-slate-900 focus:outline-none bg-transparent"
                   />
                 </div>
-                <p className="text-[11px] text-slate-400">Cash taken from drawer for milk, ice, vegetables, etc.</p>
+                <p className="text-[11px] text-slate-400">Cash taken from drawer for milk, ice, vegetables, cleaning, etc.</p>
+
+                {/* Day Expenses Audit List */}
+                {dayExpenses.length > 0 && (
+                  <div className="mt-2 space-y-1.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                      <span>Today&apos;s Expenses ({dayExpenses.length})</span>
+                      <span className="text-[10px] lowercase text-slate-400">cash &amp; store items</span>
+                    </div>
+
+                    {dayExpenses.map((exp: any) => {
+                      const isPending = exp.approval_status === 'pending_approval';
+                      const isApproved = exp.approval_status === 'approved' || !exp.approval_status;
+                      const isRejected = exp.approval_status === 'rejected';
+                      const canApprove = ['owner', 'manager', 'super_admin'].includes(activeRole);
+
+                      return (
+                        <div
+                          key={exp.id}
+                          className={`p-2 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+                            isRejected
+                              ? 'bg-rose-50/50 border-rose-200 opacity-60'
+                              : isPending
+                              ? 'bg-amber-50/80 border-amber-200'
+                              : 'bg-white border-slate-200'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-800 truncate">{exp.title}</span>
+                              {exp.payment_mode === 'store_inventory' ? (
+                                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-700">
+                                  Store Stock
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-700">
+                                  Cash Drawer
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate flex items-center gap-1.5 mt-0.5">
+                              <span>By: {exp.staff_name || 'Staff'}</span>
+                              {exp.notes && <span>• {exp.notes}</span>}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-bold font-mono text-slate-900">
+                              {currencySymbol} {Number(exp.amount || 0).toLocaleString('en-IN')}
+                            </span>
+
+                            {isPending && canApprove ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={isApprovingId === exp.id}
+                                  onClick={() => handleApproveReject(exp.id, 'approved')}
+                                  title="Approve Expense"
+                                  className="p-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer transition-colors"
+                                >
+                                  <Check className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isApprovingId === exp.id}
+                                  onClick={() => handleApproveReject(exp.id, 'rejected')}
+                                  title="Reject Expense"
+                                  className="p-1 rounded bg-rose-600 hover:bg-rose-500 text-white cursor-pointer transition-colors"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            ) : isPending ? (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 flex items-center gap-1">
+                                <Clock className="h-2.5 w-2.5" /> Pending
+                              </span>
+                            ) : isRejected ? (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">
+                                Rejected
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                Approved
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Expected Total Box */}
@@ -556,6 +690,16 @@ export default function CashClosingPage() {
           </Card>
         </div>
       </div>
+
+      <PettyCashRequisitionModal
+        isOpen={isPettyCashModalOpen}
+        onClose={() => setIsPettyCashModalOpen(false)}
+        restaurantId={restaurant?.id || ''}
+        profile={profile}
+        activeRole={activeRole}
+        initialTab="petty_cash"
+        onSuccess={fetchTodayFigures}
+      />
     </div>
   );
 }

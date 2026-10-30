@@ -187,15 +187,12 @@ export function calculateOrderTax(
   }
 
   // Default mode: Intrastate CGST + SGST
-  const totalGstAmount = roundCurrency((taxableAmount * rates.totalRate) / 100);
-  let cgstAmount = roundCurrency((taxableAmount * rates.cgstPercentage) / 100);
-  let sgstAmount = roundCurrency((taxableAmount * rates.sgstPercentage) / 100);
-
-  // Guarantee cgstAmount + sgstAmount === totalGstAmount
-  if (roundCurrency(cgstAmount + sgstAmount) !== totalGstAmount) {
-    const diff = roundCurrency(totalGstAmount - (cgstAmount + sgstAmount));
-    sgstAmount = roundCurrency(sgstAmount + diff);
-  }
+  // For standard intrastate GST (equal rates), CGST and SGST must be strictly equal per Section 9 of the CGST Act
+  const cgstAmount = roundCurrency((taxableAmount * rates.cgstPercentage) / 100);
+  const sgstAmount = rates.cgstPercentage === rates.sgstPercentage
+    ? cgstAmount
+    : roundCurrency((taxableAmount * rates.sgstPercentage) / 100);
+  const totalGstAmount = roundCurrency(cgstAmount + sgstAmount);
 
   const grandTotal = roundCurrency(taxableAmount + totalGstAmount);
 

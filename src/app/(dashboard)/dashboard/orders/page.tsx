@@ -1149,8 +1149,13 @@ export default function OrdersPage() {
     window.addEventListener('force-resync', handleResync);
 
     console.log(`Subscribing to live orders, requests & batches updates for restaurant: ${restId}`);
+    const chName = `live_orders_${restId}`;
+    const existing = supabase.getChannels().find((c: any) => c.topic === `realtime:${chName}`);
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
     const channel = supabase
-      .channel(`live_orders_${restId}`, {
+      .channel(chName, {
         config: {
           broadcast: { self: true }
         }
