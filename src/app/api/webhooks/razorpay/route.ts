@@ -127,7 +127,19 @@ export async function POST(req: Request) {
             // Provision new restaurant via RPC fallback
             let userId = prof?.id;
             if (!userId) {
-              const { data: authUser } = await getAdmin().auth.admin.createUser({
+              try {
+                const listRes = await getAdmin().auth.admin.listUsers({ page: 1, perPage: 1000 });
+                const existingAuth = (listRes?.data?.users || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+                if (existingAuth?.id) {
+                  userId = existingAuth.id;
+                }
+              } catch (listErr) {
+                console.warn('[Razorpay Webhook] listUsers check warning:', listErr);
+              }
+            }
+
+            if (!userId) {
+              const { data: authUser, error: createAuthErr } = await getAdmin().auth.admin.createUser({
                 email: cleanEmail,
                 password: cleanPassword || 'SmartDine#2026!',
                 email_confirm: true,
@@ -150,8 +162,10 @@ export async function POST(req: Request) {
                   email: cleanEmail
                 }).catch((e: any) => console.warn('[Razorpay Webhook] Invite/recovery link dispatch error:', e?.message));
               }
-            } else if (cleanPassword) {
-              // Update user password and metadata if account already existed
+            }
+
+            if (userId && cleanPassword) {
+              // Owner Password Preservation Guarantee: Ensure exact typed password is set
               await getAdmin().auth.admin.updateUserById(userId, {
                 password: cleanPassword,
                 email_confirm: true,

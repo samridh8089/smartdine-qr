@@ -159,6 +159,70 @@ export async function POST(req: Request) {
       }
     }
 
+    // Task: Owner Password Preservation Guarantee
+    // Pre-provision or sync the owner in auth.users with their exact typed password upfront!
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanPassword = (body.password || '').trim();
+    const cleanOwnerName = (body.fullName || body.restaurantName || 'Restaurant Owner').trim();
+    const cleanRestName = (body.restaurantName || 'Restaurant').trim();
+    const cleanPhone = (body.phone || '').trim();
+
+    if (cleanEmail && cleanPassword && !isUpgrade) {
+      try {
+        const { createClient } = require('@supabase/supabase-js');
+        const supabaseAdmin = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+          process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+        );
+
+        const listRes = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const existingAuth = (listRes?.data?.users || []).find((u: any) => u.email?.toLowerCase().trim() === cleanEmail);
+
+        if (existingAuth?.id) {
+          await supabaseAdmin.auth.admin.updateUserById(existingAuth.id, {
+            password: cleanPassword,
+            email_confirm: true,
+            user_metadata: {
+              role: 'owner',
+              name: cleanOwnerName,
+              full_name: cleanOwnerName,
+              display_name: cleanOwnerName,
+              fullName: cleanOwnerName,
+              phone: cleanPhone,
+              restaurant_name: cleanRestName,
+              restaurantName: cleanRestName
+            },
+            app_metadata: { role: 'owner' }
+          });
+          console.log(`[CreateOrder Auth Sync] Updated auth user ${cleanEmail} with owner's exact typed password`);
+        } else {
+          const { error: createAuthErr } = await supabaseAdmin.auth.admin.createUser({
+            email: cleanEmail,
+            password: cleanPassword,
+            email_confirm: true,
+            user_metadata: {
+              role: 'owner',
+              name: cleanOwnerName,
+              full_name: cleanOwnerName,
+              display_name: cleanOwnerName,
+              fullName: cleanOwnerName,
+              phone: cleanPhone,
+              restaurant_name: cleanRestName,
+              restaurantName: cleanRestName
+            },
+            app_metadata: { role: 'owner' }
+          });
+          if (createAuthErr) {
+            console.warn(`[CreateOrder Auth Sync] Notice creating auth user: ${createAuthErr.message}`);
+          } else {
+            console.log(`[CreateOrder Auth Sync] Created auth user ${cleanEmail} with owner's exact typed password`);
+          }
+        }
+      } catch (authSyncErr: any) {
+        console.warn(`[CreateOrder Auth Sync] Error syncing auth user: ${authSyncErr?.message}`);
+      }
+    }
+
     let keyId: string;
     let keySecret: string;
     try {

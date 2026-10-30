@@ -112,7 +112,14 @@ function CheckoutContent() {
             restaurantId: activeRestId,
             email,
             billingInterval,
-            isUpgrade
+            isUpgrade,
+            fullName,
+            phone,
+            password,
+            restaurantType,
+            city,
+            address,
+            slug
           })
         });
         const orderData = await orderRes.json();
