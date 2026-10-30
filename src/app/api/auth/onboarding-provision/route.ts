@@ -477,9 +477,6 @@ export async function POST(req: Request) {
         email: cleanEmail,
         full_name: displayName,
         role: 'owner',
-        phone: cleanPhone,
-        is_active: true,
-        is_verified: true,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
 

@@ -217,11 +217,8 @@ export async function POST(req: Request) {
                 email: cleanEmail,
                 full_name: cleanOwnerName,
                 role: 'owner',
-                phone: cleanPhone,
-                is_active: true,
-                is_verified: true,
                 updated_at: new Date().toISOString()
-              }, { onConflict: 'id' }).catch(() => {});
+              }, { onConflict: 'id' }).catch((e: any) => console.warn('[Razorpay Webhook] Profile link error:', e?.message));
             }
           }
         }
@@ -309,9 +306,6 @@ export async function POST(req: Request) {
             email: cleanEmail,
             full_name: cleanOwnerName,
             role: 'owner',
-            phone: cleanPhone,
-            is_active: true,
-            is_verified: true,
             updated_at: nowIso
           }, { onConflict: 'id' }).catch((e: any) => console.warn('[Razorpay Webhook] Profile link error:', e?.message));
 

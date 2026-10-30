@@ -61,25 +61,12 @@ export async function POST(req: Request) {
       const { error: profUpdErr } = await admin.from('profiles').update({
         restaurant_id: matchedRest.id,
         role: 'owner',
-        full_name: ownerName
+        full_name: ownerName,
+        updated_at: new Date().toISOString()
       }).eq('id', found.id);
 
-      const { error: profUpsertErr } = await admin.from('profiles').upsert({
-        id: found.id,
-        restaurant_id: matchedRest.id,
-        email: cleanTarget,
-        full_name: ownerName,
-        role: 'owner',
-        phone,
-        is_active: true,
-        is_verified: true,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
-
-      if (profUpdErr || profUpsertErr) {
-        return NextResponse.json({ 
-          error: (profUpdErr?.message || '') + ' ' + (profUpsertErr?.message || '') 
-        }, { status: 500 });
+      if (profUpdErr) {
+        return NextResponse.json({ error: profUpdErr.message }, { status: 500 });
       }
 
       // 3. Update auth user metadata
