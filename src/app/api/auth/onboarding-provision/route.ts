@@ -174,7 +174,21 @@ export async function POST(req: Request) {
     }
 
     const cleanPassword = (password || '').trim();
-    const displayName = cleanName || cleanRestName || 'Owner';
+    let displayName = cleanName;
+    if (!displayName) {
+      if (cleanRestName && cleanRestName.toLowerCase() !== 'restaurant') {
+        displayName = cleanRestName;
+      } else if (cleanEmail) {
+        const rawPrefix = cleanEmail.split('@')[0].replace(/[0-9_.-]/g, ' ').trim();
+        displayName = rawPrefix ? rawPrefix.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Restaurant Owner';
+      } else {
+        displayName = 'Restaurant Owner';
+      }
+    }
+    const resolvedRestName = (cleanRestName && cleanRestName.toLowerCase() !== 'restaurant')
+      ? cleanRestName
+      : (displayName ? `${displayName}'s Restaurant` : 'Restaurant');
+
     const initialUserMetadata = {
       name: displayName,
       full_name: displayName,
@@ -182,8 +196,8 @@ export async function POST(req: Request) {
       fullName: displayName,
       phone: cleanPhone,
       role: 'owner',
-      restaurant_name: cleanRestName,
-      restaurantName: cleanRestName
+      restaurant_name: resolvedRestName,
+      restaurantName: resolvedRestName
     };
 
     if (userId) {

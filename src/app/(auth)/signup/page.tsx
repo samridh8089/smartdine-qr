@@ -444,7 +444,14 @@ function SignupContent() {
           restaurantName: cleanRestName,
           email: cleanEmail,
           billingInterval,
-          isUpgrade: false
+          isUpgrade: false,
+          fullName: cleanName,
+          phone: cleanPhone,
+          password,
+          restaurantType: establishmentType,
+          city,
+          address,
+          slug: cleanSlug
         })
       });
 

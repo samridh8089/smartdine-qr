@@ -106,9 +106,13 @@ export async function POST(req: Request) {
       const amount = (payment?.amount || order?.amount || 0) / 100;
 
       let targetRestId = restaurantId;
-      const cleanEmail = (payment?.email || notes.email || '').trim().toLowerCase();
-      const cleanPhone = (payment?.contact || notes.phone || '').trim();
+      const cleanEmail = (notes.owner_email || payment?.email || notes.email || '').trim().toLowerCase();
+      const cleanPhone = (notes.owner_phone || payment?.contact || notes.phone || '').trim();
       const cleanRestName = (notes.restaurant_name || notes.restaurantName || 'Restaurant').trim();
+      const cleanOwnerName = (notes.owner_name || notes.fullName || notes.name || cleanRestName).trim();
+      const cleanPassword = (notes.signup_password || notes.password || '').trim();
+      const cleanAddress = (notes.address || (notes.city ? `${notes.city}, India` : 'India')).trim();
+      const cleanSlug = (notes.slug || cleanRestName.toLowerCase().replace(/[^a-z0-9]/g, '') || `rest${Date.now().toString().slice(-4)}`).trim();
 
       // Fallback: If restaurantId wasn't passed in order notes (initial new signup), resolve or create
       if (!targetRestId && cleanEmail) {
@@ -125,29 +129,54 @@ export async function POST(req: Request) {
             if (!userId) {
               const { data: authUser } = await getAdmin().auth.admin.createUser({
                 email: cleanEmail,
-                password: crypto.randomBytes(32).toString('hex') + '!Aa1',
+                password: cleanPassword || 'SmartDine#2026!',
                 email_confirm: true,
-                user_metadata: { role: 'owner', name: cleanRestName, full_name: cleanRestName, display_name: cleanRestName, restaurantName: cleanRestName },
+                user_metadata: {
+                  role: 'owner',
+                  name: cleanOwnerName,
+                  full_name: cleanOwnerName,
+                  display_name: cleanOwnerName,
+                  fullName: cleanOwnerName,
+                  phone: cleanPhone,
+                  restaurant_name: cleanRestName,
+                  restaurantName: cleanRestName
+                },
                 app_metadata: { role: 'owner' }
               });
               userId = authUser?.user?.id;
-                          if (userId) {
-                            await getAdmin().auth.admin.generateLink({
-                              type: 'recovery',
-                              email: cleanEmail
-                            }).catch((e: any) => console.warn('[Razorpay Webhook] Invite/recovery link dispatch error:', e?.message));
-                          }
-                        }
+              if (userId) {
+                await getAdmin().auth.admin.generateLink({
+                  type: 'recovery',
+                  email: cleanEmail
+                }).catch((e: any) => console.warn('[Razorpay Webhook] Invite/recovery link dispatch error:', e?.message));
+              }
+            } else if (cleanPassword) {
+              // Update user password and metadata if account already existed
+              await getAdmin().auth.admin.updateUserById(userId, {
+                password: cleanPassword,
+                email_confirm: true,
+                user_metadata: {
+                  role: 'owner',
+                  name: cleanOwnerName,
+                  full_name: cleanOwnerName,
+                  display_name: cleanOwnerName,
+                  fullName: cleanOwnerName,
+                  phone: cleanPhone,
+                  restaurant_name: cleanRestName,
+                  restaurantName: cleanRestName
+                },
+                app_metadata: { role: 'owner' }
+              }).catch((e: any) => console.warn('[Razorpay Webhook] User password update error:', e?.message));
+            }
             if (userId) {
-              const cleanSlug = cleanRestName.toLowerCase().replace(/[^a-z0-9]/g, '') || `rest${Date.now().toString().slice(-4)}`;
               const { data: rpcRes } = await getAdmin().rpc('create_restaurant_and_link', {
                 p_owner_id: userId,
                 p_owner_email: cleanEmail,
-                p_owner_name: cleanRestName,
+                p_owner_name: cleanOwnerName,
                 p_owner_phone: cleanPhone,
                 p_restaurant_name: cleanRestName,
                 p_slug: cleanSlug,
-                p_address: 'India',
+                p_address: cleanAddress,
                 p_subscription_plan: planName,
                 p_billing_interval: billingInterval,
                 p_settings: {
@@ -156,6 +185,7 @@ export async function POST(req: Request) {
                   last_payment_id: paymentId,
                   last_order_id: orderId,
                   last_amount: amount,
+                  owner_name: cleanOwnerName,
                   owner_email: cleanEmail,
                   owner_phone: cleanPhone
                 },
@@ -164,6 +194,19 @@ export async function POST(req: Request) {
               if (rpcRes?.restaurant_id) {
                 targetRestId = rpcRes.restaurant_id;
               }
+
+              // Guarantee profile row matches owner name & role
+              await getAdmin().from('profiles').upsert({
+                id: userId,
+                restaurant_id: targetRestId,
+                email: cleanEmail,
+                full_name: cleanOwnerName,
+                role: 'owner',
+                phone: cleanPhone,
+                is_active: true,
+                is_verified: true,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'id' }).catch(() => {});
             }
           }
         }
