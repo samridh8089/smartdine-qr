@@ -31,8 +31,9 @@ import {
   CheckCircle2, XCircle, ChevronRight, Edit3, ArrowUpRight, 
   ArrowDownRight, RefreshCw, AlertCircle, PieChart, Layers,
   FileSpreadsheet, Upload, Download, Check, AlertOctagon,
-  Clock, DollarSign, X, UtensilsCrossed, ArrowLeft, LayoutGrid
+  Clock, DollarSign, X, UtensilsCrossed, ArrowLeft, LayoutGrid, PackageCheck
 } from 'lucide-react';
+import PettyCashRequisitionModal from '@/components/dashboard/PettyCashRequisitionModal';
 import { createPortal } from 'react-dom';
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
 
@@ -812,7 +813,7 @@ const INVENTORY_HUB_MODULES = [
 ];
 
 export default function InventoryDashboardPage() {
-  const { restaurant, activeRole, planSpec } = useRestaurant();
+  const { restaurant, profile, activeRole, planSpec } = useRestaurant();
   const restaurantId = restaurant?.id || '';
   const [aiRecipeUsage, setAiRecipeUsage] = useState<{ used: number; limit: number | null; remaining: number | null }>({
     used: 0,
@@ -849,6 +850,8 @@ export default function InventoryDashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedStockStatus, setSelectedStockStatus] = useState<string>('all');
+  const [showStoreRequisitionModal, setShowStoreRequisitionModal] = useState(false);
+  const [requisitionPreselectedItemId, setRequisitionPreselectedItemId] = useState<string | undefined>(undefined);
 
   // Item Modal & Entry Flow
   const [showItemModal, setShowItemModal] = useState(false);
@@ -2843,6 +2846,16 @@ export default function InventoryDashboardPage() {
                   >
                     <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>Import CSV</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRequisitionPreselectedItemId(undefined);
+                      setShowStoreRequisitionModal(true);
+                    }}
+                    className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                  >
+                    <PackageCheck className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                    <span>Issue Stock to Staff</span>
                   </button>
                   <button
                     onClick={openAddItemModal}
@@ -5429,6 +5442,21 @@ export default function InventoryDashboardPage() {
           </div>
         </ModalPortal>
       )}
+
+      {/* Store Requisition Modal */}
+      <PettyCashRequisitionModal
+        isOpen={showStoreRequisitionModal}
+        onClose={() => {
+          setShowStoreRequisitionModal(false);
+          setRequisitionPreselectedItemId(undefined);
+        }}
+        restaurantId={restaurantId}
+        profile={profile}
+        activeRole={activeRole}
+        initialTab="store_issue"
+        preselectedItemId={requisitionPreselectedItemId}
+        onSuccess={loadData}
+      />
     </div>
   );
 }

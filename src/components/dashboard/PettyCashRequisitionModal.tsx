@@ -189,7 +189,7 @@ export default function PettyCashRequisitionModal({
         notes,
         staffProfile: {
           id: profile?.id || '',
-          name: profile?.full_name || profile?.name,
+          name: profile?.full_name || profile?.role || 'Staff',
           role: userRole,
         },
       });
@@ -245,7 +245,7 @@ export default function PettyCashRequisitionModal({
         purposeNote: purposeNote.trim(),
         staffProfile: {
           id: profile?.id || '',
-          name: profile?.full_name || profile?.name,
+          name: profile?.full_name || profile?.role || 'Staff',
           role: userRole,
         },
       });

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Search, Printer, Check, X, AlertCircle, AlertTriangle, ShoppingBag, Bell, BellOff, ClipboardList, CheckCircle, ChefHat, Plus, XCircle, Banknote, CreditCard, Copy, ArrowLeft, Calendar, Clock, UserCheck, Users, UtensilsCrossed, Phone, UserPlus, User, Smartphone, Split, Share2, Download, Scissors, RotateCcw, Zap } from 'lucide-react';
 import PunchOrderModal from '@/components/dashboard/PunchOrderModal';
+import PettyCashRequisitionModal from '@/components/dashboard/PettyCashRequisitionModal';
 import { playLoudBell, unlockAudio, stopLoudBell, isGloballyMuted, isBellRinging } from '@/lib/soundAlert';
 import { registerServiceWorkerAndPush } from '@/lib/registerWebPush';
 import { broadcastOrderRealtimeEvent } from '@/lib/realtime';
@@ -434,6 +435,7 @@ export default function OrdersPage() {
   const [refundNotes, setRefundNotes] = useState<string>('');
   const [isSubmittingRefund, setIsSubmittingRefund] = useState(false);
   const [isBellRinging, setIsBellRinging] = useState(false);
+  const [pettyCashModalOpen, setPettyCashModalOpen] = useState(false);
 
   // ─── 2. useRef Declarations ───────────────────────────────────────────
   const orderListContainerRef = useRef<HTMLDivElement>(null);
@@ -2751,6 +2753,17 @@ export default function OrdersPage() {
               )}
             </button>
           </div>
+
+          {['owner', 'manager', 'cashier'].includes((activeRole || '').toLowerCase()) && (
+            <button
+              type="button"
+              onClick={() => setPettyCashModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 transition-all cursor-pointer shadow-2xs"
+            >
+              <Banknote className="h-3.5 w-3.5" />
+              <span>Petty Cash</span>
+            </button>
+          )}
 
           <Button
             onClick={() => setPunchModalOpen(true)}
@@ -5460,6 +5473,18 @@ export default function OrdersPage() {
             }
             await safeReloadOrders(restaurant.id);
           }}
+        />
+      )}
+
+      {/* Petty Cash & Store Requisition Quick Modal */}
+      {restaurant && (
+        <PettyCashRequisitionModal
+          isOpen={pettyCashModalOpen}
+          onClose={() => setPettyCashModalOpen(false)}
+          restaurantId={restaurant.id}
+          profile={profile}
+          activeRole={activeRole}
+          initialTab="petty_cash"
         />
       )}
 
