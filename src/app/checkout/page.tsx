@@ -82,6 +82,27 @@ function CheckoutContent() {
         }
       }
 
+      // Task: Owner Password Preservation Guarantee
+      // Pre-sync typed password into auth.users immediately upon checkout load
+      if (isSignup && email && password) {
+        try {
+          await fetch('/api/auth/pre-sync-credentials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email,
+              password,
+              fullName,
+              phone,
+              restaurantName
+            })
+          });
+          console.log('[Checkout] Credentials pre-synced successfully');
+        } catch (syncErr) {
+          console.warn('[Checkout] Pre-sync notice:', syncErr);
+        }
+      }
+
       const scriptReady = await loadRazorpayScript();
       if (!scriptReady) {
         throw new Error('Razorpay Checkout SDK failed to load. Please check internet connection.');
