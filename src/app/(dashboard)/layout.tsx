@@ -16,7 +16,7 @@ import {
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
   LogOut, MenuSquare, X, ChevronRight, User, Settings,
   ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users,
-  Bell, BellOff, UserCheck
+  Bell, BellOff, UserCheck, Banknote
 } from 'lucide-react';
 import { setGlobalMute, stopLoudBell, isGloballyMuted, playLoudBell } from '@/lib/soundAlert';
 import { registerDeviceActivity, getOrCreateDeviceId } from '@/lib/sessionManager';
@@ -52,16 +52,16 @@ export function useRestaurant() {
 }
 
 const ALLOWED_PATHS: Record<string, string[]> = {
-  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
-  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center'],
-  supervisor: ['/dashboard', '/dashboard/orders', '/dashboard/tables', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  owner: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/kds', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center', '/dashboard/cash-closing'],
+  manager: ['/dashboard', '/dashboard/menu', '/dashboard/ai-menu', '/dashboard/offers', '/dashboard/tables', '/dashboard/orders', '/dashboard/reports', '/dashboard/billing', '/dashboard/settings', '/dashboard/inventory', '/dashboard/staff', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/founder', '/dashboard/founder/control-center', '/dashboard/cash-closing'],
+  supervisor: ['/dashboard', '/dashboard/orders', '/dashboard/tables', '/dashboard/inventory', '/dashboard/reports', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/cash-closing'],
   head_chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   chef: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen: ['/dashboard/kds', '/dashboard/inventory', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   kitchen_helper: ['/dashboard/kds', '/dashboard/attendance', '/dashboard/attendance/punch'],
   captain: ['/dashboard/orders', '/dashboard/tables', '/dashboard/menu', '/dashboard/attendance', '/dashboard/attendance/punch'],
   waiter: ['/dashboard/orders', '/dashboard/tables', '/dashboard/attendance', '/dashboard/attendance/punch'],
-  cashier: ['/dashboard/orders', '/dashboard/tables', '/dashboard/reports', '/dashboard/attendance', '/dashboard/attendance/punch'],
+  cashier: ['/dashboard/orders', '/dashboard/tables', '/dashboard/reports', '/dashboard/attendance', '/dashboard/attendance/punch', '/dashboard/cash-closing'],
   cleaner: ['/dashboard/attendance', '/dashboard/attendance/punch'],
   helper: ['/dashboard/attendance', '/dashboard/attendance/punch'],
   staff: ['/dashboard/attendance', '/dashboard/attendance/punch']
@@ -70,9 +70,11 @@ const ALLOWED_PATHS: Record<string, string[]> = {
 const ALL_MENU_ITEMS = [
   { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, roles: ['owner', 'manager', 'supervisor'] },
   { name: 'Live Orders', href: '/dashboard/orders', icon: ClipboardList, roles: ['owner', 'manager', 'supervisor', 'captain', 'waiter', 'cashier'] },
+  { name: 'Cash Register', href: '/dashboard/cash-closing', icon: Banknote, roles: ['owner', 'manager', 'supervisor', 'cashier'] },
   { name: 'Kitchen KDS', href: '/dashboard/kds', icon: ChefHat, roles: ['head_chef', 'chef', 'kitchen', 'kitchen_helper'] },
   { name: 'Tables', href: '/dashboard/tables', icon: QrCode, roles: ['owner', 'manager', 'supervisor', 'captain', 'waiter', 'cashier'] },
   { name: 'Smart Menu by Clever Ops', href: '/dashboard/menu', icon: Sparkles, roles: ['owner', 'manager', 'head_chef', 'chef', 'kitchen', 'supervisor', 'captain'] },
+  { name: 'Offers & Discounts', href: '/dashboard/offers', icon: Tag, roles: ['owner', 'manager'] },
   { name: 'Attendance & Shifts', href: '/dashboard/attendance', icon: UserCheck, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen', 'kitchen_helper', 'captain', 'waiter', 'cashier', 'cleaner', 'helper', 'staff'] },
   { name: 'Inventory & Recipes', href: '/dashboard/inventory', icon: Boxes, roles: ['owner', 'manager', 'supervisor', 'head_chef', 'chef', 'kitchen'] },
   { name: 'Reports & Analytics', href: '/dashboard/reports', icon: BarChart3, roles: ['owner', 'manager', 'supervisor', 'cashier'] },
@@ -870,7 +872,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             {/* Navigation Links */}
-            <nav className="flex-1 px-3.5 sm:px-4 py-3 space-y-2.5 lg:space-y-1 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <nav className="flex-1 px-3 sm:px-3.5 py-2 space-y-2 lg:space-y-0.5 overflow-y-auto lg:overflow-y-hidden no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
               {filteredMenuItems.map((item) => {
                 const isActive = pathname === item.href;
                 const itemLockInfo = ROUTE_FEATURE_KEYS[item.href];
@@ -899,7 +901,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       if (sidebarOpen) setSidebarOpen(false);
                     }}
                     className={`
-                      flex items-center justify-between px-4 py-3.5 lg:py-2.5 rounded-xl lg:rounded-lg text-[17px] sm:text-[17.5px] lg:text-sm font-bold lg:font-medium transition-all group
+                      flex items-center justify-between px-4 py-3 lg:py-1.5 lg:px-3 rounded-xl lg:rounded-lg text-[16px] sm:text-[17px] lg:text-[13px] font-bold lg:font-medium transition-all group
                       ${isActive 
                         ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/10 font-extrabold lg:font-bold' 
                         : isLocked
@@ -919,8 +921,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </nav>
 
             {/* User Section / Logout */}
-            <div className="p-3.5 border-t border-slate-800 bg-slate-950/40">
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-800 mb-2.5">
+            <div className="p-3 border-t border-slate-800 bg-slate-950/40 shrink-0">
+              <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-slate-900 border border-slate-800 mb-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold truncate text-slate-200">{profile?.full_name}</p>
                   <p className="text-[10px] text-slate-400 truncate capitalize mt-0.5">
@@ -930,7 +932,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-all cursor-pointer"
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-rose-400 hover:bg-rose-950/20 hover:text-rose-300 transition-all cursor-pointer"
               >
                 <LogOut className="h-4 w-4 shrink-0" />
                 Sign Out
