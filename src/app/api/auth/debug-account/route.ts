@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: Request) {
   try {
-    const { email, secret } = await req.json();
+    const { email, secret, action, newPassword } = await req.json();
     if (secret !== 'PURGE_ACCOUNT_EXPLICIT_CONFIRMATION_2026') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
@@ -15,6 +15,19 @@ export async function POST(req: Request) {
     }
 
     const admin = createClient(supabaseUrl, supabaseKey);
+
+    if (action === 'set_password' && email && newPassword) {
+      const cleanTarget = (email || '').trim().toLowerCase();
+      const listRes = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      const found = (listRes?.data?.users || []).find((u: any) => u.email?.toLowerCase().trim() === cleanTarget);
+      if (!found) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      const { error: updErr } = await admin.auth.admin.updateUserById(found.id, {
+        password: String(newPassword).trim(),
+        email_confirm: true
+      });
+      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+      return NextResponse.json({ success: true, message: `Password successfully updated for ${cleanTarget}` });
+    }
 
     const { data: usersData, error: userErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 50 });
     const users = (usersData?.users || []).map(u => ({
