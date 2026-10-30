@@ -58,7 +58,13 @@ export async function POST(req: Request) {
       }).eq('id', matchedRest.id);
 
       // 2. Link profile to restaurant
-      await admin.from('profiles').upsert({
+      const { error: profUpdErr } = await admin.from('profiles').update({
+        restaurant_id: matchedRest.id,
+        role: 'owner',
+        full_name: ownerName
+      }).eq('id', found.id);
+
+      const { error: profUpsertErr } = await admin.from('profiles').upsert({
         id: found.id,
         restaurant_id: matchedRest.id,
         email: cleanTarget,
@@ -69,6 +75,12 @@ export async function POST(req: Request) {
         is_verified: true,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
+
+      if (profUpdErr || profUpsertErr) {
+        return NextResponse.json({ 
+          error: (profUpdErr?.message || '') + ' ' + (profUpsertErr?.message || '') 
+        }, { status: 500 });
+      }
 
       // 3. Update auth user metadata
       await admin.auth.admin.updateUserById(found.id, {
