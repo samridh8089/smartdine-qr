@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, Banknote, PackageCheck, AlertCircle, CheckCircle2, 
-  Loader2, ShieldCheck, Sparkles, ShoppingBag, ArrowRight
+  Loader2, ShieldCheck, ShoppingBag, ArrowRight
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ExpenseCategory, EXPENSE_CATEGORIES } from '@/lib/pnlEngine';
@@ -25,12 +25,12 @@ interface PettyCashRequisitionModalProps {
 }
 
 const QUICK_TAGS = [
-  { label: '🧹 झाड़ू / पोछा', title: 'Jhadu & Pocha (Mop & Broom)', category: 'maintenance' },
-  { label: '🧴 फिनाइल / सर्फ', title: 'Phenyl & Detergent (Cleaning)', category: 'maintenance' },
-  { label: '🥛 दूध / डेयरी', title: 'Milk & Dairy Emergency', category: 'other' },
-  { label: '🧊 बर्फ (Ice)', title: 'Ice Cube Bags', category: 'other' },
-  { label: '🧻 टिशू / बैग्स', title: 'Tissue Paper & Garbage Bags', category: 'packaging' },
-  { label: '🥬 धनिया / मिर्च', title: 'Fresh Herbs & Veg Replenish', category: 'other' },
+  { label: 'Broom & Mop', title: 'Broom & Mop', category: 'maintenance' },
+  { label: 'Phenyl & Detergent', title: 'Phenyl & Detergent', category: 'maintenance' },
+  { label: 'Milk & Dairy', title: 'Milk & Dairy', category: 'other' },
+  { label: 'Ice Cubes', title: 'Ice Cubes', category: 'other' },
+  { label: 'Packaging & Bags', title: 'Packaging & Bags', category: 'packaging' },
+  { label: 'Fresh Vegetables', title: 'Fresh Vegetables', category: 'other' },
 ];
 
 export default function PettyCashRequisitionModal({
@@ -61,7 +61,7 @@ export default function PettyCashRequisitionModal({
   const [selectedItemId, setSelectedItemId] = useState(preselectedItemId || '');
   const [issueQuantity, setIssueQuantity] = useState('');
   const [issuedToName, setIssuedToName] = useState('');
-  const [purposeNote, setPurposeNote] = useState('Daily cleaning & maintenance');
+  const [purposeNote, setPurposeNote] = useState('Daily maintenance');
 
   // Submission States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -163,7 +163,7 @@ export default function PettyCashRequisitionModal({
     setNotes('');
     setIssueQuantity('');
     setIssuedToName('');
-    setPurposeNote('Daily cleaning & maintenance');
+    setPurposeNote('Daily maintenance');
     setErrorMessage('');
     setSuccessMessage('');
   }, []);
@@ -201,15 +201,15 @@ export default function PettyCashRequisitionModal({
 
       setSuccessMessage(
         isCashier
-          ? 'Expense submitted successfully! It is pending Manager/Owner approval.'
-          : 'Expense approved and saved successfully!'
+          ? 'Expense submitted for Manager/Owner approval.'
+          : 'Expense approved and recorded.'
       );
 
       setTimeout(() => {
         resetForms();
         onSuccess?.();
         onClose();
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Error recording expense.');
     } finally {
@@ -256,14 +256,14 @@ export default function PettyCashRequisitionModal({
       }
 
       setSuccessMessage(
-        `Issued ${qty} ${selectedItem?.unit || 'units'} of ${selectedItem?.name}. Stock updated & cost mapped to P&L!`
+        `Issued ${qty} ${selectedItem?.unit || 'units'} of ${selectedItem?.name}. Stock updated.`
       );
 
       setTimeout(() => {
         resetForms();
         onSuccess?.();
         onClose();
-      }, 1300);
+      }, 1000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Error issuing stock.');
     } finally {
@@ -288,10 +288,10 @@ export default function PettyCashRequisitionModal({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                Daily Expense & Store Issue
+                Petty Cash & Store Requisition
               </h2>
               <p className="text-[11px] text-slate-500 font-medium">
-                गल्ला खर्च और स्टोर खपत (Recorded by: <span className="font-bold text-slate-700 dark:text-slate-300 capitalize">{userRole}</span>)
+                Recorded by: <span className="font-bold text-slate-700 dark:text-slate-300 capitalize">{userRole}</span>
               </p>
             </div>
           </div>
@@ -315,7 +315,7 @@ export default function PettyCashRequisitionModal({
             }`}
           >
             <ShoppingBag className="h-3.5 w-3.5" />
-            <span>1. दुकान से खरीदा (Petty Cash)</span>
+            <span>Petty Cash Expense</span>
           </button>
           <button
             type="button"
@@ -327,7 +327,7 @@ export default function PettyCashRequisitionModal({
             }`}
           >
             <PackageCheck className="h-3.5 w-3.5" />
-            <span>2. स्टोर से निकाला (Store Issue)</span>
+            <span>Store Stock Issue</span>
           </button>
         </div>
 
@@ -350,27 +350,25 @@ export default function PettyCashRequisitionModal({
         {/* TAB 1: Petty Cash Form */}
         {activeTab === 'petty_cash' && (
           <form onSubmit={handlePettyCashSubmit} className="p-5 space-y-4 overflow-y-auto max-h-[70vh]">
-            {/* Cashier Approval Notification Banner */}
+            {/* Approval Notice Banner */}
             {isCashier ? (
               <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-start gap-2.5 text-[11px] text-amber-900 dark:text-amber-300">
                 <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
                 <div>
-                  <span className="font-bold">Approval Required:</span> Cashier dwara dala gaya yeh kharcha
-                  Manager/Owner ke approval ke baad hi cash drawer aur P&L mein final deduct hoga.
+                  <span className="font-bold">Approval Required:</span> This entry will be submitted for Manager or Owner approval before closing in the cash drawer and P&L.
                 </div>
               </div>
             ) : (
               <div className="p-2.5 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40 rounded-xl flex items-center gap-2 text-[11px] text-emerald-800 dark:text-emerald-300">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span>Authorized as <strong>{userRole.toUpperCase()}</strong>: Directly approved upon save.</span>
+                <span>Authorized as <strong>{userRole.toUpperCase()}</strong>: Automatically approved on submit.</span>
               </div>
             )}
 
-            {/* Quick Tag Pills */}
+            {/* Quick Tags */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
-                <Sparkles className="h-3 w-3 text-amber-500" />
-                Quick Selection (जल्दी चुनने के लिए)
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                Quick Selection
               </label>
               <div className="flex flex-wrap gap-1.5">
                 {QUICK_TAGS.map((tag, idx) => (
@@ -389,14 +387,14 @@ export default function PettyCashRequisitionModal({
             {/* Item Title */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Expense Title / सामान का नाम *
+                Expense Title *
               </label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder="e.g. 2 Jhadu & 1 Surf Packet"
+                placeholder="e.g. Broom, Mop, Phenyl, Detergent"
                 className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
@@ -405,7 +403,7 @@ export default function PettyCashRequisitionModal({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Amount / कुल रुपया (₹) *
+                  Amount (₹) *
                 </label>
                 <input
                   type="number"
@@ -421,15 +419,15 @@ export default function PettyCashRequisitionModal({
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Payment Mode / भुगतान
+                  Payment Mode
                 </label>
                 <select
                   value={paymentMode}
                   onChange={e => setPaymentMode(e.target.value as 'cash' | 'upi')}
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                 >
-                  <option value="cash">💵 Cash (गल्ले से दिया)</option>
-                  <option value="upi">📱 UPI / QR Scanner</option>
+                  <option value="cash">Cash (Drawer)</option>
+                  <option value="upi">UPI / Online</option>
                 </select>
               </div>
             </div>
@@ -453,13 +451,13 @@ export default function PettyCashRequisitionModal({
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Dukan / Vendor Name (Optional)
+                  Vendor Name (Optional)
                 </label>
                 <input
                   type="text"
                   value={vendorName}
                   onChange={e => setVendorName(e.target.value)}
-                  placeholder="Local General Store"
+                  placeholder="Local Vendor"
                   className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100"
                 />
               </div>
@@ -468,13 +466,13 @@ export default function PettyCashRequisitionModal({
             {/* Notes */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Notes / वजह
+                Notes
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Cleaning dining hall floor before dinner rush"
+                placeholder="Cleaning floor before dinner shift"
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -516,14 +514,14 @@ export default function PettyCashRequisitionModal({
             <div className="p-2.5 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-xl flex items-center gap-2 text-[11px] text-indigo-900 dark:text-indigo-300">
               <PackageCheck className="h-4 w-4 text-indigo-600 shrink-0" />
               <span>
-                Store room se saman nikalne par stock deduct hoga aur uski cost Owner ke <strong>P&L Expenses</strong> mein judegi. Cash drawer untouched rahega.
+                Store stock will be deducted from inventory and the cost will be recorded under Operating Expenses. The cash drawer is not affected.
               </span>
             </div>
 
             {/* Item Selection Dropdown */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Select Store Item / सामान चुनें *
+                Select Store Item *
               </label>
               {isLoadingItems ? (
                 <div className="py-3 px-4 bg-slate-50 dark:bg-slate-800 border rounded-xl text-xs text-slate-400 flex items-center gap-2">
@@ -538,7 +536,7 @@ export default function PettyCashRequisitionModal({
                 >
                   <option value="">-- Choose Item from Inventory --</option>
                   {maintenanceItems.length > 0 && (
-                    <optgroup label="🧹 Cleaning & Packaging Supplies">
+                    <optgroup label="Cleaning & Packaging Supplies">
                       {maintenanceItems.map(item => (
                         <option key={item.id} value={item.id}>
                           {item.name} (Stock: {item.current_stock} {item.unit} @ ₹{Number(item.cost_per_unit || 0)}/{item.unit})
@@ -547,7 +545,7 @@ export default function PettyCashRequisitionModal({
                     </optgroup>
                   )}
                   {otherItems.length > 0 && (
-                    <optgroup label="📦 Raw Materials & Other Stock">
+                    <optgroup label="Raw Materials & Stock">
                       {otherItems.map(item => (
                         <option key={item.id} value={item.id}>
                           {item.name} (Stock: {item.current_stock} {item.unit} @ ₹{Number(item.cost_per_unit || 0)}/{item.unit})
@@ -593,14 +591,14 @@ export default function PettyCashRequisitionModal({
             {/* Issued To Staff Name */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Issued To / किसे दिया गया *
+                Issued To *
               </label>
               <input
                 type="text"
                 required
                 value={issuedToName}
                 onChange={e => setIssuedToName(e.target.value)}
-                placeholder="e.g. Ramesh (Cleaner) / Kitchen Helper"
+                placeholder="e.g. Cleaning Staff, Ramesh"
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100"
               />
             </div>
@@ -608,13 +606,13 @@ export default function PettyCashRequisitionModal({
             {/* Purpose / Note */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                Purpose Note / उपयोग
+                Purpose Note
               </label>
               <input
                 type="text"
                 value={purposeNote}
                 onChange={e => setPurposeNote(e.target.value)}
-                placeholder="Floor cleaning, washroom, etc."
+                placeholder="Floor cleaning, dining area, etc."
                 className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100"
               />
             </div>
