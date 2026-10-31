@@ -1596,26 +1596,29 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* RIGHT COLUMN: RESULT CARD (Smoothly shown/updated upon submit) */}
+            {/* RIGHT COLUMN: RESULT CARD (Clean White / Emerald Theme Matching Left Card) */}
             <div className="lg:col-span-7 w-full" id="calc-results-card">
               {calcSubmitted ? (
-                <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-emerald-900/40 text-slate-100 rounded-2xl p-6 shadow-sm space-y-5 text-left relative overflow-hidden animate-fade-in ring-1 ring-emerald-500/10">
+                <div className="bg-white border-2 border-emerald-500/25 rounded-2xl p-6 shadow-sm space-y-5 text-left relative overflow-hidden animate-fade-in ring-1 ring-emerald-500/10">
                   
+                  {/* Top decorative subtle emerald accent border */}
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600" />
+
                   {/* Highlight Headline & Main Savings Number */}
-                  <div className="space-y-1.5 border-b border-slate-800 pb-4">
-                    <p className="text-xs sm:text-sm font-bold text-slate-300">
+                  <div className="space-y-1.5 border-b border-slate-100 pb-4 pt-1">
+                    <p className="text-xs sm:text-sm font-bold text-slate-600">
                       {t.calculator.resultHeadline}
                     </p>
                     <div className="flex flex-wrap items-baseline gap-2">
-                      <span className="text-3xl sm:text-4xl md:text-5xl font-black text-emerald-400 tracking-tight">
+                      <span className="text-3xl sm:text-4xl md:text-5xl font-black text-emerald-600 tracking-tight">
                         ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly)}
                       </span>
-                      <span className="text-sm sm:text-base font-bold text-slate-400">
+                      <span className="text-sm sm:text-base font-bold text-slate-500">
                         {t.calculator.perMonth}
                       </span>
                     </div>
                     <div className="pt-1">
-                      <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black px-3 py-1 rounded-full">
+                      <span className="inline-block bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black px-3 py-1 rounded-full">
                         {t.calculator.yearlyBadge(new Intl.NumberFormat('en-IN').format(savingsCalc.totalYearly))}
                       </span>
                     </div>
@@ -1625,57 +1628,57 @@ export default function LandingPage() {
                   <div className="space-y-3.5 text-xs sm:text-sm">
                     
                     {/* Row 1 */}
-                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
                       <div className="space-y-0.5">
-                        <p className="font-bold text-slate-100 flex items-center gap-2">
-                          <ChefHat className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <p className="font-bold text-slate-900 flex items-center gap-2">
+                          <ChefHat className="h-4 w-4 text-emerald-600 shrink-0" />
                           <span>{t.calculator.row1Title}</span>
                         </p>
-                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row1Desc}</p>
+                        <p className="text-[11.5px] text-slate-500 pl-6 leading-relaxed">{t.calculator.row1Desc}</p>
                       </div>
-                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                      <span className="font-mono font-black text-emerald-700 shrink-0 text-sm">
                         ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.kitchenLeak)}/mo
                       </span>
                     </div>
 
                     {/* Row 2 */}
-                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
                       <div className="space-y-0.5">
-                        <p className="font-bold text-slate-100 flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <p className="font-bold text-slate-900 flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
                           <span>{t.calculator.row2Title}</span>
                         </p>
-                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row2Desc}</p>
+                        <p className="text-[11.5px] text-slate-500 pl-6 leading-relaxed">{t.calculator.row2Desc}</p>
                       </div>
-                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                      <span className="font-mono font-black text-emerald-700 shrink-0 text-sm">
                         ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.staffAndOtLeak)}/mo
                       </span>
                     </div>
 
                     {/* Row 3 */}
-                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
                       <div className="space-y-0.5">
-                        <p className="font-bold text-slate-100 flex items-center gap-2">
-                          <Zap className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <p className="font-bold text-slate-900 flex items-center gap-2">
+                          <Zap className="h-4 w-4 text-emerald-600 shrink-0" />
                           <span>{t.calculator.row3Title}</span>
                         </p>
-                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row3Desc}</p>
+                        <p className="text-[11.5px] text-slate-500 pl-6 leading-relaxed">{t.calculator.row3Desc}</p>
                       </div>
-                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                      <span className="font-mono font-black text-emerald-700 shrink-0 text-sm">
                         +₹{new Intl.NumberFormat('en-IN').format(savingsCalc.turnoverAndAutoMenu)}/mo
                       </span>
                     </div>
 
                     {/* Row 4 */}
-                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
                       <div className="space-y-0.5">
-                        <p className="font-bold text-slate-100 flex items-center gap-2">
-                          <Wallet className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <p className="font-bold text-slate-900 flex items-center gap-2">
+                          <Wallet className="h-4 w-4 text-emerald-600 shrink-0" />
                           <span>{t.calculator.row4Title}</span>
                         </p>
-                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row4Desc}</p>
+                        <p className="text-[11.5px] text-slate-500 pl-6 leading-relaxed">{t.calculator.row4Desc}</p>
                       </div>
-                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                      <span className="font-mono font-black text-emerald-700 shrink-0 text-sm">
                         ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.cashLeak)}/mo
                       </span>
                     </div>
@@ -1683,13 +1686,13 @@ export default function LandingPage() {
                     {/* Row 5 */}
                     <div className="flex items-start justify-between gap-3">
                       <div className="space-y-0.5">
-                        <p className="font-bold text-slate-100 flex items-center gap-2">
-                          <Smartphone className="h-4 w-4 text-emerald-400 shrink-0" />
+                        <p className="font-bold text-slate-900 flex items-center gap-2">
+                          <Smartphone className="h-4 w-4 text-emerald-600 shrink-0" />
                           <span>{t.calculator.row5Title}</span>
                         </p>
-                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row5Desc}</p>
+                        <p className="text-[11.5px] text-slate-500 pl-6 leading-relaxed">{t.calculator.row5Desc}</p>
                       </div>
-                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                      <span className="font-mono font-black text-emerald-700 shrink-0 text-sm">
                         ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.hardwareSaved)}/mo
                       </span>
                     </div>
@@ -1697,13 +1700,13 @@ export default function LandingPage() {
                   </div>
 
                   {/* Bottom Direct CTA */}
-                  <div className="pt-2 border-t border-slate-800 space-y-3">
-                    <p className="text-[11.5px] sm:text-xs text-slate-300 font-medium leading-relaxed">
+                  <div className="pt-2 border-t border-slate-100 space-y-3">
+                    <p className="text-[11.5px] sm:text-xs text-slate-600 font-medium leading-relaxed">
                       {t.calculator.ctaText(new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly))}
                     </p>
                     <Link
                       href={`/signup?plan=trial&lang=${language}`}
-                      className="block w-full bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold py-3.5 px-4 rounded-xl text-center text-sm sm:text-base shadow-lg transition-all cursor-pointer"
+                      className="block w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold py-3.5 px-4 rounded-xl text-center text-sm sm:text-base shadow-sm hover:shadow transition-all cursor-pointer"
                     >
                       {t.calculator.ctaBtn}
                     </Link>
