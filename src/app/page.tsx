@@ -1476,7 +1476,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
             
             {/* LEFT COLUMN: 3 CLEAN MANUAL INPUT BOXES WITH SUBMIT BUTTON */}
-            <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-7 shadow-xs space-y-5 text-left">
+            <div className="lg:col-span-5 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-5 text-left">
               <div className="border-b border-slate-100 pb-3">
                 <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
                   Restaurant Details
@@ -1599,7 +1599,7 @@ export default function LandingPage() {
             {/* RIGHT COLUMN: RESULT CARD (Smoothly shown/updated upon submit) */}
             <div className="lg:col-span-7 w-full" id="calc-results-card">
               {calcSubmitted ? (
-                <div className="bg-slate-900 text-white border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl space-y-5 text-left relative overflow-hidden animate-fade-in">
+                <div className="bg-gradient-to-br from-slate-900 to-slate-900 border border-emerald-900/40 text-slate-100 rounded-2xl p-6 shadow-sm space-y-5 text-left relative overflow-hidden animate-fade-in ring-1 ring-emerald-500/10">
                   
                   {/* Highlight Headline & Main Savings Number */}
                   <div className="space-y-1.5 border-b border-slate-800 pb-4">
@@ -1712,7 +1712,7 @@ export default function LandingPage() {
                 </div>
               ) : (
                 /* Desktop Placeholder before submit */
-                <div className="hidden lg:flex flex-col items-center justify-center p-8 sm:p-12 bg-white border border-slate-200/90 rounded-2xl shadow-xs text-center space-y-3 min-h-[380px]">
+                <div className="hidden lg:flex flex-col items-center justify-center p-8 sm:p-12 bg-white border border-slate-200/80 rounded-2xl shadow-sm text-center space-y-3 min-h-[380px]">
                   <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-2xs">
                     <BarChart3 className="h-7 w-7" />
                   </div>
