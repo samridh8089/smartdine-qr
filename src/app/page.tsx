@@ -62,17 +62,22 @@ export default function LandingPage() {
   const [activeFaqIndex, setActiveFaqIndex] = useState<number | null>(null);
 
   // Savings Calculator States
-  const [calcTables, setCalcTables] = useState<number>(10);
-  const [calcStaff, setCalcStaff] = useState<number>(6);
-  const [calcMonthlySale, setCalcMonthlySale] = useState<number>(500000);
+  const [calcTables, setCalcTables] = useState<number | string>(10);
+  const [calcStaff, setCalcStaff] = useState<number | string>(6);
+  const [calcMonthlySale, setCalcMonthlySale] = useState<number | string>(500000);
+  const [calcSubmitted, setCalcSubmitted] = useState<boolean>(false);
 
   // Dynamic Savings Calculation (Real-Time Memoized Formula Engine)
   const savingsCalc = useMemo(() => {
-    const kitchenLeak = Math.round(calcMonthlySale * 0.03);
-    const staffAndOtLeak = Math.round((calcStaff * 2200) + (calcTables * 350));
-    const turnoverAndAutoMenu = Math.round((calcTables * 1100) + (calcMonthlySale * 0.015));
-    const cashLeak = Math.round(calcMonthlySale * 0.012);
-    const hardwareSaved = calcTables >= 8 ? 3500 : 2000;
+    const sale = Number(calcMonthlySale) || 0;
+    const tables = Number(calcTables) || 0;
+    const staff = Number(calcStaff) || 0;
+
+    const kitchenLeak = Math.round(sale * 0.03);
+    const staffAndOtLeak = Math.round((staff * 2200) + (tables * 350));
+    const turnoverAndAutoMenu = Math.round((tables * 1100) + (sale * 0.015));
+    const cashLeak = Math.round(sale * 0.012);
+    const hardwareSaved = tables >= 8 ? 3500 : 2000;
     const totalMonthly = kitchenLeak + staffAndOtLeak + turnoverAndAutoMenu + cashLeak + hardwareSaved;
     const totalYearly = totalMonthly * 12;
 
@@ -206,22 +211,28 @@ export default function LandingPage() {
         badge: 'Live Restaurant Leak & Profit Calculator',
         title: 'Apne Restaurant ka Mahine ka Chhupa Hua Loss Check Karein',
         subtitle: 'Apne Tables, Staff aur Monthly Sale ke hisaab se dekhein CleverOps har mahine aapka kitna paisa aur waqt bacha sakta hai:',
-        tablesLabel: 'Kul Tables',
+        tablesLabel: 'Kul Tables (Total Tables)',
+        tablesPlaceholder: 'e.g. 12',
         staffLabel: 'Kul Staff (Waiter + Kitchen + Cashier)',
+        staffPlaceholder: 'e.g. 5',
         salesLabel: 'Monthly Sale (Approx ₹)',
+        salesPlaceholder: 'e.g. 600000',
+        submitBtn: 'Apna Nuksan aur Bachat Dekhein →',
         resultHeadline: 'Aapki Anumanit Monthly Bachat & Extra Kamai:',
         perMonth: '/ Month',
         yearlyBadge: (val: string) => `Saal ka ~${val} Bachega!`,
-        row1Title: 'Kitchen Chori & Cancel Order Leak Band:',
-        row1Desc: '(Recipe BOM aur Cancelled Food Audit se)',
+        emptyPlaceholderTitle: 'Apne Restaurant ka Hisaab Dekhein',
+        emptyPlaceholderDesc: 'Left side me apne tables, staff aur monthly sale darj karein aur button dabayein.',
+        row1Title: 'Kitchen Chori & Cancel Order Leak:',
+        row1Desc: 'Kitchen me recipe ke hisaab se stock minus hoga aur cancel order ka audit hone se roz ka wastage bachega.',
         row2Title: 'Staff Exact Hours, OT Control & Zyada Tables:',
-        row2Desc: '(Exact working hours/OT hisaab + QR se wahi staff zyada tables sambhalega)',
+        row2Desc: 'Staff ki duty ka exact time aur Overtime (OT) track hoga, aur QR ordering ki wajah se wahi staff bina naye log hire kiye zyada tables sambhalega.',
         row3Title: 'Fast Table Turnover & Auto Stock-Out Menu:',
-        row3Desc: '(Jo stock me nahi wo menu se auto-hide + KDS se 20 min fast service)',
+        row3Desc: 'KDS kitchen bell aur fast billing se table 20 minute jaldi free hogi, aur jo item stock me nahi hai wo menu se automatic hide ho jayega taaki customer naraz na ho.',
         row4Title: 'Galla Mismatch & Petty Cash Chori Band:',
-        row4Desc: '(Shift Cash Closing aur Photo Slip Voucher se)',
+        row4Desc: 'Raat ko galla milate waqt cash short hone ya bina slip ke petty cash nikalne ki chori band hogi.',
         row5Title: 'Biometric & Menu Printing Kharcha Zero:',
-        row5Desc: '(Selfie+GPS Attendance aur AI Menu Scanner se)',
+        row5Desc: 'Mehengi biometric machine aur bar-bar menu print karane ki koi zarurat nahi, sab phone se hoga.',
         ctaText: (val: string) => `Har mahine ${val} ka nuksan rokne ke liye — Sirf ₹3 ke 3-Din Trial me apne restaurant ka pura sach khud dekhein!`,
         ctaBtn: 'Sirf ₹3 Me 3-Din Trial Chalu Karein →',
       },
@@ -620,21 +631,27 @@ export default function LandingPage() {
         title: 'Calculate the Hidden Monthly Losses in Your Restaurant',
         subtitle: 'Based on your tables, staff, and monthly sales, see how much money and time CleverOps saves every single month:',
         tablesLabel: 'Total Tables',
+        tablesPlaceholder: 'e.g. 12',
         staffLabel: 'Total Staff (Waiters, Kitchen, Cashiers)',
+        staffPlaceholder: 'e.g. 5',
         salesLabel: 'Monthly Sales (Approx ₹)',
+        salesPlaceholder: 'e.g. 600000',
+        submitBtn: 'Calculate My Losses & Savings →',
         resultHeadline: 'Estimated Monthly Savings & Extra Profit:',
         perMonth: '/ Month',
         yearlyBadge: (val: string) => `Saves ~${val} Every Year!`,
-        row1Title: 'Kitchen Pilferage & Cancelled Order Audit:',
-        row1Desc: '(Via Recipe BOM & Cancelled Food Disposition audit)',
-        row2Title: 'Exact Working Hours, OT Control & More Tables per Waiter:',
-        row2Desc: '(Exact shift hours tracking + QR ordering lets existing staff handle more tables)',
-        row3Title: 'Fast Table Turnover & Auto Stock-Out Menu Sync:',
-        row3Desc: '(Items with zero stock auto-hide from menu + KDS enables 20-min faster service)',
-        row4Title: 'Cash Drawer Reconciliation & Petty Cash Oversight:',
-        row4Desc: '(Shift cash closing with denomination counting and photo slip voucher approvals)',
-        row5Title: 'Biometric Machine & Menu Printing Zero Expense:',
-        row5Desc: '(Phone selfie + GPS clock-in and instant AI paper menu digitization)',
+        emptyPlaceholderTitle: 'Discover Your Restaurant Savings',
+        emptyPlaceholderDesc: 'Fill in your tables, staff count, and monthly sales on the left, then click the button.',
+        row1Title: 'Kitchen Pilferage & Cancel Order Leak:',
+        row1Desc: 'Real-time recipe stock deduction and cancelled food audit stop daily kitchen wastage.',
+        row2Title: 'Exact Staff Hours, OT Control & More Tables:',
+        row2Desc: 'Tracks exact working hours and overtime, while QR ordering allows existing staff to handle more tables without new hires.',
+        row3Title: 'Fast Table Turnover & Auto Stock-Out Menu:',
+        row3Desc: 'KDS kitchen chimes and fast billing free tables 20 minutes earlier, and depleted items auto-hide to avoid guest frustration.',
+        row4Title: 'Cash Drawer Mismatch & Petty Cash Leak Stopped:',
+        row4Desc: 'Night cash drawer reconciliation and mandatory receipt photo uploads prevent untracked cash leakages.',
+        row5Title: 'Zero Biometric & Paper Menu Expenses:',
+        row5Desc: 'Eliminates expensive biometric machines and repeated paper menu printing — everything runs on mobile phones.',
         ctaText: (val: string) => `To stop losing ${val} every single month — Start a ₹3 3-Day Trial and discover your restaurant\'s true numbers!`,
         ctaBtn: 'Start 3-Day Trial for Just ₹3 →',
       },
@@ -1438,12 +1455,12 @@ export default function LandingPage() {
       </section>
 
       {/* 1.5. Interactive Restaurant Loss & Profit Calculator & Operations Simplified */}
-      <section id="savings-breakdown" className="scroll-mt-16 bg-gradient-to-b from-slate-50/70 via-white to-slate-50/70 border-b border-slate-200/80 px-4 sm:px-6 md:px-12 py-10 sm:py-14">
+      <section id="savings-breakdown" className="scroll-mt-16 bg-slate-50/80 border-b border-slate-200/80 px-4 sm:px-6 md:px-12 py-12 sm:py-16">
         <div className="max-w-6xl mx-auto space-y-10 sm:space-y-12">
           
-          {/* SECTION HEADER (Clean Emerald Badge, No Loud Yellow) */}
+          {/* SECTION HEADER (Clean Emerald Badge, Normal Typography) */}
           <div className="text-center space-y-2.5 max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/90 px-3.5 py-1 rounded-full text-xs font-bold text-emerald-800 shadow-2xs">
+            <div className="inline-flex items-center gap-1.5 bg-white border border-slate-200 px-3.5 py-1 rounded-full text-xs font-bold text-slate-700 shadow-2xs">
               <BarChart3 className="h-3.5 w-3.5 text-emerald-600" />
               <span>{t.calculator.badge}</span>
             </div>
@@ -1455,283 +1472,258 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* CALCULATOR MAIN GRID */}
+          {/* CALCULATOR MAIN GRID (Clean Form on Left, Result on Right) */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
             
-            {/* LEFT COLUMN: 3 EDITABLE INPUT FIELDS + TOUCH SLIDERS */}
-            <div className="lg:col-span-6 bg-white border border-slate-200 rounded-3xl p-5 sm:p-7 shadow-xs space-y-6">
-              
-              {/* Slider 1: Tables (With Editable Input) */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+            {/* LEFT COLUMN: 3 CLEAN MANUAL INPUT BOXES WITH SUBMIT BUTTON */}
+            <div className="lg:col-span-5 bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-7 shadow-xs space-y-5 text-left">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-sm sm:text-base font-extrabold text-slate-900">
+                  Restaurant Details
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Apne anumanit numbers darj karein
+                </p>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setCalcSubmitted(true);
+                  setTimeout(() => {
+                    const el = document.getElementById('calc-results-card');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                  }, 50);
+                }}
+                className="space-y-4"
+              >
+                {/* Input 1: Tables */}
+                <div className="space-y-1.5">
+                  <label htmlFor="calc-tables-input" className="block text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
                     <Utensils className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span>{t.calculator.tablesLabel}</span>
                   </label>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="relative">
                     <input
+                      id="calc-tables-input"
                       type="number"
                       min={1}
-                      max={200}
-                      value={calcTables || ''}
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
-                        setCalcTables(val);
-                      }}
-                      className="w-18 sm:w-20 px-2.5 py-1 text-right text-xs sm:text-sm font-bold text-emerald-900 bg-emerald-50/50 border border-emerald-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg outline-none transition-all"
+                      max={500}
+                      placeholder={t.calculator.tablesPlaceholder}
+                      value={calcTables}
+                      onChange={(e) => setCalcTables(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white text-slate-900 font-bold text-sm sm:text-base focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
                     />
-                    <span className="text-xs font-bold text-slate-500 select-none">Tables</span>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min={2}
-                  max={50}
-                  step={1}
-                  value={Math.min(50, Math.max(2, calcTables || 2))}
-                  onChange={(e) => setCalcTables(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
-                />
-                {/* Presets */}
-                <div className="flex items-center justify-between gap-1.5 pt-0.5">
-                  {[6, 10, 18, 30].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setCalcTables(preset)}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                        calcTables === preset
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {preset} Tables
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Slider 2: Staff (With Editable Input) */}
-              <div className="space-y-2.5 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                    <Users className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>{t.calculator.staffLabel}</span>
-                  </label>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <input
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={calcStaff || ''}
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
-                        setCalcStaff(val);
-                      }}
-                      className="w-18 sm:w-20 px-2.5 py-1 text-right text-xs sm:text-sm font-bold text-emerald-900 bg-emerald-50/50 border border-emerald-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg outline-none transition-all"
-                    />
-                    <span className="text-xs font-bold text-slate-500 select-none">Staff</span>
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min={2}
-                  max={40}
-                  step={1}
-                  value={Math.min(40, Math.max(2, calcStaff || 2))}
-                  onChange={(e) => setCalcStaff(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
-                />
-                {/* Presets */}
-                <div className="flex items-center justify-between gap-1.5 pt-0.5">
-                  {[3, 6, 12, 20].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setCalcStaff(preset)}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                        calcStaff === preset
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      {preset} Staff
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Slider 3: Monthly Sales (With Editable Input) */}
-              <div className="space-y-2.5 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between gap-2">
-                  <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                    <Banknote className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>{t.calculator.salesLabel}</span>
-                  </label>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-xs font-bold text-slate-500 select-none">₹</span>
-                    <input
-                      type="number"
-                      min={10000}
-                      step={10000}
-                      value={calcMonthlySale || ''}
-                      onChange={(e) => {
-                        const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
-                        setCalcMonthlySale(val);
-                      }}
-                      className="w-24 sm:w-28 px-2.5 py-1 text-right text-xs sm:text-sm font-bold text-emerald-900 bg-emerald-50/50 border border-emerald-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg outline-none transition-all"
-                    />
-                    <span className="text-[11px] font-bold text-emerald-700 ml-1 select-none whitespace-nowrap">
-                      ({calcMonthlySale >= 100000 ? `${(calcMonthlySale / 100000).toFixed(1)}L` : `${Math.round(calcMonthlySale / 1000)}k`})
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 select-none">
+                      Tables
                     </span>
                   </div>
                 </div>
-                <input
-                  type="range"
-                  min={100000}
-                  max={3000000}
-                  step={50000}
-                  value={Math.min(3000000, Math.max(100000, calcMonthlySale || 100000))}
-                  onChange={(e) => setCalcMonthlySale(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
-                />
-                {/* Presets */}
-                <div className="flex items-center justify-between gap-1.5 pt-0.5">
-                  {[300000, 500000, 1000000, 2000000].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setCalcMonthlySale(preset)}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
-                        calcMonthlySale === preset
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      ₹{(preset / 100000).toFixed(0)} Lakh
-                    </button>
-                  ))}
+
+                {/* Input 2: Staff */}
+                <div className="space-y-1.5">
+                  <label htmlFor="calc-staff-input" className="block text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <Users className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>{t.calculator.staffLabel}</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="calc-staff-input"
+                      type="number"
+                      min={1}
+                      max={200}
+                      placeholder={t.calculator.staffPlaceholder}
+                      value={calcStaff}
+                      onChange={(e) => setCalcStaff(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white text-slate-900 font-bold text-sm sm:text-base focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 select-none">
+                      Staff
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] sm:text-xs text-slate-500 leading-relaxed flex items-start gap-2">
+                {/* Input 3: Monthly Sales */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="calc-sales-input" className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-2">
+                      <Banknote className="h-4 w-4 text-emerald-600 shrink-0" />
+                      <span>{t.calculator.salesLabel}</span>
+                    </label>
+                    {Number(calcMonthlySale) > 0 && (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md">
+                        {Number(calcMonthlySale) >= 100000 
+                          ? `₹${(Number(calcMonthlySale) / 100000).toFixed(1)} Lakh` 
+                          : `₹${new Intl.NumberFormat('en-IN').format(Number(calcMonthlySale))}`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 select-none">
+                      ₹
+                    </span>
+                    <input
+                      id="calc-sales-input"
+                      type="number"
+                      min={10000}
+                      step={10000}
+                      placeholder={t.calculator.salesPlaceholder}
+                      value={calcMonthlySale}
+                      onChange={(e) => setCalcMonthlySale(e.target.value)}
+                      required
+                      className="w-full pl-8 pr-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white text-slate-900 font-bold text-sm sm:text-base focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all placeholder:text-slate-400 placeholder:font-normal"
+                    />
+                  </div>
+                </div>
+
+                {/* High-Contrast Primary Submit Button */}
+                <button
+                  type="submit"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold py-3.5 px-5 rounded-xl text-sm sm:text-base shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
+                >
+                  <span>{t.calculator.submitBtn}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </form>
+
+              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-[11px] sm:text-xs text-slate-500 leading-relaxed flex items-start gap-2">
                 <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span>Formulas are based on real audit data across Indian dining outlets: 3% kitchen pilferage/cancel losses, exact staff hours/OT tracking, and fast table turnaround.</span>
+                <span>Real restaurant audit data: 3% kitchen pilferage/cancel loss, shift OT tracking, aur 20-min faster table turnover par calculated.</span>
               </div>
-
             </div>
 
-            {/* RIGHT COLUMN: DARK SLATE / EMERALD RESULT CARD (Clean Lucide Icons, No Emojis) */}
-            <div className="lg:col-span-6 bg-slate-900 text-white border-2 border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-5 text-left relative overflow-hidden">
-              
-              {/* Highlight Headline & Main Savings Number */}
-              <div className="space-y-1.5 border-b border-slate-800 pb-4">
-                <p className="text-xs sm:text-sm font-bold text-slate-300">
-                  {t.calculator.resultHeadline}
-                </p>
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="text-3xl sm:text-4xl md:text-5xl font-black text-emerald-400 tracking-tight">
-                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly)}
-                  </span>
-                  <span className="text-sm sm:text-base font-bold text-slate-400">
-                    {t.calculator.perMonth}
-                  </span>
-                </div>
-                <div className="pt-1">
-                  <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black px-3 py-1 rounded-full">
-                    {t.calculator.yearlyBadge(new Intl.NumberFormat('en-IN').format(savingsCalc.totalYearly))}
-                  </span>
-                </div>
-              </div>
-
-              {/* 5 Real-Time Live Breakdown Rows (With Clean Lucide Icons) */}
-              <div className="space-y-3 text-xs sm:text-sm">
-                
-                {/* Row 1 */}
-                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-2">
-                      <ChefHat className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>{t.calculator.row1Title}</span>
+            {/* RIGHT COLUMN: RESULT CARD (Smoothly shown/updated upon submit) */}
+            <div className="lg:col-span-7 w-full" id="calc-results-card">
+              {calcSubmitted ? (
+                <div className="bg-slate-900 text-white border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl space-y-5 text-left relative overflow-hidden animate-fade-in">
+                  
+                  {/* Highlight Headline & Main Savings Number */}
+                  <div className="space-y-1.5 border-b border-slate-800 pb-4">
+                    <p className="text-xs sm:text-sm font-bold text-slate-300">
+                      {t.calculator.resultHeadline}
                     </p>
-                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row1Desc}</p>
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-3xl sm:text-4xl md:text-5xl font-black text-emerald-400 tracking-tight">
+                        ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly)}
+                      </span>
+                      <span className="text-sm sm:text-base font-bold text-slate-400">
+                        {t.calculator.perMonth}
+                      </span>
+                    </div>
+                    <div className="pt-1">
+                      <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black px-3 py-1 rounded-full">
+                        {t.calculator.yearlyBadge(new Intl.NumberFormat('en-IN').format(savingsCalc.totalYearly))}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-mono font-black text-emerald-400 shrink-0">
-                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.kitchenLeak)}/mo
-                  </span>
-                </div>
 
-                {/* Row 2 */}
-                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>{t.calculator.row2Title}</span>
+                  {/* 5 Real-Time Live Breakdown Rows with Clear Hinglish Explanations */}
+                  <div className="space-y-3.5 text-xs sm:text-sm">
+                    
+                    {/* Row 1 */}
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-100 flex items-center gap-2">
+                          <ChefHat className="h-4 w-4 text-emerald-400 shrink-0" />
+                          <span>{t.calculator.row1Title}</span>
+                        </p>
+                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row1Desc}</p>
+                      </div>
+                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                        ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.kitchenLeak)}/mo
+                      </span>
+                    </div>
+
+                    {/* Row 2 */}
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-100 flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
+                          <span>{t.calculator.row2Title}</span>
+                        </p>
+                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row2Desc}</p>
+                      </div>
+                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                        ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.staffAndOtLeak)}/mo
+                      </span>
+                    </div>
+
+                    {/* Row 3 */}
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-100 flex items-center gap-2">
+                          <Zap className="h-4 w-4 text-emerald-400 shrink-0" />
+                          <span>{t.calculator.row3Title}</span>
+                        </p>
+                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row3Desc}</p>
+                      </div>
+                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                        +₹{new Intl.NumberFormat('en-IN').format(savingsCalc.turnoverAndAutoMenu)}/mo
+                      </span>
+                    </div>
+
+                    {/* Row 4 */}
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-100 flex items-center gap-2">
+                          <Wallet className="h-4 w-4 text-emerald-400 shrink-0" />
+                          <span>{t.calculator.row4Title}</span>
+                        </p>
+                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row4Desc}</p>
+                      </div>
+                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                        ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.cashLeak)}/mo
+                      </span>
+                    </div>
+
+                    {/* Row 5 */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <p className="font-bold text-slate-100 flex items-center gap-2">
+                          <Smartphone className="h-4 w-4 text-emerald-400 shrink-0" />
+                          <span>{t.calculator.row5Title}</span>
+                        </p>
+                        <p className="text-[11.5px] text-slate-400 pl-6 leading-relaxed">{t.calculator.row5Desc}</p>
+                      </div>
+                      <span className="font-mono font-black text-emerald-400 shrink-0 text-sm">
+                        ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.hardwareSaved)}/mo
+                      </span>
+                    </div>
+
+                  </div>
+
+                  {/* Bottom Direct CTA */}
+                  <div className="pt-2 border-t border-slate-800 space-y-3">
+                    <p className="text-[11.5px] sm:text-xs text-slate-300 font-medium leading-relaxed">
+                      {t.calculator.ctaText(new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly))}
                     </p>
-                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row2Desc}</p>
+                    <Link
+                      href={`/signup?plan=trial&lang=${language}`}
+                      className="block w-full bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold py-3.5 px-4 rounded-xl text-center text-sm sm:text-base shadow-lg transition-all cursor-pointer"
+                    >
+                      {t.calculator.ctaBtn}
+                    </Link>
                   </div>
-                  <span className="font-mono font-black text-emerald-400 shrink-0">
-                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.staffAndOtLeak)}/mo
-                  </span>
-                </div>
 
-                {/* Row 3 */}
-                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>{t.calculator.row3Title}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row3Desc}</p>
+                </div>
+              ) : (
+                /* Desktop Placeholder before submit */
+                <div className="hidden lg:flex flex-col items-center justify-center p-8 sm:p-12 bg-white border border-slate-200/90 rounded-2xl shadow-xs text-center space-y-3 min-h-[380px]">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-2xs">
+                    <BarChart3 className="h-7 w-7" />
                   </div>
-                  <span className="font-mono font-black text-emerald-400 shrink-0">
-                    +₹{new Intl.NumberFormat('en-IN').format(savingsCalc.turnoverAndAutoMenu)}/mo
-                  </span>
+                  <h4 className="text-base sm:text-lg font-bold text-slate-900">
+                    {t.calculator.emptyPlaceholderTitle}
+                  </h4>
+                  <p className="text-xs sm:text-sm text-slate-500 max-w-sm leading-relaxed">
+                    {t.calculator.emptyPlaceholderDesc}
+                  </p>
                 </div>
-
-                {/* Row 4 */}
-                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-2">
-                      <Wallet className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>{t.calculator.row4Title}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row4Desc}</p>
-                  </div>
-                  <span className="font-mono font-black text-emerald-400 shrink-0">
-                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.cashLeak)}/mo
-                  </span>
-                </div>
-
-                {/* Row 5 */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-2">
-                      <Smartphone className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>{t.calculator.row5Title}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row5Desc}</p>
-                  </div>
-                  <span className="font-mono font-black text-emerald-400 shrink-0">
-                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.hardwareSaved)}/mo
-                  </span>
-                </div>
-
-              </div>
-
-              {/* Bottom Direct CTA */}
-              <div className="pt-2 border-t border-slate-800 space-y-3">
-                <p className="text-[11.5px] sm:text-xs text-slate-300 font-medium leading-relaxed">
-                  {t.calculator.ctaText(new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly))}
-                </p>
-                <Link
-                  href={`/signup?plan=trial&lang=${language}`}
-                  className="block w-full bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold py-3.5 px-4 rounded-2xl text-center text-sm sm:text-base shadow-lg transition-all cursor-pointer"
-                >
-                  {t.calculator.ctaBtn}
-                </Link>
-              </div>
-
+              )}
             </div>
 
           </div>
