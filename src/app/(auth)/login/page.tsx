@@ -24,6 +24,10 @@ export default function LoginPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      const emailParam = params.get('email');
+      if (emailParam) {
+        setEmail(emailParam);
+      }
       const reason = params.get('reason');
       if (reason === 'session_revoked') {
         setError('Your session was logged out from another device.');

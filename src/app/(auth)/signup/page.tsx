@@ -160,6 +160,18 @@ function SignupContent() {
     return billingInterval === 'yearly' ? planObj.yearlyPrice : planObj.monthlyPrice;
   }, [plansData, selectedPlan, billingInterval]);
 
+  const isEmailOrAccountError = useMemo(() => {
+    if (!errorMsg) return false;
+    const lower = errorMsg.toLowerCase();
+    return (
+      lower.includes('already') ||
+      lower.includes('sign in') ||
+      lower.includes('exists') ||
+      lower.includes('linked') ||
+      lower.includes('owns restaurant')
+    );
+  }, [errorMsg]);
+
   // 4. All useCallback hooks
   const handleRestaurantNameChange = useCallback((val: string) => {
     setRestaurantName(val);
@@ -264,6 +276,19 @@ function SignupContent() {
       return () => clearTimeout(cd);
     }
   }, [resendCooldown]);
+
+  // Smooth auto-scroll to error banner on current screen
+  useEffect(() => {
+    if (errorMsg) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById('signup-active-step-error');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMsg]);
 
   // ─── STEP 1: OWNER DETAILS SUBMIT ───────────────────────────────────────────
   const handleOwnerDetailsSubmit = async (e: React.FormEvent) => {
@@ -584,6 +609,57 @@ function SignupContent() {
     }
   };
 
+  const renderActiveStepError = () => {
+    if (!errorMsg) return null;
+
+    return (
+      <div
+        id="signup-active-step-error"
+        tabIndex={-1}
+        className="my-3.5 bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-500 dark:border-rose-600 p-4 rounded-2xl shadow-lg text-left transition-all animate-in fade-in duration-200"
+      >
+        <div className="flex items-start gap-3">
+          <div className="p-1.5 bg-rose-100 dark:bg-rose-900/60 rounded-xl text-rose-600 dark:text-rose-300 shrink-0 mt-0.5">
+            <AlertCircle className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs sm:text-sm font-bold text-rose-900 dark:text-rose-100 leading-snug">
+              {isEmailOrAccountError ? 'Account Already Exists / Email In Use' : 'Action Required'}
+            </h4>
+            <p className="text-xs text-rose-700 dark:text-rose-300 mt-1 leading-relaxed font-medium">
+              {errorMsg}
+            </p>
+
+            {isEmailOrAccountError && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 pt-2.5 border-t border-rose-200 dark:border-rose-900/50">
+                <Link
+                  href={`/login?email=${encodeURIComponent(email.trim())}`}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm transition-all"
+                >
+                  <span>Sign In to Your Restaurant</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+                {currentStep > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg('');
+                      setCurrentStep(1);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-2 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Use Different Email</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const steps = [
     { num: 1, label: 'Owner' },
     { num: 2, label: 'OTP' },
@@ -639,12 +715,7 @@ function SignupContent() {
         </div>
       </div>
 
-      {errorMsg && (
-        <div className="mb-5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 text-rose-700 dark:text-rose-400 p-3.5 rounded-xl text-xs font-semibold flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 flex-shrink-0" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
+
 
       {/* ═══════════════════════════════════════════════════════════════════════
           STEP 1: OWNER DETAILS
@@ -759,6 +830,8 @@ function SignupContent() {
             />
           </div>
 
+          {renderActiveStepError()}
+
           <button
             type="submit"
             disabled={loading}
@@ -826,6 +899,8 @@ function SignupContent() {
               {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
             </button>
           </div>
+
+          {renderActiveStepError()}
 
           <div className="flex gap-2.5 pt-2">
             <button
@@ -981,6 +1056,8 @@ function SignupContent() {
               />
             </div>
           </div>
+
+          {renderActiveStepError()}
 
           <div className="flex gap-2.5 pt-3">
             <button
@@ -1139,6 +1216,8 @@ function SignupContent() {
               </span>
             </label>
           </div>
+
+          {renderActiveStepError()}
 
           <div className="flex gap-2.5 pt-2">
             <button
