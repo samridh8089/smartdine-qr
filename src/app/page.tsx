@@ -9,7 +9,7 @@ import {
   Play, Clock, ChevronDown, ChevronUp, AlertTriangle, 
   ShieldCheck, Zap, Laptop, Users, Receipt, Package,
   Lock, FileText, XCircle, CheckCircle2, RefreshCw, Layers,
-  Globe, Mail, Phone, MapPin, Languages, Banknote, Wallet, UserCheck
+  Globe, Mail, Phone, MapPin, Languages, Banknote, Wallet, UserCheck, Utensils, Coffee, Store, PhoneCall
 } from 'lucide-react';
 
 import { db, PricingPlan } from '@/lib/db';
@@ -158,31 +158,18 @@ export default function LandingPage() {
         noHardwareNeeded: 'No Hardware Needed',
       },
       hero: {
-        pill: 'AI-Powered Restaurant Operating System',
+        pill: 'Restaurant, Cafe aur Cloud Kitchen Owners ke liye',
         titlePrefix: 'Restaurant ka har kaam.',
-        titleHighlight: 'Ek hi App se.',
-        subtitle: 'Order se lekar Kitchen, Inventory, AI Recipe Costing, Cash Closing, Petty Cash, Staff Attendance, Billing aur Reports tak sab kuch ek hi app me. Laptop ya alag machine ki zarurat nahi.',
-        trialCta: 'Start 3-Day Trial for ₹3',
-        demoCta: 'Watch Live Demo',
-        microcopy1: 'Razorpay se sirf ₹3 pay karo. 3 din sab features unlock.',
-        microcopy2: 'No Laptop Required • No Extra Hardware • Setup in Minutes',
-        pills: [
-          'No Laptop Required',
-          'Built for Restaurant Owners',
-          'Razorpay Secure',
-          '5 Minute Setup',
+        titleHighlight: 'Ab aapke Mobile par.',
+        subtitle: 'Bina ₹40,000 ki POS machine ya computer kharide — Billing, Live Kitchen (KOT), Raw Material Chori, aur Roz ka Galla (Cash) apne regular phone se sambhalein.',
+        checkpoints: [
+          'Koi Laptop ya Hardware Nahi Chahiye',
+          '5 Minute me Staff Seekh Jayega',
+          'Stock Chori aur Food Cost par 100% Control',
         ],
-        chips: [
-          'QR Ordering',
-          'Live KDS',
-          'Inventory',
-          'AI Recipe',
-          'AI Menu',
-          'Billing',
-          'Cash Closing',
-          'Petty Cash',
-          'Staff Attendance',
-        ],
+        trialCta: '3-Din Trial Shuru Karein (Sirf ₹3)',
+        demoCta: 'Live Demo Screen Dekhein',
+        microcopy: '🔒 100% Safe Razorpay Checkout • Koi Auto-Debit Nahi • Turant Chalu',
       },
       trustStrip: [
         'No Laptop Required',
@@ -389,9 +376,15 @@ export default function LandingPage() {
           { title: 'Staff Attendance', desc: 'Selfie and PIN-based clock-in, shift management, late marks, and automated monthly payroll.' },
         ],
       },
-      caseStudies: {
-        badge: 'Customer Stories & Case Studies Coming Soon',
-        text: 'CleverOps restaurants aur cafes ke operations ko transform kar raha hai. Real verified customer reviews jaldi publish honge.',
+      businessTypes: {
+        title: 'Har Food Business ke liye Banaya Gaya',
+        subtitle: 'Chhota cafe ho ya bada family restaurant — CleverOps har format ke operations ko aasaan banata hai',
+        items: [
+          { title: 'Fine Dine & Family Restaurants', desc: 'Table QR Ordering + Live Kitchen KOT + Captain Waiter App.' },
+          { title: 'Cafes & QSRs', desc: 'Fast Counter Billing + Token Display + Recipe Cost & Profit Margins.' },
+          { title: 'Cloud Kitchens & Dhabas', desc: 'Raw Material Stock Inventory + Roz ka Galla (Daily Cash Closing).' },
+          { title: '100% Made in India Support', desc: 'Direct WhatsApp aur Call par support, bina kisi technical confusion ke.' },
+        ],
       },
       comparison: {
         title: 'Traditional POS vs CleverOps',
@@ -405,9 +398,6 @@ export default function LandingPage() {
           { feature: 'Low Stock Alerts', pos: 'No', clever: 'Yes' },
           { feature: 'Auto Menu Hide', pos: 'No', clever: 'Yes' },
           { feature: 'One App for All Roles', pos: 'No', clever: 'Yes' },
-          { feature: 'Shift Cash Register Closing', pos: 'Extra Paid Add-on', clever: 'Yes' },
-          { feature: 'Petty Cash Vouchers', pos: 'Manual Ledger', clever: 'Yes' },
-          { feature: 'Staff Attendance & Payroll', pos: 'Separate ₹15,000 Machine', clever: 'Yes (Phone)' },
           { feature: 'Shift Cash Register Closing', pos: 'Extra Paid Add-on', clever: 'Yes' },
           { feature: 'Petty Cash Vouchers', pos: 'Manual Ledger', clever: 'Yes' },
           { feature: 'Staff Attendance & Payroll', pos: 'Separate ₹15,000 Machine', clever: 'Yes (Phone)' },
@@ -458,9 +448,9 @@ export default function LandingPage() {
         'Cloud Backup',
       ],
       floatingBar: {
-        title: '3-Day Trial ₹3',
-        subtitle: 'Instant activation',
-        cta: 'Start Trial',
+        title: '3-Din Trial @ ₹3',
+        subtitle: 'Koi Auto-Debit Nahi',
+        cta: 'Abhi Chalu Karein →',
         microcopy: 'No Laptop Required • Razorpay Secure • Instant Activation',
       },
       footer: {
@@ -506,31 +496,18 @@ export default function LandingPage() {
         noHardwareNeeded: 'No Hardware Needed',
       },
       hero: {
-        pill: 'AI-Powered Restaurant Operating System',
+        pill: 'Built for Restaurant, Cafe & Cloud Kitchen Owners',
         titlePrefix: 'Run your entire restaurant.',
-        titleHighlight: 'From one app.',
-        subtitle: 'Manage Orders, Kitchen, Inventory, AI Recipe Costing, Cash Closing, Petty Cash, Staff Attendance, Billing and Reports from a single app. No laptop or extra hardware needed.',
-        trialCta: 'Start a 3-Day Trial for ₹3',
-        demoCta: 'Watch Live Demo',
-        microcopy1: 'Pay just ₹3 via Razorpay. Unlock all features for 3 days.',
-        microcopy2: 'No Laptop Required • No Extra Hardware • Setup in Minutes',
-        pills: [
-          'No Laptop Required',
-          'Built for Restaurant Owners',
-          'Razorpay Secure',
-          '5 Minute Setup',
+        titleHighlight: 'Right from your Mobile.',
+        subtitle: 'Run Billing, Live Kitchen (KOT), Food Inventory, and Daily Cash Register from your regular phone — without buying expensive ₹40,000 POS machines.',
+        checkpoints: [
+          'No Laptop or Extra Hardware Needed',
+          'Staff Learns in 5 Minutes',
+          '100% Control over Stock & Food Cost',
         ],
-        chips: [
-          'QR Ordering',
-          'Live KDS',
-          'Inventory',
-          'AI Recipe',
-          'AI Menu',
-          'Billing',
-          'Cash Closing',
-          'Petty Cash',
-          'Staff Attendance',
-        ],
+        trialCta: 'Start 3-Day Trial (Just ₹3)',
+        demoCta: 'View Live Demo Screen',
+        microcopy: '🔒 100% Safe Razorpay Checkout • No Auto-Debit • Instant Activation',
       },
       trustStrip: [
         'No Laptop Required',
@@ -737,9 +714,15 @@ export default function LandingPage() {
           { title: 'Staff Attendance', desc: 'Selfie and PIN-based clock-in, shift management, late marks, and automated monthly payroll.' },
         ],
       },
-      caseStudies: {
-        badge: 'Customer Stories & Case Studies Coming Soon',
-        text: 'CleverOps is transforming operations for restaurants and cafes across India. Verified customer reviews will be published soon.',
+      businessTypes: {
+        title: 'Built for Every Food Business',
+        subtitle: 'From cozy cafes to busy multi-floor restaurants — CleverOps adapts to your specific operation',
+        items: [
+          { title: 'Fine Dine & Family Restaurants', desc: 'Table QR Ordering + Live Kitchen KOT + Captain Waiter App.' },
+          { title: 'Cafes & QSRs', desc: 'Fast Counter Billing + Token Display + Recipe Cost & Profit Margins.' },
+          { title: 'Cloud Kitchens & Dhabas', desc: 'Raw Material Stock Inventory + Daily Cash Register Closing.' },
+          { title: '100% Made in India Support', desc: 'Direct assistance via WhatsApp and Phone with zero delays.' },
+        ],
       },
       comparison: {
         title: 'Traditional POS vs CleverOps',
@@ -753,6 +736,9 @@ export default function LandingPage() {
           { feature: 'Low Stock Alerts', pos: 'No', clever: 'Yes' },
           { feature: 'Auto Menu Hide', pos: 'No', clever: 'Yes' },
           { feature: 'One App for All Roles', pos: 'No', clever: 'Yes' },
+          { feature: 'Shift Cash Register Closing', pos: 'Extra Paid Add-on', clever: 'Yes' },
+          { feature: 'Petty Cash Vouchers', pos: 'Manual Ledger', clever: 'Yes' },
+          { feature: 'Staff Attendance & Payroll', pos: 'Separate ₹15,000 Machine', clever: 'Yes (Phone)' },
           { feature: 'Owner Reports', pos: 'Basic', clever: 'Live on Mobile' },
           { feature: 'Hardware Required', pos: 'Often Yes (Costly)', clever: 'No (Phone is enough)' },
         ],
@@ -800,9 +786,9 @@ export default function LandingPage() {
         'Cloud Backup',
       ],
       floatingBar: {
-        title: '3-Day Trial ₹3',
-        subtitle: 'Instant activation',
-        cta: 'Start Trial',
+        title: '3-Day Trial @ ₹3',
+        subtitle: 'No Auto-Debit',
+        cta: 'Start Now →',
         microcopy: 'No Laptop Required • Razorpay Secure • Instant Activation',
       },
       footer: {
@@ -982,19 +968,45 @@ export default function LandingPage() {
           </Link>
         </nav>
 
-        {/* Mobile Header Actions (Trial ₹3 Primary CTA + Hamburger) */}
+        {/* Mobile Header Actions (Compact Sign In + Language Toggle + Hamburger) */}
         <div className="flex md:hidden items-center gap-2 shrink-0">
-          {/* Primary CTA: Trial ₹3 */}
-          <Link href={`/signup?plan=trial&lang=${language}`} className="shrink-0">
-            <button className="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-3 sm:px-3.5 rounded-xl text-xs font-bold shadow-xs shadow-emerald-600/20 h-10 min-h-[44px] flex items-center justify-center cursor-pointer">
-              {t.nav.trialCtaMobile}
-            </button>
+          <Link href={`/login?lang=${language}`} className="text-xs font-bold text-slate-700 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+            {t.nav.signIn}
           </Link>
 
-          {/* Hamburger Menu (44x44px touch target) */}
+          {/* Compact Mobile Language Switcher (HI | EN) */}
+          <div className="inline-flex items-center p-0.5 rounded-lg border border-slate-200 bg-slate-100 text-[11px] font-bold shadow-2xs" role="group" aria-label="Language selector">
+            <button
+              onClick={() => handleNavbarSwitch('hi')}
+              className={`px-2 py-0.5 rounded transition-all cursor-pointer flex items-center justify-center ${
+                language === 'hi'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-transparent text-slate-600 hover:text-slate-900'
+              }`}
+              aria-pressed={language === 'hi'}
+              aria-label="Hinglish"
+            >
+              HI
+            </button>
+            <span className="text-slate-300 mx-0.5 select-none text-[10px]">|</span>
+            <button
+              onClick={() => handleNavbarSwitch('en')}
+              className={`px-2 py-0.5 rounded transition-all cursor-pointer flex items-center justify-center ${
+                language === 'en'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-transparent text-slate-600 hover:text-slate-900'
+              }`}
+              aria-pressed={language === 'en'}
+              aria-label="English"
+            >
+              EN
+            </button>
+          </div>
+
+          {/* Hamburger Menu (40x40px touch target) */}
           <button 
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors h-11 w-11 min-h-[44px] min-w-[44px] flex items-center justify-center cursor-pointer shrink-0"
+            className="p-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors h-10 w-10 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer shrink-0"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -1055,78 +1067,172 @@ export default function LandingPage() {
 
       <main className="flex-1 pb-28 md:pb-0">
 
-      {/* 1. Hero Section (Standardized Mobile First-Fold) */}
-      <section className="px-4 sm:px-8 md:px-12 pt-7 pb-6 sm:pt-14 sm:pb-14 md:pt-18 md:pb-16 max-w-4xl mx-auto text-center space-y-4 sm:space-y-6">
-        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 px-3.5 py-1.5 rounded-full text-xs font-bold text-emerald-800 max-w-full">
-          <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-          <span className="leading-tight">{t.hero.pill}</span>
-        </div>
-        
-        {/* Headline: 30px on mobile, desktop unchanged */}
-        <h1 className="text-[30px] sm:text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.18] sm:leading-[1.15]">
-          {t.hero.titlePrefix} <span className="text-emerald-600">{t.hero.titleHighlight}</span>
-        </h1>
-        
-        {/* Subheadline: Paragraph max width 100% on mobile */}
-        <p className="text-[15px] sm:text-base md:text-lg text-slate-600 w-full max-w-full sm:max-w-2xl mx-auto leading-relaxed">
-          {t.hero.subtitle}
-        </p>
-        
-        {/* Action CTAs: Primary height 56px, Secondary height 50px */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1 w-full max-w-sm sm:max-w-none mx-auto">
-          <Link href={`/signup?plan=trial&lang=${language}`} className="w-full sm:w-auto">
-            <button className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-7 rounded-2xl text-base font-bold shadow-sm shadow-emerald-600/20 transition-all cursor-pointer h-14 min-h-[56px] flex items-center justify-center gap-2">
-              <span>{t.hero.trialCta}</span>
-            </button>
-          </Link>
-          <a href="#roles" className="w-full sm:w-auto">
-            <button className="w-full sm:w-auto bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-6 rounded-2xl text-sm md:text-base font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 h-[50px] min-h-[50px]">
-              <Play className="h-4 w-4 fill-slate-700 text-slate-700" />
-              <span>{t.hero.demoCta}</span>
-            </button>
-          </a>
-        </div>
+      {/* 1. Hero Section (Mobile-First Above-the-Fold Fit & Desktop Grid) */}
+      <section className="px-4 sm:px-8 md:px-12 pt-4 pb-8 sm:pt-12 sm:pb-14 md:pt-16 md:pb-18 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-12 items-center">
+          
+          {/* Left Column: Mobile Above-The-Fold Pitch */}
+          <div className="lg:col-span-7 text-center lg:text-left space-y-3.5 sm:space-y-4">
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold text-emerald-800 max-w-full">
+              <span>🇮🇳</span>
+              <span className="leading-tight">{t.hero.pill}</span>
+            </div>
+            
+            <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-[50px] font-black text-slate-900 tracking-tight leading-tight sm:leading-[1.15]">
+              {t.hero.titlePrefix} <span className="text-emerald-600 block sm:inline">{t.hero.titleHighlight}</span>
+            </h1>
+            
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 leading-relaxed font-normal">
+              {t.hero.subtitle}
+            </p>
+            
+            {/* 3 Clean Horizontal Checkmarks (Compact vertical stack on mobile) */}
+            <div className="space-y-1.5 pt-0.5 text-xs sm:text-sm font-semibold text-slate-700 max-w-lg mx-auto lg:mx-0 text-left">
+              {t.hero.checkpoints.map((pt, idx) => (
+                <div key={idx} className="flex items-center justify-start gap-2">
+                  <div className="h-4.5 w-4.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Check className="h-3 w-3 stroke-[3]" />
+                  </div>
+                  <span>{pt}</span>
+                </div>
+              ))}
+            </div>
 
-        {/* 3. Trust Line: Smaller typography, subtle divider, better spacing */}
-        <div className="pt-3 pb-1 max-w-md mx-auto space-y-1.5 border-t border-slate-200/80 mt-4">
-          <p className="text-xs sm:text-sm text-slate-800 font-bold">
-            {t.hero.microcopy1}
-          </p>
-          <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-            {t.hero.microcopy2}
-          </p>
-        </div>
+            {/* Action CTAs: Full width on mobile, 52px high-contrast touch target */}
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-2.5 pt-1.5 w-full max-w-md mx-auto lg:mx-0">
+              <Link href={`/signup?plan=trial&lang=${language}`} className="w-full sm:w-auto">
+                <button className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-6 rounded-2xl text-sm sm:text-base font-black shadow-md shadow-emerald-600/25 transition-all cursor-pointer h-13 min-h-[52px] flex items-center justify-center gap-2">
+                  <span>{t.hero.trialCta}</span>
+                </button>
+              </Link>
+              <a href="#preview" className="hidden sm:inline-flex w-full sm:w-auto">
+                <button className="w-full sm:w-auto bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-6 rounded-2xl text-sm md:text-base font-semibold shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-2 h-13 min-h-[52px]">
+                  <Play className="h-4 w-4 fill-slate-700 text-slate-700" />
+                  <span>{t.hero.demoCta}</span>
+                </button>
+              </a>
+            </div>
 
-        {/* 4. Feature Cards: 2-column grid, equal heights, icon above text, 16px padding, 16px radius */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-3xl mx-auto pt-2">
-          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
-            <Laptop className="h-5 w-5 text-emerald-600 shrink-0" />
-            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[0]}</span>
-          </div>
-          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
-            <Users className="h-5 w-5 text-emerald-600 shrink-0" />
-            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[1]}</span>
-          </div>
-          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
-            <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
-            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[2]}</span>
-          </div>
-          <div className="flex flex-col items-center justify-center text-center gap-2 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs h-full min-h-[96px]">
-            <Zap className="h-5 w-5 text-emerald-600 shrink-0" />
-            <span className="text-xs sm:text-sm font-bold text-slate-700 leading-snug">{t.hero.pills[3]}</span>
-          </div>
-        </div>
+            {/* Single Clean Reassurance Line */}
+            <p className="text-[11px] sm:text-xs text-slate-500 font-semibold pt-0.5 max-w-md mx-auto lg:mx-0">
+              {t.hero.microcopy}
+            </p>
 
-        {/* 5. Small Feature Pills: 42-46px height, better horizontal padding, wrapping allowed, consistent gaps */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-xl mx-auto pt-1">
-          {t.hero.chips.map((chip, idx) => (
-            <span 
-              key={idx} 
-              className="min-h-[44px] inline-flex items-center justify-center px-3 py-2 rounded-xl text-xs font-bold bg-white border border-slate-200 text-slate-700 shadow-2xs text-center leading-tight break-words"
-            >
-              {chip}
-            </span>
-          ))}
+            {/* Mobile Native App Widget Preview (Instant Visual Proof - Mobile only, lg:hidden) */}
+            <div className="block lg:hidden w-full pt-1.5">
+              <div className="bg-white border-2 border-slate-200/90 rounded-2xl p-3.5 shadow-md space-y-2.5 text-left">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-xs font-black text-slate-900 tracking-tight">Royal Spice Bistro</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
+                    Live Mobile OS
+                  </span>
+                </div>
+
+                {/* 2x2 Grid */}
+                <div className="grid grid-cols-2 gap-2 text-left">
+                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Today's Sales</p>
+                    <p className="text-sm font-black text-slate-900 leading-snug">₹24,850</p>
+                    <p className="text-[10px] text-emerald-600 font-bold">↑ 18%</p>
+                  </div>
+                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Active KOTs</p>
+                    <p className="text-sm font-black text-slate-900 leading-snug">4 Orders</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Kitchen Live</p>
+                  </div>
+                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Cash Drawer</p>
+                    <p className="text-sm font-black text-slate-900 leading-snug">₹8,400</p>
+                    <p className="text-[10px] text-emerald-600 font-bold">Matched ✓</p>
+                  </div>
+                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Staff Present</p>
+                    <p className="text-sm font-black text-slate-900 leading-snug">5 / 5</p>
+                    <p className="text-[10px] text-slate-500 font-medium">Online</p>
+                  </div>
+                </div>
+
+                {/* Bottom Red/Amber Alert Strip */}
+                <div className="p-2 bg-amber-50/90 border border-amber-200 rounded-xl flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-950 text-[11px] leading-tight">
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                    <span>⚠️ Low Stock Alert: Paneer (1.2 kg left) — Auto-alert sent to Owner</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Column: Desktop High-Impact Live Dashboard Visual Card (hidden on mobile) */}
+          <div className="hidden lg:block lg:col-span-5 w-full max-w-md mx-auto">
+            <div className="bg-white border-2 border-slate-200/90 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4 text-left relative overflow-hidden">
+              
+              {/* Header with Live Status */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs font-black text-slate-900 tracking-tight">Royal Spice Bistro • Live OS</span>
+                </div>
+                <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  Counter Synced
+                </span>
+              </div>
+
+              {/* 2x2 Metrics Grid */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Today's Sales</p>
+                  <p className="text-xl font-black text-slate-900">₹24,850</p>
+                  <p className="text-[11px] text-emerald-600 font-bold">↑ 18% vs yesterday</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Active KOTs</p>
+                  <p className="text-xl font-black text-slate-900">4 Orders</p>
+                  <p className="text-[11px] text-slate-500 font-medium">Kitchen Live</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cash Drawer</p>
+                  <p className="text-xl font-black text-slate-900">₹8,400</p>
+                  <p className="text-[11px] text-emerald-600 font-bold">Matched ✓</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Staff Present</p>
+                  <p className="text-xl font-black text-slate-900">5 / 5</p>
+                  <p className="text-[11px] text-slate-500 font-medium">Online</p>
+                </div>
+              </div>
+
+              {/* Low Stock Alert Bar */}
+              <div className="p-3 bg-amber-50/80 border border-amber-200/90 rounded-2xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 font-bold text-amber-950">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>⚠️ Low Stock Alert: Paneer (1.2 kg left) — Auto-alert sent to Owner</span>
+                </div>
+              </div>
+
+              {/* Bottom Quick Link */}
+              <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100 font-medium">
+                <span>12 Tables Active • 5 Staff Synced</span>
+                <a href="#preview" className="text-emerald-600 font-bold hover:underline flex items-center gap-1">
+                  <span>Preview Screen</span>
+                  <ArrowRight className="h-3 w-3" />
+                </a>
+              </div>
+
+            </div>
+          </div>
+
         </div>
       </section>
 
@@ -1976,7 +2082,13 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Mobile Swipe Cue */}
+          <div className="flex md:hidden items-center justify-end text-xs font-semibold text-emerald-700 gap-1 -mb-2">
+            <span>Swipe karke dekhein</span>
+            <span>→</span>
+          </div>
+
+          <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 sm:grid sm:grid-cols-2 lg:grid-cols-3 sm:pb-0 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
             {t.workflow.steps.map((step, idx) => {
               const colors = [
                 'bg-emerald-50 text-emerald-800',
@@ -1995,7 +2107,7 @@ export default function LandingPage() {
                 'text-emerald-400'
               ];
               return (
-                <div key={idx} className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2.5 shadow-2xs">
+                <div key={idx} className="min-w-[270px] sm:min-w-0 snap-center bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2.5 shadow-2xs flex-1">
                   <div className={`inline-flex items-center gap-1.5 ${colors[idx % colors.length]} font-black text-xs px-2.5 py-1 rounded-md`}>
                     <Clock className={`h-3.5 w-3.5 ${iconColors[idx % iconColors.length]}`} />
                     <span>{step.time}</span>
@@ -2097,7 +2209,13 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 md:grid md:grid-cols-3 lg:grid-cols-4 md:gap-6 md:pb-0 scrollbar-none">
+          {/* Mobile Swipe Cue */}
+          <div className="flex md:hidden items-center justify-end text-xs font-semibold text-emerald-700 gap-1 -mb-2">
+            <span>Swipe karke dekhein</span>
+            <span>→</span>
+          </div>
+
+          <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 md:grid md:grid-cols-3 lg:grid-cols-4 md:gap-6 md:pb-0 scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
             {t.features.items.map((feat, idx) => {
               const Icon = featureIcons[idx % featureIcons.length];
               const color = featureColors[idx % featureColors.length];
@@ -2125,16 +2243,33 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 9. Case Studies & Stories Section (Honest Placeholder) */}
-      <section className="px-4 sm:px-6 md:px-12 py-10 sm:py-14 bg-slate-50 border-b border-slate-200/80">
-        <div className="max-w-4xl mx-auto text-center space-y-3">
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 px-3.5 py-1.5 rounded-full shadow-2xs">
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-            <span>{t.caseStudies.badge}</span>
+      {/* 9. Built for Every Food Business Trust Section */}
+      <section className="px-4 sm:px-6 md:px-12 py-12 sm:py-16 bg-slate-50 border-b border-slate-200/80">
+        <div className="max-w-5xl mx-auto space-y-8 text-center">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-[1.22]">
+              {t.businessTypes.title}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-xl mx-auto">
+              {t.businessTypes.subtitle}
+            </p>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-lg mx-auto">
-            {t.caseStudies.text}
-          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-left">
+            {t.businessTypes.items.map((item, idx) => {
+              const icons = [Utensils, Coffee, Store, PhoneCall];
+              const Icon = icons[idx % icons.length];
+              return (
+                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-5 space-y-2.5 shadow-2xs hover:shadow-md transition-shadow">
+                  <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">{item.title}</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">{item.desc}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -2151,24 +2286,47 @@ export default function LandingPage() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs divide-y divide-slate-100">
-            {/* Table Header */}
-            <div className="grid grid-cols-3 bg-slate-100/80 p-3.5 sm:p-4 text-xs sm:text-sm font-bold">
-              <div className="text-slate-600">{t.comparison.headers[0]}</div>
-              <div className="text-slate-500">{t.comparison.headers[1]}</div>
-              <div className="text-emerald-700 flex items-center gap-1.5">
-                <Check className="h-4 w-4 text-emerald-600" />
-                <span>{t.comparison.headers[2]}</span>
+            {/* Table Header (50% - 25% - 25% distribution for 360px screens) */}
+            <div className="grid grid-cols-12 bg-slate-100/90 p-3 sm:p-4 text-xs sm:text-sm font-bold border-b border-slate-200 items-center">
+              <div className="col-span-6 text-slate-700">{t.comparison.headers[0]}</div>
+              <div className="col-span-3 text-center text-slate-500 text-[11px] sm:text-xs">
+                <span className="hidden sm:inline">{t.comparison.headers[1]}</span>
+                <span className="sm:hidden">Old POS</span>
+              </div>
+              <div className="col-span-3 text-center text-emerald-700 font-extrabold text-[11px] sm:text-xs flex items-center justify-center gap-1">
+                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>CleverOps</span>
               </div>
             </div>
 
             {/* Rows */}
-            {t.comparison.rows.map((row, idx) => (
-              <div key={idx} className="grid grid-cols-3 p-3.5 sm:p-4 text-xs sm:text-sm">
-                <div className="font-semibold text-slate-800">{row.feature}</div>
-                <div className="text-slate-500">{row.pos}</div>
-                <div className="text-emerald-700 font-bold">{row.clever}</div>
-              </div>
-            ))}
+            {t.comparison.rows.map((row, idx) => {
+              const isPosNegative = row.pos.toLowerCase().includes('no') || row.pos.toLowerCase().includes('extra') || row.pos.toLowerCase().includes('costly') || row.pos.toLowerCase().includes('manual') || row.pos.toLowerCase().includes('separate');
+              return (
+                <div key={idx} className="grid grid-cols-12 p-2.5 sm:p-3.5 text-xs sm:text-sm items-center hover:bg-slate-50/50 transition-colors">
+                  {/* Col 1: 50% width */}
+                  <div className="col-span-6 font-semibold text-slate-800 text-[11px] sm:text-xs leading-snug pr-2">
+                    {row.feature}
+                  </div>
+
+                  {/* Col 2: Traditional POS (25% width) */}
+                  <div className="col-span-3 text-center text-[10px] sm:text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1">
+                    {isPosNegative ? (
+                      <span className="text-rose-500 font-bold shrink-0">✕</span>
+                    ) : (
+                      <span className="text-amber-600 shrink-0">~</span>
+                    )}
+                    <span className="truncate max-w-full">{row.pos}</span>
+                  </div>
+
+                  {/* Col 3: CleverOps (25% width) */}
+                  <div className="col-span-3 text-center text-[10px] sm:text-xs text-emerald-700 font-bold flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1 bg-emerald-50/60 py-1 rounded-lg">
+                    <span className="text-emerald-600 font-bold shrink-0">✓</span>
+                    <span className="truncate max-w-full">{row.clever}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -2349,7 +2507,7 @@ export default function LandingPage() {
       </main>
 
       {/* Translated Footer */}
-      <footer className="bg-slate-950 text-slate-400 border-t border-slate-800 shrink-0 font-sans">
+      <footer className="bg-slate-950 text-slate-400 border-t border-slate-800 shrink-0 font-sans pb-24 md:pb-12">
         <div className="max-w-7xl mx-auto px-6 md:px-12 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
             
@@ -2454,14 +2612,14 @@ export default function LandingPage() {
         </div>
       </footer>
 
-      {/* 15. Sticky Mobile CTA Floating Bar (72px Clean Modern SaaS) */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg px-4 flex items-center justify-between h-[72px] pb-[env(safe-area-inset-bottom)] md:hidden">
+      {/* 15. Thumb-Zone Sticky Bottom Bar (h-16, z-50, Non-intrusive) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-4 flex items-center justify-between h-16 pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="flex flex-col justify-center pr-2 min-w-0">
-          <span className="text-xs sm:text-sm font-black text-slate-900 tracking-tight truncate">{t.floatingBar.title}</span>
-          <span className="text-[11px] text-slate-500 font-medium truncate">{t.floatingBar.subtitle}</span>
+          <span className="text-xs font-black text-slate-900 tracking-tight truncate">{t.floatingBar.title}</span>
+          <span className="text-[10px] text-slate-500 font-semibold truncate">{t.floatingBar.subtitle}</span>
         </div>
         <Link href={`/signup?plan=trial&lang=${language}`} className="shrink-0">
-          <button className="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs shadow-emerald-600/20 cursor-pointer h-11 min-h-[44px] flex items-center justify-center whitespace-nowrap">
+          <button className="bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white px-4 py-2 rounded-xl text-xs font-black shadow-xs shadow-emerald-600/20 cursor-pointer h-10 min-h-[40px] flex items-center justify-center whitespace-nowrap">
             {t.floatingBar.cta}
           </button>
         </Link>
