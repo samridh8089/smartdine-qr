@@ -199,17 +199,17 @@ export default function LandingPage() {
       },
       scrollMagnet: {
         boldLine: 'Sale toh roz hoti hai, par paisa kahan gayab ho raha hai?',
-        subLine: 'Sirf ₹3 ke 3-Din Trial me apne kitchen, galla, staff hours aur stock ka pura sach khud apni aankhon se dekhein — Niche Calculator me apne restaurant ki bachat check karein 👇',
-        cta: 'Bachat Calculator Dekhein',
+        subLine: 'Sirf ₹3 ke 3-Din Trial me apne kitchen, galla, staff hours aur stock ka pura sach khud apni aankhon se dekhein — Niche Calculator me apne restaurant ki bachat check karein:',
+        cta: 'Bachat Calculator',
       },
       calculator: {
-        badge: '🧮 Live Restaurant Leak & Profit Calculator',
+        badge: 'Live Restaurant Leak & Profit Calculator',
         title: 'Apne Restaurant ka Mahine ka Chhupa Hua Loss Check Karein',
         subtitle: 'Apne Tables, Staff aur Monthly Sale ke hisaab se dekhein CleverOps har mahine aapka kitna paisa aur waqt bacha sakta hai:',
-        tablesLabel: 'Kul Tables (Total Tables)',
+        tablesLabel: 'Kul Tables',
         staffLabel: 'Kul Staff (Waiter + Kitchen + Cashier)',
         salesLabel: 'Monthly Sale (Approx ₹)',
-        resultHeadline: 'Aapki Anumanit Monthly Bachat & Extra कमाई:',
+        resultHeadline: 'Aapki Anumanit Monthly Bachat & Extra Kamai:',
         perMonth: '/ Month',
         yearlyBadge: (val: string) => `Saal ka ~${val} Bachega!`,
         row1Title: 'Kitchen Chori & Cancel Order Leak Band:',
@@ -222,11 +222,11 @@ export default function LandingPage() {
         row4Desc: '(Shift Cash Closing aur Photo Slip Voucher se)',
         row5Title: 'Biometric & Menu Printing Kharcha Zero:',
         row5Desc: '(Selfie+GPS Attendance aur AI Menu Scanner se)',
-        ctaText: (val: string) => `🕵️‍♂️ Har mahine ${val} ka nuksan rokne ke liye — Sirf ₹3 ke 3-Din Trial me apne restaurant ka pura sach khud dekhein!`,
+        ctaText: (val: string) => `Har mahine ${val} ka nuksan rokne ke liye — Sirf ₹3 ke 3-Din Trial me apne restaurant ka pura sach khud dekhein!`,
         ctaBtn: 'Sirf ₹3 Me 3-Din Trial Chalu Karein →',
       },
       operationsBreakdown: {
-        badge: '💡 Operations Simplified • 100% Practical',
+        badge: 'Operations Simplified • 100% Practical',
         title: 'Yeh Paisa Kaise Bachta Hai & Roz Ka Kaam Kaise Aasaan Hota Hai?',
         subtitle: 'Kisi theoretical gyaan ke bina — dekhiye CleverOps ke 8 real ground features aapke restaurant ko kaise chalate hain:',
         cards: [
@@ -612,11 +612,11 @@ export default function LandingPage() {
       },
       scrollMagnet: {
         boldLine: 'Sales happen every day, but where is the money quietly leaking?',
-        subLine: 'In just a ₹3 3-Day Trial, see the complete reality of your kitchen, cash drawer, staff hours, and inventory with your own eyes — Check your savings in the calculator below 👇',
+        subLine: 'In just a ₹3 3-Day Trial, see the complete reality of your kitchen, cash drawer, staff hours, and inventory with your own eyes — Check your savings in the calculator below:',
         cta: 'Check Loss Calculator',
       },
       calculator: {
-        badge: '🧮 Live Restaurant Leak & Profit Calculator',
+        badge: 'Live Restaurant Leak & Profit Calculator',
         title: 'Calculate the Hidden Monthly Losses in Your Restaurant',
         subtitle: 'Based on your tables, staff, and monthly sales, see how much money and time CleverOps saves every single month:',
         tablesLabel: 'Total Tables',
@@ -635,11 +635,11 @@ export default function LandingPage() {
         row4Desc: '(Shift cash closing with denomination counting and photo slip voucher approvals)',
         row5Title: 'Biometric Machine & Menu Printing Zero Expense:',
         row5Desc: '(Phone selfie + GPS clock-in and instant AI paper menu digitization)',
-        ctaText: (val: string) => `🕵️‍♂️ To stop losing ${val} every single month — Start a ₹3 3-Day Trial and discover your restaurant\'s true numbers!`,
+        ctaText: (val: string) => `To stop losing ${val} every single month — Start a ₹3 3-Day Trial and discover your restaurant\'s true numbers!`,
         ctaBtn: 'Start 3-Day Trial for Just ₹3 →',
       },
       operationsBreakdown: {
-        badge: '💡 Operations Simplified • 100% Practical',
+        badge: 'Operations Simplified • 100% Practical',
         title: 'How is This Money Saved & Daily Work Simplified?',
         subtitle: 'Zero theoretical jargon — see how CleverOps\'s 8 real ground features run your restaurant smoothly:',
         cards: [
@@ -1261,6 +1261,30 @@ export default function LandingPage() {
             <p className="text-xs sm:text-sm md:text-base lg:text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 leading-relaxed font-normal">
               {t.hero.subtitle}
             </p>
+
+            {/* Value Pitch & Audit Hook Callout (Clean Emerald Surface Directly Under H1) */}
+            <a
+              href="#savings-breakdown"
+              className="group block bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200/90 hover:border-emerald-300 rounded-2xl p-3 sm:p-3.5 transition-all shadow-2xs hover:shadow-xs text-left max-w-xl mx-auto lg:mx-0"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span>{t.scrollMagnet.boldLine}</span>
+                  </p>
+                  <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed font-medium">
+                    {t.scrollMagnet.subLine}
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs transition-all">
+                    <span>{t.scrollMagnet.cta}</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </span>
+                </div>
+              </div>
+            </a>
             
             {/* 3 Clean Horizontal Checkmarks (Compact vertical stack on mobile) */}
             <div className="space-y-1.5 pt-0.5 text-xs sm:text-sm font-semibold text-slate-700 max-w-lg mx-auto lg:mx-0 text-left">
@@ -1411,66 +1435,16 @@ export default function LandingPage() {
 
         </div>
 
-        {/* Hero Scroll-Magnet Hook Teaser (Visible at bottom edge of first screen) */}
-        <div className="mt-4 sm:mt-6 w-full max-w-5xl mx-auto">
-          <a
-            href="#savings-breakdown"
-            className="group block bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-emerald-500/15 border-2 border-amber-400 hover:border-amber-500 rounded-2xl p-3.5 sm:p-4.5 transition-all shadow-md hover:shadow-lg cursor-pointer text-left ring-2 ring-amber-400/20"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm sm:text-base font-black text-amber-950 flex items-center gap-2">
-                  <span className="text-lg">💰</span>
-                  <span>{t.scrollMagnet.boldLine}</span>
-                </p>
-                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold">
-                  {t.scrollMagnet.subLine}
-                </p>
-              </div>
-              <div className="shrink-0 self-end sm:self-center">
-                <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-extrabold text-xs shadow-sm transition-all">
-                  <span>{t.scrollMagnet.cta}</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </span>
-              </div>
-            </div>
-          </a>
-        </div>
-      </section>
-
-      {/* Trust Strip */}
-      <section className="bg-slate-50 border-y border-slate-200/80 py-2 sm:py-3 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto grid grid-cols-2 sm:flex sm:flex-wrap items-center justify-center gap-x-4 sm:gap-x-8 gap-y-1.5 text-[11px] sm:text-xs font-semibold text-slate-600">
-          <div className="flex items-center gap-1.5">
-            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <span>{t.trustStrip[0]}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <span>{t.trustStrip[1]}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <span>{t.trustStrip[2]}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <span>{t.trustStrip[3]}</span>
-          </div>
-          <div className="flex items-center gap-1.5 col-span-2 sm:col-span-1 justify-center">
-            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-            <span>{t.trustStrip[4]}</span>
-          </div>
-        </div>
       </section>
 
       {/* 1.5. Interactive Restaurant Loss & Profit Calculator & Operations Simplified */}
-      <section id="savings-breakdown" className="scroll-mt-16 bg-gradient-to-b from-slate-50 via-white to-slate-50 border-b border-slate-200/80 px-4 sm:px-6 md:px-12 py-12 sm:py-16">
-        <div className="max-w-6xl mx-auto space-y-10 sm:space-y-14">
+      <section id="savings-breakdown" className="scroll-mt-16 bg-gradient-to-b from-slate-50/70 via-white to-slate-50/70 border-b border-slate-200/80 px-4 sm:px-6 md:px-12 py-10 sm:py-14">
+        <div className="max-w-6xl mx-auto space-y-10 sm:space-y-12">
           
-          {/* SECTION HEADER */}
+          {/* SECTION HEADER (Clean Emerald Badge, No Loud Yellow) */}
           <div className="text-center space-y-2.5 max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-1.5 bg-amber-100/80 border border-amber-300 px-3.5 py-1 rounded-full text-xs font-black text-amber-900 shadow-2xs">
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200/90 px-3.5 py-1 rounded-full text-xs font-bold text-emerald-800 shadow-2xs">
+              <BarChart3 className="h-3.5 w-3.5 text-emerald-600" />
               <span>{t.calculator.badge}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">
@@ -1484,31 +1458,42 @@ export default function LandingPage() {
           {/* CALCULATOR MAIN GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
             
-            {/* LEFT COLUMN: 3 INTERACTIVE TOUCH SLIDERS */}
-            <div className="lg:col-span-6 bg-white border border-slate-200 rounded-3xl p-5 sm:p-7 shadow-sm space-y-6">
+            {/* LEFT COLUMN: 3 EDITABLE INPUT FIELDS + TOUCH SLIDERS */}
+            <div className="lg:col-span-6 bg-white border border-slate-200 rounded-3xl p-5 sm:p-7 shadow-xs space-y-6">
               
-              {/* Slider 1: Tables */}
+              {/* Slider 1: Tables (With Editable Input) */}
               <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                    <span>🍽️</span>
+                    <Utensils className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span>{t.calculator.tablesLabel}</span>
                   </label>
-                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm rounded-lg border border-emerald-200">
-                    {calcTables} Tables
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={calcTables || ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setCalcTables(val);
+                      }}
+                      className="w-18 sm:w-20 px-2.5 py-1 text-right text-xs sm:text-sm font-bold text-emerald-900 bg-emerald-50/50 border border-emerald-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg outline-none transition-all"
+                    />
+                    <span className="text-xs font-bold text-slate-500 select-none">Tables</span>
+                  </div>
                 </div>
                 <input
                   type="range"
                   min={2}
                   max={50}
                   step={1}
-                  value={calcTables}
+                  value={Math.min(50, Math.max(2, calcTables || 2))}
                   onChange={(e) => setCalcTables(Number(e.target.value))}
-                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
                 />
                 {/* Presets */}
-                <div className="flex items-center justify-between gap-1.5 pt-1">
+                <div className="flex items-center justify-between gap-1.5 pt-0.5">
                   {[6, 10, 18, 30].map((preset) => (
                     <button
                       key={preset}
@@ -1526,28 +1511,39 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Slider 2: Staff */}
+              {/* Slider 2: Staff (With Editable Input) */}
               <div className="space-y-2.5 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                    <span>👥</span>
+                    <Users className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span>{t.calculator.staffLabel}</span>
                   </label>
-                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm rounded-lg border border-emerald-200">
-                    {calcStaff} Staff Members
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={calcStaff || ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setCalcStaff(val);
+                      }}
+                      className="w-18 sm:w-20 px-2.5 py-1 text-right text-xs sm:text-sm font-bold text-emerald-900 bg-emerald-50/50 border border-emerald-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg outline-none transition-all"
+                    />
+                    <span className="text-xs font-bold text-slate-500 select-none">Staff</span>
+                  </div>
                 </div>
                 <input
                   type="range"
                   min={2}
                   max={40}
                   step={1}
-                  value={calcStaff}
+                  value={Math.min(40, Math.max(2, calcStaff || 2))}
                   onChange={(e) => setCalcStaff(Number(e.target.value))}
-                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
                 />
                 {/* Presets */}
-                <div className="flex items-center justify-between gap-1.5 pt-1">
+                <div className="flex items-center justify-between gap-1.5 pt-0.5">
                   {[3, 6, 12, 20].map((preset) => (
                     <button
                       key={preset}
@@ -1565,28 +1561,42 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Slider 3: Monthly Sales */}
+              {/* Slider 3: Monthly Sales (With Editable Input) */}
               <div className="space-y-2.5 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
-                    <span>💵</span>
+                    <Banknote className="h-4 w-4 text-emerald-600 shrink-0" />
                     <span>{t.calculator.salesLabel}</span>
                   </label>
-                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm rounded-lg border border-emerald-200">
-                    ₹{(calcMonthlySale / 100000).toFixed(1)} Lakh / mo
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-xs font-bold text-slate-500 select-none">₹</span>
+                    <input
+                      type="number"
+                      min={10000}
+                      step={10000}
+                      value={calcMonthlySale || ''}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setCalcMonthlySale(val);
+                      }}
+                      className="w-24 sm:w-28 px-2.5 py-1 text-right text-xs sm:text-sm font-bold text-emerald-900 bg-emerald-50/50 border border-emerald-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-lg outline-none transition-all"
+                    />
+                    <span className="text-[11px] font-bold text-emerald-700 ml-1 select-none whitespace-nowrap">
+                      ({calcMonthlySale >= 100000 ? `${(calcMonthlySale / 100000).toFixed(1)}L` : `${Math.round(calcMonthlySale / 1000)}k`})
+                    </span>
+                  </div>
                 </div>
                 <input
                   type="range"
                   min={100000}
                   max={3000000}
                   step={50000}
-                  value={calcMonthlySale}
+                  value={Math.min(3000000, Math.max(100000, calcMonthlySale || 100000))}
                   onChange={(e) => setCalcMonthlySale(Number(e.target.value))}
-                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
                 />
                 {/* Presets */}
-                <div className="flex items-center justify-between gap-1.5 pt-1">
+                <div className="flex items-center justify-between gap-1.5 pt-0.5">
                   {[300000, 500000, 1000000, 2000000].map((preset) => (
                     <button
                       key={preset}
@@ -1604,13 +1614,14 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] sm:text-xs text-slate-500 leading-relaxed">
-                ℹ️ <em>Formulas are based on real audit data across Indian dining outlets: 3% kitchen pilferage/cancel losses, exact staff hours/OT tracking, and fast table turnaround.</em>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] sm:text-xs text-slate-500 leading-relaxed flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>Formulas are based on real audit data across Indian dining outlets: 3% kitchen pilferage/cancel losses, exact staff hours/OT tracking, and fast table turnaround.</span>
               </div>
 
             </div>
 
-            {/* RIGHT COLUMN: DARK SLATE / EMERALD RESULT CARD */}
+            {/* RIGHT COLUMN: DARK SLATE / EMERALD RESULT CARD (Clean Lucide Icons, No Emojis) */}
             <div className="lg:col-span-6 bg-slate-900 text-white border-2 border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-5 text-left relative overflow-hidden">
               
               {/* Highlight Headline & Main Savings Number */}
@@ -1633,17 +1644,17 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* 5 Real-Time Live Breakdown Rows */}
+              {/* 5 Real-Time Live Breakdown Rows (With Clean Lucide Icons) */}
               <div className="space-y-3 text-xs sm:text-sm">
                 
                 {/* Row 1 */}
                 <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
                   <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
-                      <span>🥘</span>
+                    <p className="font-bold text-slate-100 flex items-center gap-2">
+                      <ChefHat className="h-4 w-4 text-emerald-400 shrink-0" />
                       <span>{t.calculator.row1Title}</span>
                     </p>
-                    <p className="text-[11px] text-slate-400">{t.calculator.row1Desc}</p>
+                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row1Desc}</p>
                   </div>
                   <span className="font-mono font-black text-emerald-400 shrink-0">
                     ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.kitchenLeak)}/mo
@@ -1653,11 +1664,11 @@ export default function LandingPage() {
                 {/* Row 2 */}
                 <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
                   <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
-                      <span>⏱️</span>
+                    <p className="font-bold text-slate-100 flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
                       <span>{t.calculator.row2Title}</span>
                     </p>
-                    <p className="text-[11px] text-slate-400">{t.calculator.row2Desc}</p>
+                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row2Desc}</p>
                   </div>
                   <span className="font-mono font-black text-emerald-400 shrink-0">
                     ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.staffAndOtLeak)}/mo
@@ -1667,11 +1678,11 @@ export default function LandingPage() {
                 {/* Row 3 */}
                 <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
                   <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
-                      <span>⚡</span>
+                    <p className="font-bold text-slate-100 flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-emerald-400 shrink-0" />
                       <span>{t.calculator.row3Title}</span>
                     </p>
-                    <p className="text-[11px] text-slate-400">{t.calculator.row3Desc}</p>
+                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row3Desc}</p>
                   </div>
                   <span className="font-mono font-black text-emerald-400 shrink-0">
                     +₹{new Intl.NumberFormat('en-IN').format(savingsCalc.turnoverAndAutoMenu)}/mo
@@ -1681,11 +1692,11 @@ export default function LandingPage() {
                 {/* Row 4 */}
                 <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
                   <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
-                      <span>💵</span>
+                    <p className="font-bold text-slate-100 flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-emerald-400 shrink-0" />
                       <span>{t.calculator.row4Title}</span>
                     </p>
-                    <p className="text-[11px] text-slate-400">{t.calculator.row4Desc}</p>
+                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row4Desc}</p>
                   </div>
                   <span className="font-mono font-black text-emerald-400 shrink-0">
                     ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.cashLeak)}/mo
@@ -1695,11 +1706,11 @@ export default function LandingPage() {
                 {/* Row 5 */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="space-y-0.5">
-                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
-                      <span>📱</span>
+                    <p className="font-bold text-slate-100 flex items-center gap-2">
+                      <Smartphone className="h-4 w-4 text-emerald-400 shrink-0" />
                       <span>{t.calculator.row5Title}</span>
                     </p>
-                    <p className="text-[11px] text-slate-400">{t.calculator.row5Desc}</p>
+                    <p className="text-[11px] text-slate-400 pl-6">{t.calculator.row5Desc}</p>
                   </div>
                   <span className="font-mono font-black text-emerald-400 shrink-0">
                     ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.hardwareSaved)}/mo
@@ -1715,7 +1726,7 @@ export default function LandingPage() {
                 </p>
                 <Link
                   href={`/signup?plan=trial&lang=${language}`}
-                  className="block w-full bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black py-3.5 px-4 rounded-2xl text-center text-sm sm:text-base shadow-lg transition-all cursor-pointer"
+                  className="block w-full bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-extrabold py-3.5 px-4 rounded-2xl text-center text-sm sm:text-base shadow-lg transition-all cursor-pointer"
                 >
                   {t.calculator.ctaBtn}
                 </Link>
@@ -1725,10 +1736,11 @@ export default function LandingPage() {
 
           </div>
 
-          {/* PART 2: 8 OPERATIONAL FEATURE CARDS (COMPACT 2-COLUMN GRID ON MOBILE) */}
-          <div className="pt-8 sm:pt-12 border-t border-slate-200/80 space-y-6 sm:space-y-8">
+          {/* PART 2: 8 OPERATIONAL FEATURE CARDS (CLEAN LUCIDE ICONS, NO EMOJIS) */}
+          <div className="pt-8 sm:pt-10 border-t border-slate-200/80 space-y-6 sm:space-y-8">
             <div className="text-center space-y-2 max-w-3xl mx-auto">
-              <div className="inline-flex items-center gap-1.5 bg-emerald-100/70 border border-emerald-300 px-3 py-1 rounded-full text-xs font-black text-emerald-900">
+              <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full text-xs font-bold text-emerald-800">
+                <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
                 <span>{t.operationsBreakdown.badge}</span>
               </div>
               <h3 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
@@ -1744,15 +1756,22 @@ export default function LandingPage() {
               {t.operationsBreakdown.cards.map((card, idx) => (
                 <div
                   key={idx}
-                  className="bg-white border border-slate-200/90 hover:border-emerald-400 rounded-2xl p-3 sm:p-4.5 space-y-2 shadow-2xs hover:shadow-sm transition-all text-left flex flex-col justify-between"
+                  className="bg-white border border-slate-200/90 hover:border-emerald-400 rounded-2xl p-3 sm:p-4 space-y-2 shadow-2xs hover:shadow-xs transition-all text-left flex flex-col justify-between"
                 >
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
                         {card.num}
                       </span>
-                      <span className="text-xs">
-                        {idx === 0 ? '⏱️' : idx === 1 ? '🚫' : idx === 2 ? '👥' : idx === 3 ? '🥘' : idx === 4 ? '💵' : idx === 5 ? '🔔' : idx === 6 ? '🧾' : '📄'}
+                      <span className="text-emerald-600">
+                        {idx === 0 ? <Clock className="h-4 w-4" /> : 
+                         idx === 1 ? <Package className="h-4 w-4" /> : 
+                         idx === 2 ? <Users className="h-4 w-4" /> : 
+                         idx === 3 ? <ChefHat className="h-4 w-4" /> : 
+                         idx === 4 ? <Banknote className="h-4 w-4" /> : 
+                         idx === 5 ? <PhoneCall className="h-4 w-4" /> : 
+                         idx === 6 ? <Receipt className="h-4 w-4" /> : 
+                                     <FileText className="h-4 w-4" />}
                       </span>
                     </div>
                     <h4 className="text-[12px] sm:text-sm font-black text-slate-900 leading-snug">
@@ -1767,7 +1786,7 @@ export default function LandingPage() {
             </div>
 
             {/* Bottom Reassurance Banner below the 8 cards */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
               <div className="space-y-0.5">
                 <p className="text-xs sm:text-sm font-black text-slate-900">
                   Yeh saare 8 operations sirf ₹3 ke 3-Din Trial me 100% unlocked hain.
@@ -1778,7 +1797,7 @@ export default function LandingPage() {
               </div>
               <Link
                 href={`/signup?plan=trial&lang=${language}`}
-                className="shrink-0 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-sm transition-all"
+                className="shrink-0 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-xs transition-all"
               >
                 Start Trial for ₹3 →
               </Link>
