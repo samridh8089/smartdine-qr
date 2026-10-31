@@ -420,16 +420,6 @@ export default function AttendanceManagerView({
           loadAllData(true);
         }
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'staff_attendance', filter: `restaurant_id=eq.${restId}` },
-        async () => {
-          try {
-            const attendances = await getAttendanceForDate(restId, selectedDate);
-            setTodayAttendances(attendances);
-          } catch (_) {}
-        }
-      )
       .subscribe();
 
     return () => {

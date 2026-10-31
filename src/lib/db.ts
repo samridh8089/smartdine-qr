@@ -2198,22 +2198,36 @@ export const db = {
 
     const promise = (async () => {
       try {
-        let query = supabase
-          .from('orders')
-          .select('*, order_items(*), order_batches(*)')
-          .eq('restaurant_id', restaurantId);
+        let allRows: any[] = [];
+        let offset = 0;
+        const pageSize = 1000;
 
-        if (startDate) {
-          query = query.gte('created_at', startDate);
+        while (true) {
+          let query = supabase
+            .from('orders')
+            .select('*, order_items(*), order_batches(*)')
+            .eq('restaurant_id', restaurantId);
+
+          if (startDate) {
+            query = query.gte('created_at', startDate);
+          }
+          if (endDate) {
+            query = query.lte('created_at', endDate);
+          }
+
+          const { data, error } = await query
+            .order('created_at', { ascending: false })
+            .range(offset, offset + pageSize - 1);
+
+          if (error || !data || data.length === 0) break;
+          allRows = allRows.concat(data);
+          if (data.length < pageSize) break;
+          offset += pageSize;
         }
-        if (endDate) {
-          query = query.lte('created_at', endDate);
-        }
 
-        const { data, error } = await query.order('created_at', { ascending: false });
-        if (error || !data) return [];
+        if (allRows.length === 0) return [];
 
-        return data.map((o: any) => {
+        return allRows.map((o: any) => {
           const items = (o.order_items || []).map((oi: any) => ({
             id: oi.id,
             order_id: oi.order_id,

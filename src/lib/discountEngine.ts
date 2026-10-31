@@ -9,6 +9,9 @@ export interface OrderDiscountRow extends EvaluatedDiscount {
   created_at?: string;
 }
 
+// Cached flag: order_discounts table is not deployed in standard schema; discounts are tracked in orders.discount_total & batches
+let hasOrderDiscountsTable = false;
+
 export const DiscountEngine = {
   calculateTotalDiscount(discounts: EvaluatedDiscount[], subtotal: number): number {
     if (!discounts || discounts.length === 0 || subtotal <= 0) return 0;
@@ -59,10 +62,12 @@ export const DiscountEngine = {
         metadata: d.metadata || {}
       }));
 
-      try {
-        await supabase.from('order_discounts').insert(rows);
-      } catch (err) {
-        console.warn('Failed to insert order_discounts rows:', err);
+      if (hasOrderDiscountsTable) {
+        try {
+          await supabase.from('order_discounts').insert(rows);
+        } catch (err) {
+          hasOrderDiscountsTable = false;
+        }
       }
     }
 
@@ -70,6 +75,7 @@ export const DiscountEngine = {
   },
 
   async getOrderDiscounts(orderId: string): Promise<OrderDiscountRow[]> {
+    if (!hasOrderDiscountsTable) return [];
     try {
       const { data, error } = await supabase
         .from('order_discounts')
@@ -85,6 +91,7 @@ export const DiscountEngine = {
   },
 
   async recalculateMultiBatchDiscounts(orderId: string, newSubtotal: number): Promise<number> {
+    if (!hasOrderDiscountsTable) return 0;
     const existingDiscounts = await this.getOrderDiscounts(orderId);
     if (!existingDiscounts || existingDiscounts.length === 0) return 0;
 

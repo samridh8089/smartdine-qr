@@ -33,6 +33,10 @@ const QUICK_TAGS = [
   { label: 'Fresh Vegetables', title: 'Fresh Vegetables', category: 'other' },
 ];
 
+// In-memory items cache to eliminate N+1 fetch storms and freeze on modal open
+const itemsCache = new Map<string, { items: any[]; timestamp: number }>();
+const ITEMS_CACHE_TTL_MS = 60000;
+
 export default function PettyCashRequisitionModal({
   isOpen,
   onClose,
@@ -44,6 +48,7 @@ export default function PettyCashRequisitionModal({
   onSuccess,
 }: PettyCashRequisitionModalProps) {
   // 1. ALL HOOKS STRICTLY AT TOP-LEVEL (CleverOps React Hooks Safety Guardrail)
+  // Step 1: useState
   const [activeTab, setActiveTab] = useState<'petty_cash' | 'store_issue'>(initialTab);
   const [mounted, setMounted] = useState(false);
 
@@ -56,7 +61,15 @@ export default function PettyCashRequisitionModal({
   const [notes, setNotes] = useState('');
 
   // Tab 2 (Store Requisition) Form States
-  const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<any[]>(() => {
+    if (restaurantId && itemsCache.has(restaurantId)) {
+      const entry = itemsCache.get(restaurantId)!;
+      if (Date.now() - entry.timestamp < ITEMS_CACHE_TTL_MS) {
+        return entry.items;
+      }
+    }
+    return [];
+  });
   const [isLoadingItems, setIsLoadingItems] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState(preselectedItemId || '');
   const [issueQuantity, setIssueQuantity] = useState('');
@@ -68,54 +81,7 @@ export default function PettyCashRequisitionModal({
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // 2. useEffect Hooks
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      setActiveTab(initialTab);
-      setSelectedItemId(preselectedItemId || '');
-      setErrorMessage('');
-      setSuccessMessage('');
-    }
-  }, [isOpen, initialTab, preselectedItemId]);
-
-  // Load Inventory Items for Tab 2
-  useEffect(() => {
-    if (!isOpen || !restaurantId) return;
-
-    let isCancelled = false;
-    async function loadItems() {
-      setIsLoadingItems(true);
-      try {
-        const { data, error } = await supabase
-          .from('inventory_items')
-          .select('id, name, unit, current_stock, cost_per_unit, category')
-          .eq('restaurant_id', restaurantId)
-          .eq('is_archived', false)
-          .order('name', { ascending: true });
-
-        if (!isCancelled && !error && data) {
-          setInventoryItems(data);
-          if (preselectedItemId && data.some(i => i.id === preselectedItemId)) {
-            setSelectedItemId(preselectedItemId);
-          }
-        }
-      } catch (_) {
-      } finally {
-        if (!isCancelled) setIsLoadingItems(false);
-      }
-    }
-
-    loadItems();
-    return () => {
-      isCancelled = true;
-    };
-  }, [isOpen, restaurantId, preselectedItemId]);
-
-  // 3. useMemo Hooks
+  // Step 2: useMemo
   const userRole = useMemo(() => {
     return (activeRole || profile?.role || 'cashier').toLowerCase();
   }, [activeRole, profile?.role]);
@@ -148,7 +114,7 @@ export default function PettyCashRequisitionModal({
     );
   }, [inventoryItems]);
 
-  // 4. useCallback Hooks
+  // Step 3: useCallback
   const handleSelectQuickTag = useCallback((tag: { title: string; category: string }) => {
     setTitle(tag.title);
     setCategory(tag.category as ExpenseCategory);
@@ -273,6 +239,75 @@ export default function PettyCashRequisitionModal({
     selectedItemId, issueQuantity, issuedToName, purposeNote,
     restaurantId, profile, userRole, selectedItem, resetForms, onSuccess, onClose
   ]);
+
+  // Step 4: useEffect
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+      setSelectedItemId(preselectedItemId || '');
+      setErrorMessage('');
+      setSuccessMessage('');
+    }
+  }, [isOpen, initialTab, preselectedItemId]);
+
+  // Load Inventory Items for Tab 2 with In-Memory Cache (only on Store Issue tab)
+  useEffect(() => {
+    if (!isOpen || !restaurantId || activeTab !== 'store_issue') return;
+
+    // Check fast cache first
+    const cached = itemsCache.get(restaurantId);
+    if (cached && Date.now() - cached.timestamp < ITEMS_CACHE_TTL_MS) {
+      setInventoryItems(cached.items);
+      if (preselectedItemId && cached.items.some(i => i.id === preselectedItemId)) {
+        setSelectedItemId(preselectedItemId);
+      }
+      return;
+    }
+
+    let isCancelled = false;
+    async function loadItems() {
+      setIsLoadingItems(true);
+      try {
+        let { data, error } = await supabase
+          .from('inventory_items')
+          .select('id, name, unit, current_stock, cost_per_unit, category')
+          .eq('restaurant_id', restaurantId)
+          .eq('is_archived', false)
+          .order('name', { ascending: true });
+
+        // Graceful fallback if is_archived does not exist in schema cache
+        if (error && (error.code === 'PGRST204' || error.message?.includes('is_archived'))) {
+          const fallbackRes = await supabase
+            .from('inventory_items')
+            .select('id, name, unit, current_stock, cost_per_unit, category')
+            .eq('restaurant_id', restaurantId)
+            .order('name', { ascending: true });
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+        }
+
+        if (!isCancelled && !error && data) {
+          itemsCache.set(restaurantId, { items: data, timestamp: Date.now() });
+          setInventoryItems(data);
+          if (preselectedItemId && data.some(i => i.id === preselectedItemId)) {
+            setSelectedItemId(preselectedItemId);
+          }
+        }
+      } catch (_) {
+      } finally {
+        if (!isCancelled) setIsLoadingItems(false);
+      }
+    }
+
+    loadItems();
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, restaurantId, preselectedItemId, activeTab]);
 
   // Conditional return strictly AFTER all hooks
   if (!isOpen || !mounted) return null;

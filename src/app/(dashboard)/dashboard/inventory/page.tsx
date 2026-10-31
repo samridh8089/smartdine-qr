@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRestaurant } from '../../layout';
 import { supabase, getClientAuthHeaders } from '@/lib/supabase';
+import { db } from '@/lib/db';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
 import { 
   convertUnit, 
@@ -812,6 +813,22 @@ const INVENTORY_HUB_MODULES = [
   }
 ];
 
+// In-memory data cache to eliminate N+1 fetch storms on intra-inventory tab switches
+interface CachedInventoryData {
+  items: any[];
+  categories: any[];
+  recipes: any[];
+  menuItems: any[];
+  transactions: any[];
+  purchases: any[];
+  wasteLogs: any[];
+  dispositions: any[];
+  alerts: any[];
+  timestamp: number;
+}
+const inventoryPageDataCache = new Map<string, CachedInventoryData>();
+const INVENTORY_CACHE_TTL_MS = 30000; // 30s cache
+
 export default function InventoryDashboardPage() {
   const { restaurant, profile, activeRole, planSpec } = useRestaurant();
   const restaurantId = restaurant?.id || '';
@@ -965,6 +982,8 @@ export default function InventoryDashboardPage() {
   const importingAiDraftRef = useRef(false);
   const savingItemRef = useRef(false);
   const handledUrlDishIdRef = useRef<string | null>(null);
+  const inFlightLoadDataRef = useRef<Promise<void> | null>(null);
+  const lastLoadedTimeRef = useRef<number>(0);
 
   // Filtered Windows 10 Hub Modules
   const filteredHubModules = useMemo(() => {
@@ -1115,68 +1134,90 @@ export default function InventoryDashboardPage() {
     }
   }, [menuItems, openRecipeModalForDish]);
 
-  // Load Inventory Data
-  const loadData = async () => {
+  // Load Inventory Data with in-memory caching and in-flight deduplication
+  const loadData = async (force: boolean = false) => {
     if (!restaurantId) return;
+
+    if (!force) {
+      const now = Date.now();
+      if (now - lastLoadedTimeRef.current < 15000 && items.length > 0) {
+        return;
+      }
+      const cached = inventoryPageDataCache.get(restaurantId);
+      if (cached && Date.now() - cached.timestamp < INVENTORY_CACHE_TTL_MS) {
+        setItems(cached.items);
+        setCategories(cached.categories);
+        setRecipes(cached.recipes);
+        setMenuItems(cached.menuItems);
+        setTransactions(cached.transactions);
+        setPurchases(cached.purchases);
+        setWasteLogs(cached.wasteLogs);
+        setDispositions(cached.dispositions);
+        setAlerts(cached.alerts);
+        setLoading(false);
+        lastLoadedTimeRef.current = now;
+        return;
+      }
+    }
+
+    if (inFlightLoadDataRef.current) {
+      return inFlightLoadDataRef.current;
+    }
+
     setLoading(true);
 
-    try {
-      // 1. Load Items, Categories, Recipes, Menu Items with Variants, Transactions & Dispositions
-      const [itemsRes, catsRes, recipesRes, menuRes, variantsRes, txRes, purchRes, wasteRes, alertsRes, dispRes] = await Promise.all([
-        supabase.from('inventory_items').select('*').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }),
-        supabase.from('inventory_categories').select('*').eq('restaurant_id', restaurantId).order('name', { ascending: true }),
-        supabase.from('inventory_recipes').select('*, inventory_recipe_ingredients(*)').eq('restaurant_id', restaurantId),
-        supabase.from('menu_items').select('*').eq('restaurant_id', restaurantId),
-        supabase.from('menu_item_variants').select('*'),
-        supabase.from('inventory_transactions').select('*, inventory_items(name)').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(200),
-        supabase.from('inventory_purchases').select('*, inventory_purchase_items(*, inventory_items(name))').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(50),
-        supabase.from('inventory_waste').select('*, inventory_items(name)').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(50),
-        supabase.from('inventory_alerts').select('*, inventory_items(name)').eq('restaurant_id', restaurantId).eq('is_acknowledged', false).order('created_at', { ascending: false }),
-        supabase.from('prepared_food_dispositions').select('*').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(100)
-      ]);
+    const promise = (async () => {
+      try {
+        // 1. Load Items, Categories, Recipes, Menu Items with Variants, Transactions & Dispositions
+        const [itemsRes, catsRes, recipesRes, menuItemsData, txRes, purchRes, wasteRes, alertsRes, dispRes] = await Promise.all([
+          supabase.from('inventory_items').select('*').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }),
+          supabase.from('inventory_categories').select('*').eq('restaurant_id', restaurantId).order('name', { ascending: true }),
+          supabase.from('inventory_recipes').select('*, inventory_recipe_ingredients(*)').eq('restaurant_id', restaurantId),
+          db.getMenuItems(restaurantId),
+          supabase.from('inventory_transactions').select('*, inventory_items(name)').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(200),
+          supabase.from('inventory_purchases').select('*, inventory_purchase_items(*, inventory_items(name))').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(50),
+          supabase.from('inventory_waste').select('*, inventory_items(name)').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(50),
+          supabase.from('inventory_alerts').select('*, inventory_items(name)').eq('restaurant_id', restaurantId).eq('is_acknowledged', false).order('created_at', { ascending: false }),
+          supabase.from('prepared_food_dispositions').select('*').eq('restaurant_id', restaurantId).order('created_at', { ascending: false }).limit(100)
+        ]);
 
-      const allVariants = variantsRes.data || [];
-      const formattedMenuItems = (menuRes.data || []).map(m => ({
-        ...m,
-        variants: allVariants.filter(v => v.menu_item_id === m.id)
-      }));
+        const formattedMenuItems = menuItemsData || [];
 
-      setItems(itemsRes.data || []);
-      setCategories(catsRes.data || []);
-      setRecipes(recipesRes.data || []);
-      setMenuItems(formattedMenuItems);
-      setTransactions(txRes.data || []);
-      setPurchases(purchRes.data || []);
-      setWasteLogs(wasteRes.data || []);
-      setDispositions(dispRes.data || []);
-      setAlerts(alertsRes.data || []);
+        setItems(itemsRes.data || []);
+        setCategories(catsRes.data || []);
+        setRecipes(recipesRes.data || []);
+        setMenuItems(formattedMenuItems);
+        setTransactions(txRes.data || []);
+        setPurchases(purchRes.data || []);
+        setWasteLogs(wasteRes.data || []);
+        setDispositions(dispRes.data || []);
+        setAlerts(alertsRes.data || []);
 
-      // Instant UI Unblock: enable instant recipe modal rendering
-      setLoading(false);
+        inventoryPageDataCache.set(restaurantId, {
+          items: itemsRes.data || [],
+          categories: catsRes.data || [],
+          recipes: recipesRes.data || [],
+          menuItems: formattedMenuItems,
+          transactions: txRes.data || [],
+          purchases: purchRes.data || [],
+          wasteLogs: wasteRes.data || [],
+          dispositions: dispRes.data || [],
+          alerts: alertsRes.data || [],
+          timestamp: Date.now()
+        });
 
-      // Background Non-blocking Tasks
-      getHourlyInventoryImpactReport(restaurantId, 1).then(setHourlyImpact).catch(() => {});
-      syncInventoryMenuAvailability(restaurantId).catch(() => {});
+        lastLoadedTimeRef.current = Date.now();
+        setLoading(false);
+      } catch (err) {
+        console.error('Error loading inventory data:', err);
+        setLoading(false);
+      } finally {
+        inFlightLoadDataRef.current = null;
+      }
+    })();
 
-      // Background AI Recipe Credit Usage
-      fetch(`/api/ai-usage/check?restaurantId=${restaurantId}&featureKey=ai_recipe_generation`)
-        .then(r => r.ok ? r.json() : null)
-        .then(uData => {
-          if (uData) setAiRecipeUsage({ used: uData.used, limit: uData.limit, remaining: uData.remaining });
-        })
-        .catch(() => {});
-
-      // Clean up any orphan reservations for cancelled/completed orders (non-blocking)
-      getClientAuthHeaders().then(authHeaders => {
-        fetch(`/api/staff/cleanup-reservations?restaurantId=${restaurantId}`, {
-          method: 'POST',
-          headers: authHeaders
-        }).catch(() => {});
-      }).catch(() => {});
-    } catch (err) {
-      console.error('Error loading inventory data:', err);
-      setLoading(false);
-    }
+    inFlightLoadDataRef.current = promise;
+    return promise;
   };
 
   useEffect(() => {
@@ -1187,22 +1228,34 @@ export default function InventoryDashboardPage() {
   useEffect(() => {
     if (!restaurantId) return;
 
+    let debounceTimer: any = null;
     const handleResync = () => {
       console.log('[Inventory] Force resync event received. Reloading inventory data...');
-      loadData();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        loadData(true);
+      }, 500);
     };
     window.addEventListener('force-resync', handleResync);
 
+    const onDataChange = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        loadData(true);
+      }, 500);
+    };
+
     const channel = supabase
       .channel(`inventory_${restaurantId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_transactions', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_alerts', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_reservations', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_purchases', filter: `restaurant_id=eq.${restaurantId}` }, loadData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `restaurant_id=eq.${restaurantId}` }, onDataChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_transactions', filter: `restaurant_id=eq.${restaurantId}` }, onDataChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_alerts', filter: `restaurant_id=eq.${restaurantId}` }, onDataChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_reservations', filter: `restaurant_id=eq.${restaurantId}` }, onDataChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_purchases', filter: `restaurant_id=eq.${restaurantId}` }, onDataChange)
       .subscribe();
 
     return () => { 
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel); 
       window.removeEventListener('force-resync', handleResync);
     };
@@ -1716,7 +1769,7 @@ export default function InventoryDashboardPage() {
       setShowItemModal(false);
       setEditingItem(null);
       setIsReviewingItem(false);
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert(err.message || 'Error saving item');
     } finally {
@@ -1778,7 +1831,7 @@ export default function InventoryDashboardPage() {
       setItemToDelete(null);
       setShowItemModal(false);
       setEditingItem(null);
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       console.error('Failed to delete inventory item:', err);
       alert(err.message || 'Error deleting item');
@@ -1844,7 +1897,7 @@ export default function InventoryDashboardPage() {
       setShowQuickItemModal(false);
       setQuickItemName('');
       setTargetIngredientIndex(null);
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert(err.message || 'Error creating item');
     }
@@ -1995,7 +2048,7 @@ export default function InventoryDashboardPage() {
       setShowImportModal(false);
       setParsedRows([]);
       setCsvRawText('');
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert(err.message || 'Import failed');
     }
@@ -2135,7 +2188,7 @@ export default function InventoryDashboardPage() {
       setShowRecipeModal(false);
       setSelectedMenuItemForRecipe(null);
       setSelectedRecipeVariantId(null);
-      await loadData();
+      await loadData(true);
 
       if (targetDishId) {
         setTimeout(() => {
@@ -2230,7 +2283,7 @@ export default function InventoryDashboardPage() {
       setShowRecipeModal(false);
       setSelectedMenuItemForRecipe(null);
       setSelectedRecipeVariantId(null);
-      await loadData();
+      await loadData(true);
 
       if (targetDishId) {
         setTimeout(() => {
@@ -2395,7 +2448,7 @@ export default function InventoryDashboardPage() {
       setShowAiModal(false);
       setAiDraftRecipe(null);
       setShowRecipeModal(true);
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       console.error('Error importing draft into recipe editor:', err);
       alert('Error importing draft: ' + (err.message || 'Failed to import'));
@@ -2461,7 +2514,7 @@ export default function InventoryDashboardPage() {
         cost_unit: 'kg',
         notes: ''
       });
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert(err.message || 'Purchase save error');
     } finally {
@@ -2523,7 +2576,7 @@ export default function InventoryDashboardPage() {
 
       setShowWasteModal(false);
       setWasteForm({ inventory_item_id: '', quantity: '', unit: 'gram', waste_reason: 'Spoiled', notes: '' });
-      await loadData();
+      await loadData(true);
     } catch (err: any) {
       alert(err.message || 'Waste save error');
     }

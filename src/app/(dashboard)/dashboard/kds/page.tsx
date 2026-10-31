@@ -963,6 +963,8 @@ export default function KitchenDisplayPage() {
           )}
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
+            title={soundEnabled ? 'Kitchen Bell On' : 'Kitchen Bell Off'}
+            aria-label="Toggle kitchen bell sound"
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               soundEnabled 
                 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/30' 

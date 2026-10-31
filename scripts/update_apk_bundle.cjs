@@ -6,7 +6,8 @@ async function updateApkBundle() {
   const bundlePath = path.join(__dirname, '../smartdine-mobile/dist-android/index.android.bundle');
   const targetApks = [
     path.join(__dirname, '../app-release.apk'),
-    path.join(__dirname, '../public/app-release.apk')
+    path.join(__dirname, '../public/app-release.apk'),
+    path.join(__dirname, '../public/CleverOps-universal.apk')
   ];
 
   if (!fs.existsSync(bundlePath)) {

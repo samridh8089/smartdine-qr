@@ -331,7 +331,7 @@ export default function LoginPage() {
               </button>
             </form>
           ) : (
-          <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
+          <form onSubmit={handleLogin} action="javascript:void(0)" method="POST" autoComplete="off" className="space-y-4">
             {/* Email Field */}
             <div>
               <label htmlFor="mobile-email" className="block text-[11px] font-black text-[#1e293b] tracking-wider uppercase mb-1.5">
@@ -538,7 +538,7 @@ export default function LoginPage() {
                 </button>
               </form>
             ) : (
-            <form className="space-y-6" onSubmit={handleLogin} autoComplete="off">
+            <form className="space-y-6" onSubmit={handleLogin} action="javascript:void(0)" method="POST" autoComplete="off">
               <Input
                 label="Email address"
                 type="email"

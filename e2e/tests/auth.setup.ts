@@ -26,14 +26,14 @@ const STORAGE_STATE = {
 };
 
 // ── Seed credentials (Spec TDM-002) ─────────────────────────────────────
-const defaultPw = process.env.E2E_DEFAULT_PASSWORD || 'TestPass123!';
+const defaultPw = process.env.E2E_DEFAULT_PASSWORD || '123456';
 const CREDENTIALS = {
-  owner:      { email: process.env.E2E_OWNER_EMAIL || 'owner@test.com',       password: process.env.E2E_OWNER_PASSWORD || defaultPw },
-  waiter:     { email: process.env.E2E_WAITER_EMAIL || 'waiter@test.com',      password: process.env.E2E_WAITER_PASSWORD || defaultPw },
-  kitchen:    { email: process.env.E2E_KITCHEN_EMAIL || 'kitchen@test.com',     password: process.env.E2E_KITCHEN_PASSWORD || defaultPw },
-  cashier:    { email: process.env.E2E_CASHIER_EMAIL || 'cashier@test.com',     password: process.env.E2E_CASHIER_PASSWORD || defaultPw },
-  manager:    { email: process.env.E2E_MANAGER_EMAIL || 'manager@test.com',     password: process.env.E2E_MANAGER_PASSWORD || defaultPw },
-  superAdmin: { email: process.env.E2E_SUPER_ADMIN_EMAIL || 'superadmin@test.com',  password: process.env.E2E_SUPER_ADMIN_PASSWORD || defaultPw },
+  owner:      { email: process.env.E2E_OWNER_EMAIL || 'dsoni1281@gmail.com',       password: process.env.E2E_OWNER_PASSWORD || defaultPw },
+  waiter:     { email: process.env.E2E_WAITER_EMAIL || 'waiter@bistro.local',      password: process.env.E2E_WAITER_PASSWORD || defaultPw },
+  kitchen:    { email: process.env.E2E_KITCHEN_EMAIL || 'headchef@bistro.local',     password: process.env.E2E_KITCHEN_PASSWORD || defaultPw },
+  cashier:    { email: process.env.E2E_CASHIER_EMAIL || 'cashier@bistro.local',     password: process.env.E2E_CASHIER_PASSWORD || defaultPw },
+  manager:    { email: process.env.E2E_MANAGER_EMAIL || 'manager@bistro.local',     password: process.env.E2E_MANAGER_PASSWORD || defaultPw },
+  superAdmin: { email: process.env.E2E_SUPER_ADMIN_EMAIL || 'dsoni1281@gmail.com',  password: process.env.E2E_SUPER_ADMIN_PASSWORD || defaultPw },
 };
 
 // ── Helper: performs login and saves storage state ────────────────────────
@@ -47,9 +47,9 @@ async function loginAndSave(
   await page.waitForLoadState('networkidle');
 
   // Fill credentials
-  await page.getByLabel(/email/i).fill(credentials.email);
-  await page.locator('input[type="password"]').fill(credentials.password);
-  await page.getByRole('button', { name: /sign in|log in|login/i }).click();
+  await page.locator('input[type="email"]:visible').first().fill(credentials.email);
+  await page.locator('input[type="password"]:visible').first().fill(credentials.password);
+  await page.locator('button[type="submit"]:visible, button:has-text("Sign In"):visible').first().click();
 
   // Wait for redirect away from /login — confirms successful auth
   await page.waitForURL((url) => !url.pathname.includes('/login'), {

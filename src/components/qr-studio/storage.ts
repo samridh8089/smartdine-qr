@@ -52,24 +52,7 @@ export async function loadQRDesignConfig(
     }
   }
 
-  // 3. Check Supabase qr_design_settings table
-  if (restaurantId && restaurantId !== 'demo' && supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('qr_design_settings')
-        .select('config')
-        .eq('restaurant_id', restaurantId)
-        .maybeSingle();
-
-      if (!error && data?.config) {
-        return mergeWithDefaults(data.config, name, logo);
-      }
-    } catch (e) {
-      // Table might not exist yet or offline, continue gracefully
-    }
-  }
-
-  // 4. Default configuration
+  // 3. Default configuration (QR design is natively persisted in restaurant.settings.qr_design)
   return mergeWithDefaults({}, name, logo);
 }
 
@@ -268,20 +251,6 @@ export async function saveQRDesignConfig(
           qr_design: updatedConfig
         }
       });
-
-      // 4. Try saving into qr_design_settings table (upsert)
-      try {
-        await supabase
-          .from('qr_design_settings')
-          .upsert({
-            restaurant_id: restaurantId,
-            template_id: updatedConfig.templateId,
-            config: updatedConfig,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'restaurant_id' });
-      } catch (tableErr) {
-        // Suppress if table not present, already saved in restaurant.settings
-      }
     }
 
     return { success: true };

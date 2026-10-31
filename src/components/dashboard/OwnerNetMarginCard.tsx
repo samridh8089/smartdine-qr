@@ -456,11 +456,11 @@ export default function OwnerNetMarginCard({
               {loadingExpenses && expenses.length === 0 ? (
                 <div className="h-7 w-28 bg-slate-200 dark:bg-slate-700 animate-pulse rounded my-0.5" />
               ) : (
-                formatPrice(pnl.operatingExpenses, currency, 0)
+                formatPrice(pnl.operatingExpenses + (pnl.staffLaborCost || 0), currency, 0)
               )}
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Rent, Salary &amp; Bills ({pnl.operatingExpensesPercentage}%)
+              Rent, Salary &amp; Bills ({(((pnl.operatingExpensesPercentage || 0) + (pnl.staffLaborPercentage || 0))).toFixed(1)}%)
             </div>
           </div>
 
@@ -516,7 +516,7 @@ export default function OwnerNetMarginCard({
                 Monthly Expenses
               </div>
               <div className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">
-                ₹{((pnl.perHundredBreakdown?.operatingExpenses || 0) + (pnl.perHundredBreakdown?.staffLabor || 0)).toFixed(1)} <span className="text-xs font-normal text-slate-500">({pnl.operatingExpensesPercentage}%)</span>
+                ₹{((pnl.perHundredBreakdown?.operatingExpenses || 0) + (pnl.perHundredBreakdown?.staffLabor || 0)).toFixed(1)} <span className="text-xs font-normal text-slate-500">({(((pnl.operatingExpensesPercentage || 0) + (pnl.staffLaborPercentage || 0))).toFixed(1)}%)</span>
               </div>
             </div>
 

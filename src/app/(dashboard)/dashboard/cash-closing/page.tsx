@@ -250,6 +250,10 @@ export default function CashClosingPage() {
     setClosings(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      if (restaurant?.id) {
+        const freshSettings = { ...restaurant.settings, cash_closings: updated };
+        void supabase.from('restaurants').update({ settings: freshSettings }).eq('id', restaurant.id);
+      }
     } catch (_) {}
 
     setSaveSuccess(true);
@@ -264,6 +268,21 @@ export default function CashClosingPage() {
       void fetchTodayFigures();
     }
   }, [restaurant?.id, date, fetchTodayFigures]);
+
+  useEffect(() => {
+    const dbClosings = (restaurant?.settings as any)?.cash_closings;
+    if (Array.isArray(dbClosings) && dbClosings.length > 0) {
+      setClosings(prev => {
+        if (prev.length <= 1 || prev.length < dbClosings.length) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(dbClosings));
+          } catch (_) {}
+          return dbClosings;
+        }
+        return prev;
+      });
+    }
+  }, [restaurant?.settings]);
 
   return (
     <div className="space-y-6">

@@ -326,7 +326,15 @@ export default function ReportsPage() {
 
   // Reports Toast Notification State (Non-blocking replacement for browser alert modals)
   const [reportsToast, setReportsToast] = useState<{ message: string; visible: boolean; type?: 'success' | 'error' | 'info' } | null>(null);
+
+  // All useRef hooks (Hooks Always First guardrail)
   const reportsToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isReloadingReportsRef = useRef(false);
+  const pendingReportsReloadRef = useRef(false);
+  const inFlightReportsPromiseRef = useRef<Promise<void> | null>(null);
+  const lastReportsLoadedTimeRef = useRef<number>(0);
+  const lastLoadedKeyRef = useRef<string>('');
+  const loadReportsRef = useRef<(force?: boolean) => Promise<void>>(() => Promise.resolve());
 
   const showReportsToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
     if (reportsToastTimerRef.current) clearTimeout(reportsToastTimerRef.current);
@@ -1105,85 +1113,97 @@ export default function ReportsPage() {
     });
   };
 
-  const isReloadingReportsRef = useRef(false);
-  const pendingReportsReloadRef = useRef(false);
+  const loadReports = async (force: boolean = false) => {
+    const user = await getActiveUser();
+    const restId = restaurant?.id || user?.restaurant_id;
+    if (!restId) return;
 
-  const loadReports = async () => {
+    const currentKey = `${restId}_${timeRange}_${singleDate}_${selectedMonth}_${selectedYear}_${appliedStartDate}_${appliedEndDate}_${selectedWaiter}_${selectedStatus}`;
+    const now = Date.now();
+
+    if (!force && currentKey === lastLoadedKeyRef.current && now - lastReportsLoadedTimeRef.current < 15000 && orders.length > 0) {
+      return;
+    }
+
+    if (inFlightReportsPromiseRef.current) {
+      return inFlightReportsPromiseRef.current;
+    }
+
     if (isReloadingReportsRef.current) {
       pendingReportsReloadRef.current = true;
       return;
     }
     isReloadingReportsRef.current = true;
+    setLoading(true);
 
-    try {
-      const user = await getActiveUser();
-      const restId = restaurant?.id || user?.restaurant_id;
-      if (!restId) return;
+    const promise = (async () => {
+      try {
+        const [allOrders, cats, invItemsRes, dispRes, liveTableData, mItems] = await Promise.all([
+          db.getOrders(restId),
+          db.getCategories(restId),
+          supabase.from('inventory_items').select('*').eq('restaurant_id', restId),
+          (supabase as any).from('prepared_food_dispositions').select('*').eq('restaurant_id', restId),
+          db.getTablesWithLiveStatus(restId),
+          db.getMenuItems(restId)
+        ]);
+        const effectiveOrders = allOrders || [];
+        const effectiveCats = cats || [];
+        const effectiveMenuItems = mItems || [];
 
-      const [allOrders, cats, invItemsRes, dispRes, liveTableData, mItems] = await Promise.all([
-        db.getOrders(restId),
-        db.getCategories(restId),
-        supabase.from('inventory_items').select('*').eq('restaurant_id', restId),
-        (supabase as any).from('prepared_food_dispositions').select('*').eq('restaurant_id', restId),
-        db.getTablesWithLiveStatus(restId),
-        db.getMenuItems(restId)
-      ]);
-      const effectiveOrders = allOrders || [];
-      const effectiveCats = cats || [];
-      const effectiveMenuItems = mItems || [];
+        setOrders(effectiveOrders);
+        setCategories(effectiveCats);
+        setMenuItems(effectiveMenuItems);
+        const invItems = invItemsRes?.data || [];
+        const lowStock = invItems.filter((item: any) => Number(item.current_stock || 0) <= Number(item.minimum_stock || 5));
+        setLowStockItems(lowStock);
+        setDispositionsList(dispRes?.data || []);
+        const occ = liveTableData?.stats?.occupied || 0;
+        const fr = liveTableData?.stats?.available || 0;
+        setLiveOccupancyMerge(prev => ({
+          ...prev,
+          occupied: occ,
+          free: fr
+        }));
+        computeStats(effectiveOrders, effectiveCats, dispRes?.data || [], occ, fr, effectiveMenuItems);
 
-      setOrders(effectiveOrders);
-      setCategories(effectiveCats);
-      setMenuItems(effectiveMenuItems);
-      const invItems = invItemsRes?.data || [];
-      const lowStock = invItems.filter((item: any) => Number(item.current_stock || 0) <= Number(item.minimum_stock || 5));
-      setLowStockItems(lowStock);
-      setDispositionsList(dispRes?.data || []);
-      const occ = liveTableData?.stats?.occupied || 0;
-      const fr = liveTableData?.stats?.available || 0;
-      setLiveOccupancyMerge(prev => ({
-        ...prev,
-        occupied: occ,
-        free: fr
-      }));
-      computeStats(effectiveOrders, effectiveCats, dispRes?.data || [], occ, fr, effectiveMenuItems);
+        // Fetch Owner Financial Data (Restricted to Owner only)
+        let ownerPurchases: any[] = [];
+        let ownerSalaries: any[] = [];
+        let ownerStaff: any[] = [];
 
-      // Fetch Owner Financial Data (Restricted to Owner only)
-      let ownerPurchases: any[] = [];
-      let ownerSalaries: any[] = [];
-      let ownerStaff: any[] = [];
-
-      if (isOwner) {
-        try {
-          const [purchRes, salRes, staffRes] = await Promise.all([
-            supabase.from('inventory_purchases').select('*').eq('restaurant_id', restId).limit(200),
-            supabase.from('salary_records').select('*').eq('restaurant_id', restId).limit(200),
-            supabase.from('staff_profiles').select('*').eq('restaurant_id', restId)
-          ]);
-          ownerPurchases = purchRes.data || [];
-          ownerSalaries = salRes.data || [];
-          ownerStaff = staffRes.data || [];
-        } catch (ownerFetchErr) {
-          console.warn('[Reports] Error loading owner financial data:', ownerFetchErr);
+        if (isOwner) {
+          try {
+            const purchRes = await supabase.from('inventory_purchases').select('*').eq('restaurant_id', restId).limit(200);
+            ownerPurchases = purchRes.data || [];
+            const attendoSettings = (restaurant as any)?.settings?.attendo;
+            ownerStaff = attendoSettings?.staff_profiles || [];
+            ownerSalaries = attendoSettings?.salary_records || [];
+          } catch (ownerFetchErr) {
+            console.warn('[Reports] Error loading owner financial data:', ownerFetchErr);
+          }
+        }
+        setPurchasesList(ownerPurchases);
+        setSalaryRecordsList(ownerSalaries);
+        setStaffProfilesList(ownerStaff);
+        lastLoadedKeyRef.current = currentKey;
+        lastReportsLoadedTimeRef.current = Date.now();
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to load reports:', err);
+        setLoading(false);
+      } finally {
+        isReloadingReportsRef.current = false;
+        inFlightReportsPromiseRef.current = null;
+        if (pendingReportsReloadRef.current) {
+          pendingReportsReloadRef.current = false;
+          await loadReports(true);
         }
       }
-      setPurchasesList(ownerPurchases);
-      setSalaryRecordsList(ownerSalaries);
-      setStaffProfilesList(ownerStaff);
-      setLoading(false);
-    } catch (err) {
-      console.error('Failed to load reports:', err);
-      setLoading(false);
-    } finally {
-      isReloadingReportsRef.current = false;
-      if (pendingReportsReloadRef.current) {
-        pendingReportsReloadRef.current = false;
-        await loadReports();
-      }
-    }
-  };
+    })();
 
-  const loadReportsRef = useRef(loadReports);
+    inFlightReportsPromiseRef.current = promise;
+    return promise;
+  };
 
   const availableWaiters = useMemo(() => {
     const set = new Set<string>();
@@ -1255,8 +1275,16 @@ export default function ReportsPage() {
     const restId = restaurant?.id;
     if (!restId) return;
 
+    let debounceTimer: any = null;
+    const triggerReload = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        loadReportsRef.current(true);
+      }, 500);
+    };
+
     const handleResync = () => {
-      loadReportsRef.current();
+      triggerReload();
     };
     window.addEventListener('force-resync', handleResync);
 
@@ -1264,15 +1292,9 @@ export default function ReportsPage() {
       .channel(`reports_${restId}`, {
         config: { broadcast: { self: true } }
       })
-      .on('broadcast', { event: 'new-order' }, () => {
-        loadReportsRef.current();
-      })
-      .on('broadcast', { event: 'order-status-updated' }, () => {
-        loadReportsRef.current();
-      })
-      .on('broadcast', { event: 'payment-updated' }, () => {
-        loadReportsRef.current();
-      })
+      .on('broadcast', { event: 'new-order' }, triggerReload)
+      .on('broadcast', { event: 'order-status-updated' }, triggerReload)
+      .on('broadcast', { event: 'payment-updated' }, triggerReload)
       .on(
         'postgres_changes',
         {
@@ -1281,13 +1303,12 @@ export default function ReportsPage() {
           table: 'orders',
           filter: `restaurant_id=eq.${restId}`
         },
-        () => {
-          loadReportsRef.current();
-        }
+        triggerReload
       )
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
       window.removeEventListener('force-resync', handleResync);
     };

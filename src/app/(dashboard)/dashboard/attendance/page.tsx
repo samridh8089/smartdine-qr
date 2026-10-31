@@ -70,6 +70,13 @@ export default function AttendancePage() {
     if (!restaurant?.id) return;
     const restId: string = restaurant.id;
 
+    // In manager view, AttendanceManagerView already manages its own comprehensive data loading
+    // Only personal punch card view requires outer profile & shift state
+    if (viewMode !== 'punch') {
+      setLoading(false);
+      return;
+    }
+
     async function loadData() {
       setLoading(true);
       try {

@@ -33,11 +33,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // High-speed in-memory user cache with short TTL to eliminate redundant queries across layouts/pages
 let cachedProfile: any = null;
 let cachedProfileTimestamp = 0;
-const CACHE_TTL_MS = 10000; // 10 seconds cache for rapid intra-page navigations
+let inFlightUserPromise: Promise<any> | null = null;
+const CACHE_TTL_MS = 30000; // 30 seconds cache for rapid intra-page navigations
 
 export const clearActiveUserCache = () => {
   cachedProfile = null;
   cachedProfileTimestamp = 0;
+  inFlightUserPromise = null;
 };
 
 /**
@@ -141,8 +143,14 @@ export const getActiveUser = async (forceRefresh = false) => {
     return cachedProfile;
   }
 
-  try {
-    // 3. Check current session or refresh if needed
+  // 2b. Deduplicate concurrent in-flight profile requests
+  if (!forceRefresh && inFlightUserPromise) {
+    return inFlightUserPromise;
+  }
+
+  inFlightUserPromise = (async () => {
+    try {
+      // 3. Check current session or refresh if needed
     let sessionUser: any = null;
     const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
     
@@ -236,10 +244,15 @@ export const getActiveUser = async (forceRefresh = false) => {
     cachedProfile = finalProfile;
     cachedProfileTimestamp = now;
     return finalProfile;
-  } catch (err) {
-    console.warn('[Supabase Auth] getActiveUser recovery attempt error:', err);
-    return cachedProfile || null;
-  }
+    } catch (err) {
+      console.warn('[Supabase Auth] getActiveUser recovery attempt error:', err);
+      return cachedProfile || null;
+    } finally {
+      inFlightUserPromise = null;
+    }
+  })();
+
+  return inFlightUserPromise;
 };
 
 // Lifecycle listener: automatically refresh session whenever window or tab regains focus

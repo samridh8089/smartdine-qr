@@ -819,11 +819,12 @@ export default function OrdersPage() {
     const tz = (restaurant as any)?.timezone || restaurant?.settings?.timezone || 'Asia/Kolkata';
     const { startIso, endIso } = getDayRangeInTimezone(targetDate, tz);
 
-    const [allOrders, reqs, tbls] = await Promise.all([
-      db.getOrders(restId, startIso, endIso),
+    const allOrders = await db.getOrders(restId, startIso, endIso);
+    const [reqs, liveTableRes] = await Promise.all([
       db.getCustomerRequests(restId),
-      db.getTables(restId)
+      db.getTablesWithLiveStatus(restId, allOrders)
     ]);
+    const tbls = liveTableRes.tables;
     setAllTables(tbls || []);
 
     const waiterTableIds = new Set(
@@ -1071,10 +1072,9 @@ export default function OrdersPage() {
       const tz = (restaurant as any)?.timezone || restaurant?.settings?.timezone || 'Asia/Kolkata';
       const { startIso, endIso } = getDayRangeInTimezone(targetDate, tz);
 
-      const [allOrders, tbls] = await Promise.all([
-        db.getOrders(restId, startIso, endIso),
-        db.getTables(restId)
-      ]);
+      const allOrders = await db.getOrders(restId, startIso, endIso);
+      const liveTableRes = await db.getTablesWithLiveStatus(restId, allOrders);
+      const tbls = liveTableRes.tables;
       setAllTables(tbls || []);
       dashboardStore.setCachedOrders(restId, allOrders);
 
@@ -1119,7 +1119,7 @@ export default function OrdersPage() {
       isReloadingRef.current = false;
       if (pendingReloadRef.current) {
         pendingReloadRef.current = false;
-        await safeReloadOrders(restId);
+        debouncedReloadOrders(restId);
       }
     }
   };
@@ -1136,7 +1136,7 @@ export default function OrdersPage() {
       if (rId) {
         reloadFnRef.current(rId);
       }
-    }, 200);
+    }, 800);
   };
 
   // Realtime Supabase Subscription for Orders, Requests & Batches
@@ -1168,17 +1168,20 @@ export default function OrdersPage() {
         async (payload) => {
           console.log('Realtime broadcast live orders new-order received:', payload);
           const newOrderPayload = payload.payload?.new || payload.payload?.updatedOrder;
-          if (newOrderPayload && !alertedOrderIds.current.has(newOrderPayload.id)) {
-            alertedOrderIds.current.add(newOrderPayload.id);
-            if (!alarmMutedRef.current && !isGloballyMuted()) {
-              playLoudBell('waiter');
+          if (newOrderPayload) {
+            const isAlreadyKnown = alertedOrderIds.current.has(newOrderPayload.id);
+            if (!isAlreadyKnown) {
+              alertedOrderIds.current.add(newOrderPayload.id);
+              if (!alarmMutedRef.current && !isGloballyMuted()) {
+                playLoudBell('waiter');
+              }
+              setToast({ message: `New Order Received - ${newOrderPayload.table_name || 'Table'}`, visible: true });
+              setTimeout(() => {
+                setToast(prev => prev && prev.message.includes(newOrderPayload.table_name || 'Table') ? { ...prev, visible: false } : prev);
+              }, 5000);
+              debouncedReloadOrders(restId);
             }
-            setToast({ message: `New Order Received - ${newOrderPayload.table_name || 'Table'}`, visible: true });
-            setTimeout(() => {
-              setToast(prev => prev && prev.message.includes(newOrderPayload.table_name || 'Table') ? { ...prev, visible: false } : prev);
-            }, 5000);
           }
-          debouncedReloadOrders(restId);
         }
       )
       .on(
@@ -1198,7 +1201,6 @@ export default function OrdersPage() {
               batches: (updated.batches && updated.batches.length > 0) ? updated.batches : o.batches,
             } : o));
           }
-          debouncedReloadOrders(restId);
         }
       )
       .on(
@@ -1211,7 +1213,6 @@ export default function OrdersPage() {
           if (pOrderId) {
             setOrders(prev => prev.map(o => o.id === pOrderId ? { ...o, payment_status: pStatus, status: 'completed' } : o));
           }
-          debouncedReloadOrders(restId);
         }
       )
       .on(
@@ -1254,10 +1255,15 @@ export default function OrdersPage() {
               return o;
             }));
           }
-          debouncedReloadOrders(restId);
 
           if (payload.eventType === 'INSERT') {
             const newOrderPayload = payload.new as Order;
+            // Optimistic instant UI update: immediately prepend new order to orders state
+            setOrders(prev => {
+              if (prev.some(o => o.id === newOrderPayload.id)) return prev;
+              return [newOrderPayload, ...prev];
+            });
+
             // BUG-OWNER-005: Auto-scroll only for a brand-new order when user is already near the top (<100px)
             const listEl = orderListContainerRef.current;
             const isNearTop = listEl ? listEl.scrollTop < 100 : (typeof window !== 'undefined' && window.scrollY < 100);
@@ -1276,6 +1282,9 @@ export default function OrdersPage() {
               // Fetch full order with items and display toast banner
               const fullOrder = await db.getOrderById(newOrderPayload.id);
               if (fullOrder) {
+                // Update with full enriched order including items and batches
+                setOrders(prev => prev.map(o => o.id === fullOrder.id ? fullOrder : o));
+
                 if (!alarmMutedRef.current && !isGloballyMuted()) {
                   playLoudBell('waiter');
                 }
@@ -1356,23 +1365,6 @@ export default function OrdersPage() {
             }
             return o;
           }));
-
-          // Fast tenant check before executing DB queries for cross-tenant events
-          const isLocalOrder = ordersRef.current.some(o => o.id === batch.order_id);
-          if (isLocalOrder) {
-            debouncedReloadOrders(restId);
-          } else {
-            const { data: parentOrder } = await supabase
-              .from('orders')
-              .select('restaurant_id')
-              .eq('id', batch.order_id)
-              .eq('restaurant_id', restId)
-              .single();
-
-            if (parentOrder) {
-              debouncedReloadOrders(restId);
-            }
-          }
         }
       )
       .subscribe((status, err) => {
@@ -1717,43 +1709,48 @@ export default function OrdersPage() {
           .eq('id', orderIdToCancel);
       }
 
-      // 3. Record Prepared Food Disposition for all active items in parallel
-      const { recordPreparedFoodDisposition } = await import('@/lib/inventoryEngine');
-      const activeItems = (selectedOrder.items || []).filter(i => !i.is_cancelled && i.status !== 'cancelled');
-      if (activeItems.length > 0) {
-        await Promise.all(activeItems.map(item =>
-          recordPreparedFoodDisposition({
-            restaurantId: restaurant.id,
-            orderId: orderIdToCancel,
-            batchId: item.batch_id,
-            orderItemId: item.id,
-            menuItemId: item.menu_item_id,
-            menuItemName: item.menu_item_name,
-            variantName: item.variant_name,
-            quantity: item.quantity,
-            wasServed: isNotPrepared ? false : Boolean(selectedOrder.status === 'served' || item.is_served),
-            dispositionType: effectiveDispType,
-            destinationOrderId: destinationOrderId || undefined,
-            destinationOrderDisplayId: destinationOrderDisplayId || undefined,
-            wasteReason: effectiveDispType === 'waste' ? (isNotPrepared ? 'Not Prepared (Cancelled Before Cooking)' : wasteReason) : undefined,
-            notes: effectiveDispNotes,
-            handledBy: profile?.full_name || activeRole || 'Staff Member',
-            restoreInventory: effectiveRestoreStock
-          })
-        ));
-      }
+      // 3. Record Prepared Food Disposition & Inventory Restoration in background promise (< 1,000ms response)
+      (async () => {
+        try {
+          const { recordPreparedFoodDisposition, restoreInventoryForOrderBatch } = await import('@/lib/inventoryEngine');
+          const activeItems = (selectedOrder.items || []).filter(i => !i.is_cancelled && i.status !== 'cancelled');
+          if (activeItems.length > 0) {
+            await Promise.all(activeItems.map(item =>
+              recordPreparedFoodDisposition({
+                restaurantId: restaurant.id,
+                orderId: orderIdToCancel,
+                batchId: item.batch_id,
+                orderItemId: item.id,
+                menuItemId: item.menu_item_id,
+                menuItemName: item.menu_item_name,
+                variantName: item.variant_name,
+                quantity: item.quantity,
+                wasServed: isNotPrepared ? false : Boolean(selectedOrder.status === 'served' || item.is_served),
+                dispositionType: effectiveDispType,
+                destinationOrderId: destinationOrderId || undefined,
+                destinationOrderDisplayId: destinationOrderDisplayId || undefined,
+                wasteReason: effectiveDispType === 'waste' ? (isNotPrepared ? 'Not Prepared (Cancelled Before Cooking)' : wasteReason) : undefined,
+                notes: effectiveDispNotes,
+                handledBy: profile?.full_name || activeRole || 'Staff Member',
+                restoreInventory: effectiveRestoreStock
+              })
+            ));
+          }
 
-      if (effectiveRestoreStock) {
-        const { restoreInventoryForOrderBatch } = await import('@/lib/inventoryEngine');
-        await restoreInventoryForOrderBatch(
-          restaurant.id,
-          orderIdToCancel,
-          undefined,
-          profile?.id,
-          profile?.full_name || activeRole || 'Staff Member',
-          fullReason
-        );
-      }
+          if (effectiveRestoreStock) {
+            await restoreInventoryForOrderBatch(
+              restaurant.id,
+              orderIdToCancel,
+              undefined,
+              profile?.id,
+              profile?.full_name || activeRole || 'Staff Member',
+              fullReason
+            );
+          }
+        } catch (e) {
+          console.error('[Cancellation Disposition] Background sync error:', e);
+        }
+      })();
 
       if (updated) {
         setOptimisticStatusMap(prev => {
@@ -2022,43 +2019,48 @@ export default function OrdersPage() {
   const handlePrintInvoice = () => {
     if (!selectedOrder || !restaurant) return;
 
-    const calcResult = calculateBillingTotals({
-      items: selectedOrder.items || [],
-      batches: selectedOrder.batches || [],
-      discountAmount: Number(selectedOrder.discount_amount || 0),
-      offerCode: selectedOrder.offer_code,
-      specialInstructions: selectedOrder.special_instructions,
-      offers: restaurant.settings.offers || [],
-      settings: restaurant.settings,
-      gstNumber: restaurant.gst_number,
-      gstEnabled: restaurant.settings.gst_enabled,
-      gstPercentage: restaurant.settings.gst_percentage || 0,
-      serviceChargeEnabled: restaurant.settings.service_charge_enabled !== false,
-      serviceChargePercentage: restaurant.settings.service_charge_percentage || 0,
-      customCharges: restaurant.settings.custom_charges || [],
-      orderType: selectedOrder.order_type || 'dine_in'
-    });
+    try {
+      const restSettings = restaurant.settings || {};
+      const calcResult = calculateBillingTotals({
+        items: selectedOrder.items || [],
+        batches: selectedOrder.batches || [],
+        discountAmount: Number(selectedOrder.discount_amount || 0),
+        offerCode: selectedOrder.offer_code,
+        specialInstructions: selectedOrder.special_instructions,
+        offers: restSettings.offers || [],
+        settings: restSettings,
+        gstNumber: restaurant.gst_number,
+        gstEnabled: restSettings.gst_enabled,
+        gstPercentage: restSettings.gst_percentage || 0,
+        serviceChargeEnabled: restSettings.service_charge_enabled !== false,
+        serviceChargePercentage: restSettings.service_charge_percentage || 0,
+        customCharges: restSettings.custom_charges || [],
+        orderType: selectedOrder.order_type || 'dine_in'
+      });
 
-    const validItems = (selectedOrder.items || []).filter(item => {
-      if (item.is_cancelled || item.status === 'cancelled' || item.notes?.includes('[CANCELLED]')) return false;
-      if (item.batch_id && (selectedOrder.batches || []).length > 0) {
-        const b = (selectedOrder.batches || []).find(batch => batch.id === item.batch_id);
-        if (b && (b.status === 'cancelled' || b.special_instructions?.includes('[CANCELLED]'))) return false;
-      }
-      return true;
-    });
+      const validItems = (selectedOrder.items || []).filter(item => {
+        if (item.is_cancelled || item.status === 'cancelled' || item.notes?.includes('[CANCELLED]')) return false;
+        if (item.batch_id && (selectedOrder.batches || []).length > 0) {
+          const b = (selectedOrder.batches || []).find(batch => batch.id === item.batch_id);
+          if (b && (b.status === 'cancelled' || b.special_instructions?.includes('[CANCELLED]'))) return false;
+        }
+        return true;
+      });
 
-    const cust = parseCustomerDetailsFromOrder(selectedOrder);
-    setBillCustomerName(selectedOrder.customer_name || cust.name || '');
-    setBillCustomerPhone(selectedOrder.customer_phone || cust.phone || '');
+      const cust = parseCustomerDetailsFromOrder(selectedOrder);
+      setBillCustomerName(selectedOrder.customer_name || cust.name || '');
+      setBillCustomerPhone(selectedOrder.customer_phone || cust.phone || '');
 
-    setPrintOrderData({
-      order: selectedOrder,
-      calcResult,
-      validItems,
-      restaurant
-    });
-    setPrintModalOpen(true);
+      setPrintOrderData({
+        order: selectedOrder,
+        calcResult,
+        validItems,
+        restaurant
+      });
+      setPrintModalOpen(true);
+    } catch (err) {
+      console.error('[handlePrintInvoice] Error generating print data:', err);
+    }
   };
 
   const persistBillCustomerDetails = async (orderId: string, name: string, phone: string) => {
@@ -5462,16 +5464,25 @@ export default function OrdersPage() {
           initialCustomerPhone={lookupPrefillCustomer?.phone || ''}
           initialTableId={punchTargetTableId || undefined}
           existingOrderId={punchExistingOrderId || undefined}
-          onOrderCreated={async () => {
-            const punchedId = punchExistingOrderId;
+          onOrderCreated={async (newOrder?: Order) => {
+            const punchedId = punchExistingOrderId || newOrder?.id;
             setLookupPrefillCustomer(null);
             setPunchTargetTableId(null);
             setPunchExistingOrderId(null);
             setOrderQueue('dine_in');
             if (punchedId) {
               setSelectedOrderId(punchedId);
+              alertedOrderIds.current.add(punchedId);
             }
-            await safeReloadOrders(restaurant.id);
+            if (newOrder) {
+              setOrders(prev => {
+                const exists = prev.some(o => o.id === newOrder.id);
+                if (exists) return prev.map(o => o.id === newOrder.id ? newOrder : o);
+                return [newOrder, ...prev];
+              });
+            } else {
+              await safeReloadOrders(restaurant.id);
+            }
           }}
         />
       )}

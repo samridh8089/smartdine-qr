@@ -728,9 +728,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         // PHASE 2: Deferred Background Hydration (Stock Map & Top Selling Items)
         setTimeout(async () => {
           try {
-            const { getRestaurantMenuStockMap } = await import('@/lib/inventoryEngine');
-            const sMap = await getRestaurantMenuStockMap(rest.id);
-            if (sMap?.menuStockMap) setStockMap(sMap.menuStockMap);
+            const res = await fetch(`/api/public/menu-stock?restaurantId=${rest.id}`);
+            if (res.ok) {
+              const sMap = await res.json();
+              if (sMap?.menuStockMap) setStockMap(sMap.menuStockMap);
+            }
           } catch (e) {}
 
           try {
@@ -761,9 +763,11 @@ export default function CustomerMenu({ restaurantSlug, tableId, isTakeaway: isTa
         .channel(`cust_menu_stock_${r.id}_${Date.now()}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items', filter: `restaurant_id=eq.${r.id}` }, async () => {
           try {
-            const { getRestaurantMenuStockMap } = await import('@/lib/inventoryEngine');
-            const sMap = await getRestaurantMenuStockMap(r.id);
-            if (sMap?.menuStockMap) setStockMap(sMap.menuStockMap);
+            const res = await fetch(`/api/public/menu-stock?restaurantId=${r.id}`);
+            if (res.ok) {
+              const sMap = await res.json();
+              if (sMap?.menuStockMap) setStockMap(sMap.menuStockMap);
+            }
           } catch (e) {}
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurants', filter: `id=eq.${r.id}` }, async () => {

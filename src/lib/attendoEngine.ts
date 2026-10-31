@@ -371,6 +371,9 @@ export async function updateAttendoSettings(
 const STAFF_PROFILES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes fast cache
 const _attendoStaffCache = new Map<string, { timestamp: number; data: StaffProfile[] }>();
 
+// Staff records (staff_profiles, staff_shifts, staff_attendance, salary_records) are stored directly in restaurant.settings.attendo JSONB
+const HAS_DEDICATED_ATTENDO_TABLES = false;
+
 export function invalidateStaffProfilesCache(restaurantId?: string) {
   if (restaurantId) {
     _attendoStaffCache.delete(restaurantId);
@@ -420,16 +423,18 @@ export async function getStaffProfiles(restaurantId: string, forceRefresh: boole
     const salaryMap = new Map(savedStaff.map(s => [s.profile_id || s.id, s]));
 
     // 2b. Also merge from direct staff_profiles table if present
-    try {
-      const { data: dbProfiles } = await supabase.from('staff_profiles').select('*').eq('restaurant_id', restaurantId);
-      if (dbProfiles && Array.isArray(dbProfiles)) {
-        dbProfiles.forEach((dp: any) => {
-          const key = dp.profile_id || dp.id;
-          const existing = salaryMap.get(key) || {};
-          salaryMap.set(key, { ...existing, ...dp });
-        });
-      }
-    } catch (_) {}
+    if (HAS_DEDICATED_ATTENDO_TABLES) {
+      try {
+        const { data: dbProfiles } = await supabase.from('staff_profiles').select('*').eq('restaurant_id', restaurantId);
+        if (dbProfiles && Array.isArray(dbProfiles)) {
+          dbProfiles.forEach((dp: any) => {
+            const key = dp.profile_id || dp.id;
+            const existing = salaryMap.get(key) || {};
+            salaryMap.set(key, { ...existing, ...dp });
+          });
+        }
+      } catch (_) {}
+    }
 
     // 3. Merge configured staff and registered staff so records never show 0
     const profileMap = new Map<string, StaffProfile>();
@@ -514,9 +519,11 @@ export async function saveStaffProfile(profile: Partial<StaffProfile> & { restau
   };
 
   // 1. Upsert to staff_profiles table if available
-  try {
-    await supabase.from('staff_profiles').upsert(payload);
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('staff_profiles').upsert(payload);
+    } catch (_) {}
+  }
 
   // 2. ALWAYS sync to restaurant.settings.attendo.staff_profiles via authoritative db.updateRestaurant
   try {
@@ -669,16 +676,18 @@ export async function getStaffShiftsForDate(restaurantId: string, date: string):
   const mergedMap = new Map<string, StaffShift>();
 
   // 1. Try DB table
-  try {
-    const { data: dbShifts } = await supabase
-      .from('staff_shifts')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .eq('assigned_date', date);
-    if (dbShifts && Array.isArray(dbShifts)) {
-      dbShifts.forEach((s: any) => mergedMap.set(s.staff_id, s));
-    }
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      const { data: dbShifts } = await supabase
+        .from('staff_shifts')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .eq('assigned_date', date);
+      if (dbShifts && Array.isArray(dbShifts)) {
+        dbShifts.forEach((s: any) => mergedMap.set(s.staff_id, s));
+      }
+    } catch (_) {}
+  }
 
   // 2. Try restaurant settings
   try {
@@ -727,13 +736,15 @@ export async function assignStaffShift(
   };
 
   // 1. Try DB table
-  try {
-    if (shiftId) {
-      await supabase.from('staff_shifts').upsert(payload, { onConflict: 'staff_id,assigned_date' });
-    } else {
-      await supabase.from('staff_shifts').delete().match({ staff_id: staffId, assigned_date: assignedDate });
-    }
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      if (shiftId) {
+        await supabase.from('staff_shifts').upsert(payload, { onConflict: 'staff_id,assigned_date' });
+      } else {
+        await supabase.from('staff_shifts').delete().match({ staff_id: staffId, assigned_date: assignedDate });
+      }
+    } catch (_) {}
+  }
 
   // 2. Update settings via authoritative db.updateRestaurant
   try {
@@ -841,16 +852,18 @@ export function getLocalAttendanceRecords(restaurantId: string, date?: string): 
 export async function getAttendanceForDate(restaurantId: string, date: string): Promise<StaffAttendance[]> {
   try {
     let matched: StaffAttendance[] = [];
-    try {
-      const { data: dbAtts } = await supabase
-        .from('staff_attendance')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .eq('date', date);
-      if (dbAtts && dbAtts.length > 0) {
-        matched = dbAtts as StaffAttendance[];
-      }
-    } catch (_) {}
+    if (HAS_DEDICATED_ATTENDO_TABLES) {
+      try {
+        const { data: dbAtts } = await supabase
+          .from('staff_attendance')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .eq('date', date);
+        if (dbAtts && dbAtts.length > 0) {
+          matched = dbAtts as StaffAttendance[];
+        }
+      } catch (_) {}
+    }
 
     if (matched.length === 0) {
       const rest = await db.getRestaurantById(restaurantId);
@@ -908,18 +921,20 @@ export async function getMonthlyAttendanceForRestaurant(
     const mergedMap = new Map<string, StaffAttendance>();
 
     // 1. Fetch from staff_attendance table in Supabase
-    try {
-      const { data: dbAtts } = await supabase
-        .from('staff_attendance')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .gte('date', `${prefix}-01`)
-        .lte('date', `${prefix}-31`);
+    if (HAS_DEDICATED_ATTENDO_TABLES) {
+      try {
+        const { data: dbAtts } = await supabase
+          .from('staff_attendance')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .gte('date', `${prefix}-01`)
+          .lte('date', `${prefix}-31`);
 
-      if (dbAtts && Array.isArray(dbAtts)) {
-        dbAtts.forEach((a: any) => mergedMap.set(`${a.staff_id}_${a.date}`, a as StaffAttendance));
-      }
-    } catch (_) {}
+        if (dbAtts && Array.isArray(dbAtts)) {
+          dbAtts.forEach((a: any) => mergedMap.set(`${a.staff_id}_${a.date}`, a as StaffAttendance));
+        }
+      } catch (_) {}
+    }
 
     // 2. Fetch from restaurant.settings.attendo.attendance
     try {
@@ -1109,9 +1124,11 @@ export async function punchIn(params: {
   }
 
   // 2. Direct DB fallback if API unreachable
-  try {
-    await supabase.from('staff_attendance').upsert(attendanceRecord, { onConflict: 'staff_id,date' });
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('staff_attendance').upsert(attendanceRecord, { onConflict: 'staff_id,date' });
+    } catch (_) {}
+  }
 
 
 
@@ -1219,9 +1236,11 @@ export async function punchOut(params: {
   }
 
   // 2. Direct DB fallback if API unreachable
-  try {
-    await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
+    } catch (_) {}
+  }
 
 
 
@@ -1292,9 +1311,11 @@ export async function managerOverrideAttendance(params: {
     updated_at: now
   };
 
-  try {
-    await supabase.from('staff_attendance').upsert(payload, { onConflict: 'staff_id,date' });
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('staff_attendance').upsert(payload, { onConflict: 'staff_id,date' });
+    } catch (_) {}
+  }
 
 
 
@@ -1450,9 +1471,11 @@ export async function calculateMonthlyPayroll(
  * Save / Update a Salary Record (Allows editing allowances, deductions, and payment status)
  */
 export async function saveSalaryRecord(record: SalaryRecord): Promise<SalaryRecord> {
-  try {
-    await supabase.from('salary_records').upsert(record, { onConflict: 'staff_id,month,year' });
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('salary_records').upsert(record, { onConflict: 'staff_id,month,year' });
+    } catch (_) {}
+  }
 
   const rest = await db.getRestaurantById(record.restaurant_id);
   if (rest) {
@@ -1504,9 +1527,11 @@ export async function approveSalaryRecord(params: {
 
   list[idx] = updated;
 
-  try {
-    await supabase.from('salary_records').upsert(updated, { onConflict: 'staff_id,month,year' });
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('salary_records').upsert(updated, { onConflict: 'staff_id,month,year' });
+    } catch (_) {}
+  }
 
   await supabase.from('restaurants').update({
     settings: {
@@ -1553,12 +1578,14 @@ export async function approveAllSalaryRecords(params: {
     return r;
   });
 
-  try {
-    const toUpsert = updatedList.filter(r => r.year === year && r.month === month);
-    for (const rec of toUpsert) {
-      await supabase.from('salary_records').upsert(rec, { onConflict: 'staff_id,month,year' });
-    }
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      const toUpsert = updatedList.filter(r => r.year === year && r.month === month);
+      for (const rec of toUpsert) {
+        await supabase.from('salary_records').upsert(rec, { onConflict: 'staff_id,month,year' });
+      }
+    } catch (_) {}
+  }
 
   await supabase.from('restaurants').update({
     settings: {
@@ -1611,9 +1638,11 @@ export async function managerApprovePunchOut(params: {
     updated_at: now.toISOString()
   };
 
-  try {
-    await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('staff_attendance').upsert(updated, { onConflict: 'staff_id,date' });
+    } catch (_) {}
+  }
 
 
 
@@ -1695,9 +1724,11 @@ export async function requestPastAttendance(params: {
     updated_at: now
   };
 
-  try {
-    await supabase.from('staff_attendance').upsert(record, { onConflict: 'staff_id,date' });
-  } catch (_) {}
+  if (HAS_DEDICATED_ATTENDO_TABLES) {
+    try {
+      await supabase.from('staff_attendance').upsert(record, { onConflict: 'staff_id,date' });
+    } catch (_) {}
+  }
 
 
 
@@ -1743,9 +1774,11 @@ export async function reviewAttendanceDays(params: {
         punch_out_time: rev.punchOutTime || list[existingIdx].punch_out_time,
         updated_at: now
       };
-      try {
-        await supabase.from('staff_attendance').upsert(list[existingIdx], { onConflict: 'staff_id,date' });
-      } catch (_) {}
+      if (HAS_DEDICATED_ATTENDO_TABLES) {
+        try {
+          await supabase.from('staff_attendance').upsert(list[existingIdx], { onConflict: 'staff_id,date' });
+        } catch (_) {}
+      }
     } else {
       const newRec: StaffAttendance = {
         id: `att_${rev.staffId}_${rev.date}`,
@@ -1765,9 +1798,11 @@ export async function reviewAttendanceDays(params: {
         updated_at: now
       };
       list.push(newRec);
-      try {
-        await supabase.from('staff_attendance').upsert(newRec, { onConflict: 'staff_id,date' });
-      } catch (_) {}
+      if (HAS_DEDICATED_ATTENDO_TABLES) {
+        try {
+          await supabase.from('staff_attendance').upsert(newRec, { onConflict: 'staff_id,date' });
+        } catch (_) {}
+      }
     }
   }
 
@@ -1932,19 +1967,21 @@ export async function cleanupOldAttendanceSelfies(
     let cleanedCount = 0;
 
     // 1. Clean DB table if table exists
-    try {
-      const { data, error } = await supabase
-        .from('staff_attendance')
-        .update({ selfie_url: null, updated_at: new Date().toISOString() })
-        .eq('restaurant_id', restaurantId)
-        .lt('date', cutoffDateStr)
-        .not('selfie_url', 'is', null)
-        .select('id');
+    if (HAS_DEDICATED_ATTENDO_TABLES) {
+      try {
+        const { data, error } = await supabase
+          .from('staff_attendance')
+          .update({ selfie_url: null, updated_at: new Date().toISOString() })
+          .eq('restaurant_id', restaurantId)
+          .lt('date', cutoffDateStr)
+          .not('selfie_url', 'is', null)
+          .select('id');
 
-      if (!error && data) {
-        cleanedCount = data.length;
-      }
-    } catch (_) {}
+        if (!error && data) {
+          cleanedCount = data.length;
+        }
+      } catch (_) {}
+    }
 
     // 2. Clean fallback settings JSON in restaurant row
     const rest = await db.getRestaurantById(restaurantId);

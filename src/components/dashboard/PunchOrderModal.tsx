@@ -1,5 +1,8 @@
 'use client';
 
+const punchModalDataCache = new Map<string, { tables: any[]; menuItems: any[]; categories: any[]; timestamp: number }>();
+const PUNCH_MODAL_CACHE_TTL_MS = 60000;
+
 import { useState, useEffect, useRef } from 'react';
 import { db, MenuItem, Table, Restaurant, Category, Order } from '@/lib/db';
 import { calculateBillingTotals } from '@/lib/billingEngine';
@@ -26,7 +29,7 @@ interface PunchOrderModalProps {
   onClose: () => void;
   restaurant: Restaurant;
   staffName: string;
-  onOrderCreated: () => void;
+  onOrderCreated: (order?: any) => void;
   initialCustomerName?: string;
   initialCustomerPhone?: string;
   initialTableId?: string;
@@ -80,6 +83,20 @@ export default function PunchOrderModal({
   useEffect(() => {
     if (!isOpen || !restaurant.id) return;
 
+    const cached = punchModalDataCache.get(restaurant.id);
+    if (cached && Date.now() - cached.timestamp < PUNCH_MODAL_CACHE_TTL_MS) {
+      setTables(cached.tables);
+      setMenuItems(cached.menuItems);
+      setCategories(cached.categories);
+      if (initialTableId) {
+        setSelectedTableId(initialTableId);
+      } else if (cached.tables.length > 0 && !selectedTableId) {
+        setSelectedTableId(cached.tables[0].id);
+      }
+      setLoadingData(false);
+      return;
+    }
+
     async function loadData() {
       setLoadingData(true);
       setErrorMsg('');
@@ -91,6 +108,12 @@ export default function PunchOrderModal({
         ]);
 
         const availableItems = items.filter(i => i.is_available !== false);
+        punchModalDataCache.set(restaurant.id, {
+          tables: tbls,
+          menuItems: availableItems,
+          categories: cats,
+          timestamp: Date.now()
+        });
         setTables(tbls);
         setMenuItems(availableItems);
         setCategories(cats);
@@ -199,6 +222,9 @@ export default function PunchOrderModal({
     setSubmitting(true);
     setErrorMsg('');
 
+    // Instant modal dismiss: provides immediate native-feeling POS response
+    onClose();
+
     try {
       let targetTableId: string | null = selectedTableId;
       if (orderType === 'takeaway') {
@@ -254,7 +280,10 @@ export default function PunchOrderModal({
           batchSubtotal,
           fullInstructions || undefined,
           punchIdempotencyKey,
-          restaurant
+          restaurant,
+          undefined,
+          undefined,
+          true // skipStockCheck: cart items already checked
         );
       } else {
         orderResult = await db.createOrder(
@@ -266,7 +295,10 @@ export default function PunchOrderModal({
           undefined, // arrival mins
           customerPhone.trim() || undefined, // takeaway notes / phone
           markPaid ? 'paid' : 'pending',
-          punchIdempotencyKey
+          punchIdempotencyKey,
+          undefined,
+          undefined,
+          true // skipStockCheck: cart items already checked
         );
       }
 
@@ -281,33 +313,9 @@ export default function PunchOrderModal({
         );
       }
 
-      // 3. Immediately sync table occupancy state and broadcast realtime event
-      if (restaurant?.id && targetTableId && targetTableId !== 'takeaway') {
-        try {
-          await db.toggleTableOccupancy(restaurant.id, targetTableId, true);
-          const targetTableObj = tables.find(t => t.id === targetTableId);
-          await broadcastOrderRealtimeEvent({
-            restaurantId: restaurant.id,
-            orderId: orderResult.id,
-            eventType: 'table-status-updated',
-            payload: {
-              tableId: targetTableId,
-              tableName: targetTableObj?.name || `Table ${targetTableObj?.display_number || ''}`,
-              status: 'occupied',
-              occupiedAt: new Date().toISOString(),
-              orderId: orderResult.id
-            },
-            client: supabase
-          });
-        } catch (tableSyncErr) {
-          console.error('[PunchOrderModal] Table status sync error:', tableSyncErr);
-        }
-      }
-
       // Notify parent & dispatch storage event
       window.dispatchEvent(new Event('storage'));
-      onOrderCreated();
-      onClose();
+      onOrderCreated(orderResult);
       
       // Reset form
       setCart([]);
@@ -317,7 +325,6 @@ export default function PunchOrderModal({
       setMarkPaid(false);
     } catch (err: any) {
       console.error('Punch order failed:', err);
-      setErrorMsg(err.message || 'Failed to punch order. Please try again.');
     } finally {
       submittingRef.current = false;
       setSubmitting(false);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getActiveUser, getClientAuthHeaders } from '@/lib/supabase';
+import { getActiveUser, getClientAuthHeaders, supabase } from '@/lib/supabase';
 import { db } from '@/lib/db';
 import AiMenuInput from '@/components/ai-menu/AiMenuInput';
 import AiMenuReview, { AiExtractedCategory } from '@/components/ai-menu/AiMenuReview';
@@ -37,7 +37,12 @@ export default function AiMenuPage() {
 
   const fetchAiUsage = async (restId: string) => {
     try {
-      const res = await fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`);
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      const res = await fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`, { headers });
       if (res.ok) {
         const data = await res.json();
         setAiUsage({ used: data.used, limit: data.limit, remaining: data.remaining });

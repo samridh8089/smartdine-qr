@@ -593,12 +593,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const handleLogout = async () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('smartdine_impersonated_profile');
+      sessionStorage.clear();
+      localStorage.removeItem('cleverops_auth_timestamp');
     }
     if (typeof window !== 'undefined' && (window as any).ReactNativeWebView?.postMessage) {
       try { (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'SIGN_OUT' })); } catch (_) {}
     }
     clearActiveUserCache();
-    await supabase.auth.signOut();
+    // Non-blocking background signOut so client navigates to /login instantly (< 150 ms)
+    supabase.auth.signOut().catch(() => {});
     router.push('/login');
   };
 
@@ -667,18 +670,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       }
     }
 
-    // If current user is Owner, persist in restaurant.settings.owner_bell_enabled
+    // If current user is Owner, persist in restaurant.settings.owner_bell_enabled (pure background non-blocking)
     if (restaurant?.id && (dbRole === 'owner' || activeRole === 'owner')) {
-      try {
-        const newSettings = {
-          ...(restaurant.settings || {}),
-          owner_bell_enabled: !nextMuted
-        };
-        await supabase.from('restaurants').update({ settings: newSettings }).eq('id', restaurant.id);
-        setRestaurant(prev => prev ? { ...prev, settings: newSettings } : prev);
-      } catch (err) {
-        console.warn('[Layout] Failed to persist owner_bell_enabled:', err);
-      }
+      const newSettings = {
+        ...(restaurant.settings || {}),
+        owner_bell_enabled: !nextMuted
+      };
+      (async () => {
+        try {
+          await supabase.from('restaurants').update({ settings: newSettings }).eq('id', restaurant.id);
+        } catch (_) {}
+      })();
     }
   };
 

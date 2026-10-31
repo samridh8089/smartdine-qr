@@ -31,6 +31,18 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   compress: true,
   allowedDevOrigins: ['127.0.0.1', 'localhost'],
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.supabase.co',
+      },
+    ],
+  },
   experimental: {
     optimizePackageImports: ['lucide-react', 'recharts', 'framer-motion']
   },

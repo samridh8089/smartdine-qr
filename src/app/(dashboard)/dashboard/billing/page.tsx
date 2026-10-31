@@ -59,15 +59,23 @@ export default function BillingPage() {
       if (isMounted) setLoading(false);
     });
 
-    // Background load AI usage checks without blocking pricing UI
-    Promise.all([
-      fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`).then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_recipe_generation`).then(r => r.ok ? r.json() : null).catch(() => null)
-    ]).then(([mData, rData]) => {
-      if (!isMounted) return;
-      if (mData) setAiMenuUsage({ used: mData.used, limit: mData.limit });
-      if (rData) setAiRecipeUsage({ used: rData.used, limit: rData.limit });
-    });
+    // Background load AI usage checks with staff auth token without blocking pricing UI
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        const [mData, rData] = await Promise.all([
+          fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_menu_analysis`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null),
+          fetch(`/api/ai-usage/check?restaurantId=${restId}&featureKey=ai_recipe_generation`, { headers }).then(r => r.ok ? r.json() : null).catch(() => null)
+        ]);
+        if (!isMounted) return;
+        if (mData) setAiMenuUsage({ used: mData.used, limit: mData.limit });
+        if (rData) setAiRecipeUsage({ used: rData.used, limit: rData.limit });
+      } catch (_) {}
+    })();
 
     return () => {
       isMounted = false;

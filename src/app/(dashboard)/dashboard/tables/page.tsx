@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { 
   Plus, QrCode, Download, ExternalLink, Trash2, 
   AlertTriangle, Printer, HelpCircle, Calendar, ShoppingBag,
-  Sparkles, FileText, Archive, UserCheck, UserPlus, Users, Check, X, Zap
+  Sparkles, FileText, Archive, UserCheck, UserPlus, Users, Check, X, Zap, LayoutGrid
 } from 'lucide-react';
 
 import ResourceUsageCard from '@/components/shared/ResourceUsageCard';
@@ -42,6 +42,7 @@ export default function TablesPage() {
   // Merged Tables state
   const [activeMergeGroups, setActiveMergeGroups] = useState<any[]>(() => initialCachedTables?.mergeGroups || []);
   const [selectedTableIds, setSelectedTableIds] = useState<string[]>([]);
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState<string>("all");
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeGroupName, setMergeGroupName] = useState('');
   const [mergeErrorMsg, setMergeErrorMsg] = useState('');
@@ -97,6 +98,30 @@ export default function TablesPage() {
     return (staffList || []).filter(s => s.is_active !== false);
   }, [staffList]);
 
+  const effectiveZones: RestaurantZone[] = useMemo(() => {
+    if (zones && zones.length > 0) return zones;
+    const restZones = (restaurant?.settings as any)?.zones;
+    if (restZones && restZones.length > 0) return restZones;
+    return [
+      { id: 'zone-ac', name: 'AC Dining Hall', color: '#3b82f6' },
+      { id: 'zone-rooftop', name: 'Rooftop Garden', color: '#10b981' },
+      { id: 'zone-courtyard', name: 'Open Courtyard', color: '#f59e0b' }
+    ];
+  }, [zones, restaurant?.settings]);
+
+  const filteredTables = useMemo(() => {
+    if (selectedZoneFilter === 'all') return tables;
+    return tables.filter(t => {
+      const zId = (t as any).zone_id;
+      const zName = (t as any).zone_name;
+      if (zId === selectedZoneFilter || zName === selectedZoneFilter) return true;
+      if (selectedZoneFilter === 'zone-ac' && (t.name.startsWith('T-') || zName?.toLowerCase().includes('ac'))) return true;
+      if (selectedZoneFilter === 'zone-rooftop' && (t.name.startsWith('R-') || zName?.toLowerCase().includes('rooftop'))) return true;
+      if (selectedZoneFilter === 'zone-courtyard' && (t.name.startsWith('C-') || zName?.toLowerCase().includes('courtyard'))) return true;
+      return false;
+    });
+  }, [tables, selectedZoneFilter]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setNowTime(Date.now());
@@ -129,8 +154,10 @@ export default function TablesPage() {
 
   useEffect(() => {
     let channel: any = null;
+    let realtimeTimer: any = null;
 
     const debouncedReload = (targetRestId: string) => {
+      if (realtimeTimer) clearTimeout(realtimeTimer);
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         if (targetRestId) fetchTablesData(targetRestId, true);
@@ -163,7 +190,13 @@ export default function TablesPage() {
       setLoading(false);
 
       // Realtime subscription deferred slightly so it never blocks first interactive paint
-      const realtimeTimer = setTimeout(() => {
+      realtimeTimer = setTimeout(() => {
+        try {
+          const existing = supabase.getChannels().find((c: any) => c.topic === `realtime:tables_${targetRestId}`);
+          if (existing) {
+            supabase.removeChannel(existing);
+          }
+        } catch (_) {}
         channel = supabase
           .channel(`tables_${targetRestId}`)
           .on(
@@ -1243,6 +1276,72 @@ export default function TablesPage() {
         </button>
       </div>
 
+            {/* Floor & Zone Management System Bar */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400">
+            <LayoutGrid className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base">
+              Floor & Zone Management
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Select a dining zone to view distributed tables ({tables.length} Total Tables)
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedZoneFilter('all')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              selectedZoneFilter === 'all'
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            All Zones ({tables.length})
+          </button>
+
+          {effectiveZones.map(zone => {
+            const count = tables.filter(t => {
+              const zId = (t as any).zone_id;
+              const zName = (t as any).zone_name;
+              if (zId === zone.id || zName === zone.name) return true;
+              if (zone.id === 'zone-ac' && (t.name.startsWith('T-') || zName?.toLowerCase().includes('ac'))) return true;
+              if (zone.id === 'zone-rooftop' && (t.name.startsWith('R-') || zName?.toLowerCase().includes('rooftop'))) return true;
+              if (zone.id === 'zone-courtyard' && (t.name.startsWith('C-') || zName?.toLowerCase().includes('courtyard'))) return true;
+              return false;
+            }).length;
+            const isSelected = selectedZoneFilter === zone.id;
+
+            return (
+              <button
+                key={zone.id}
+                type="button"
+                onClick={() => setSelectedZoneFilter(isSelected ? 'all' : zone.id)}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  isSelected
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-2xs"
+                  style={{ backgroundColor: zone.color || '#3b82f6' }}
+                />
+                <span>{zone.name}</span>
+                <span className="text-[10px] opacity-80 font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {tables.length === 0 ? (
         <div className="bg-white border border-slate-100 rounded-2xl p-12 text-center text-slate-400 text-sm flex flex-col items-center justify-center gap-3">
           <QrCode className="h-10 w-10 text-slate-300" />
@@ -1250,7 +1349,7 @@ export default function TablesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tables.map((table) => {
+          {filteredTables.map((table) => {
             const origin = typeof window !== 'undefined' ? window.location.origin : '';
             const customerUrl = getCanonicalTableQRUrl(origin, restaurantSlug, table.id);
             const qrData = qrCodes[table.id];
@@ -1314,7 +1413,29 @@ export default function TablesPage() {
                         onChange={() => toggleTableSelection(table.id)}
                         className="h-4 w-4 rounded border-slate-300 text-gray-900 focus:ring-gray-900 cursor-pointer"
                       />
-                      <span className="font-bold text-slate-900 dark:text-white text-lg">{table.name}</span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="font-bold text-slate-900 dark:text-white text-lg">{table.name}</span>
+                        {(() => {
+                          const matchedZone = effectiveZones.find(z => z.id === (table as any).zone_id || z.name === (table as any).zone_name)
+                            || (table.name.startsWith('T-') ? effectiveZones.find(z => z.id === 'zone-ac') : null)
+                            || (table.name.startsWith('R-') ? effectiveZones.find(z => z.id === 'zone-rooftop') : null)
+                            || (table.name.startsWith('C-') ? effectiveZones.find(z => z.id === 'zone-courtyard') : null)
+                            || { id: 'zone-general', name: 'Main Hall', color: '#64748b' };
+                          return (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold border"
+                              style={{
+                                borderColor: `${matchedZone.color}40`,
+                                backgroundColor: `${matchedZone.color}15`,
+                                color: matchedZone.color
+                              }}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: matchedZone.color }} />
+                              {matchedZone.name} ({(table as any).seats || (table as any).capacity || 4} Seater)
+                            </span>
+                          );
+                        })()}
+                      </div>
                       {activeGroupForTable && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100 border border-gray-300 dark:border-gray-700">
                           {activeGroupForTable.name}

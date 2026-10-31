@@ -2771,6 +2771,14 @@ export default function SettingsPage({ initialTab = 'hub' }: { initialTab?: 'hub
                         onChange={(e) => setUpiName(e.target.value)}
                       />
                     </div>
+                    {upiId && (!upiId.includes('@') || upiId.includes('example') || upiId.includes('dummy') || upiId.includes('test') || upiId.includes('bistrocafe.flagship')) && (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-xs rounded-xl flex items-start gap-2 font-semibold">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <span>
+                          ⚠️ Unverified UPI VPA Warning: &quot;{upiId}&quot; appears to be a test or placeholder address. Live customer UPI QR payments will fail or not reconcile without an active merchant VPA.
+                        </span>
+                      </div>
+                    )}
                     <ImageUpload
                       label="Payment QR Image — Optional if UPI ID provided"
                       value={paymentQr}
