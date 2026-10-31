@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Upload, ArrowRight,
@@ -60,6 +60,32 @@ export default function LandingPage() {
   ]);
   const [smartMenuSavedNotice, setSmartMenuSavedNotice] = useState(false);
   const [activeFaqIndex, setActiveFaqIndex] = useState<number | null>(null);
+
+  // Savings Calculator States
+  const [calcTables, setCalcTables] = useState<number>(10);
+  const [calcStaff, setCalcStaff] = useState<number>(6);
+  const [calcMonthlySale, setCalcMonthlySale] = useState<number>(500000);
+
+  // Dynamic Savings Calculation (Real-Time Memoized Formula Engine)
+  const savingsCalc = useMemo(() => {
+    const kitchenLeak = Math.round(calcMonthlySale * 0.03);
+    const staffAndOtLeak = Math.round((calcStaff * 2200) + (calcTables * 350));
+    const turnoverAndAutoMenu = Math.round((calcTables * 1100) + (calcMonthlySale * 0.015));
+    const cashLeak = Math.round(calcMonthlySale * 0.012);
+    const hardwareSaved = calcTables >= 8 ? 3500 : 2000;
+    const totalMonthly = kitchenLeak + staffAndOtLeak + turnoverAndAutoMenu + cashLeak + hardwareSaved;
+    const totalYearly = totalMonthly * 12;
+
+    return {
+      kitchenLeak,
+      staffAndOtLeak,
+      turnoverAndAutoMenu,
+      cashLeak,
+      hardwareSaved,
+      totalMonthly,
+      totalYearly,
+    };
+  }, [calcTables, calcStaff, calcMonthlySale]);
 
   useEffect(() => {
     // 1. Language Resolution with Strict Priority: URL parameter -> localStorage -> Browser language
@@ -170,6 +196,81 @@ export default function LandingPage() {
         trialCta: '3-Din Trial Shuru Karein (Sirf ₹3)',
         demoCta: 'Live Demo Screen Dekhein',
         microcopy: '🔒 100% Safe Razorpay Checkout • Koi Auto-Debit Nahi • Turant Chalu',
+      },
+      scrollMagnet: {
+        boldLine: 'Sale toh roz hoti hai, par paisa kahan gayab ho raha hai?',
+        subLine: 'Sirf ₹3 ke 3-Din Trial me apne kitchen, galla, staff hours aur stock ka pura sach khud apni aankhon se dekhein — Niche Calculator me apne restaurant ki bachat check karein 👇',
+        cta: 'Bachat Calculator Dekhein',
+      },
+      calculator: {
+        badge: '🧮 Live Restaurant Leak & Profit Calculator',
+        title: 'Apne Restaurant ka Mahine ka Chhupa Hua Loss Check Karein',
+        subtitle: 'Apne Tables, Staff aur Monthly Sale ke hisaab se dekhein CleverOps har mahine aapka kitna paisa aur waqt bacha sakta hai:',
+        tablesLabel: 'Kul Tables (Total Tables)',
+        staffLabel: 'Kul Staff (Waiter + Kitchen + Cashier)',
+        salesLabel: 'Monthly Sale (Approx ₹)',
+        resultHeadline: 'Aapki Anumanit Monthly Bachat & Extra कमाई:',
+        perMonth: '/ Month',
+        yearlyBadge: (val: string) => `Saal ka ~${val} Bachega!`,
+        row1Title: 'Kitchen Chori & Cancel Order Leak Band:',
+        row1Desc: '(Recipe BOM aur Cancelled Food Audit se)',
+        row2Title: 'Staff Exact Hours, OT Control & Zyada Tables:',
+        row2Desc: '(Exact working hours/OT hisaab + QR se wahi staff zyada tables sambhalega)',
+        row3Title: 'Fast Table Turnover & Auto Stock-Out Menu:',
+        row3Desc: '(Jo stock me nahi wo menu se auto-hide + KDS se 20 min fast service)',
+        row4Title: 'Galla Mismatch & Petty Cash Chori Band:',
+        row4Desc: '(Shift Cash Closing aur Photo Slip Voucher se)',
+        row5Title: 'Biometric & Menu Printing Kharcha Zero:',
+        row5Desc: '(Selfie+GPS Attendance aur AI Menu Scanner se)',
+        ctaText: (val: string) => `🕵️‍♂️ Har mahine ${val} ka nuksan rokne ke liye — Sirf ₹3 ke 3-Din Trial me apne restaurant ka pura sach khud dekhein!`,
+        ctaBtn: 'Sirf ₹3 Me 3-Din Trial Chalu Karein →',
+      },
+      operationsBreakdown: {
+        badge: '💡 Operations Simplified • 100% Practical',
+        title: 'Yeh Paisa Kaise Bachta Hai & Roz Ka Kaam Kaise Aasaan Hota Hai?',
+        subtitle: 'Kisi theoretical gyaan ke bina — dekhiye CleverOps ke 8 real ground features aapke restaurant ko kaise chalate hain:',
+        cards: [
+          {
+            num: '01',
+            title: 'Kaun Kitni Der Kaam Kar Raha Hai + Auto Overtime & Payroll',
+            desc: 'Selfie + GPS Geofence se punch-in/out. Har employee ne aaj kitne ghante kaam kiya, kab late aaya, kitna Overtime (OT) bana aur kitna advance liya — mahine ke aakhir me 1-click me exact salary aur PDF slip ready.',
+          },
+          {
+            num: '02',
+            title: 'Inventory Khatam = Customer Menu se Dish Auto-Hide',
+            desc: 'Jo raw material ya item inventory me khatam ho gaya, wo customer ke QR Menu se apne-aap hide (Out of Stock) ho jayega. Waiter ko table par jaakar \'Sir yeh dish nahi hai\' bolne ki sharmindagi nahi hogi, aur stock dalte hi dish wapas menu me chalu ho jayegi.',
+          },
+          {
+            num: '03',
+            title: 'Wahi Staff, Zyada Tables (Bina Naye Hiring ke)',
+            desc: 'Customer table QR se khud order karega aur screen se hi 1-Click me \'Water\', \'Cutlery\', \'Call Waiter\' ya \'Bill\' mangwayega. Waiter ke fokat chakkar बचेंगे aur wahi staff peak rush me zyada tables aaram se sambhal lega.',
+          },
+          {
+            num: '04',
+            title: 'Kitchen Chori & Cancel Order Audit (Food Disposition)',
+            desc: 'Har order par Recipe BOM ke hisaab se exact gram stock minus hota hai. Agar koi order cancel hota hai, to chef ko mark karna hi padega ki khana dusri table ko resell hua, staff meal me gaya ya waste hua — bina hisaab khana gayab hona band.',
+          },
+          {
+            num: '05',
+            title: 'Raat ka Galla (Cash Closing) & Petty Cash Photo Slips',
+            desc: 'Subah ka Opening Float + Din ki Cash Sale - Approved Petty Cash (doodh/sabzi ki photo parchi ke saath) = Exact Galla Hisaab. ₹10 bhi kam-zyada hua to Red Variance Alert aayega.',
+          },
+          {
+            num: '06',
+            title: 'Loud Kitchen Bell & Offline KDS (No Paper KOT)',
+            desc: 'Order aate hi kitchen screen par घंटी (bell) bajti hai aur live timer chalta hai. Khana bante hi 1-tap me waiter ke phone par \'Order Ready\' alert jata hai. Wi-Fi band hone par bhi offline queue kaam karti hai.',
+          },
+          {
+            num: '07',
+            title: '1-Click Split Bill & Multi-Round Party Table Merge',
+            desc: 'Customer 3 baar order de (Starters, Main Course, Dessert) ya 2 tables jod kar birthday party kare — sabka 1 single bill banega. \'Aadha Cash, Aadha UPI\' ka hisaab Split Calculator 2 second me kar dega.',
+          },
+          {
+            num: '08',
+            title: 'AI Menu Scanner & 1-Click CA / Tally GST Report',
+            desc: 'Kagaz ke menu ki photo khinch kar 2 minute me digital menu banayein. Aur mahine ke aakhir me CA ko GST filing ke liye 1-click me Tally CSV report bhej dein.',
+          },
+        ],
       },
       trustStrip: [
         'No Laptop Required',
@@ -508,6 +609,81 @@ export default function LandingPage() {
         trialCta: 'Start 3-Day Trial (Just ₹3)',
         demoCta: 'View Live Demo Screen',
         microcopy: '🔒 100% Safe Razorpay Checkout • No Auto-Debit • Instant Activation',
+      },
+      scrollMagnet: {
+        boldLine: 'Sales happen every day, but where is the money quietly leaking?',
+        subLine: 'In just a ₹3 3-Day Trial, see the complete reality of your kitchen, cash drawer, staff hours, and inventory with your own eyes — Check your savings in the calculator below 👇',
+        cta: 'Check Loss Calculator',
+      },
+      calculator: {
+        badge: '🧮 Live Restaurant Leak & Profit Calculator',
+        title: 'Calculate the Hidden Monthly Losses in Your Restaurant',
+        subtitle: 'Based on your tables, staff, and monthly sales, see how much money and time CleverOps saves every single month:',
+        tablesLabel: 'Total Tables',
+        staffLabel: 'Total Staff (Waiters, Kitchen, Cashiers)',
+        salesLabel: 'Monthly Sales (Approx ₹)',
+        resultHeadline: 'Estimated Monthly Savings & Extra Profit:',
+        perMonth: '/ Month',
+        yearlyBadge: (val: string) => `Saves ~${val} Every Year!`,
+        row1Title: 'Kitchen Pilferage & Cancelled Order Audit:',
+        row1Desc: '(Via Recipe BOM & Cancelled Food Disposition audit)',
+        row2Title: 'Exact Working Hours, OT Control & More Tables per Waiter:',
+        row2Desc: '(Exact shift hours tracking + QR ordering lets existing staff handle more tables)',
+        row3Title: 'Fast Table Turnover & Auto Stock-Out Menu Sync:',
+        row3Desc: '(Items with zero stock auto-hide from menu + KDS enables 20-min faster service)',
+        row4Title: 'Cash Drawer Reconciliation & Petty Cash Oversight:',
+        row4Desc: '(Shift cash closing with denomination counting and photo slip voucher approvals)',
+        row5Title: 'Biometric Machine & Menu Printing Zero Expense:',
+        row5Desc: '(Phone selfie + GPS clock-in and instant AI paper menu digitization)',
+        ctaText: (val: string) => `🕵️‍♂️ To stop losing ${val} every single month — Start a ₹3 3-Day Trial and discover your restaurant\'s true numbers!`,
+        ctaBtn: 'Start 3-Day Trial for Just ₹3 →',
+      },
+      operationsBreakdown: {
+        badge: '💡 Operations Simplified • 100% Practical',
+        title: 'How is This Money Saved & Daily Work Simplified?',
+        subtitle: 'Zero theoretical jargon — see how CleverOps\'s 8 real ground features run your restaurant smoothly:',
+        cards: [
+          {
+            num: '01',
+            title: 'Exact Working Hours + Automated Overtime & Payroll',
+            desc: 'Selfie + GPS Geofence clock-in/out. Track exact daily hours, late arrivals, overtime, and salary advances — generate complete PDF payslips at month-end in one click.',
+          },
+          {
+            num: '02',
+            title: 'Depleted Stock = Instant Menu Auto-Hide',
+            desc: 'When raw ingredients run out, the dish automatically hides from the customer QR menu. Never embarrass waiters having to say \'Sorry, out of stock\', and restock brings it back instantly.',
+          },
+          {
+            num: '03',
+            title: 'Same Staff, More Tables (Without New Hires)',
+            desc: 'Guests order from table QR codes and request \'Water\', \'Cutlery\', \'Call Waiter\', or \'Bill\' directly on screen. Eliminates wasted waiter trips so current staff easily handles rush hours.',
+          },
+          {
+            num: '04',
+            title: 'Kitchen Pilferage & Cancelled Order Audit',
+            desc: 'Every order deducts exact grams based on Recipe BOM. If an order is cancelled, chefs must log whether it was resold, consumed as staff meal, or wasted — no more unaccounted food.',
+          },
+          {
+            num: '05',
+            title: 'Night Shift Cash Closing & Photo Petty Cash Slips',
+            desc: 'Morning float + Cash sales - Approved petty cash vouchers (with mandatory bill photos) = Exact cash drawer tally. Even a ₹10 discrepancy triggers an instant Red Variance Alert.',
+          },
+          {
+            num: '06',
+            title: 'Loud Kitchen Chime & Offline-First KDS',
+            desc: 'Audible chime and prep timers on every new order. As soon as food is plated, a 1-tap \'Ready\' notification rings the waiter\'s phone. Offline queue works even if Wi-Fi drops.',
+          },
+          {
+            num: '07',
+            title: '1-Click Split Bills & Party Table Merging',
+            desc: 'Whether guests place 3 order rounds (Starters, Mains, Dessert) or merge tables for a large party, a single consolidated bill is generated with 2-second cash/UPI split calculations.',
+          },
+          {
+            num: '08',
+            title: 'AI Paper Menu Scanner & 1-Click Tally GST Reports',
+            desc: 'Photograph paper menus to build an editable digital menu in 2 minutes. At month-end, hand your CA a 1-click Tally-ready CSV export for seamless GST filing.',
+          },
+        ],
       },
       trustStrip: [
         'No Laptop Required',
@@ -1234,6 +1410,32 @@ export default function LandingPage() {
           </div>
 
         </div>
+
+        {/* Hero Scroll-Magnet Hook Teaser (Visible at bottom edge of first screen) */}
+        <div className="mt-4 sm:mt-6 w-full max-w-5xl mx-auto">
+          <a
+            href="#savings-breakdown"
+            className="group block bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-emerald-500/15 border-2 border-amber-400 hover:border-amber-500 rounded-2xl p-3.5 sm:p-4.5 transition-all shadow-md hover:shadow-lg cursor-pointer text-left ring-2 ring-amber-400/20"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm sm:text-base font-black text-amber-950 flex items-center gap-2">
+                  <span className="text-lg">💰</span>
+                  <span>{t.scrollMagnet.boldLine}</span>
+                </p>
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-semibold">
+                  {t.scrollMagnet.subLine}
+                </p>
+              </div>
+              <div className="shrink-0 self-end sm:self-center">
+                <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-extrabold text-xs shadow-sm transition-all">
+                  <span>{t.scrollMagnet.cta}</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </span>
+              </div>
+            </div>
+          </a>
+        </div>
       </section>
 
       {/* Trust Strip */}
@@ -1259,6 +1461,331 @@ export default function LandingPage() {
             <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
             <span>{t.trustStrip[4]}</span>
           </div>
+        </div>
+      </section>
+
+      {/* 1.5. Interactive Restaurant Loss & Profit Calculator & Operations Simplified */}
+      <section id="savings-breakdown" className="scroll-mt-16 bg-gradient-to-b from-slate-50 via-white to-slate-50 border-b border-slate-200/80 px-4 sm:px-6 md:px-12 py-12 sm:py-16">
+        <div className="max-w-6xl mx-auto space-y-10 sm:space-y-14">
+          
+          {/* SECTION HEADER */}
+          <div className="text-center space-y-2.5 max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-1.5 bg-amber-100/80 border border-amber-300 px-3.5 py-1 rounded-full text-xs font-black text-amber-900 shadow-2xs">
+              <span>{t.calculator.badge}</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-tight">
+              {t.calculator.title}
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+              {t.calculator.subtitle}
+            </p>
+          </div>
+
+          {/* CALCULATOR MAIN GRID */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+            
+            {/* LEFT COLUMN: 3 INTERACTIVE TOUCH SLIDERS */}
+            <div className="lg:col-span-6 bg-white border border-slate-200 rounded-3xl p-5 sm:p-7 shadow-sm space-y-6">
+              
+              {/* Slider 1: Tables */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                    <span>🍽️</span>
+                    <span>{t.calculator.tablesLabel}</span>
+                  </label>
+                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm rounded-lg border border-emerald-200">
+                    {calcTables} Tables
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={2}
+                  max={50}
+                  step={1}
+                  value={calcTables}
+                  onChange={(e) => setCalcTables(Number(e.target.value))}
+                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                />
+                {/* Presets */}
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  {[6, 10, 18, 30].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCalcTables(preset)}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                        calcTables === preset
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {preset} Tables
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Slider 2: Staff */}
+              <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                    <span>👥</span>
+                    <span>{t.calculator.staffLabel}</span>
+                  </label>
+                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm rounded-lg border border-emerald-200">
+                    {calcStaff} Staff Members
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={2}
+                  max={40}
+                  step={1}
+                  value={calcStaff}
+                  onChange={(e) => setCalcStaff(Number(e.target.value))}
+                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                />
+                {/* Presets */}
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  {[3, 6, 12, 20].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCalcStaff(preset)}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                        calcStaff === preset
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {preset} Staff
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Slider 3: Monthly Sales */}
+              <div className="space-y-2.5 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs sm:text-sm font-extrabold text-slate-800 flex items-center gap-1.5">
+                    <span>💵</span>
+                    <span>{t.calculator.salesLabel}</span>
+                  </label>
+                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm rounded-lg border border-emerald-200">
+                    ₹{(calcMonthlySale / 100000).toFixed(1)} Lakh / mo
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={100000}
+                  max={3000000}
+                  step={50000}
+                  value={calcMonthlySale}
+                  onChange={(e) => setCalcMonthlySale(Number(e.target.value))}
+                  className="w-full h-2.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-emerald-600 focus:outline-none"
+                />
+                {/* Presets */}
+                <div className="flex items-center justify-between gap-1.5 pt-1">
+                  {[300000, 500000, 1000000, 2000000].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCalcMonthlySale(preset)}
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                        calcMonthlySale === preset
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      ₹{(preset / 100000).toFixed(0)} Lakh
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] sm:text-xs text-slate-500 leading-relaxed">
+                ℹ️ <em>Formulas are based on real audit data across Indian dining outlets: 3% kitchen pilferage/cancel losses, exact staff hours/OT tracking, and fast table turnaround.</em>
+              </div>
+
+            </div>
+
+            {/* RIGHT COLUMN: DARK SLATE / EMERALD RESULT CARD */}
+            <div className="lg:col-span-6 bg-slate-900 text-white border-2 border-slate-800 rounded-3xl p-5 sm:p-7 shadow-xl space-y-5 text-left relative overflow-hidden">
+              
+              {/* Highlight Headline & Main Savings Number */}
+              <div className="space-y-1.5 border-b border-slate-800 pb-4">
+                <p className="text-xs sm:text-sm font-bold text-slate-300">
+                  {t.calculator.resultHeadline}
+                </p>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-3xl sm:text-4xl md:text-5xl font-black text-emerald-400 tracking-tight">
+                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly)}
+                  </span>
+                  <span className="text-sm sm:text-base font-bold text-slate-400">
+                    {t.calculator.perMonth}
+                  </span>
+                </div>
+                <div className="pt-1">
+                  <span className="inline-block bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black px-3 py-1 rounded-full">
+                    {t.calculator.yearlyBadge(new Intl.NumberFormat('en-IN').format(savingsCalc.totalYearly))}
+                  </span>
+                </div>
+              </div>
+
+              {/* 5 Real-Time Live Breakdown Rows */}
+              <div className="space-y-3 text-xs sm:text-sm">
+                
+                {/* Row 1 */}
+                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
+                      <span>🥘</span>
+                      <span>{t.calculator.row1Title}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">{t.calculator.row1Desc}</p>
+                  </div>
+                  <span className="font-mono font-black text-emerald-400 shrink-0">
+                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.kitchenLeak)}/mo
+                  </span>
+                </div>
+
+                {/* Row 2 */}
+                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
+                      <span>⏱️</span>
+                      <span>{t.calculator.row2Title}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">{t.calculator.row2Desc}</p>
+                  </div>
+                  <span className="font-mono font-black text-emerald-400 shrink-0">
+                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.staffAndOtLeak)}/mo
+                  </span>
+                </div>
+
+                {/* Row 3 */}
+                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
+                      <span>⚡</span>
+                      <span>{t.calculator.row3Title}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">{t.calculator.row3Desc}</p>
+                  </div>
+                  <span className="font-mono font-black text-emerald-400 shrink-0">
+                    +₹{new Intl.NumberFormat('en-IN').format(savingsCalc.turnoverAndAutoMenu)}/mo
+                  </span>
+                </div>
+
+                {/* Row 4 */}
+                <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
+                      <span>💵</span>
+                      <span>{t.calculator.row4Title}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">{t.calculator.row4Desc}</p>
+                  </div>
+                  <span className="font-mono font-black text-emerald-400 shrink-0">
+                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.cashLeak)}/mo
+                  </span>
+                </div>
+
+                {/* Row 5 */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-100 flex items-center gap-1.5">
+                      <span>📱</span>
+                      <span>{t.calculator.row5Title}</span>
+                    </p>
+                    <p className="text-[11px] text-slate-400">{t.calculator.row5Desc}</p>
+                  </div>
+                  <span className="font-mono font-black text-emerald-400 shrink-0">
+                    ₹{new Intl.NumberFormat('en-IN').format(savingsCalc.hardwareSaved)}/mo
+                  </span>
+                </div>
+
+              </div>
+
+              {/* Bottom Direct CTA */}
+              <div className="pt-2 border-t border-slate-800 space-y-3">
+                <p className="text-[11.5px] sm:text-xs text-slate-300 font-medium leading-relaxed">
+                  {t.calculator.ctaText(new Intl.NumberFormat('en-IN').format(savingsCalc.totalMonthly))}
+                </p>
+                <Link
+                  href={`/signup?plan=trial&lang=${language}`}
+                  className="block w-full bg-emerald-500 hover:bg-emerald-400 active:scale-98 text-slate-950 font-black py-3.5 px-4 rounded-2xl text-center text-sm sm:text-base shadow-lg transition-all cursor-pointer"
+                >
+                  {t.calculator.ctaBtn}
+                </Link>
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* PART 2: 8 OPERATIONAL FEATURE CARDS (COMPACT 2-COLUMN GRID ON MOBILE) */}
+          <div className="pt-8 sm:pt-12 border-t border-slate-200/80 space-y-6 sm:space-y-8">
+            <div className="text-center space-y-2 max-w-3xl mx-auto">
+              <div className="inline-flex items-center gap-1.5 bg-emerald-100/70 border border-emerald-300 px-3 py-1 rounded-full text-xs font-black text-emerald-900">
+                <span>{t.operationsBreakdown.badge}</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
+                {t.operationsBreakdown.title}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed">
+                {t.operationsBreakdown.subtitle}
+              </p>
+            </div>
+
+            {/* Compact 2-column mobile grid (< 768px) and 4-column desktop grid for snappy scrolling */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+              {t.operationsBreakdown.cards.map((card, idx) => (
+                <div
+                  key={idx}
+                  className="bg-white border border-slate-200/90 hover:border-emerald-400 rounded-2xl p-3 sm:p-4.5 space-y-2 shadow-2xs hover:shadow-sm transition-all text-left flex flex-col justify-between"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                        {card.num}
+                      </span>
+                      <span className="text-xs">
+                        {idx === 0 ? '⏱️' : idx === 1 ? '🚫' : idx === 2 ? '👥' : idx === 3 ? '🥘' : idx === 4 ? '💵' : idx === 5 ? '🔔' : idx === 6 ? '🧾' : '📄'}
+                      </span>
+                    </div>
+                    <h4 className="text-[12px] sm:text-sm font-black text-slate-900 leading-snug">
+                      {card.title}
+                    </h4>
+                    <p className="text-[10.5px] sm:text-xs text-slate-600 leading-relaxed font-normal">
+                      {card.desc}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom Reassurance Banner below the 8 cards */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border border-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+              <div className="space-y-0.5">
+                <p className="text-xs sm:text-sm font-black text-slate-900">
+                  Yeh saare 8 operations sirf ₹3 ke 3-Din Trial me 100% unlocked hain.
+                </p>
+                <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
+                  Koi laptop ya hardware nahi chahiye • Regular smartphone par chalta hai • No auto-debit.
+                </p>
+              </div>
+              <Link
+                href={`/signup?plan=trial&lang=${language}`}
+                className="shrink-0 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-sm transition-all"
+              >
+                Start Trial for ₹3 →
+              </Link>
+            </div>
+
+          </div>
+
         </div>
       </section>
 
