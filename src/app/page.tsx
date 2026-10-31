@@ -9,7 +9,7 @@ import {
   Play, Clock, ChevronDown, ChevronUp, AlertTriangle, 
   ShieldCheck, Zap, Laptop, Users, Receipt, Package,
   Lock, FileText, XCircle, CheckCircle2, RefreshCw, Layers,
-  Globe, Mail, Phone, MapPin, Languages
+  Globe, Mail, Phone, MapPin, Languages, Banknote, Wallet, UserCheck
 } from 'lucide-react';
 
 import { db, PricingPlan } from '@/lib/db';
@@ -44,7 +44,7 @@ export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
   const [pricingPlans, setPricingPlans] = useState<PricingPlan[]>([]);
-  const [activePreviewTab, setActivePreviewTab] = useState<'owner' | 'kitchen' | 'waiter' | 'cashier' | 'smart_menu'>('owner');
+  const [activePreviewTab, setActivePreviewTab] = useState<'owner' | 'kitchen' | 'waiter' | 'cashier' | 'smart_menu' | 'attendance'>('owner');
   const [kdsTickets, setKdsTickets] = useState<{ id: string; table: string; status: 'new' | 'preparing' | 'ready' | 'served'; items: string; notes: string }[]>([
     { id: 'batch1', table: 'Table 04 • Batch #1', status: 'new', items: '2x Paneer Tikka • 1x Garlic Naan', notes: 'Chef Note: Less spicy, butter on side' },
     { id: 'batch2', table: 'Table 09 • Batch #2', status: 'preparing', items: '1x Dal Makhani • 2x Roti', notes: 'Timer: 6 min elapsed' },
@@ -161,7 +161,7 @@ export default function LandingPage() {
         pill: 'AI-Powered Restaurant Operating System',
         titlePrefix: 'Restaurant ka har kaam.',
         titleHighlight: 'Ek hi App se.',
-        subtitle: 'Order se lekar Kitchen, Inventory, AI Recipe Costing, Billing aur Reports tak sab kuch ek hi app me. Laptop ya alag machine ki zarurat nahi.',
+        subtitle: 'Order se lekar Kitchen, Inventory, AI Recipe Costing, Cash Closing, Petty Cash, Staff Attendance, Billing aur Reports tak sab kuch ek hi app me. Laptop ya alag machine ki zarurat nahi.',
         trialCta: 'Start 3-Day Trial for ₹3',
         demoCta: 'Watch Live Demo',
         microcopy1: 'Razorpay se sirf ₹3 pay karo. 3 din sab features unlock.',
@@ -179,6 +179,9 @@ export default function LandingPage() {
           'AI Recipe',
           'AI Menu',
           'Billing',
+          'Cash Closing',
+          'Petty Cash',
+          'Staff Attendance',
         ],
       },
       trustStrip: [
@@ -198,6 +201,7 @@ export default function LandingPage() {
           kitchen: 'Kitchen Display',
           waiter: 'Waiter',
           cashier: 'Cashier',
+          attendance: 'Staff Attendance',
         },
         subtitles: {
           smart_menu: 'Smart Menu: Scan paper menu images & build editable draft menus with AI.',
@@ -205,6 +209,7 @@ export default function LandingPage() {
           kitchen: 'Kitchen: Live order queue bina kisi confusion ke.',
           waiter: 'Waiter: Table requests aur bill instantly receive karo.',
           cashier: 'Cashier: UPI aur receipt 2 taps me.',
+          attendance: 'Staff Attendance: Phone se direct selfie biometric clock-in aur wage tracking.',
         },
         demoHeader: 'Demo Dashboard Preview',
         sampleTag: 'Sample Restaurant Data',
@@ -255,13 +260,27 @@ export default function LandingPage() {
           card1Title: 'Table 12 • UPI Payment',
           card1Subtotal: 'Subtotal: ₹1,380 + GST: ₹70',
           card1Action: 'Instant UPI QR Generated',
-          card2Title: 'Table 05 • Printed Receipt',
-          card2Status: 'Payment received via UPI',
-          card2Action: 'Thermal 3-Inch Receipt Printed',
-          card3Title: "Today's Collection",
-          card3Total: '₹24,850 Total',
-          card3Breakdown: 'UPI: ₹18,400 • Cash: ₹6,450',
-          card3Action: 'Day Cash Register Synced',
+          card2Title: 'Petty Cash Voucher',
+          card2Status: 'Fresh Coriander & Ice • Approved',
+          card2Action: 'Voucher #PC-108 Recorded',
+          card3Title: 'Shift Cash Balancing',
+          card3Total: '₹6,450 Total',
+          card3Breakdown: 'Expected ₹6,450 • Counted ₹6,450',
+          card3Action: 'Discrepancy: ₹0.00 Balanced',
+        },
+        attendance: {
+          card1Title: 'Chef Vikram • Kitchen',
+          card1Badge: 'ON DUTY',
+          card1Desc: 'Clock-in: 10:15 AM • Selfie Verified',
+          card1Action: '7h 20m Elapsed',
+          card2Title: 'Waiter Rahul • Service',
+          card2Badge: 'ON DUTY',
+          card2Desc: 'Shift #1 Morning • 0 Late Marks',
+          card2Action: 'PIN Clock-in Recorded',
+          card3Title: 'Daily Attendance Summary',
+          card3Total: '5 / 5 Present',
+          card3Desc: 'Zero Biometric Hardware Required',
+          card3Action: 'Automatic Wage Estimation',
         },
       },
       whyUs: {
@@ -365,6 +384,9 @@ export default function LandingPage() {
           { title: 'AI Menu', desc: 'Generates high-converting dish descriptions and automated category structuring in seconds.' },
           { title: 'Billing & GST', desc: 'Subtotal, customizable GST, thermal receipt printouts, and dynamic UPI QR checkout.' },
           { title: 'Reports & Analytics', desc: 'Daily sales, food cost margin tracking, and top selling leaderboard right on your mobile.' },
+          { title: 'Shift Cash Closing', desc: 'Shift drawer balancing, denomination counting, over/short alerts, and audit-ready Z-Reports.' },
+          { title: 'Petty Cash Vouchers', desc: 'Record daily emergency kitchen expenses with manager approvals and zero cash drawer theft.' },
+          { title: 'Staff Attendance', desc: 'Selfie and PIN-based clock-in, shift management, late marks, and automated monthly payroll.' },
         ],
       },
       caseStudies: {
@@ -383,6 +405,12 @@ export default function LandingPage() {
           { feature: 'Low Stock Alerts', pos: 'No', clever: 'Yes' },
           { feature: 'Auto Menu Hide', pos: 'No', clever: 'Yes' },
           { feature: 'One App for All Roles', pos: 'No', clever: 'Yes' },
+          { feature: 'Shift Cash Register Closing', pos: 'Extra Paid Add-on', clever: 'Yes' },
+          { feature: 'Petty Cash Vouchers', pos: 'Manual Ledger', clever: 'Yes' },
+          { feature: 'Staff Attendance & Payroll', pos: 'Separate ₹15,000 Machine', clever: 'Yes (Phone)' },
+          { feature: 'Shift Cash Register Closing', pos: 'Extra Paid Add-on', clever: 'Yes' },
+          { feature: 'Petty Cash Vouchers', pos: 'Manual Ledger', clever: 'Yes' },
+          { feature: 'Staff Attendance & Payroll', pos: 'Separate ₹15,000 Machine', clever: 'Yes (Phone)' },
           { feature: 'Owner Reports', pos: 'Basic', clever: 'Live on Mobile' },
           { feature: 'Hardware Required', pos: 'Often Yes (Costly)', clever: 'No (Phone is enough)' },
         ],
@@ -481,7 +509,7 @@ export default function LandingPage() {
         pill: 'AI-Powered Restaurant Operating System',
         titlePrefix: 'Run your entire restaurant.',
         titleHighlight: 'From one app.',
-        subtitle: 'Manage Orders, Kitchen, Inventory, AI Recipe Costing, Billing and Reports from a single app. No laptop or extra hardware needed.',
+        subtitle: 'Manage Orders, Kitchen, Inventory, AI Recipe Costing, Cash Closing, Petty Cash, Staff Attendance, Billing and Reports from a single app. No laptop or extra hardware needed.',
         trialCta: 'Start a 3-Day Trial for ₹3',
         demoCta: 'Watch Live Demo',
         microcopy1: 'Pay just ₹3 via Razorpay. Unlock all features for 3 days.',
@@ -499,6 +527,9 @@ export default function LandingPage() {
           'AI Recipe',
           'AI Menu',
           'Billing',
+          'Cash Closing',
+          'Petty Cash',
+          'Staff Attendance',
         ],
       },
       trustStrip: [
@@ -518,6 +549,7 @@ export default function LandingPage() {
           kitchen: 'Kitchen Display',
           waiter: 'Waiter',
           cashier: 'Cashier',
+          attendance: 'Staff Attendance',
         },
         subtitles: {
           smart_menu: 'Smart Menu: Scan paper menu images & build editable draft menus with AI.',
@@ -525,6 +557,7 @@ export default function LandingPage() {
           kitchen: 'Kitchen: Live order queue without any confusion.',
           waiter: 'Waiter: Receive table service calls and bill requests instantly.',
           cashier: 'Cashier: Instant UPI QR and receipt printing in 2 taps.',
+          attendance: 'Staff Attendance: Direct phone-based selfie biometric clock-in and automated payroll tracking.',
         },
         demoHeader: 'Demo Dashboard Preview',
         sampleTag: 'Sample Restaurant Data',
@@ -575,13 +608,27 @@ export default function LandingPage() {
           card1Title: 'Table 12 • UPI Payment',
           card1Subtotal: 'Subtotal: ₹1,380 + GST: ₹70',
           card1Action: 'Instant UPI QR Generated',
-          card2Title: 'Table 05 • Printed Receipt',
-          card2Status: 'Payment received via UPI',
-          card2Action: 'Thermal 3-Inch Receipt Printed',
-          card3Title: "Today's Collection",
-          card3Total: '₹24,850 Total',
-          card3Breakdown: 'UPI: ₹18,400 • Cash: ₹6,450',
-          card3Action: 'Day Cash Register Synced',
+          card2Title: 'Petty Cash Voucher',
+          card2Status: 'Fresh Coriander & Ice • Approved',
+          card2Action: 'Voucher #PC-108 Recorded',
+          card3Title: 'Shift Cash Balancing',
+          card3Total: '₹6,450 Total',
+          card3Breakdown: 'Expected ₹6,450 • Counted ₹6,450',
+          card3Action: 'Discrepancy: ₹0.00 Balanced',
+        },
+        attendance: {
+          card1Title: 'Chef Vikram • Kitchen',
+          card1Badge: 'ON DUTY',
+          card1Desc: 'Clock-in: 10:15 AM • Selfie Verified',
+          card1Action: '7h 20m Elapsed',
+          card2Title: 'Waiter Rahul • Service',
+          card2Badge: 'ON DUTY',
+          card2Desc: 'Shift #1 Morning • 0 Late Marks',
+          card2Action: 'PIN Clock-in Recorded',
+          card3Title: 'Daily Attendance Summary',
+          card3Total: '5 / 5 Present',
+          card3Desc: 'Zero Biometric Hardware Required',
+          card3Action: 'Automatic Wage Estimation',
         },
       },
       whyUs: {
@@ -685,6 +732,9 @@ export default function LandingPage() {
           { title: 'AI Menu', desc: 'Generates high-converting dish descriptions and automated category structuring in seconds.' },
           { title: 'Billing & GST', desc: 'Subtotal, customizable GST, thermal receipt printouts, and dynamic UPI QR checkout.' },
           { title: 'Reports & Analytics', desc: 'Daily sales, food cost margin tracking, and top-selling leaderboard right on your mobile.' },
+          { title: 'Shift Cash Closing', desc: 'Shift drawer balancing, denomination counting, over/short alerts, and audit-ready Z-Reports.' },
+          { title: 'Petty Cash Vouchers', desc: 'Record daily emergency kitchen expenses with manager approvals and zero cash drawer theft.' },
+          { title: 'Staff Attendance', desc: 'Selfie and PIN-based clock-in, shift management, late marks, and automated monthly payroll.' },
         ],
       },
       caseStudies: {
@@ -782,7 +832,7 @@ export default function LandingPage() {
 
   const t = copy[language];
 
-  const featureIcons = [QrCode, ChefHat, Package, Sparkles, Smartphone, Receipt, BarChart3];
+  const featureIcons = [QrCode, ChefHat, Package, Sparkles, Smartphone, Receipt, BarChart3, Banknote, Wallet, UserCheck];
   const featureColors = [
     'bg-emerald-50 text-emerald-600',
     'bg-amber-50 text-amber-600',
@@ -1171,6 +1221,18 @@ export default function LandingPage() {
             >
               <Sparkles className="h-3.5 w-3.5" />
               <span>Smart Menu</span>
+            </button>
+            <button
+              onClick={() => setActivePreviewTab('attendance')}
+              data-testid="tab-attendance"
+              className={`min-w-[110px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap min-h-[44px] snap-start flex items-center justify-center gap-1.5 ${
+                activePreviewTab === 'attendance'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                  : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200/80 hover:text-slate-900'
+              }`}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              <span>{t.preview.tabs.attendance}</span>
             </button>
           </div>
         </div>
@@ -1613,7 +1675,7 @@ export default function LandingPage() {
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
                 <div className="flex justify-between items-center font-bold text-slate-900">
                   <span>{t.preview.cashier.card2Title}</span>
-                  <span className="text-slate-900 font-bold">₹2,100</span>
+                  <span className="text-slate-900 font-bold">-₹350</span>
                 </div>
                 <p className="text-slate-600">{t.preview.cashier.card2Status}</p>
                 <div className="bg-slate-100 border border-slate-200 text-slate-700 font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
@@ -1628,6 +1690,46 @@ export default function LandingPage() {
                 <p className="text-slate-600">{t.preview.cashier.card3Breakdown}</p>
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
                   {t.preview.cashier.card3Action}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Staff Attendance Tab */}
+          {activePreviewTab === 'attendance' && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs animate-fade-in">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span>{t.preview.attendance.card1Title}</span>
+                  <span className="text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                    {t.preview.attendance.card1Badge}
+                  </span>
+                </div>
+                <p className="text-slate-600">{t.preview.attendance.card1Desc}</p>
+                <div className="bg-slate-100 border border-slate-200 text-slate-700 font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
+                  {t.preview.attendance.card1Action}
+                </div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span>{t.preview.attendance.card2Title}</span>
+                  <span className="text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                    {t.preview.attendance.card2Badge}
+                  </span>
+                </div>
+                <p className="text-slate-600">{t.preview.attendance.card2Desc}</p>
+                <div className="bg-slate-100 border border-slate-200 text-slate-700 font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
+                  {t.preview.attendance.card2Action}
+                </div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-2">
+                <div className="flex justify-between items-center font-bold text-slate-900">
+                  <span>{t.preview.attendance.card3Title}</span>
+                  <span className="text-slate-900 font-bold">{t.preview.attendance.card3Total}</span>
+                </div>
+                <p className="text-slate-600">{t.preview.attendance.card3Desc}</p>
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-center py-2 rounded-xl text-xs min-h-[36px] flex items-center justify-center">
+                  {t.preview.attendance.card3Action}
                 </div>
               </div>
             </div>
