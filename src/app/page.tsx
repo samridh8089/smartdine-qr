@@ -271,7 +271,7 @@ export default function LandingPage() {
         },
       },
       whyUs: {
-        title: 'Jo phone chalana aata hai, CleverOps bhi chal jayega.',
+        title: 'Agar phone chalana aata hai, to CleverOps bhi aasani se chala loge.',
         subtitle: 'Kisi mehengi POS machine, computer ya printer setup ki zarurat nahi.',
         card1Title: 'Purana Android phone chalega',
         card1Desc: 'Aapka aur aapke staff ka regular phone hi kaafi hai. Koi extra hardware kharidne ki zarurat nahi.',
@@ -2431,6 +2431,32 @@ export default function LandingPage() {
               {t.pricing.yearly}
             </button>
           </div>
+        </div>
+
+        {/* 3-Day Full Access Trial for ₹3 Highlight */}
+        <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border-2 border-emerald-500/40 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 bg-emerald-600 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider">
+              <Sparkles className="h-3 w-3" />
+              <span>Full Access Trial</span>
+            </div>
+            <h3 className="text-xl sm:text-2xl font-black text-slate-900">
+              3-Day Full Access Trial (Sirf ₹3 me)
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              QR Ordering, Live KDS, Inventory, AI Recipe Costing, Cash Closing, Petty Cash aur Staff Attendance. Bina kisi POS machine ya extra hardware ke apne regular phone par 72 hours tak sab kuch test karein.
+            </p>
+            <p className="text-[11px] text-slate-500 font-semibold">
+              🔒 100% Safe Razorpay Checkout • Koi Auto-Debit Nahi • Turant Activation
+            </p>
+          </div>
+
+          <Link href={`/signup?plan=trial&lang=${language}`} className="shrink-0 w-full md:w-auto">
+            <button className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-3.5 rounded-xl text-sm shadow-md shadow-emerald-600/20 cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-2 min-h-[48px]">
+              <span>3-Din Trial Shuru Karein (Sirf ₹3)</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </Link>
         </div>
 
         {/* Pricing Cards Grid */}

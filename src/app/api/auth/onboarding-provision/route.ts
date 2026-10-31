@@ -42,9 +42,10 @@ export async function POST(req: Request) {
     const cleanPhone = (phone || '').trim();
     const cleanName = (fullName || '').trim();
     const cleanRestName = (restaurantName || '').trim();
-    const validPlans = ['starter', 'pro', 'premium'];
+    const validPlans = ['starter', 'pro', 'premium', 'trial_3_days', 'trial'];
     const normalizedPlan = (plan || 'pro').toLowerCase().trim();
-    const validPlan = validPlans.includes(normalizedPlan) ? normalizedPlan : (normalizedPlan.includes('prem') ? 'premium' : normalizedPlan.includes('start') ? 'starter' : 'pro');
+    const isTrialPlan = normalizedPlan === 'trial' || normalizedPlan === 'trial_3_days';
+    const validPlan = isTrialPlan ? 'trial_3_days' : (validPlans.includes(normalizedPlan) ? normalizedPlan : (normalizedPlan.includes('prem') ? 'premium' : normalizedPlan.includes('start') ? 'starter' : 'pro'));
 
     if (!cleanEmail || !cleanRestName) {
       return NextResponse.json({ error: 'Missing mandatory fields (email, restaurant name)' }, { status: 400 });
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
     });
 
     // ─── 1. MANDATORY RAZORPAY SIGNATURE VALIDATION FOR PAID PLANS ──────────────
-    const isPaidPlan = ['starter', 'pro', 'premium', 'custom'].includes(normalizedPlan);
+    const isPaidPlan = ['starter', 'pro', 'premium', 'custom', 'trial', 'trial_3_days'].includes(normalizedPlan);
 
     if (isPaidPlan) {
       if (!paymentDetails || !paymentDetails.razorpay_payment_id || !paymentDetails.razorpay_order_id) {
@@ -286,17 +287,20 @@ export async function POST(req: Request) {
     }
 
     // ─── 4. DETERMINE SUBSCRIPTION END DATE & SETTINGS ──────────────────────────
-    const isTrialRegistration = Boolean(body.isTrial || plan === 'trial' || realPaymentId.startsWith('trial_'));
+    const isTrialRegistration = Boolean(body.isTrial || normalizedPlan === 'trial' || normalizedPlan === 'trial_3_days' || realPaymentId.startsWith('trial_'));
     const durationDays = isTrialRegistration ? 3 : (billingInterval === 'yearly' ? 365 : 30);
+    const nowIso = new Date().toISOString();
     const subscriptionEndsAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
-    const initialStatus = isTrialRegistration ? 'trial' : 'active';
+    const initialStatus = 'active';
 
     const planAmounts: Record<string, { monthly: number; yearly: number }> = {
+      trial_3_days: { monthly: 3, yearly: 3 },
+      trial: { monthly: 3, yearly: 3 },
       starter: { monthly: 499, yearly: 4990 },
       pro: { monthly: 999, yearly: 9990 },
       premium: { monthly: 1999, yearly: 19990 }
     };
-    paidAmount = isTrialRegistration ? 0 : (paymentDetails?.amount || (billingInterval === 'yearly' ? planAmounts[normalizedPlan]?.yearly : planAmounts[normalizedPlan]?.monthly) || 999);
+    paidAmount = isTrialRegistration ? 3 : (paymentDetails?.amount || (billingInterval === 'yearly' ? planAmounts[normalizedPlan]?.yearly : planAmounts[normalizedPlan]?.monthly) || 999);
 
     const paymentDetailsRecord = {
       payment_id: realPaymentId,
@@ -333,6 +337,11 @@ export async function POST(req: Request) {
       last_amount: paidAmount,
       renewal_date: subscriptionEndsAt,
       payment_history: [paymentDetailsRecord],
+      plan_type: isTrialRegistration ? 'trial_3_days' : validPlan,
+      plan_status: 'active',
+      trial_started_at: isTrialRegistration ? nowIso : null,
+      plan_expires_at: subscriptionEndsAt,
+      has_used_trial: isTrialRegistration ? true : false,
       dpdp_consent: {
         consented: true,
         consented_at: new Date().toISOString(),

@@ -5,8 +5,9 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { getActiveUser, supabase, clearActiveUserCache, signOutUser } from '@/lib/supabase';
 import { db, Profile, Restaurant, isSubscriptionExpired } from '@/lib/db';
-import { DEFAULT_PLAN_SPECS, parsePlanSpec, PlanEntitlementSpec } from '@/lib/entitlements';
+import { DEFAULT_PLAN_SPECS, parsePlanSpec, PlanEntitlementSpec, getCachedPlanSpec } from '@/lib/entitlements';
 import LockedFeatureView from '@/components/shared/LockedFeatureView';
+import TrialCountdownBanner from '@/components/dashboard/TrialCountdownBanner';
 import MockBanner from '@/components/shared/MockBanner';
 import { dashboardStore } from '@/lib/dashboardStore';
 import { PreviewModeProvider } from '@/context/PreviewModeContext';
@@ -16,7 +17,7 @@ import {
   QrCode, ClipboardList, ChefHat, BarChart3, CreditCard, 
   LogOut, MenuSquare, X, ChevronRight, User, Settings,
   ShieldAlert, Sparkles, AlertTriangle, Tag, Boxes, Lock, Users,
-  Bell, BellOff, UserCheck, Banknote, Search
+  Bell, BellOff, UserCheck, Banknote, Search, ArrowRight
 } from 'lucide-react';
 import GlobalCommandPalette from '@/components/dashboard/GlobalCommandPalette';
 import { setGlobalMute, stopLoudBell, isGloballyMuted, playLoudBell } from '@/lib/soundAlert';
@@ -86,93 +87,31 @@ const ALL_MENU_ITEMS = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [profile, setProfile] = useState<Profile | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('smartdine_cached_profile');
-        if (stored) return JSON.parse(stored);
-      } catch (_) {}
-    }
-    return null;
-  });
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('smartdine_cached_restaurant');
-        if (stored) return JSON.parse(stored);
-      } catch (_) {}
-    }
-    return null;
-  });
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const storedProfile = sessionStorage.getItem('smartdine_cached_profile');
-        const storedRest = sessionStorage.getItem('smartdine_cached_restaurant');
-        if (storedProfile && storedRest) return false;
-      } catch (_) {}
-    }
-    return true;
-  });
+
+  // 1. useState hooks
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
-  const [alarmMuted, setAlarmMuted] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = localStorage.getItem('cleverops_bell_muted');
-        if (stored !== null) return stored === 'true';
-      } catch (_) {}
-    }
-    return false;
-  });
+  const [alarmMuted, setAlarmMuted] = useState<boolean>(false);
   const [isRinging, setIsRinging] = useState(false);
   const [searchPaletteOpen, setSearchPaletteOpen] = useState(false);
-  // Phase-19: Founder Control Center easter egg (5-tap logo)
   const [logoTapCount, setLogoTapCount] = useState(0);
-  const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Separate Portals Role View
-  const [dbRole, setDbRole] = useState<Profile['role']>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('smartdine_cached_profile');
-        if (stored) return JSON.parse(stored)?.role || 'owner';
-      } catch (_) {}
-    }
-    return 'owner';
-  });
-  const [activeRole, setActiveRole] = useState<Profile['role']>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const stored = sessionStorage.getItem('smartdine_cached_profile');
-        if (stored) return JSON.parse(stored)?.role || 'owner';
-      } catch (_) {}
-    }
-    return 'owner';
-  });
-
-  // Plan Entitlement Specification State
-  const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const storedRest = sessionStorage.getItem('smartdine_cached_restaurant');
-        if (storedRest) {
-          const rest = JSON.parse(storedRest);
-          const p = (rest?.subscription_plan || 'starter').toLowerCase();
-          return DEFAULT_PLAN_SPECS[p] || DEFAULT_PLAN_SPECS.starter;
-        }
-      } catch (_) {}
-    }
-    return DEFAULT_PLAN_SPECS.starter;
-  });
-
+  const [dbRole, setDbRole] = useState<Profile['role']>('owner');
+  const [activeRole, setActiveRole] = useState<Profile['role']>('owner');
+  const [planSpec, setPlanSpec] = useState<PlanEntitlementSpec>(DEFAULT_PLAN_SPECS.starter);
   const [isImpersonating, setIsImpersonating] = useState(false);
+
+  // 2. useRef hooks
+  const logoTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localOrderIdsRef = useRef<Set<string>>(new Set());
+  const inFlightAlarmsCheckRef = useRef<Promise<void> | null>(null);
+  const lastAlarmsCheckTimestampRef = useRef<number>(0);
 
   const fetchPlanSpec = async (planId: string) => {
     try {
-      const pId = (planId || 'starter').toLowerCase();
-      const { data: row } = await supabase.from('pricing_plans').select('*').eq('id', pId).maybeSingle();
-      const spec = parsePlanSpec(row || { id: pId });
+      const spec = await getCachedPlanSpec(planId);
       setPlanSpec(spec);
     } catch (e) {
       const pId = (planId || 'starter').toLowerCase();
@@ -260,6 +199,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   useEffect(() => {
+    // Read cached values from client storage immediately post-mount without SSR mismatch
+    try {
+      const storedMuted = localStorage.getItem('cleverops_bell_muted');
+      if (storedMuted !== null) setAlarmMuted(storedMuted === 'true');
+
+      const storedProfile = sessionStorage.getItem('smartdine_cached_profile');
+      const storedRest = sessionStorage.getItem('smartdine_cached_restaurant');
+      if (storedProfile && storedRest) {
+        const prof = JSON.parse(storedProfile);
+        const rest = JSON.parse(storedRest);
+        setProfile(prof);
+        setRestaurant(rest);
+        const role = prof?.role || 'owner';
+        setDbRole(role);
+        setActiveRole(role);
+        const p = (rest?.subscription_plan || 'starter').toLowerCase();
+        setPlanSpec(DEFAULT_PLAN_SPECS[p] || DEFAULT_PLAN_SPECS.starter);
+        setLoading(false);
+      }
+    } catch (_) {}
+
     checkAuth();
 
     // Safe storage listener (prevent cross-tab hijacking)
@@ -399,30 +359,43 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // ==========================================
   // GLOBAL NOTIFICATION & ALARM SYSTEM
   // ==========================================
-  const localOrderIdsRef = useRef<Set<string>>(new Set());
-
   const stopGlobalAlarm = () => {
     stopLoudBell();
   };
 
   const checkActiveAlarmsGlobal = async (restId: string, role: string) => {
+    const now = Date.now();
+    if (now - lastAlarmsCheckTimestampRef.current < 15000 && localOrderIdsRef.current.size > 0) {
+      return;
+    }
+    if (inFlightAlarmsCheckRef.current) {
+      return inFlightAlarmsCheckRef.current;
+    }
     try {
       const cached = dashboardStore.getCachedOrders(restId);
       if (cached) {
         localOrderIdsRef.current = new Set(cached.map(o => o.id));
+        lastAlarmsCheckTimestampRef.current = now;
         return;
       }
-      const { data } = await supabase
-        .from('orders')
-        .select('id')
-        .eq('restaurant_id', restId)
-        .order('created_at', { ascending: false })
-        .limit(50);
-      if (data) {
-        localOrderIdsRef.current = new Set(data.map(o => o.id));
-      }
+      const p = (async () => {
+        const { data } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('restaurant_id', restId)
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (data) {
+          localOrderIdsRef.current = new Set(data.map(o => o.id));
+        }
+        lastAlarmsCheckTimestampRef.current = Date.now();
+      })();
+      inFlightAlarmsCheckRef.current = p;
+      await p;
     } catch (e) {
       console.warn('Error checking global order IDs:', e);
+    } finally {
+      inFlightAlarmsCheckRef.current = null;
     }
   };
 
@@ -447,17 +420,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       window.removeEventListener('online', handleActive);
     };
   }, [restaurant?.id, activeRole]);
-
-  // Idle background prewarm for Tables and Billing routes
-  useEffect(() => {
-    const restId = restaurant?.id || profile?.restaurant_id;
-    if (!restId) return;
-    const timer = setTimeout(() => {
-      dashboardStore.prewarmRoute('/dashboard/tables', restId);
-      dashboardStore.prewarmRoute('/dashboard/billing', restId);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [restaurant?.id, profile?.restaurant_id]);
 
   // Global Audio stop listeners triggered by actions & bell ringing state
   useEffect(() => {
@@ -958,6 +920,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden h-full max-w-full">
+            {/* Live 72-Hour Trial Countdown & Expiry Banner */}
+            {restaurant && (
+              <TrialCountdownBanner
+                restaurant={restaurant}
+                isOwner={dbRole === 'owner' || activeRole === 'owner'}
+              />
+            )}
+
             {/* Dashboard Header */}
             <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 h-16 pt-2 pb-2 px-4 sm:px-6 flex items-center justify-between shrink-0 sticky top-0 z-30 transition-colors">
               <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
@@ -1013,7 +983,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   onClick={handleToggleBellMute}
                   className={`p-2 rounded-xl border transition-all cursor-pointer shadow-xs flex items-center gap-1.5 ${
                     isRinging
-                      ? 'bg-rose-600 text-white border-rose-500 animate-bounce shadow-lg shadow-rose-500/20'
+                      ? 'bg-rose-600 text-white border-rose-500 animate-pulse ring-2 ring-rose-400/50 shadow-lg shadow-rose-500/20'
                       : alarmMuted
                       ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:border-slate-700 hover:bg-slate-200'
                       : 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900 dark:border-white hover:bg-slate-800'
@@ -1028,7 +998,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   aria-label="Toggle bell sound alerts"
                 >
                   {isRinging ? (
-                    <Bell className="h-4 w-4 shrink-0 fill-current animate-pulse text-white" />
+                    <Bell className="h-4 w-4 shrink-0 fill-current animate-bounce text-white" />
                   ) : alarmMuted ? (
                     <BellOff className="h-4 w-4 shrink-0" />
                   ) : (
@@ -1068,6 +1038,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   featureDescription={routeLockInfo.desc}
                   planName={planSpec.name}
                 />
+              ) : (restaurant && isSubscriptionExpired(restaurant) && (dbRole === 'owner' || activeRole === 'owner') && pathname !== '/dashboard/billing' && pathname !== '/dashboard/settings') ? (
+                <div className="min-h-[60vh] flex items-center justify-center p-4">
+                  <div className="max-w-md w-full bg-white dark:bg-slate-900 border-2 border-rose-500/30 rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-xl">
+                    <div className="h-16 w-16 bg-rose-50 dark:bg-rose-950/30 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 dark:border-rose-900/40">
+                      <AlertTriangle className="h-8 w-8" />
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-black text-slate-900 dark:text-white">Trial Expired</h2>
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                        Aapka 3-Din Trial samapt ho gaya hai. <strong>Aapka sara data, menu, recipes aur sales records 100% safe hain.</strong>
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Naye orders, KOT aur billing chalu rakhne ke liye kripya apna regular plan activate karein.
+                      </p>
+                    </div>
+                    <div className="pt-2 flex flex-col gap-2.5">
+                      <Link href="/dashboard/billing">
+                        <button className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-3 px-4 rounded-xl text-sm shadow-md cursor-pointer flex items-center justify-center gap-2">
+                          <span>Upgrade to Continue</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                      </Link>
+                      <Link href="/dashboard/settings">
+                        <button className="w-full py-2.5 px-3 text-xs font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                          View Restaurant Settings
+                        </button>
+                      </Link>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 children
               )}

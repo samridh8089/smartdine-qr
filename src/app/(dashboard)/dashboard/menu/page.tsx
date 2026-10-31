@@ -172,7 +172,7 @@ export default function MenuManagementPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => initialCachedMenu?.menuItems || []);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>(restaurant?.subscription_plan || 'starter');
+  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium' | 'trial_3_days' | 'trial' | string>(restaurant?.subscription_plan || 'starter');
   const [loading, setLoading] = useState(() => !initialCachedMenu);
   const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'ai'>('catalog');
 

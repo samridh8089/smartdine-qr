@@ -110,6 +110,167 @@ export interface PlanEntitlementSpec {
 }
 
 export const DEFAULT_PLAN_SPECS: Record<string, PlanEntitlementSpec> = {
+  trial_3_days: {
+    id: 'trial_3_days',
+    name: '3-DAY TRIAL',
+    slug: 'trial',
+    price_monthly: 3,
+    price_yearly: 3,
+    billing_interval: 'monthly',
+    description: 'Full 3-Day Restaurant Access for ₹3 (No Auto-Debit)',
+    is_active: true,
+    is_popular: false,
+    sort_order: 0,
+    limits: {
+      tables: null,
+      menu_items: null,
+      staff_accounts: null,
+      inventory_items: null,
+      recipes: null,
+      outlets: 1,
+      monthly_orders: null
+    },
+    features: {
+      qr_menu: true,
+      ordering: true,
+      takeaway: true,
+      reservations: true,
+      live_order_tracking: true,
+      call_waiter: true,
+      request_bill: true,
+      table_management: true,
+      kds: true,
+      kitchen_notifications: true,
+      batch_orders: true,
+      floor_plan: true,
+      table_merge: true,
+      manual_discount: true,
+      inventory: true,
+      stock_in: true,
+      low_stock_alerts: true,
+      out_of_stock_auto_disable: true,
+      auto_stock_deduction: true,
+      csv_inventory_import: true,
+      recipes: true,
+      recipe_costing: true,
+      gross_margin: true,
+      waste_management: true,
+      transaction_ledger: true,
+      advanced_analytics: true,
+      csv_exports: true,
+      pdf_reports: true,
+      detailed_gst_reports: true,
+      staff_rbac: true,
+      staff_tasks: true,
+      task_proof_upload: true,
+      task_approval: true,
+      audit_logs: true,
+      multi_outlet: false,
+      central_dashboard: false,
+      outlet_reports: false,
+      custom_reports: true,
+      api_access: false,
+      custom_branding: true,
+      ai_menu: true,
+      ai_recipe: true
+    },
+    ai_limits: {
+      ai_menu_analysis: 100,
+      ai_recipe_generation: 100,
+      ai_review_generation: 0,
+      max_items_per_request: 100,
+      max_requests_per_month: 10
+    },
+    display_features: [
+      '100% All Features Unlocked for 72 Hours',
+      'QR Ordering & Live KDS',
+      'Inventory & AI Recipe Costing',
+      'Cash Closing & Petty Cash',
+      'Staff Attendance & Payroll',
+      'Instant Activation — ₹3 Only (No Auto-Debit)'
+    ]
+  },
+  trial: {
+    id: 'trial_3_days',
+    name: '3-DAY TRIAL',
+    slug: 'trial',
+    price_monthly: 3,
+    price_yearly: 3,
+    billing_interval: 'monthly',
+    description: 'Full 3-Day Restaurant Access for ₹3 (No Auto-Debit)',
+    is_active: true,
+    is_popular: false,
+    sort_order: 0,
+    limits: {
+      tables: null,
+      menu_items: null,
+      staff_accounts: null,
+      inventory_items: null,
+      recipes: null,
+      outlets: 1,
+      monthly_orders: null
+    },
+    features: {
+      qr_menu: true,
+      ordering: true,
+      takeaway: true,
+      reservations: true,
+      live_order_tracking: true,
+      call_waiter: true,
+      request_bill: true,
+      table_management: true,
+      kds: true,
+      kitchen_notifications: true,
+      batch_orders: true,
+      floor_plan: true,
+      table_merge: true,
+      manual_discount: true,
+      inventory: true,
+      stock_in: true,
+      low_stock_alerts: true,
+      out_of_stock_auto_disable: true,
+      auto_stock_deduction: true,
+      csv_inventory_import: true,
+      recipes: true,
+      recipe_costing: true,
+      gross_margin: true,
+      waste_management: true,
+      transaction_ledger: true,
+      advanced_analytics: true,
+      csv_exports: true,
+      pdf_reports: true,
+      detailed_gst_reports: true,
+      staff_rbac: true,
+      staff_tasks: true,
+      task_proof_upload: true,
+      task_approval: true,
+      audit_logs: true,
+      multi_outlet: false,
+      central_dashboard: false,
+      outlet_reports: false,
+      custom_reports: true,
+      api_access: false,
+      custom_branding: true,
+      ai_menu: true,
+      ai_recipe: true
+    },
+    ai_limits: {
+      ai_menu_analysis: 100,
+      ai_recipe_generation: 100,
+      ai_review_generation: 0,
+      max_items_per_request: 100,
+      max_requests_per_month: 10
+    },
+    display_features: [
+      '100% All Features Unlocked for 72 Hours',
+      'QR Ordering & Live KDS',
+      'Inventory & AI Recipe Costing',
+      'Cash Closing & Petty Cash',
+      'Staff Attendance & Payroll',
+      'Instant Activation — ₹3 Only (No Auto-Debit)'
+    ]
+  },
+
   starter: {
     id: 'starter',
     name: 'STARTER',
@@ -601,16 +762,69 @@ export function serializePlanSpec(spec: PlanEntitlementSpec) {
 }
 
 /**
+ * In-memory plan entitlement caches to eliminate repetitive network roundtrips
+ */
+const planSpecCache = new Map<string, { spec: PlanEntitlementSpec; timestamp: number }>();
+const restPlanCache = new Map<string, { planId: string; timestamp: number }>();
+const inFlightPlanQueries = new Map<string, Promise<PlanEntitlementSpec>>();
+
+export function invalidatePlanCache(restaurantId?: string) {
+  if (restaurantId) {
+    restPlanCache.delete(restaurantId);
+  } else {
+    restPlanCache.clear();
+    planSpecCache.clear();
+  }
+}
+
+export function cacheRestaurantPlan(restaurantId: string, planId: string) {
+  if (restaurantId && planId) {
+    restPlanCache.set(restaurantId, { planId: planId.toLowerCase(), timestamp: Date.now() });
+  }
+}
+
+export async function getCachedPlanSpec(planId: string): Promise<PlanEntitlementSpec> {
+  const pId = (planId || 'starter').toLowerCase();
+  const now = Date.now();
+  const cachedSpec = planSpecCache.get(pId);
+  if (cachedSpec && now - cachedSpec.timestamp < 60000) {
+    return cachedSpec.spec;
+  }
+  let queryPromise = inFlightPlanQueries.get(pId);
+  if (!queryPromise) {
+    queryPromise = (async () => {
+      try {
+        const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', pId).maybeSingle();
+        const parsed = parsePlanSpec(planRow || { id: pId });
+        planSpecCache.set(pId, { spec: parsed, timestamp: Date.now() });
+        return parsed;
+      } finally {
+        inFlightPlanQueries.delete(pId);
+      }
+    })();
+    inFlightPlanQueries.set(pId, queryPromise);
+  }
+  return queryPromise;
+}
+
+/**
  * Centralized Feature Check for a Restaurant
  */
 export async function isFeatureEnabledForRestaurant(restaurantId: string, featureKey: string): Promise<boolean> {
   if (!restaurantId) return false;
   try {
-    const { data: rest } = await supabase.from('restaurants').select('subscription_plan').eq('id', restaurantId).maybeSingle();
-    const planId = (rest?.subscription_plan || 'starter').toLowerCase();
-    
-    const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle();
-    const spec = parsePlanSpec(planRow || { id: planId });
+    const now = Date.now();
+    let planId = 'starter';
+    const cachedPlan = restPlanCache.get(restaurantId);
+    if (cachedPlan && now - cachedPlan.timestamp < 30000) {
+      planId = cachedPlan.planId;
+    } else {
+      const { data: rest } = await supabase.from('restaurants').select('subscription_plan').eq('id', restaurantId).maybeSingle();
+      planId = (rest?.subscription_plan || 'starter').toLowerCase();
+      restPlanCache.set(restaurantId, { planId, timestamp: now });
+    }
+
+    const spec = await getCachedPlanSpec(planId);
     return spec.features[featureKey] !== false;
   } catch (e) {
     return true; // Fail-open safety fallback to avoid breaking working code on connection glitches
@@ -628,11 +842,18 @@ export async function checkResourceLimitForRestaurant(
   if (!restaurantId) return { allowed: true, limit: null, count: currentCount };
 
   try {
-    const { data: rest } = await supabase.from('restaurants').select('subscription_plan').eq('id', restaurantId).maybeSingle();
-    const planId = (rest?.subscription_plan || 'starter').toLowerCase();
-    
-    const { data: planRow } = await supabase.from('pricing_plans').select('*').eq('id', planId).maybeSingle();
-    const spec = parsePlanSpec(planRow || { id: planId });
+    const now = Date.now();
+    let planId = 'starter';
+    const cachedPlan = restPlanCache.get(restaurantId);
+    if (cachedPlan && now - cachedPlan.timestamp < 30000) {
+      planId = cachedPlan.planId;
+    } else {
+      const { data: rest } = await supabase.from('restaurants').select('subscription_plan').eq('id', restaurantId).maybeSingle();
+      planId = (rest?.subscription_plan || 'starter').toLowerCase();
+      restPlanCache.set(restaurantId, { planId, timestamp: now });
+    }
+
+    const spec = await getCachedPlanSpec(planId);
     
     const limit = spec.limits[resourceKey];
     if (limit === null || limit === undefined) {

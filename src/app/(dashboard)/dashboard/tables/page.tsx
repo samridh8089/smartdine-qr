@@ -36,7 +36,7 @@ export default function TablesPage() {
   const [restaurantSlug, setRestaurantSlug] = useState(restaurant?.slug || '');
   const [tables, setTables] = useState<Table[]>(() => initialCachedTables?.tables || []);
   const [zones, setZones] = useState<RestaurantZone[]>(() => initialCachedTables?.zones || []);
-  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium'>(restaurant?.subscription_plan || 'starter');
+  const [activePlan, setActivePlan] = useState<'starter' | 'pro' | 'premium' | 'trial_3_days' | 'trial' | string>(restaurant?.subscription_plan || 'starter');
   const [loading, setLoading] = useState(() => !initialCachedTables);
 
   // Merged Tables state

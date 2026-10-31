@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       restaurantId: { rules: [Validators.string({ max: 100 })], required: false },
       email: { rules: [Validators.email()], required: false },
       plan: { rules: [Validators.string({ max: 50 })], required: false },
-      plan_name: { rules: [Validators.enum(['starter', 'pro', 'premium', 'custom', 'free', 'lite', 'enterprise'] as const)], required: false },
+      plan_name: { rules: [Validators.enum(['starter', 'pro', 'premium', 'custom', 'free', 'lite', 'enterprise', 'trial_3_days', 'trial'] as const)], required: false },
       billingInterval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false },
       billing_interval: { rules: [Validators.enum(['monthly', 'yearly'] as const)], required: false },
       amount: { rules: [Validators.number({ min: 0 })], required: false },

@@ -42,6 +42,23 @@ const ESTABLISHMENT_TYPES = [
 ];
 
 const DEFAULT_PLANS = {
+  trial: {
+    id: 'trial',
+    name: '3-Day Full Access Trial (₹3)',
+    monthlyPrice: 3,
+    yearlyPrice: 3,
+    badge: '72-HR TRIAL',
+    tagline: '100% all features unlocked for 3 days • No auto-debit',
+    features: [
+      'Interactive Digital QR Menu & Table Ordering',
+      'Real-time Multi-KDS Kitchen Display with Timers',
+      'Raw Material Inventory & Auto-Deductions',
+      'AI Recipe Costing & Food Margin Intelligence',
+      'Shift Cash Closing & Petty Cash Vouchers',
+      'Staff Attendance, PIN Clock-in & Automated Payroll',
+      'GST Billing, Thermal Printing & Dynamic UPI QR'
+    ]
+  },
   starter: {
     id: 'starter',
     name: 'Starter Plan',
@@ -121,7 +138,7 @@ function SignupContent() {
   const [fssaiNumber, setFssaiNumber] = useState<string>('');
 
   // Step 4: Plan
-  const [selectedPlan, setSelectedPlan] = useState<'starter' | 'pro' | 'premium' | 'custom'>('starter');
+  const [selectedPlan, setSelectedPlan] = useState<'starter' | 'pro' | 'premium' | 'custom' | 'trial'>('starter');
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly');
   const [dpdpConsent, setDpdpConsent] = useState<boolean>(false);
   const [plansData, setPlansData] = useState<any>(DEFAULT_PLANS);
@@ -137,6 +154,7 @@ function SignupContent() {
 
   // 3. All useMemo hooks
   const activePrice = useMemo(() => {
+    if (selectedPlan === 'trial') return 3;
     const planObj = plansData[selectedPlan] || DEFAULT_PLANS[selectedPlan as keyof typeof DEFAULT_PLANS];
     if (!planObj) return 499;
     return billingInterval === 'yearly' ? planObj.yearlyPrice : planObj.monthlyPrice;
@@ -175,8 +193,13 @@ function SignupContent() {
     if (lang === 'en' || lang === 'hi') {
       localStorage.setItem('language', lang);
     }
-    if (plan && ['starter', 'pro', 'premium', 'custom'].includes(plan)) {
-      setSelectedPlan(plan as any);
+    if (plan) {
+      const p = plan.toLowerCase().trim();
+      if (p === 'trial' || p === 'trial_3_days') {
+        setSelectedPlan('trial');
+      } else if (['starter', 'pro', 'premium', 'custom'].includes(p)) {
+        setSelectedPlan(p as any);
+      }
     }
     if (interval && ['monthly', 'yearly'].includes(interval)) {
       setBillingInterval(interval as any);
@@ -440,7 +463,8 @@ function SignupContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: activePrice,
-          plan: selectedPlan,
+          plan: selectedPlan === 'trial' ? 'trial_3_days' : selectedPlan,
+          isTrial: selectedPlan === 'trial',
           restaurantName: cleanRestName,
           email: cleanEmail,
           billingInterval,
@@ -497,7 +521,8 @@ function SignupContent() {
                 gstNumber,
                 fssaiNumber,
                 slug: cleanSlug,
-                plan: selectedPlan,
+                plan: selectedPlan === 'trial' ? 'trial_3_days' : selectedPlan,
+                isTrial: selectedPlan === 'trial',
                 billingInterval,
                 dpdpConsent: true,
                 paymentDetails: {

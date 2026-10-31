@@ -109,7 +109,7 @@ export default function BillingPage() {
     });
   };
 
-  const handleUpgradePlan = async (planId: 'starter' | 'pro' | 'premium', loadedPlans?: PricingPlan[]) => {
+  const handleUpgradePlan = async (planId: 'starter' | 'pro' | 'premium' | 'trial_3_days' | 'trial', loadedPlans?: PricingPlan[]) => {
     if (!restaurant || !profile) return;
     
     const targetPlans = (loadedPlans && loadedPlans.length > 0) ? loadedPlans : pricingPlans;
@@ -163,7 +163,7 @@ export default function BillingPage() {
     if (amount <= 0) {
       try {
         db.clearRestaurantCache(restaurant.id);
-        await db.updateRestaurantPlan(restaurant.id, planId, 'active', undefined, billingInterval);
+        await db.updateRestaurantPlan(restaurant.id, planId as any, 'active', undefined, billingInterval);
         await refresh();
         alert(`Success! Your subscription has been updated to the ${planId.toUpperCase()} plan.`);
       } catch (err: any) {
@@ -227,7 +227,7 @@ export default function BillingPage() {
             const verifyData = await verifyRes.json();
             if (verifyData.verified) {
               db.clearRestaurantCache(restaurant.id);
-              await db.updateRestaurantPlan(restaurant.id, planId, 'active', undefined, billingInterval);
+              await db.updateRestaurantPlan(restaurant.id, planId as any, 'active', undefined, billingInterval);
               await db.createAuditLog(
                 restaurant.id,
                 profile.id,
@@ -463,6 +463,35 @@ export default function BillingPage() {
           </div>
         </div>
         
+        {/* 3-Day Full Access Trial for ₹3 Banner */}
+        {(!(restaurant.settings as any)?.has_used_trial && (activePlan as string) !== 'trial_3_days' && (activePlan as string) !== 'trial') && (
+          <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border-2 border-emerald-500/30 rounded-3xl p-6 sm:p-7 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="space-y-2 max-w-xl">
+              <div className="inline-flex items-center gap-1.5 bg-emerald-600 text-white text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-wider">
+                <Sparkles className="h-3 w-3" />
+                <span>Special 72-Hour Offer</span>
+              </div>
+              <h4 className="text-xl font-black text-slate-900 dark:text-white">
+                3-Day Full Access Trial (₹3 Only)
+              </h4>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                Unlock 100% of CleverOps features for 72 hours: QR Ordering, Live KDS, Inventory, AI Recipe Costing, Cash Closing, Petty Cash, and Staff Attendance. No auto-debit or recurring commitment.
+              </p>
+              <p className="text-[11px] text-slate-400 font-semibold">
+                🔒 One-time ₹3 payment via Razorpay • 1 Trial per restaurant
+              </p>
+            </div>
+
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-6 py-3.5 rounded-xl text-xs cursor-pointer shadow-md shadow-emerald-600/20 shrink-0 w-full md:w-auto"
+              onClick={() => handleUpgradePlan('trial_3_days')}
+              disabled={paymentLoading === 'trial_3_days'}
+            >
+              {paymentLoading === 'trial_3_days' ? 'Processing...' : 'Start 3-Day Trial (Sirf ₹3)'}
+            </Button>
+          </div>
+        )}
+
         {/* 3-Column Standard Pricing Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {(() => {

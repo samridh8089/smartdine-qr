@@ -3,7 +3,7 @@ const dbStaffCache = new Map<string, { timestamp: number; data: Profile[] }>();
 import { supabase } from './supabase';
 import { calculateBillingTotals } from './billingEngine';
 import { calculateOrderTax } from './tax';
-import { checkResourceLimitForRestaurant, isFeatureEnabledForRestaurant, parsePlanSpec } from './entitlements';
+import { checkResourceLimitForRestaurant, isFeatureEnabledForRestaurant, parsePlanSpec, cacheRestaurantPlan } from './entitlements';
 import {
   validateOrderStockAvailability,
   reserveInventoryForOrderBatch,
@@ -117,9 +117,13 @@ export interface Restaurant {
       revoked_at: string;
     }>;
   };
-  subscription_plan: 'starter' | 'pro' | 'premium';
+  subscription_plan: 'starter' | 'pro' | 'premium' | 'trial_3_days' | 'trial' | string;
   subscription_status: 'active' | 'trial' | 'past_due' | 'cancelled';
   trial_ends_at: string;
+  plan_type?: string;
+  plan_status?: string;
+  trial_started_at?: string;
+  plan_expires_at?: string;
   created_at: string;
   billing_interval: 'monthly' | 'yearly';
 }
@@ -127,11 +131,14 @@ export interface Restaurant {
 export function getEffectiveSubscriptionStatus(restaurant: {
   subscription_status?: string;
   trial_ends_at?: string | null;
+  plan_expires_at?: string | null;
+  settings?: any;
 }): 'active' | 'trial' | 'expired' | 'past_due' | 'cancelled' {
   if (!restaurant) return 'expired';
   const now = new Date();
   const rawStatus = restaurant.subscription_status || 'trial';
-  const expiryDate = restaurant.trial_ends_at ? new Date(restaurant.trial_ends_at) : null;
+  const expiryDateStr = restaurant.plan_expires_at || restaurant.settings?.plan_expires_at || restaurant.trial_ends_at;
+  const expiryDate = expiryDateStr ? new Date(expiryDateStr) : null;
 
   // 1. Inclusive Expiry Comparison: if expiryDate <= now, status is immediately expired
   if (expiryDate && expiryDate <= now) {
@@ -195,7 +202,7 @@ export interface PlanFeatureConfig {
 }
 
 export interface PricingPlan {
-  id: 'starter' | 'pro' | 'premium';
+  id: 'starter' | 'pro' | 'premium' | 'trial_3_days' | 'trial' | string;
   name: string;
   price_monthly: number;
   price_yearly: number;
@@ -580,8 +587,22 @@ const restaurantSlugMemoryCache = new Map<string, { data: Restaurant; timestamp:
 const categoriesMemoryCache = new Map<string, { data: Category[]; timestamp: number }>();
 const menuItemsMemoryCache = new Map<string, { data: MenuItem[]; timestamp: number }>();
 const basicTablesMemoryCache = new Map<string, { data: Table[]; timestamp: number }>();
+const tablesWithLiveStatusCache = new Map<string, { data: any; timestamp: number }>();
+const mergeGroupsMemoryCache = new Map<string, { data: any[]; timestamp: number }>();
+const customerRequestsMemoryCache = new Map<string, { data: CustomerRequest[]; timestamp: number }>();
+
+const inFlightRestaurants = new Map<string, Promise<Restaurant | null>>();
+const inFlightRestaurantSlugs = new Map<string, Promise<Restaurant | null>>();
+const inFlightCategories = new Map<string, Promise<Category[]>>();
+const inFlightMenuItems = new Map<string, Promise<MenuItem[]>>();
+const inFlightBasicTables = new Map<string, Promise<Table[]>>();
+const inFlightLiveTables = new Map<string, Promise<any>>();
+const inFlightOrders = new Map<string, Promise<Order[]>>();
+const inFlightStaffProfiles = new Map<string, Promise<Profile[]>>();
+const inFlightCustomerRequests = new Map<string, Promise<CustomerRequest[]>>();
 
 export const DEFAULT_PRICING_PLANS: PricingPlan[] = [
+  { id: 'trial_3_days', name: '3-Day Full Access Trial', price_monthly: 3, price_yearly: 3, features: ['100% All Features Unlocked', 'QR Ordering & Live KDS', 'Inventory & Recipe Costing', 'Cash Closing & Petty Cash', 'Staff Attendance & Payroll', '72-Hour Full Trial'], max_tables: 9999, max_items: 9999 },
   { id: 'starter', name: 'Starter', price_monthly: 299, price_yearly: 2500, features: ['Standard KDS', 'Basic Sales Overview', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 15, max_items: 50 },
   { id: 'pro', name: 'Pro', price_monthly: 799, price_yearly: 6000, features: ['Premium KDS with Sound Alerts', 'Analytics Dashboard', 'Waiter Panel & Real-Time Calling', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 35, max_items: 150 },
   { id: 'premium', name: 'Premium', price_monthly: 1499, price_yearly: 10000, features: ['Premium KDS with Sound Alerts', 'Analytics Dashboard', 'Waiter Panel & Real-Time Calling', 'Custom Branding & Logo Upload', 'QR Code Generation & Table Ordering', 'Real-Time Order Push Alerts'], max_tables: 9999, max_items: 9999 }
@@ -871,105 +892,138 @@ export const db = {
     const cleanSlug = (slug || '').toLowerCase().trim();
     if (!cleanSlug) return null;
     const cached = restaurantSlugMemoryCache.get(cleanSlug);
-    if (cached && Date.now() - cached.timestamp < 5000) {
+    if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
     }
 
-    // 1. Try full restaurants table first (authenticated users have full settings access)
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('slug', cleanSlug);
-    if (!error && data && data.length > 0) {
-      const res = data[0] as Restaurant;
-      if (!res.logo_url) {
-        res.logo_url = (res.settings as any)?.logo_url || (res.settings as any)?.logo || undefined;
-      }
-      restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
-      restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
-      return res;
+    if (inFlightRestaurantSlugs.has(cleanSlug)) {
+      return inFlightRestaurantSlugs.get(cleanSlug)!;
     }
 
-    // 2. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
-    if (typeof window !== 'undefined') {
+    const promise = (async () => {
       try {
-        const res = await fetch(`/api/customer/restaurant?slug=${encodeURIComponent(cleanSlug)}`, { cache: 'no-store' });
-        if (res.ok) {
-          const payload = await res.json();
-          if (payload?.restaurant) {
-            const rest = payload.restaurant as Restaurant;
-            restaurantSlugMemoryCache.set(cleanSlug, { data: rest, timestamp: Date.now() });
-            if (rest.id) restaurantMemoryCache.set(rest.id, { data: rest, timestamp: Date.now() });
-            return rest;
+        // 1. Try full restaurants table first (authenticated users have full settings access)
+        const { data, error } = await supabase
+          .from('restaurants')
+          .select('*')
+          .eq('slug', cleanSlug);
+        if (!error && data && data.length > 0) {
+          const res = data[0] as Restaurant;
+          if (!res.logo_url) {
+            res.logo_url = (res.settings as any)?.logo_url || (res.settings as any)?.logo || undefined;
           }
+          restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
+          restaurantMemoryCache.set(res.id, { data: res, timestamp: Date.now() });
+          return res;
         }
-      } catch (_) {}
-    }
-    // Fallback to safe public_restaurants view for customer menu views
-    const { data: pubData, error: pubErr } = await supabase
-      .from('public_restaurants')
-      .select('*')
-      .eq('slug', cleanSlug);
-    if (!pubErr && pubData && pubData.length > 0) {
-      const res = pubData[0] as Restaurant;
-      restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
-      return res;
-    }
-    if (cached?.data) return cached.data;
-    return null;
+
+        // 2. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
+        if (typeof window !== 'undefined') {
+          try {
+            const res = await fetch(`/api/customer/restaurant?slug=${encodeURIComponent(cleanSlug)}`, { cache: 'no-store' });
+            if (res.ok) {
+              const payload = await res.json();
+              if (payload?.restaurant) {
+                const rest = payload.restaurant as Restaurant;
+                restaurantSlugMemoryCache.set(cleanSlug, { data: rest, timestamp: Date.now() });
+                if (rest.id) restaurantMemoryCache.set(rest.id, { data: rest, timestamp: Date.now() });
+                return rest;
+              }
+            }
+          } catch (_) {}
+        }
+        // Fallback to safe public_restaurants view for customer menu views
+        const { data: pubData, error: pubErr } = await supabase
+          .from('public_restaurants')
+          .select('*')
+          .eq('slug', cleanSlug);
+        if (!pubErr && pubData && pubData.length > 0) {
+          const res = pubData[0] as Restaurant;
+          restaurantSlugMemoryCache.set(cleanSlug, { data: res, timestamp: Date.now() });
+          return res;
+        }
+        if (cached?.data) return cached.data;
+        return null;
+      } finally {
+        inFlightRestaurantSlugs.delete(cleanSlug);
+      }
+    })();
+
+    inFlightRestaurantSlugs.set(cleanSlug, promise);
+    return promise;
   },
 
   async getRestaurantById(id: string): Promise<Restaurant | null> {
     if (!id) return null;
     const cached = restaurantMemoryCache.get(id);
     if (cached && Date.now() - cached.timestamp < 30000) {
+      if (cached.data?.subscription_plan) {
+        cacheRestaurantPlan(cached.data.id, cached.data.subscription_plan);
+      }
       return cached.data;
     }
 
-    // 1. Try full restaurants table first (authenticated users have access to complete settings)
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .eq('id', id);
-    if (!error && data && data.length > 0) {
-      const res = data[0] as Restaurant;
-      restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
-      if (res.slug) restaurantSlugMemoryCache.set(res.slug, { data: res, timestamp: Date.now() });
-      return res;
+    if (inFlightRestaurants.has(id)) {
+      return inFlightRestaurants.get(id)!;
     }
 
-    // 2. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
-    if (typeof window !== 'undefined') {
+    const promise = (async () => {
       try {
-        const res = await fetch(`/api/customer/restaurant?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
-        if (res.ok) {
-          const payload = await res.json();
-          if (payload?.restaurant) {
-            const rest = payload.restaurant as Restaurant;
-            restaurantMemoryCache.set(id, { data: rest, timestamp: Date.now() });
-            if (rest.slug) restaurantSlugMemoryCache.set(rest.slug, { data: rest, timestamp: Date.now() });
-            return rest;
-          }
+        // 1. Try full restaurants table first (authenticated users have access to complete settings)
+        const { data, error } = await supabase
+          .from('restaurants')
+          .select('*')
+          .eq('id', id);
+        if (!error && data && data.length > 0) {
+          const res = data[0] as Restaurant;
+          restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
+          if (res.slug) restaurantSlugMemoryCache.set(res.slug, { data: res, timestamp: Date.now() });
+          if (res.subscription_plan) cacheRestaurantPlan(res.id, res.subscription_plan);
+          return res;
         }
-      } catch (_) {}
-    }
-    if (!error && data && data.length > 0) {
-      const res = data[0] as Restaurant;
-      restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
-      return res;
-    }
-    // Fallback to safe public_restaurants view for customer queries
-    const { data: pubData, error: pubErr } = await supabase
-      .from('public_restaurants')
-      .select('*')
-      .eq('id', id);
-    if (!pubErr && pubData && pubData.length > 0) {
-      const res = pubData[0] as Restaurant;
-      restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
-      return res;
-    }
-    if (cached?.data) return cached.data;
-    return null;
+
+        // 2. Try server-side customer API endpoint (authoritative service-role access to true logo_url & settings)
+        if (typeof window !== 'undefined') {
+          try {
+            const res = await fetch(`/api/customer/restaurant?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+            if (res.ok) {
+              const payload = await res.json();
+              if (payload?.restaurant) {
+                const rest = payload.restaurant as Restaurant;
+                restaurantMemoryCache.set(id, { data: rest, timestamp: Date.now() });
+                if (rest.slug) restaurantSlugMemoryCache.set(rest.slug, { data: rest, timestamp: Date.now() });
+                if (rest.subscription_plan) cacheRestaurantPlan(rest.id, rest.subscription_plan);
+                return rest;
+              }
+            }
+          } catch (_) {}
+        }
+        if (!error && data && data.length > 0) {
+          const res = data[0] as Restaurant;
+          restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
+          if (res.subscription_plan) cacheRestaurantPlan(res.id, res.subscription_plan);
+          return res;
+        }
+        // Fallback to safe public_restaurants view for customer queries
+        const { data: pubData, error: pubErr } = await supabase
+          .from('public_restaurants')
+          .select('*')
+          .eq('id', id);
+        if (!pubErr && pubData && pubData.length > 0) {
+          const res = pubData[0] as Restaurant;
+          restaurantMemoryCache.set(id, { data: res, timestamp: Date.now() });
+          if (res.subscription_plan) cacheRestaurantPlan(res.id, res.subscription_plan);
+          return res;
+        }
+        if (cached?.data) return cached.data;
+        return null;
+      } finally {
+        inFlightRestaurants.delete(id);
+      }
+    })();
+
+    inFlightRestaurants.set(id, promise);
+    return promise;
   },
 
   async updateRestaurant(id: string, data: Partial<Restaurant>): Promise<Restaurant> {
@@ -1000,18 +1054,32 @@ export const db = {
   // --- Category CRUD ---
   async getCategories(restaurantId: string): Promise<Category[]> {
     const cached = categoriesMemoryCache.get(restaurantId);
-    if (cached && Date.now() - cached.timestamp < 15000) {
+    if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
     }
-    const { data, error } = await supabase
-      .from('categories')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .order('sort_order', { ascending: true });
-    if (error || !data) return cached?.data || [];
-    const result = data as Category[];
-    categoriesMemoryCache.set(restaurantId, { data: result, timestamp: Date.now() });
-    return result;
+
+    if (inFlightCategories.has(restaurantId)) {
+      return inFlightCategories.get(restaurantId)!;
+    }
+
+    const promise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .order('sort_order', { ascending: true });
+        if (error || !data) return cached?.data || [];
+        const result = data as Category[];
+        categoriesMemoryCache.set(restaurantId, { data: result, timestamp: Date.now() });
+        return result;
+      } finally {
+        inFlightCategories.delete(restaurantId);
+      }
+    })();
+
+    inFlightCategories.set(restaurantId, promise);
+    return promise;
   },
 
   async createCategory(restaurantId: string, name: string): Promise<Category> {
@@ -1078,69 +1146,97 @@ export const db = {
   // --- Menu Items CRUD ---
   async getMenuItems(restaurantId: string): Promise<MenuItem[]> {
     const cached = menuItemsMemoryCache.get(restaurantId);
-    if (cached && Date.now() - cached.timestamp < 15000) {
+    if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
     }
-    const { data, error } = await supabase
-      .from('menu_items')
-      .select('*')
-      .eq('restaurant_id', restaurantId);
-    if (error || !data) return cached?.data || [];
-    
-    let items = data as MenuItem[];
 
-    try {
-      const itemIds = items.map(i => i.id);
-      if (itemIds.length > 0) {
-        const { data: varData } = await supabase
-          .from('menu_item_variants')
+    if (inFlightMenuItems.has(restaurantId)) {
+      return inFlightMenuItems.get(restaurantId)!;
+    }
+
+    const promise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('menu_items')
           .select('*')
-          .in('menu_item_id', itemIds)
-          .order('display_order', { ascending: true });
+          .eq('restaurant_id', restaurantId);
+        if (error || !data) return cached?.data || [];
+        
+        let items = data as MenuItem[];
 
-        if (varData && varData.length > 0) {
-          const varMap: Record<string, MenuItemVariant[]> = {};
-          varData.forEach((v: any) => {
-            if (!varMap[v.menu_item_id]) varMap[v.menu_item_id] = [];
-            varMap[v.menu_item_id].push({
-              id: v.id,
-              menu_item_id: v.menu_item_id,
-              name: v.name,
-              price: Number(v.price),
-              display_order: v.display_order || 0,
-              is_available: v.is_available !== false
-            });
-          });
+        try {
+          const itemIds = items.map(i => i.id);
+          if (itemIds.length > 0) {
+            const { data: varData } = await supabase
+              .from('menu_item_variants')
+              .select('*')
+              .in('menu_item_id', itemIds)
+              .order('display_order', { ascending: true });
 
-          items = items.map(item => {
-            const itemVars = varMap[item.id] || item.variants || [];
-            return {
-              ...item,
-              has_variants: Boolean(item.has_variants || itemVars.length > 0),
-              variants: itemVars
-            };
-          });
-        }
+            if (varData && varData.length > 0) {
+              const varMap: Record<string, MenuItemVariant[]> = {};
+              varData.forEach((v: any) => {
+                if (!varMap[v.menu_item_id]) varMap[v.menu_item_id] = [];
+                varMap[v.menu_item_id].push({
+                  id: v.id,
+                  menu_item_id: v.menu_item_id,
+                  name: v.name,
+                  price: Number(v.price),
+                  display_order: v.display_order || 0,
+                  is_available: v.is_available !== false
+                });
+              });
+
+              items = items.map(item => {
+                const itemVars = varMap[item.id] || item.variants || [];
+                return {
+                  ...item,
+                  has_variants: Boolean(item.has_variants || itemVars.length > 0),
+                  variants: itemVars
+                };
+              });
+            }
+          }
+        } catch (e) {}
+
+        menuItemsMemoryCache.set(restaurantId, { data: items, timestamp: Date.now() });
+        return items;
+      } finally {
+        inFlightMenuItems.delete(restaurantId);
       }
-    } catch (e) {}
+    })();
 
-    menuItemsMemoryCache.set(restaurantId, { data: items, timestamp: Date.now() });
-    return items;
+    inFlightMenuItems.set(restaurantId, promise);
+    return promise;
   },
 
   // Lightweight tables lookup for Customer Menu (skips heavy live SLA/active order joins)
   async getBasicTables(restaurantId: string): Promise<Table[]> {
     const cached = basicTablesMemoryCache.get(restaurantId);
-    if (cached && Date.now() - cached.timestamp < 15000) {
+    if (cached && Date.now() - cached.timestamp < 30000) {
       return cached.data;
     }
-    const { data, error } = await supabase
-      .from('tables')
-      .select('id, name, restaurant_id, qr_enabled, status')
-      .eq('restaurant_id', restaurantId);
-    const result = (data || []) as Table[];
-    basicTablesMemoryCache.set(restaurantId, { data: result, timestamp: Date.now() });
-    return result;
+
+    if (inFlightBasicTables.has(restaurantId)) {
+      return inFlightBasicTables.get(restaurantId)!;
+    }
+
+    const promise = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('tables')
+          .select('id, name, restaurant_id')
+          .eq('restaurant_id', restaurantId);
+        const result = (data || []) as Table[];
+        basicTablesMemoryCache.set(restaurantId, { data: result, timestamp: Date.now() });
+        return result;
+      } finally {
+        inFlightBasicTables.delete(restaurantId);
+      }
+    })();
+
+    inFlightBasicTables.set(restaurantId, promise);
+    return promise;
   },
 
   async getMenuItemVariants(menuItemId: string): Promise<MenuItemVariant[]> {
@@ -1351,160 +1447,188 @@ export const db = {
     assignments?: TableAssignment[];
     zones?: RestaurantZone[];
   }> {
-    const fetchActiveOrders = async (): Promise<any[]> => {
-      if (preloadedOrders && preloadedOrders.length > 0) {
-        return preloadedOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
+    if (!preloadedOrders || preloadedOrders.length === 0) {
+      const cached = tablesWithLiveStatusCache.get(restaurantId);
+      if (cached && Date.now() - cached.timestamp < 30000) {
+        return cached.data;
       }
-      const { data } = await supabase
-        .from('orders')
-        .select('id, table_id, table_name, status, payment_status, created_at, order_type, special_instructions')
-        .eq('restaurant_id', restaurantId)
-        .not('status', 'in', '(completed,cancelled)');
-      return data || [];
-    };
-
-    const fetchRawTables = async (): Promise<any[]> => {
-      const { data } = await supabase
-        .from('tables')
-        .select('*')
-        .eq('restaurant_id', restaurantId)
-        .order('name', { ascending: true });
-      return data || [];
-    };
-
-    const [rawTables, activeOrders, rest] = await Promise.all([
-      fetchRawTables(),
-      fetchActiveOrders(),
-      this.getRestaurantById(restaurantId)
-    ]);
-    const tableStates = rest?.settings?.table_states || {};
-    const assignments = rest?.settings?.table_assignments || [];
-
-    const zones: RestaurantZone[] = rest?.settings?.zones && rest.settings.zones.length > 0 && !(rest.settings.zones.length === 1 && rest.settings.zones[0].id === 'zone_general')
-      ? rest.settings.zones
-      : STANDARD_ZONES;
-
-    const enrichedTables: Table[] = rawTables.map(t => {
-      const state = tableStates[t.id] || {};
-      const qrEnabled = state.qr_enabled !== false;
-      const isArchived = state.is_archived === true;
-
-      const tblOrders = activeOrders.filter(o => {
-        // Exclude Takeaway orders from occupying dining tables
-        if (o.order_type === 'takeaway' || o.table_name === 'Takeaway Counter') return false;
-        // Exclude unassigned reservation bookings
-        if ((o.order_type === 'reservation' || o.table_name === 'Reservation' || o.special_instructions?.includes('TABLE RESERVATION')) && !o.table_id) return false;
-
-        return o.table_id === t.id || (o.table_name && o.table_name.toLowerCase() === t.name.toLowerCase());
-      });
-      const activeCount = tblOrders.length;
-      const paymentPending = tblOrders.some(o => o.payment_status !== 'paid');
-
-      // BUG-TABLE-OCCUPANCY-FIX: A table is occupied if it has live active dine-in orders (activeCount > 0)
-      // OR if a staff member explicitly marked it occupied without an order session (manual_occupied === true && !current_session_id).
-      // If activeCount === 0 and current_session_id exists, that dining session has already completed or cancelled.
-      const isManualStaffHold = state.manual_occupied === true && !state.current_session_id;
-
-      let status: 'available' | 'occupied' | 'inactive' | 'reserved' = 'available';
-      if (!qrEnabled || isArchived) {
-        status = 'inactive';
-      } else if (activeCount > 0 || isManualStaffHold) {
-        status = 'occupied';
-      } else if (state.occupancy_status === 'reserved') {
-        status = 'reserved';
-      } else {
-        status = 'available';
+      if (inFlightLiveTables.has(restaurantId)) {
+        return inFlightLiveTables.get(restaurantId)!;
       }
+    }
 
-      // Display number & Single source of truth for seats
-      const displayNumber = state.display_number || t.name;
-      const seats = typeof state.seats === 'number' ? state.seats : (typeof state.capacity === 'number' ? state.capacity : 4);
-
-      // Zone resolution
-      const zoneId = state.zone_id || zones[0]?.id || 'zone_indoor';
-      const matchedZone = zones.find(z => z.id === zoneId) || zones[0];
-      const zoneName = matchedZone ? matchedZone.name : 'Indoor AC';
-
-      // 3-Tier Waiter Priority Engine:
-      // Tier 1: Manual table assignment
-      const directAssignment = assignments.find((a: any) => a.table_id === t.id && a.active !== false);
-      const manualWaiterId = state.assigned_waiter_id || directAssignment?.waiter_id || null;
-      const manualWaiterName = state.assigned_waiter_name || directAssignment?.waiter_name || null;
-
-      let resolvedWaiterId: string | null = null;
-      let resolvedWaiterName: string | null = null;
-      let assignmentSource: 'manual' | 'zone' | 'unassigned' = 'unassigned';
-
-      if (manualWaiterId) {
-        resolvedWaiterId = manualWaiterId;
-        resolvedWaiterName = manualWaiterName || 'Waiter';
-        assignmentSource = 'manual';
-      } else if (matchedZone?.waiter_id) {
-        // Tier 2: Inherited from Zone
-        resolvedWaiterId = matchedZone.waiter_id;
-        resolvedWaiterName = matchedZone.waiter_name || 'Zone Waiter';
-        assignmentSource = 'zone';
-      } else {
-        // Tier 3: Unassigned
-        assignmentSource = 'unassigned';
-      }
-
-      const assigned = resolvedWaiterId
-        ? [{ id: resolvedWaiterId, name: resolvedWaiterName || 'Waiter' }]
-        : [];
-
-      // Service Priority Badges
-      const badges: Array<'W' | 'B' | 'R' | 'T' | 'VIP'> = [];
-      if (Array.isArray(state.service_badges)) {
-        badges.push(...state.service_badges);
-      }
-      if (paymentPending && !badges.includes('B')) badges.push('B');
-      if (status === 'reserved' && !badges.includes('R')) badges.push('R');
-      if (tblOrders.some(o => o.order_type === 'takeaway') && !badges.includes('T')) badges.push('T');
-
-      return {
-        ...t,
-        table_uuid: t.id,
-        display_number: displayNumber,
-        seats,
-        capacity: seats,
-        zone_id: zoneId,
-        zone_name: zoneName,
-        assigned_waiter_id: resolvedWaiterId,
-        assigned_waiter_name: resolvedWaiterName,
-        assignment_source: assignmentSource,
-        distance_from_kitchen: typeof state.distance_from_kitchen === 'number' ? state.distance_from_kitchen : 10,
-        is_archived: isArchived,
-        renumber_history: state.renumber_history || [],
-        service_badges: badges,
-        qr_enabled: qrEnabled,
-        occupancy_status: status,
-        occupied_at: status === 'occupied' ? (state.occupied_at || tblOrders[0]?.created_at || new Date().toISOString()) : null,
-        reserved_at: status === 'reserved' ? (state.reserved_at || null) : null,
-        reservation_party_name: status === 'reserved' ? (state.reservation_party_name || null) : null,
-        reservation_time: status === 'reserved' ? (state.reservation_time || null) : null,
-        reservation_id: status === 'reserved' ? (state.reservation_id || null) : null,
-        current_session_id: status === 'occupied' ? (state.current_session_id || null) : null,
-        active_order_count: activeCount,
-        payment_pending: paymentPending,
-        assigned_waiters: assigned
+    const executeFetch = async () => {
+      const fetchActiveOrders = async (): Promise<any[]> => {
+        if (preloadedOrders && preloadedOrders.length > 0) {
+          return preloadedOrders.filter(o => !['completed', 'cancelled'].includes(o.status));
+        }
+        const { data } = await supabase
+          .from('orders')
+          .select('id, table_id, table_name, status, payment_status, created_at, order_type, special_instructions')
+          .eq('restaurant_id', restaurantId)
+          .not('status', 'in', '(completed,cancelled)');
+        return data || [];
       };
-    });
 
-    const activeTables = enrichedTables.filter(t => !t.is_archived);
-    const total = activeTables.length;
-    const occupied = activeTables.filter(t => t.occupancy_status === 'occupied').length;
-    const reserved = activeTables.filter(t => t.occupancy_status === 'reserved').length;
-    const inactive = activeTables.filter(t => t.occupancy_status === 'inactive').length;
-    const available = activeTables.filter(t => t.occupancy_status === 'available').length;
-    const occupancyRate = total > 0 ? Math.round(((occupied + reserved) / total) * 100) : 0;
+      const fetchRawTables = async (): Promise<any[]> => {
+        const { data } = await supabase
+          .from('tables')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .order('name', { ascending: true });
+        return data || [];
+      };
 
-    return {
-      tables: enrichedTables,
-      stats: { total, available, occupied, reserved, inactive, occupancyRate },
-      assignments: (assignments || []).filter((a: any) => a.active !== false),
-      zones
+      const [rawTables, activeOrders, rest] = await Promise.all([
+        fetchRawTables(),
+        fetchActiveOrders(),
+        this.getRestaurantById(restaurantId)
+      ]);
+      const tableStates = rest?.settings?.table_states || {};
+      const assignments = rest?.settings?.table_assignments || [];
+
+      const zones: RestaurantZone[] = rest?.settings?.zones && rest.settings.zones.length > 0 && !(rest.settings.zones.length === 1 && rest.settings.zones[0].id === 'zone_general')
+        ? rest.settings.zones
+        : STANDARD_ZONES;
+
+      const enrichedTables: Table[] = rawTables.map(t => {
+        const state = tableStates[t.id] || {};
+        const qrEnabled = state.qr_enabled !== false;
+        const isArchived = state.is_archived === true;
+
+        const tblOrders = activeOrders.filter(o => {
+          // Exclude Takeaway orders from occupying dining tables
+          if (o.order_type === 'takeaway' || o.table_name === 'Takeaway Counter') return false;
+          // Exclude unassigned reservation bookings
+          if ((o.order_type === 'reservation' || o.table_name === 'Reservation' || o.special_instructions?.includes('TABLE RESERVATION')) && !o.table_id) return false;
+
+          return o.table_id === t.id || (o.table_name && o.table_name.toLowerCase() === t.name.toLowerCase());
+        });
+        const activeCount = tblOrders.length;
+        const paymentPending = tblOrders.some(o => o.payment_status !== 'paid');
+
+        // BUG-TABLE-OCCUPANCY-FIX: A table is occupied if it has live active dine-in orders (activeCount > 0)
+        // OR if a staff member explicitly marked it occupied without an order session (manual_occupied === true && !current_session_id).
+        // If activeCount === 0 and current_session_id exists, that dining session has already completed or cancelled.
+        const isManualStaffHold = state.manual_occupied === true && !state.current_session_id;
+
+        let status: 'available' | 'occupied' | 'inactive' | 'reserved' = 'available';
+        if (!qrEnabled || isArchived) {
+          status = 'inactive';
+        } else if (activeCount > 0 || isManualStaffHold) {
+          status = 'occupied';
+        } else if (state.occupancy_status === 'reserved') {
+          status = 'reserved';
+        } else {
+          status = 'available';
+        }
+
+        // Display number & Single source of truth for seats
+        const displayNumber = state.display_number || t.name;
+        const seats = typeof state.seats === 'number' ? state.seats : (typeof state.capacity === 'number' ? state.capacity : 4);
+
+        // Zone resolution
+        const zoneId = state.zone_id || zones[0]?.id || 'zone_indoor';
+        const matchedZone = zones.find(z => z.id === zoneId) || zones[0];
+        const zoneName = matchedZone ? matchedZone.name : 'Indoor AC';
+
+        // 3-Tier Waiter Priority Engine:
+        // Tier 1: Manual table assignment
+        const directAssignment = assignments.find((a: any) => a.table_id === t.id && a.active !== false);
+        const manualWaiterId = state.assigned_waiter_id || directAssignment?.waiter_id || null;
+        const manualWaiterName = state.assigned_waiter_name || directAssignment?.waiter_name || null;
+
+        let resolvedWaiterId: string | null = null;
+        let resolvedWaiterName: string | null = null;
+        let assignmentSource: 'manual' | 'zone' | 'unassigned' = 'unassigned';
+
+        if (manualWaiterId) {
+          resolvedWaiterId = manualWaiterId;
+          resolvedWaiterName = manualWaiterName || 'Waiter';
+          assignmentSource = 'manual';
+        } else if (matchedZone?.waiter_id) {
+          // Tier 2: Inherited from Zone
+          resolvedWaiterId = matchedZone.waiter_id;
+          resolvedWaiterName = matchedZone.waiter_name || 'Zone Waiter';
+          assignmentSource = 'zone';
+        } else {
+          // Tier 3: Unassigned
+          assignmentSource = 'unassigned';
+        }
+
+        const assigned = resolvedWaiterId
+          ? [{ id: resolvedWaiterId, name: resolvedWaiterName || 'Waiter' }]
+          : [];
+
+        // Service Priority Badges
+        const badges: Array<'W' | 'B' | 'R' | 'T' | 'VIP'> = [];
+        if (Array.isArray(state.service_badges)) {
+          badges.push(...state.service_badges);
+        }
+        if (paymentPending && !badges.includes('B')) badges.push('B');
+        if (status === 'reserved' && !badges.includes('R')) badges.push('R');
+        if (tblOrders.some(o => o.order_type === 'takeaway') && !badges.includes('T')) badges.push('T');
+
+        return {
+          ...t,
+          table_uuid: t.id,
+          display_number: displayNumber,
+          seats,
+          capacity: seats,
+          zone_id: zoneId,
+          zone_name: zoneName,
+          assigned_waiter_id: resolvedWaiterId,
+          assigned_waiter_name: resolvedWaiterName,
+          assignment_source: assignmentSource,
+          distance_from_kitchen: typeof state.distance_from_kitchen === 'number' ? state.distance_from_kitchen : 10,
+          is_archived: isArchived,
+          renumber_history: state.renumber_history || [],
+          service_badges: badges,
+          qr_enabled: qrEnabled,
+          occupancy_status: status,
+          occupied_at: status === 'occupied' ? (state.occupied_at || tblOrders[0]?.created_at || new Date().toISOString()) : null,
+          reserved_at: status === 'reserved' ? (state.reserved_at || null) : null,
+          reservation_party_name: status === 'reserved' ? (state.reservation_party_name || null) : null,
+          reservation_time: status === 'reserved' ? (state.reservation_time || null) : null,
+          reservation_id: status === 'reserved' ? (state.reservation_id || null) : null,
+          current_session_id: status === 'occupied' ? (state.current_session_id || null) : null,
+          active_order_count: activeCount,
+          payment_pending: paymentPending,
+          assigned_waiters: assigned
+        };
+      });
+
+      const activeTables = enrichedTables.filter(t => !t.is_archived);
+      const total = activeTables.length;
+      const occupied = activeTables.filter(t => t.occupancy_status === 'occupied').length;
+      const reserved = activeTables.filter(t => t.occupancy_status === 'reserved').length;
+      const inactive = activeTables.filter(t => t.occupancy_status === 'inactive').length;
+      const available = activeTables.filter(t => t.occupancy_status === 'available').length;
+      const occupancyRate = total > 0 ? Math.round(((occupied + reserved) / total) * 100) : 0;
+
+      const result = {
+        tables: enrichedTables,
+        stats: { total, available, occupied, reserved, inactive, occupancyRate },
+        assignments: (assignments || []).filter((a: any) => a.active !== false),
+        zones
+      };
+
+      if (!preloadedOrders || preloadedOrders.length === 0) {
+        tablesWithLiveStatusCache.set(restaurantId, { data: result, timestamp: Date.now() });
+      }
+
+      return result;
     };
+
+    if (!preloadedOrders || preloadedOrders.length === 0) {
+      const promise = executeFetch().finally(() => {
+        inFlightLiveTables.delete(restaurantId);
+      });
+      inFlightLiveTables.set(restaurantId, promise);
+      return promise;
+    }
+
+    return executeFetch();
   },
 
   async setTableReservationState(
@@ -2067,96 +2191,110 @@ export const db = {
 
   // --- Orders ---
   async getOrders(restaurantId: string, startDate?: string, endDate?: string): Promise<Order[]> {
-    let query = supabase
-      .from('orders')
-      .select('*, order_items(*), order_batches(*)')
-      .eq('restaurant_id', restaurantId);
-
-    if (startDate) {
-      query = query.gte('created_at', startDate);
-    }
-    if (endDate) {
-      query = query.lte('created_at', endDate);
+    const flightKey = `${restaurantId}_${startDate || ''}_${endDate || ''}`;
+    if (inFlightOrders.has(flightKey)) {
+      return inFlightOrders.get(flightKey)!;
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
-    if (error || !data) return [];
+    const promise = (async () => {
+      try {
+        let query = supabase
+          .from('orders')
+          .select('*, order_items(*), order_batches(*)')
+          .eq('restaurant_id', restaurantId);
 
-    return data.map((o: any) => {
-      const items = (o.order_items || []).map((oi: any) => ({
-        id: oi.id,
-        order_id: oi.order_id,
-        menu_item_id: oi.menu_item_id,
-        menu_item_name: oi.menu_item_name || 'Unknown Item',
-        variant_id: oi.variant_id || null,
-        variant_name: oi.variant_name || null,
-        quantity: oi.quantity,
-        price: Number(oi.price),
-        notes: oi.notes,
-        batch_id: oi.batch_id,
-        is_cancelled: Boolean(oi.is_cancelled || oi.status === 'cancelled'),
-        status: oi.status,
-        is_served: Boolean(oi.is_served || oi.status === 'served')
-      }));
-
-      const batches = (o.order_batches || []).map((b: any) => ({
-        id: b.id,
-        order_id: b.order_id,
-        batch_number: b.batch_number,
-        status: b.status,
-        special_instructions: b.special_instructions,
-        created_at: b.created_at,
-        updated_at: b.updated_at,
-        accepted_at: b.accepted_at,
-        preparing_at: b.preparing_at,
-        ready_at: b.ready_at,
-        served_at: b.served_at,
-        accepted_by: b.accepted_by,
-        preparing_by: b.preparing_by,
-        ready_by: b.ready_by,
-        served_by: b.served_by,
-        items: [] as OrderItem[]
-      })).sort((a: any, b: any) => a.batch_number - b.batch_number);
-
-      items.forEach((item: any) => {
-        const batch = batches.find((b: any) => b.id === item.batch_id);
-        if (batch) {
-          batch.items.push(item);
+        if (startDate) {
+          query = query.gte('created_at', startDate);
         }
-      });
+        if (endDate) {
+          query = query.lte('created_at', endDate);
+        }
 
-      const canonicalStatus = this.calculateAggregateOrderStatus(o.status, batches);
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error || !data) return [];
 
-      return {
-        id: o.id,
-        restaurant_id: o.restaurant_id,
-        table_id: o.table_id,
-        table_name: o.table_name || 'Table',
-        status: canonicalStatus,
-        special_instructions: o.special_instructions,
-        subtotal: Number(o.subtotal),
-        gst: Number(o.gst),
-        service_charge: Number(o.service_charge),
-        total: Number(o.total),
-        created_at: o.created_at,
-        completed_at: o.completed_at,
-        completed_by: o.completed_by,
-        cancelled_at: o.cancelled_at,
-        cancelled_by: o.cancelled_by,
-        cancellation_reason: o.cancellation_reason,
-        custom_charges: o.custom_charges,
-        payment_status: o.payment_status || 'pending',
-        payment_method: o.payment_method,
-        payment_reference: o.payment_reference,
-        paid_at: o.paid_at,
-        marked_paid_by: o.marked_paid_by,
-        order_type: (o.order_type === 'reservation' || o.table_name === 'Reservation' || o.special_instructions?.includes('TABLE RESERVATION')) ? 'reservation' : (o.order_type || 'dine_in'),
-        customer_arrival_minutes: o.customer_arrival_minutes,
-        takeaway_notes: o.takeaway_notes,
-        items,
-        batches
-      };
-    }) as Order[];
+        return data.map((o: any) => {
+          const items = (o.order_items || []).map((oi: any) => ({
+            id: oi.id,
+            order_id: oi.order_id,
+            menu_item_id: oi.menu_item_id,
+            menu_item_name: oi.menu_item_name || 'Unknown Item',
+            variant_id: oi.variant_id || null,
+            variant_name: oi.variant_name || null,
+            quantity: oi.quantity,
+            price: Number(oi.price),
+            notes: oi.notes,
+            batch_id: oi.batch_id,
+            is_cancelled: Boolean(oi.is_cancelled || oi.status === 'cancelled'),
+            status: oi.status,
+            is_served: Boolean(oi.is_served || oi.status === 'served')
+          }));
+
+          const batches = (o.order_batches || []).map((b: any) => ({
+            id: b.id,
+            order_id: b.order_id,
+            batch_number: b.batch_number,
+            status: b.status,
+            special_instructions: b.special_instructions,
+            created_at: b.created_at,
+            updated_at: b.updated_at,
+            accepted_at: b.accepted_at,
+            preparing_at: b.preparing_at,
+            ready_at: b.ready_at,
+            served_at: b.served_at,
+            accepted_by: b.accepted_by,
+            preparing_by: b.preparing_by,
+            ready_by: b.ready_by,
+            served_by: b.served_by,
+            items: [] as OrderItem[]
+          })).sort((a: any, b: any) => a.batch_number - b.batch_number);
+
+          items.forEach((item: any) => {
+            const batch = batches.find((b: any) => b.id === item.batch_id);
+            if (batch) {
+              batch.items.push(item);
+            }
+          });
+
+          const canonicalStatus = this.calculateAggregateOrderStatus(o.status, batches);
+
+          return {
+            id: o.id,
+            restaurant_id: o.restaurant_id,
+            table_id: o.table_id,
+            table_name: o.table_name || 'Table',
+            status: canonicalStatus,
+            special_instructions: o.special_instructions,
+            subtotal: Number(o.subtotal),
+            gst: Number(o.gst),
+            service_charge: Number(o.service_charge),
+            total: Number(o.total),
+            created_at: o.created_at,
+            completed_at: o.completed_at,
+            completed_by: o.completed_by,
+            cancelled_at: o.cancelled_at,
+            cancelled_by: o.cancelled_by,
+            cancellation_reason: o.cancellation_reason,
+            custom_charges: o.custom_charges,
+            payment_status: o.payment_status || 'pending',
+            payment_method: o.payment_method,
+            payment_reference: o.payment_reference,
+            paid_at: o.paid_at,
+            marked_paid_by: o.marked_paid_by,
+            order_type: (o.order_type === 'reservation' || o.table_name === 'Reservation' || o.special_instructions?.includes('TABLE RESERVATION')) ? 'reservation' : (o.order_type || 'dine_in'),
+            customer_arrival_minutes: o.customer_arrival_minutes,
+            takeaway_notes: o.takeaway_notes,
+            items,
+            batches
+          };
+        }) as Order[];
+      } finally {
+        inFlightOrders.delete(flightKey);
+      }
+    })();
+
+    inFlightOrders.set(flightKey, promise);
+    return promise;
   },
 
   async getOrderById(id: string, client?: any, token?: string | null): Promise<Order | null> {
@@ -2293,22 +2431,21 @@ export const db = {
     paymentStatus: 'pending' | 'customer_marked_paid' | 'paid' = 'pending',
     idempotencyKey?: string,
     offerCode?: string,
-    discountAmount?: number
+    discountAmount?: number,
+    skipStockCheck: boolean = false
   ): Promise<Order> {
-    let restaurant: any = null;
-    try {
-      const { data: rData, error: rErr } = await supabase.from('restaurants').select('*').eq('id', restaurantId);
-      if (rErr) console.error('Rest lookup error:', rErr);
-      restaurant = rData && rData.length > 0 ? rData[0] : null;
-    } catch (e) { console.error('Rest lookup exception:', e); }
-
+    let restaurant = await this.getRestaurantById(restaurantId);
     if (!restaurant) {
       try {
-        restaurant = await db.getRestaurantBySlug(restaurantId);
+        restaurant = await this.getRestaurantBySlug(restaurantId);
       } catch (e) {}
     }
 
     if (!restaurant) throw new Error(`Restaurant not found for ID/slug: ${restaurantId}`);
+
+    if (isSubscriptionExpired(restaurant)) {
+      throw new Error('Your 3-day trial or subscription has expired. Please upgrade your plan in Dashboard > Billing to continue taking orders.');
+    }
 
     const targetFeature = orderType === 'reservation' ? 'reservations' : orderType === 'takeaway' ? 'takeaway' : 'ordering';
     const isOrderFeatureEnabled = await isFeatureEnabledForRestaurant(restaurant.id, targetFeature);
@@ -2316,7 +2453,7 @@ export const db = {
       throw new Error(`${orderType.toUpperCase()} ordering is disabled for this restaurant's subscription plan.`);
     }
 
-    const tables = await db.getTables(restaurantId);
+    const tables = await db.getBasicTables(restaurantId);
     let table = tableId ? tables.find(t => t.id === tableId) : null;
     if (!table) {
       if (orderType === 'takeaway' || orderType === 'reservation' || orderType === 'counter' || tableId === 'takeaway' || tableId === 'reservation' || tableId === 'counter' || tableId === 'bar' || !tableId) {
@@ -2374,22 +2511,24 @@ export const db = {
     }
 
     // Authoritative Server-Side Real-Time Stock Availability Validation
-    try {
-      const stockCheck = await validateOrderStockAvailability(restaurant.id, items.map(i => ({
-        menuItemId: i.menuItemId,
-        quantity: i.quantity,
-        variantId: i.variantId,
-        variantName: i.variantName
-      })));
+    if (!skipStockCheck) {
+      try {
+        const stockCheck = await validateOrderStockAvailability(restaurant.id, items.map(i => ({
+          menuItemId: i.menuItemId,
+          quantity: i.quantity,
+          variantId: i.variantId,
+          variantName: i.variantName
+        })));
 
-      if (!stockCheck.allowed) {
-        throw new Error(stockCheck.error || 'One or more items in your cart exceed available inventory stock.');
+        if (!stockCheck.allowed) {
+          throw new Error(stockCheck.error || 'One or more items in your cart exceed available inventory stock.');
+        }
+      } catch (stockErr: any) {
+        if (stockErr.message?.includes('stock') || stockErr.message?.includes('out of stock') || stockErr.message?.includes('Insufficient')) {
+          throw stockErr;
+        }
+        console.warn('[OrderStockValidation] Validation warning:', stockErr);
       }
-    } catch (stockErr: any) {
-      if (stockErr.message?.includes('stock') || stockErr.message?.includes('out of stock') || stockErr.message?.includes('Insufficient')) {
-        throw stockErr;
-      }
-      console.warn('[OrderStockValidation] Validation warning:', stockErr);
     }
 
     // Priority 3: Check QR disabled status for Dine-in orders
@@ -2422,7 +2561,8 @@ export const db = {
         idempotencyKey,
         restaurant,
         offerCode,
-        discountAmount
+        discountAmount,
+        skipStockCheck
       );
     }
 
@@ -2643,83 +2783,97 @@ export const db = {
         }
       }
 
-      const fullOrder = await this.getOrderById(newOrder.id);
-      if (!fullOrder) throw new Error('Failed to retrieve new order');
+      const createdOrder: Order = {
+        ...newOrder,
+        items: finalItemsPayload || [],
+        batches: [{
+          ...newBatch,
+          items: finalItemsPayload || []
+        }]
+      };
 
-      // Dispatch FCM Push Notification to Kitchen, Waiter & Owner mobile devices
-      const pushTitle = orderType === 'reservation' 
-        ? 'NEW TABLE RESERVATION!' 
-        : 'NEW KITCHEN ORDER!';
-      const orderTypeLabel = orderType === 'takeaway' 
-        ? 'Takeaway' 
-        : orderType === 'reservation' 
-        ? 'Reservation' 
-        : 'Dine-in';
-
-      dispatchFCMNotification(
-        restaurantId,
-        pushTitle,
-        `Table ${table.name} • ${orderTypeLabel} • Total: ₹${total}`,
-        ['kitchen', 'waiter', 'owner', 'manager'],
-        { orderId: newOrder.id, tableId: table.id, orderType },
-        table.id
-      );
-
-      // Reserve inventory immediately for new order
-      try {
-        console.log(`[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_BEFORE_RESERVATION - OrderID: ${newOrder.id}, BatchID: ${newBatch.id}`);
-        const traceRes = await transitionOrderBatchLifecycle({
-          restaurantId,
-          orderId: newOrder.id,
-          batchId: newBatch.id,
-          targetStatus: 'new',
-          callingFunction: 'db.createOrder',
-          actor: 'Order Placement'
-        });
-        console.log(`[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_AFTER_RESERVATION - OrderID: ${newOrder.id}, Result: ${traceRes.consumptionResult}`);
-      } catch (invErr: any) {
-        console.error('[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_RESERVATION_ERROR:', invErr?.message || invErr);
-      }
-
-      // Sync table occupancy state in table_states and broadcast table-status-updated event
-      if (restaurantId && table.id && orderType !== 'takeaway' && orderType !== 'reservation') {
+      // Non-blocking background sync tasks (FCM, Inventory Reservation, Table Occupancy)
+      void (async () => {
+        // Dispatch FCM Push Notification to Kitchen, Waiter & Owner mobile devices
         try {
-          const rest = await this.getRestaurantById(restaurantId);
-          if (rest) {
-            const tableStates = { ...(rest.settings?.table_states || {}) };
-            tableStates[table.id] = {
-              ...(tableStates[table.id] || {}),
-              occupancy_status: 'occupied',
-              occupied_at: new Date().toISOString(),
-              current_session_id: newOrder.id
-            };
-            await this.updateRestaurant(restaurantId, {
-              settings: {
-                ...rest.settings,
-                table_states: tableStates
-              }
-            });
-          }
-          const { broadcastOrderRealtimeEvent } = await import('./realtime');
-          await broadcastOrderRealtimeEvent({
+          const pushTitle = orderType === 'reservation' 
+            ? 'NEW TABLE RESERVATION!' 
+            : 'NEW KITCHEN ORDER!';
+          const orderTypeLabel = orderType === 'takeaway' 
+            ? 'Takeaway' 
+            : orderType === 'reservation' 
+            ? 'Reservation' 
+            : 'Dine-in';
+
+          dispatchFCMNotification(
+            restaurantId,
+            pushTitle,
+            `Table ${table.name} • ${orderTypeLabel} • Total: ₹${total}`,
+            ['kitchen', 'waiter', 'owner', 'manager'],
+            { orderId: newOrder.id, tableId: table.id, orderType },
+            table.id
+          );
+        } catch (_) {}
+
+        // Reserve inventory immediately for new order
+        try {
+          console.log(`[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_BEFORE_RESERVATION - OrderID: ${newOrder.id}, BatchID: ${newBatch.id}`);
+          const traceRes = await transitionOrderBatchLifecycle({
             restaurantId,
             orderId: newOrder.id,
-            eventType: 'table-status-updated',
-            payload: {
-              tableId: table.id,
-              tableName: table.name,
-              status: 'occupied',
-              occupiedAt: new Date().toISOString(),
-              orderId: newOrder.id
-            },
-            client: supabase
+            batchId: newBatch.id,
+            targetStatus: 'new',
+            callingFunction: 'db.createOrder',
+            actor: 'Order Placement'
           });
-        } catch (syncErr) {
-          console.error('[db.createOrder] Table status sync error:', syncErr);
+          console.log(`[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_AFTER_RESERVATION - OrderID: ${newOrder.id}, Result: ${traceRes.consumptionResult}`);
+        } catch (invErr: any) {
+          console.error('[FORENSIC_INVENTORY_TRACE] DB_CREATE_ORDER_RESERVATION_ERROR:', invErr?.message || invErr);
         }
-      }
 
-      return fullOrder;
+        // Sync table occupancy state in table_states and broadcast table-status-updated event
+        if (restaurantId && table.id && orderType !== 'takeaway' && orderType !== 'reservation') {
+          try {
+            const rest = await this.getRestaurantById(restaurantId);
+            if (rest) {
+              const tableStates = { ...(rest.settings?.table_states || {}) };
+              tableStates[table.id] = {
+                ...(tableStates[table.id] || {}),
+                occupancy_status: 'occupied',
+                occupied_at: new Date().toISOString(),
+                current_session_id: newOrder.id
+              };
+              await this.updateRestaurant(restaurantId, {
+                settings: {
+                  ...rest.settings,
+                  table_states: tableStates
+                }
+              });
+            }
+            const { broadcastOrderRealtimeEvent } = await import('./realtime');
+            await broadcastOrderRealtimeEvent({
+              restaurantId,
+              orderId: newOrder.id,
+              eventType: 'table-status-updated',
+              payload: {
+                tableId: table.id,
+                tableName: table.name,
+                status: 'occupied',
+                occupiedAt: new Date().toISOString(),
+                orderId: newOrder.id
+              },
+              client: supabase
+            });
+          } catch (syncErr) {
+            console.error('[db.createOrder] Table status sync error:', syncErr);
+          }
+        }
+      })();
+
+      tablesWithLiveStatusCache.delete(restaurantId);
+      basicTablesMemoryCache.delete(restaurantId);
+
+      return createdOrder;
   },
 
   async addBatchToOrder(
@@ -2730,24 +2884,27 @@ export const db = {
     idempotencyKey?: string,
     restaurant?: Restaurant | null,
     offerCode?: string,
-    discountAmount?: number
+    discountAmount?: number,
+    skipStockCheck: boolean = false
   ): Promise<Order> {
-    // Authoritative Server-Side Real-Time Stock Availability Validation for additional batch
-    try {
-      const stockCheck = await validateOrderStockAvailability(activeOrder.restaurant_id, itemsPayload.map(i => ({
-        menuItemId: i.menu_item_id,
-        quantity: i.quantity,
-        menuItemName: i.menu_item_name
-      })));
+    if (!skipStockCheck) {
+      // Authoritative Server-Side Real-Time Stock Availability Validation for additional batch
+      try {
+        const stockCheck = await validateOrderStockAvailability(activeOrder.restaurant_id, itemsPayload.map(i => ({
+          menuItemId: i.menu_item_id,
+          quantity: i.quantity,
+          menuItemName: i.menu_item_name
+        })));
 
-      if (!stockCheck.allowed) {
-        throw new Error(stockCheck.error || 'One or more items exceed available inventory stock.');
+        if (!stockCheck.allowed) {
+          throw new Error(stockCheck.error || 'One or more items exceed available inventory stock.');
+        }
+      } catch (stockErr: any) {
+        if (stockErr.message?.includes('stock') || stockErr.message?.includes('out of stock') || stockErr.message?.includes('Insufficient')) {
+          throw stockErr;
+        }
+        console.warn('[OrderStockValidation] Batch validation warning:', stockErr);
       }
-    } catch (stockErr: any) {
-      if (stockErr.message?.includes('stock') || stockErr.message?.includes('out of stock') || stockErr.message?.includes('Insufficient')) {
-        throw stockErr;
-      }
-      console.warn('[OrderStockValidation] Batch validation warning:', stockErr);
     }
 
     // Query true max batch_number directly from PostgreSQL to guarantee unique sequential numbering
@@ -2866,22 +3023,6 @@ export const db = {
       throw new Error(itemsError.message || 'Failed to submit order items');
     }
 
-    // Reserve inventory immediately for new order batch
-    try {
-      console.log(`[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_BEFORE_RESERVATION - OrderID: ${activeOrder.id}, BatchID: ${newBatch.id}`);
-      const traceRes = await transitionOrderBatchLifecycle({
-        restaurantId: activeOrder.restaurant_id,
-        orderId: activeOrder.id,
-        batchId: newBatch.id,
-        targetStatus: 'new',
-        callingFunction: 'db.addBatchToOrder',
-        actor: 'Order Placement (Add Batch)'
-      });
-      console.log(`[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_AFTER_RESERVATION - OrderID: ${activeOrder.id}, Result: ${traceRes.consumptionResult}`);
-    } catch (invErr: any) {
-      console.error('[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_RESERVATION_ERROR:', invErr?.message || invErr);
-    }
-
     // Record in order_discounts table if offer present on reorder batch
     if (offerCode && batchDiscAmt > 0) {
       const { DiscountEngine } = await import('./discountEngine');
@@ -2910,12 +3051,14 @@ export const db = {
 
     const newSubtotal = Number(activeOrder.subtotal) + batchSubtotal;
 
-    // Recalculate discounts cleanly via DiscountEngine
-    const { DiscountEngine } = await import('./discountEngine');
-    let discAmt = await DiscountEngine.recalculateMultiBatchDiscounts(activeOrder.id, newSubtotal);
-
-    if (discAmt === 0) {
-      discAmt = Math.max(Number(activeOrder.discount_amount || 0), batchDiscAmt);
+    // Recalculate discounts cleanly via DiscountEngine if any discounts/offers exist
+    let discAmt = 0;
+    if (activeOrder.discount_total || activeOrder.discount_amount || offerCode || batchDiscAmt > 0) {
+      const { DiscountEngine } = await import('./discountEngine');
+      discAmt = await DiscountEngine.recalculateMultiBatchDiscounts(activeOrder.id, newSubtotal);
+      if (discAmt === 0) {
+        discAmt = Math.max(Number(activeOrder.discount_amount || 0), batchDiscAmt);
+      }
     }
 
     const taxCalc = calculateOrderTax(newSubtotal, discAmt, rest?.settings, rest?.gst_number);
@@ -3005,19 +3148,57 @@ export const db = {
         .eq('id', activeOrder.id);
     }
 
-      // Dispatch notification for new batch items added
-      dispatchFCMNotification(
-        activeOrder.restaurant_id,
-        'NEW ITEMS ADDED',
-        `Additional items added for Table ${activeOrder.table_name || 'X'}`,
-        ['kitchen', 'waiter', 'owner', 'manager'],
-        { orderId: activeOrder.id, batchId: newBatch.id, tableId: activeOrder.table_id },
-        activeOrder.table_id || undefined
-      );
+    const updatedOrder: Order = {
+      ...activeOrder,
+      ...updatePayload,
+      subtotal: newSubtotal,
+      total: newTotal,
+      grand_total: newTotal,
+      items: [...(activeOrder.items || []), ...(finalItemsPayload || [])],
+      batches: [
+        ...(activeOrder.batches || []),
+        {
+          ...newBatch,
+          items: finalItemsPayload || []
+        }
+      ]
+    };
 
-      const fullOrder = await this.getOrderById(activeOrder.id);
-      if (!fullOrder) throw new Error('Failed to retrieve updated order');
-      return fullOrder;
+    // Non-blocking background sync tasks (FCM & Inventory Reservation)
+    void (async () => {
+      // Reserve inventory immediately for new order batch
+      try {
+        console.log(`[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_BEFORE_RESERVATION - OrderID: ${activeOrder.id}, BatchID: ${newBatch.id}`);
+        const traceRes = await transitionOrderBatchLifecycle({
+          restaurantId: activeOrder.restaurant_id,
+          orderId: activeOrder.id,
+          batchId: newBatch.id,
+          targetStatus: 'new',
+          callingFunction: 'db.addBatchToOrder',
+          actor: 'Order Placement (Add Batch)'
+        });
+        console.log(`[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_AFTER_RESERVATION - OrderID: ${activeOrder.id}, Result: ${traceRes.consumptionResult}`);
+      } catch (invErr: any) {
+        console.error('[FORENSIC_INVENTORY_TRACE] DB_ADD_BATCH_RESERVATION_ERROR:', invErr?.message || invErr);
+      }
+
+      // Dispatch notification for new batch items added
+      try {
+        dispatchFCMNotification(
+          activeOrder.restaurant_id,
+          'NEW ITEMS ADDED',
+          `Additional items added for Table ${activeOrder.table_name || 'X'}`,
+          ['kitchen', 'waiter', 'owner', 'manager'],
+          { orderId: activeOrder.id, batchId: newBatch.id, tableId: activeOrder.table_id },
+          activeOrder.table_id || undefined
+        );
+      } catch (_) {}
+    })();
+
+    tablesWithLiveStatusCache.delete(activeOrder.restaurant_id);
+    basicTablesMemoryCache.delete(activeOrder.restaurant_id);
+
+    return updatedOrder;
   },
 
   async updateOrderStatus(id: string, status: Order['status'], userName?: string, cancellationReason?: string, client?: any, additionalUpdates?: Record<string, any>): Promise<Order> {
@@ -3263,6 +3444,9 @@ export const db = {
     // If paymentStatus is 'paid' and 0 rows were updated, another concurrent process already marked it paid
     if (paymentStatus === 'paid' && (!updated || updated.length === 0)) {
       console.log(`[updateOrderPaymentStatus] Order ${orderId} is already marked paid (atomic idempotent no-op).`);
+      tablesWithLiveStatusCache.delete(fullOrder.restaurant_id);
+      basicTablesMemoryCache.delete(fullOrder.restaurant_id);
+
       return fullOrder;
     }
 
@@ -4002,17 +4186,21 @@ export const db = {
       categoriesMemoryCache.delete(id);
       menuItemsMemoryCache.delete(id);
       basicTablesMemoryCache.delete(id);
+      tablesWithLiveStatusCache.delete(id);
+      mergeGroupsMemoryCache.delete(id);
     } else {
       restaurantMemoryCache.clear();
       categoriesMemoryCache.clear();
       menuItemsMemoryCache.clear();
       basicTablesMemoryCache.clear();
+      tablesWithLiveStatusCache.clear();
+      mergeGroupsMemoryCache.clear();
     }
   },
 
   async updateRestaurantPlan(
     id: string, 
-    plan: 'starter' | 'pro' | 'premium', 
+    plan: 'starter' | 'pro' | 'premium' | 'trial_3_days' | 'trial' | string, 
     status: Restaurant['subscription_status'], 
     trialEndsAt?: string,
     interval?: 'monthly' | 'yearly'
@@ -4447,13 +4635,29 @@ export const db = {
 
   // --- Customer Requests (Waiter Portal Calls) ---
   async getCustomerRequests(restaurantId: string): Promise<CustomerRequest[]> {
-    const { data, error } = await supabase
-      .from('customer_requests')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .order('created_at', { ascending: false });
-    if (error || !data) return [];
-    return data as CustomerRequest[];
+    const cached = customerRequestsMemoryCache.get(restaurantId);
+    if (cached && Date.now() - cached.timestamp < 15000) {
+      return cached.data;
+    }
+    if (inFlightCustomerRequests.has(restaurantId)) {
+      return inFlightCustomerRequests.get(restaurantId)!;
+    }
+    const p = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('customer_requests')
+          .select('*')
+          .eq('restaurant_id', restaurantId)
+          .order('created_at', { ascending: false });
+        if (error || !data) return [];
+        customerRequestsMemoryCache.set(restaurantId, { data: data as CustomerRequest[], timestamp: Date.now() });
+        return data as CustomerRequest[];
+      } finally {
+        inFlightCustomerRequests.delete(restaurantId);
+      }
+    })();
+    inFlightCustomerRequests.set(restaurantId, p);
+    return p;
   },
 
   async createCustomerRequest(restaurantId: string, tableId: string, type: 'call_waiter' | 'request_bill'): Promise<CustomerRequest> {
@@ -4647,111 +4851,129 @@ export const db = {
 
   // --- Staff Management ---
   async getStaffProfiles(restaurantId: string, force: boolean = false): Promise<Profile[]> {
-    if (!force && dbStaffCache.has(restaurantId)) {
-      const entry = dbStaffCache.get(restaurantId)!;
-      if (Date.now() - entry.timestamp < 120000) {
-        return entry.data;
+    if (!force) {
+      if (dbStaffCache.has(restaurantId)) {
+        const entry = dbStaffCache.get(restaurantId)!;
+        if (Date.now() - entry.timestamp < 120000) {
+          return entry.data;
+        }
+      }
+      if (inFlightStaffProfiles.has(restaurantId)) {
+        return inFlightStaffProfiles.get(restaurantId)!;
       }
     }
-    try {
-      const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
-      const { data: sessionData } = await supabase.auth.getSession();
-      let token = sessionData?.session?.access_token;
-      if (!token && typeof window !== 'undefined') {
-        try {
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && (key.includes('-auth-token') || key.includes('smartdine_auth_token'))) {
-              const raw = localStorage.getItem(key);
-              if (raw) {
-                const parsed = JSON.parse(raw);
-                const candidate = Array.isArray(parsed) ? (parsed[0]?.access_token || parsed[0]) : (parsed?.access_token || parsed);
-                if (candidate && typeof candidate === 'string' && candidate.length > 20) {
-                  token = candidate;
-                  break;
+
+    const promise = (async () => {
+      try {
+        const baseUrl = typeof window !== 'undefined' ? '' : (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.cleverops.in');
+        const { data: sessionData } = await supabase.auth.getSession();
+        let token = sessionData?.session?.access_token;
+        if (!token && typeof window !== 'undefined') {
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && (key.includes('-auth-token') || key.includes('smartdine_auth_token'))) {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                  const parsed = JSON.parse(raw);
+                  const candidate = Array.isArray(parsed) ? (parsed[0]?.access_token || parsed[0]) : (parsed?.access_token || parsed);
+                  if (candidate && typeof candidate === 'string' && candidate.length > 20) {
+                    token = candidate;
+                    break;
+                  }
                 }
               }
             }
-          }
-        } catch (e) {}
-      }
-      const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
-      const res = await fetch(`${baseUrl}/api/staff/list?restaurantId=${restaurantId}`, { headers });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.staff)) {
-          dbStaffCache.set(restaurantId, { timestamp: Date.now(), data: json.staff as Profile[] });
-          return json.staff as Profile[];
+          } catch (e) {}
         }
+        const headers: Record<string, string> = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(`${baseUrl}/api/staff/list?restaurantId=${restaurantId}`, { headers });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.staff)) {
+            dbStaffCache.set(restaurantId, { timestamp: Date.now(), data: json.staff as Profile[] });
+            return json.staff as Profile[];
+          }
+        }
+      } catch (e) {
+        console.warn('[db.getStaffProfiles] API endpoint fallback to DB query:', e);
       }
-    } catch (e) {
-      console.warn('[db.getStaffProfiles] API endpoint fallback to DB query:', e);
+
+      const rest = await this.getRestaurantById(restaurantId);
+      const staffMeta = rest?.settings?.staff_metadata || {};
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .neq('role', 'super_admin');
+      
+      const dbProfiles = (data || []).map(({ plain_password, ...sanitized }: any) => sanitized);
+      const foundIds = new Set(dbProfiles.map(p => p.id));
+
+      const merged = dbProfiles.map(p => {
+        const meta = (p as any).metadata || {};
+        const staffSetting = staffMeta[p.id] || {};
+
+        const isVerified = Boolean(
+          staffSetting.is_verified === true ||
+          staffSetting.verification_status === 'active' ||
+          meta.is_verified === true ||
+          p.is_verified === true ||
+          p.role === 'owner'
+        );
+
+        const verStatus = isVerified ? 'active' : (staffSetting.verification_status || 'pending_verification');
+
+        return {
+          ...p,
+          department: p.department || staffSetting.department || (p.role === 'waiter' ? 'waiter' : p.role === 'kitchen' ? 'kitchen' : 'general'),
+          phone: p.phone || staffSetting.phone || '',
+          is_active: p.is_active !== undefined ? p.is_active : (staffSetting.is_active !== false),
+          is_verified: isVerified,
+          verification_status: verStatus
+        };
+      });
+
+      const seenEmails = new Set(merged.map(p => p.email.trim().toLowerCase()));
+
+      // Merge virtual items from staff_metadata if missing in client profiles
+      Object.keys(staffMeta).forEach(id => {
+        if (!foundIds.has(id)) {
+          const item = staffMeta[id] as any;
+          if (item && item.email) {
+            const normEmail = item.email.trim().toLowerCase();
+            if (!seenEmails.has(normEmail)) {
+              seenEmails.add(normEmail);
+              merged.push({
+                id,
+                email: item.email,
+                full_name: item.full_name || item.name || 'Staff Member',
+                role: item.role || 'waiter',
+                department: item.department || 'waiter',
+                phone: item.phone || '',
+                restaurant_id: restaurantId,
+                is_active: item.is_active !== false,
+                is_verified: item.is_verified !== false,
+                verification_status: item.verification_status || 'active'
+              } as any);
+            }
+          }
+        }
+      });
+
+      const result = merged as Profile[];
+      dbStaffCache.set(restaurantId, { timestamp: Date.now(), data: result });
+      return result;
+    })();
+
+    if (!force) {
+      inFlightStaffProfiles.set(restaurantId, promise);
+      promise.finally(() => {
+        inFlightStaffProfiles.delete(restaurantId);
+      });
     }
-
-    const rest = await this.getRestaurantById(restaurantId);
-    const staffMeta = rest?.settings?.staff_metadata || {};
-
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .neq('role', 'super_admin');
-    
-    const dbProfiles = (data || []).map(({ plain_password, ...sanitized }: any) => sanitized);
-    const foundIds = new Set(dbProfiles.map(p => p.id));
-
-    const merged = dbProfiles.map(p => {
-      const meta = (p as any).metadata || {};
-      const staffSetting = staffMeta[p.id] || {};
-
-      const isVerified = Boolean(
-        staffSetting.is_verified === true ||
-        staffSetting.verification_status === 'active' ||
-        meta.is_verified === true ||
-        p.is_verified === true ||
-        p.role === 'owner'
-      );
-
-      const verStatus = isVerified ? 'active' : (staffSetting.verification_status || 'pending_verification');
-
-      return {
-        ...p,
-        department: p.department || staffSetting.department || (p.role === 'waiter' ? 'waiter' : p.role === 'kitchen' ? 'kitchen' : 'general'),
-        phone: p.phone || staffSetting.phone || '',
-        is_active: p.is_active !== undefined ? p.is_active : (staffSetting.is_active !== false),
-        is_verified: isVerified,
-        verification_status: verStatus
-      };
-    });
-
-    const seenEmails = new Set(merged.map(p => p.email.trim().toLowerCase()));
-
-    // Merge virtual items from staff_metadata if missing in client profiles
-    Object.keys(staffMeta).forEach(id => {
-      if (!foundIds.has(id)) {
-        const item = staffMeta[id] as any;
-        if (item && item.email) {
-          const normEmail = item.email.trim().toLowerCase();
-          if (!seenEmails.has(normEmail)) {
-            seenEmails.add(normEmail);
-            merged.push({
-              id,
-              email: item.email,
-              full_name: item.full_name || item.name || 'Staff Member',
-              role: item.role || 'waiter',
-              department: item.department || 'waiter',
-              phone: item.phone || '',
-              restaurant_id: restaurantId,
-              is_active: item.is_active !== false,
-              is_verified: item.is_verified !== false,
-              verification_status: item.verification_status || 'active'
-            } as any);
-          }
-        }
-      }
-    });
-
-    return merged as Profile[];
+    return promise;
   },
 
   async createStaffProfile(
@@ -5280,11 +5502,19 @@ export const db = {
   ): Promise<{ group: TableMergeGroup; member: TableMergeMember; session?: any } | null> {
     if (!restaurantId || !tableIdOrName) return null;
 
-    const { data: activeGroups } = await supabase
-      .from('table_merge_groups')
-      .select('*')
-      .eq('restaurant_id', restaurantId)
-      .eq('status', 'active');
+    let activeGroups: any[] = [];
+    const cachedMerge = mergeGroupsMemoryCache.get(restaurantId);
+    if (cachedMerge && Date.now() - cachedMerge.timestamp < 30000) {
+      activeGroups = cachedMerge.data;
+    } else {
+      const { data } = await supabase
+        .from('table_merge_groups')
+        .select('*')
+        .eq('restaurant_id', restaurantId)
+        .eq('status', 'active');
+      activeGroups = data || [];
+      mergeGroupsMemoryCache.set(restaurantId, { data: activeGroups, timestamp: Date.now() });
+    }
 
     if (!activeGroups || activeGroups.length === 0) return null;
 

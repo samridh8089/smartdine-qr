@@ -28,6 +28,16 @@ export async function getServerPlanPrice(
 ): Promise<{ price: number; planName: string; planId: string; foundInDb: boolean }> {
   const normalizedId = (planId || 'pro').toLowerCase().trim();
 
+  // 0. Dedicated 3-Day Trial (₹3) Check
+  if (normalizedId === 'trial' || normalizedId === 'trial_3_days') {
+    return {
+      price: 3,
+      planName: '3-Day Full Access Trial (₹3)',
+      planId: 'trial_3_days',
+      foundInDb: false
+    };
+  }
+
   // 1. Query pricing_plans table
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
